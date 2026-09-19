@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../features/launcher/application/mode_launcher_controller.dart';
+import '../../../features/launcher/application/terminal_auth_coordinator.dart';
 import '../../auth/gmail_sender_auth.dart';
 import '../../config/email_config.dart';
 import '../../../features/selector/application/dev_auth.dart';
@@ -29,10 +30,21 @@ const Color _terminalPath = Color(0xFF729FCF);
 const Color _terminalSuccess = Color(0xFF8AE234);
 const Color _terminalError = Color(0xFFEF6A6A);
 const Color _terminalWarning = Color(0xFFFCE94F);
+const Duration _miniTerminalOpenDuration = Duration(milliseconds: 660);
+const Duration _miniTerminalCloseDuration = Duration(milliseconds: 410);
+const Duration _miniTerminalRouteDuration = Duration(milliseconds: 170);
 
 enum ParkinWorkinTerminalContext {
   launcher,
   workspace,
+}
+
+enum _LauncherDialogPhase {
+  closed,
+  preparing,
+  opening,
+  visible,
+  closing,
 }
 
 class ParkinWorkinTerminalScreen extends StatefulWidget {
@@ -71,9 +83,11 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   bool _closing = false;
   bool _appExiting = false;
   bool _reduceMotion = false;
-  bool _launcherAutoSubmitInFlight = false;
-  bool _launcherAutoInputVisible = true;
-  String? _queuedLauncherAutoSubmit;
+  bool _launcherPresentationReady = false;
+  bool _launcherNavigationFinalizing = false;
+  _LauncherDialogPhase _launcherDialogPhase = _LauncherDialogPhase.closed;
+  ModeLauncherSubmitResult? _deferredLauncherResult;
+  String _lastLauncherActivitySignature = '';
   Timer? _bottomLockTimer;
   Future<void>? _openFuture;
   _TerminalPromptLayoutSnapshot? _promptLayoutSnapshot;
@@ -129,17 +143,11 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   bool get _obscureText =>
       _isLauncher && _launcherController!.obscurePrompt;
 
-  bool get _canBack =>
-      _isLauncher && _launcherController!.canNavigateBack;
-
-  bool get _canCancel =>
-      _isLauncher && _launcherController!.canCancelAuthentication;
-
-  bool get _canModes =>
-      _isLauncher && _launcherController!.canReturnToModes;
-
   bool get _startupSetupActive =>
-      _isLauncher && _launcherController!.startupSetupActive;
+      _isLauncher && _launcherController!.startupSetupPanelActive;
+
+  bool get _launcherBootstrapLocked =>
+      _isLauncher && !_launcherController!.authenticationBootstrapped;
 
   bool get _startupSetupBusy =>
       _isLauncher && _launcherController!.startupSetupBusy;
@@ -227,7 +235,9 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
           : Duration(milliseconds: 75 + (_contextLabel.hashCode.abs() % 55)),
     );
     if (!mounted || _interactionLocked) return;
-    if (!_startupSetupActive) {
+    if (_isLauncher) {
+      await _syncLauncherInteractionSurface();
+    } else if (!_startupSetupActive) {
       _promptFocusNode.requestFocus();
     }
     _scheduleBottomLock(delay: const Duration(milliseconds: 220));
@@ -236,19 +246,12 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   Future<bool> _consumeLauncherPendingFlow() async {
     if (!_isLauncher || !mounted || _interactionLocked) return false;
     final pendingRoute = _launcherController!.consumePendingTargetRoute();
-    if (pendingRoute != null) {
-      await _playbackController.waitUntilIdle();
-      if (!mounted || _interactionLocked) return true;
-      await _closeLauncherAndNavigate(pendingRoute);
-      return true;
-    }
-    final pendingAutoSubmit =
-        _launcherController!.consumePendingAutoSubmitText();
-    if (pendingAutoSubmit != null) {
-      await _runLauncherAutoSubmit(pendingAutoSubmit);
-      return true;
-    }
-    return false;
+    if (pendingRoute == null) return false;
+    await _finalizeLauncherAndNavigate(
+      pendingRoute,
+      source: 'pending_target_route',
+    );
+    return true;
   }
 
   Future<void> _runStartupSetupPrimaryAction() async {
@@ -269,7 +272,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     final handledPending = await _consumeLauncherPendingFlow();
     if (handledPending || !mounted || _interactionLocked) return;
     if (!_startupSetupActive) {
-      _promptFocusNode.requestFocus();
+      await _syncLauncherInteractionSurface();
     }
     _scheduleBottomLock(delay: const Duration(milliseconds: 140));
   }
@@ -287,7 +290,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     final handledPending = await _consumeLauncherPendingFlow();
     if (handledPending || !mounted || _interactionLocked) return;
     if (!_startupSetupActive) {
-      _promptFocusNode.requestFocus();
+      await _syncLauncherInteractionSurface();
     }
   }
 
@@ -303,7 +306,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     final handledPending = await _consumeLauncherPendingFlow();
     if (handledPending || !mounted || _interactionLocked) return;
     if (!_startupSetupActive) {
-      _promptFocusNode.requestFocus();
+      await _syncLauncherInteractionSurface();
     }
   }
 
@@ -330,7 +333,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     final handledPending = await _consumeLauncherPendingFlow();
     if (handledPending || !mounted || _interactionLocked) return;
     if (!_startupSetupActive) {
-      _promptFocusNode.requestFocus();
+      await _syncLauncherInteractionSurface();
     }
   }
 
@@ -338,6 +341,74 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     if (!mounted) return;
     _syncPlayback();
     setState(() {});
+    if (_isLauncher) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(_syncLauncherInteractionSurface());
+      });
+    }
+  }
+
+  void _handleLauncherActivitySignatureChanged(String signature) {
+    if (!_isLauncher || signature == _lastLauncherActivitySignature) return;
+    _lastLauncherActivitySignature = signature;
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_activity_changed',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'signature': signature,
+        'stage': _launcherController!.loginStage.name,
+        'runningCommand': _launcherController!.runningCommand,
+        'busy': _launcherController!.busy,
+        'dialogPhase': _launcherDialogPhase.name,
+        'runtimeContextReady': _launcherController!.runtimeContextReady,
+        'playbackBusy': _playbackController.busy,
+        'presentationReady': _launcherPresentationReady,
+      },
+    );
+  }
+
+  void _setLauncherDialogPhase(
+    _LauncherDialogPhase phase, {
+    required String source,
+  }) {
+    if (_launcherDialogPhase == phase) return;
+    final previous = _launcherDialogPhase;
+    _launcherDialogPhase = phase;
+    if (mounted) setState(() {});
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_dialog_phase_changed',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'from': previous.name,
+        'to': phase.name,
+        'source': source,
+        'stage': _launcherController?.loginStage.name ?? '',
+        'runningCommand': _launcherController?.runningCommand ?? '',
+      },
+    );
+  }
+
+  void _handleLauncherDialogOpened() {
+    if (_launcherDialogPhase != _LauncherDialogPhase.opening &&
+        _launcherDialogPhase != _LauncherDialogPhase.preparing) {
+      return;
+    }
+    _setLauncherDialogPhase(
+      _LauncherDialogPhase.visible,
+      source: 'mini_terminal_open_complete',
+    );
+  }
+
+  void _handleLauncherDialogClosing() {
+    if (_launcherDialogPhase == _LauncherDialogPhase.closed ||
+        _launcherDialogPhase == _LauncherDialogPhase.closing) {
+      return;
+    }
+    _setLauncherDialogPhase(
+      _LauncherDialogPhase.closing,
+      source: 'mini_terminal_close_start',
+    );
   }
 
   void _syncPlayback() {
@@ -354,7 +425,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   }
 
   void _handlePromptFocusChanged() {
-    if (!_promptFocusNode.hasFocus || _interactionLocked) return;
+    if (_isLauncher || !_promptFocusNode.hasFocus || _interactionLocked) return;
     ParkinWorkinTerminalDiagnostics.record(
       'terminal_prompt_focus',
       context: _contextLabel,
@@ -366,7 +437,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   }
 
   void _requestPromptFocusFromRow() {
-    if (_busy || _interactionLocked) return;
+    if (_isLauncher || _busy || _interactionLocked) return;
     ParkinWorkinTerminalDiagnostics.record(
       'terminal_prompt_focus_requested',
       context: _contextLabel,
@@ -402,7 +473,12 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
 
   @override
   void didChangeMetrics() {
-    if (!mounted || _interactionLocked || !_promptFocusNode.hasFocus) return;
+    if (_isLauncher ||
+        !mounted ||
+        _interactionLocked ||
+        !_promptFocusNode.hasFocus) {
+      return;
+    }
     _scheduleBottomLock(delay: const Duration(milliseconds: 110));
   }
 
@@ -488,126 +564,17 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     );
   }
 
-  Future<void> _runLauncherAutoSubmit(String raw) async {
-    final value = raw.trim();
-    if (!_isLauncher ||
-        value.isEmpty ||
-        _launcherAutoSubmitInFlight ||
-        _interactionLocked) {
-      return;
-    }
-    setState(() {
-      _launcherAutoSubmitInFlight = true;
-    });
-    try {
-      await _playbackController.waitUntilIdle();
-      if (!mounted || _interactionLocked) return;
-      if (!_reduceMotion) {
-        await Future<void>.delayed(const Duration(milliseconds: 90));
-      }
-      if (!mounted || _interactionLocked) return;
-      setState(() {
-        _launcherAutoInputVisible = false;
-      });
-      _setPromptText(value);
-      if (_reduceMotion) {
-        if (mounted) {
-          setState(() {
-            _launcherAutoInputVisible = true;
-          });
-        }
-      } else {
-        await Future<void>.delayed(const Duration(milliseconds: 24));
-        if (!mounted || _interactionLocked) return;
-        setState(() {
-          _launcherAutoInputVisible = true;
-        });
-      }
-      ParkinWorkinTerminalDiagnostics.record(
-        'terminal_selection_auto_input_visible',
-        context: _contextLabel,
-        meta: <String, Object?>{
-          'input': value,
-          'stage': _launcherController!.loginStage.name,
-          'reduceMotion': _reduceMotion,
-          'path': _promptPath,
-        },
-      );
-      if (!_reduceMotion) {
-        await Future<void>.delayed(const Duration(milliseconds: 170));
-      }
-      if (!mounted || _interactionLocked) return;
-      final autoStage = _launcherController!.loginStage;
-      if (autoStage != TerminalLoginStage.areaSelection &&
-          autoStage != TerminalLoginStage.modeSelection) {
-        ParkinWorkinTerminalDiagnostics.record(
-          'terminal_selection_auto_submit_cancelled',
-          context: _contextLabel,
-          meta: <String, Object?>{
-            'input': value,
-            'stage': _launcherController!.loginStage.name,
-          },
-        );
-        return;
-      }
-      ParkinWorkinTerminalDiagnostics.record(
-        'terminal_selection_auto_submit',
-        context: _contextLabel,
-        meta: <String, Object?>{
-          'input': value,
-          'stage': _launcherController!.loginStage.name,
-          'haptic': false,
-        },
-      );
-      await _submitLauncherRaw(value, haptic: false);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _launcherAutoSubmitInFlight = false;
-          _launcherAutoInputVisible = true;
-        });
-      } else {
-        _launcherAutoSubmitInFlight = false;
-        _launcherAutoInputVisible = true;
-      }
-    }
-    final queued = _queuedLauncherAutoSubmit;
-    _queuedLauncherAutoSubmit = null;
-    if (queued != null && mounted && !_interactionLocked) {
-      ParkinWorkinTerminalDiagnostics.record(
-        'terminal_selection_auto_submit_dequeued',
-        context: _contextLabel,
-        meta: <String, Object?>{
-          'input': queued,
-          'stage': _launcherController!.loginStage.name,
-        },
-      );
-      await _runLauncherAutoSubmit(queued);
-    }
-  }
+
 
   Future<void> _submit() async {
-    if (_launcherAutoSubmitInFlight) return;
-    final raw = _promptController.text;
-    if (_isLauncher) {
-      await _submitLauncherRaw(raw);
-    } else {
-      await _submitWorkspaceRaw(raw);
-    }
-  }
-
-  Future<void> _submitControlCommand(String command) async {
-    if (_busy || _interactionLocked || _launcherAutoSubmitInFlight || !_isLauncher) return;
-    await HapticFeedback.selectionClick();
-    _promptController.clear();
-    await _submitLauncherRaw(command, haptic: false);
+    if (_isLauncher) return;
+    await _submitWorkspaceRaw(_promptController.text);
   }
 
   Future<void> _submitHeaderCommand(String command) async {
     if (_busy ||
         _interactionLocked ||
-        _launcherAutoSubmitInFlight ||
-        (_isLauncher && _startupSetupActive)) {
+        (_isLauncher && (_startupSetupActive || _launcherBootstrapLocked))) {
       return;
     }
     if (command == 'setting' && _promptPath == '~/setting') {
@@ -667,95 +634,448 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     }
   }
 
-  Future<void> _submitLauncherRaw(
-    String raw, {
-    bool haptic = true,
-  }) async {
-    final controller = _launcherController!;
-    if (controller.busy || _interactionLocked) return;
-    if (raw.trim().isEmpty) {
-      await HapticFeedback.mediumImpact();
-      controller.rejectEmptyInput();
-      if (!_promptFocusNode.hasFocus) _promptFocusNode.requestFocus();
-      return;
-    }
-    if (haptic) await HapticFeedback.selectionClick();
-    final stageBefore = controller.loginStage.name;
-    final dismissKeyboard = controller.shouldDismissKeyboardForInput(raw);
-    ParkinWorkinTerminalDiagnostics.record(
-      'terminal_prompt_submit_start',
-      context: _contextLabel,
-      meta: <String, Object?>{
-        'stage': stageBefore,
-        'dismissKeyboard': dismissKeyboard,
-        'inputLength': raw.length,
-        'path': _promptPath,
-      },
-    );
-    _promptController.clear();
-    if (dismissKeyboard) {
-      _promptFocusNode.unfocus();
-      FocusManager.instance.primaryFocus?.unfocus();
-    }
-    final result = await controller.submit(
-      context,
-      raw,
-      reduceMotion: _reduceMotion,
-    );
-    if (!mounted) return;
-    _syncPlayback();
-    ParkinWorkinTerminalDiagnostics.record(
-      'terminal_prompt_submit_complete',
-      context: _contextLabel,
-      meta: <String, Object?>{
-        'stageBefore': stageBefore,
-        'stageAfter': controller.loginStage.name,
-        'dismissKeyboard': dismissKeyboard,
-      },
-    );
-    if (result.promptText != null) {
-      _setPromptText(
-        result.promptText!,
-        selectAll: result.selectPromptText,
-      );
-    }
-    await _handleLauncherResult(result);
-    if (result.autoSubmitText != null) {
-      if (_launcherAutoSubmitInFlight) {
-        _queuedLauncherAutoSubmit = result.autoSubmitText;
-        ParkinWorkinTerminalDiagnostics.record(
-          'terminal_selection_auto_submit_queued',
-          context: _contextLabel,
-          meta: <String, Object?>{
-            'input': result.autoSubmitText!,
-            'stage': controller.loginStage.name,
-          },
-        );
-      } else {
-        await _runLauncherAutoSubmit(result.autoSubmitText!);
-      }
-    }
-  }
+
 
   Future<void> _handleLauncherResult(ModeLauncherSubmitResult result) async {
     if (result.targetRoute != null) {
-      await _playbackController.waitUntilIdle();
-      if (!mounted || _interactionLocked) return;
-      await _closeLauncherAndNavigate(result.targetRoute!);
+      await _finalizeLauncherAndNavigate(
+        result.targetRoute!,
+        source: 'launcher_submit_result',
+      );
       return;
     }
     if (result.routeReplaced) {
-      _promptFocusNode.unfocus();
       return;
     }
     if (result.surfaceCompletion != null) {
-      _promptFocusNode.unfocus();
-      unawaited(_restoreFocusAfterSurface(result.surfaceCompletion!));
+      final completion = result.surfaceCompletion!;
+      unawaited(() async {
+        await completion;
+        if (!mounted || _interactionLocked) return;
+        await _syncLauncherInteractionSurface();
+      }());
+    }
+  }
+
+  Future<void> _finalizeLauncherAndNavigate(
+    String route, {
+    required String source,
+  }) async {
+    if (!_isLauncher ||
+        !mounted ||
+        _interactionLocked ||
+        _launcherNavigationFinalizing) {
       return;
     }
-    if (result.keepFocus && !_busy && !_interactionLocked && !_promptFocusNode.hasFocus) {
-      _promptFocusNode.requestFocus();
+    _launcherNavigationFinalizing = true;
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_presentation_finalize_start',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'source': source,
+        'targetRoute': route,
+        'runtimeContextReady': _launcherController!.runtimeContextReady,
+        'playbackBusy': _playbackController.busy,
+        'presentationReady': _launcherPresentationReady,
+      },
+    );
+    try {
+      await _playbackController.waitUntilIdle();
+      if (!mounted || _interactionLocked) return;
+      if (!_launcherPresentationReady) {
+        setState(() {
+          _launcherPresentationReady = true;
+        });
+      }
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_presentation_ready',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'source': source,
+          'targetRoute': route,
+          'runtimeContextReady': _launcherController!.runtimeContextReady,
+          'playbackBusy': _playbackController.busy,
+          'presentationReady': _launcherPresentationReady,
+        },
+      );
+      await WidgetsBinding.instance.endOfFrame;
+      if (!_reduceMotion) {
+        await Future<void>.delayed(const Duration(milliseconds: 240));
+      }
+      if (!mounted || _interactionLocked) return;
+      await _closeLauncherAndNavigate(route);
+    } finally {
+      _launcherNavigationFinalizing = false;
     }
+  }
+
+  Future<void> _syncLauncherInteractionSurface() async {
+    if (!_isLauncher ||
+        !mounted ||
+        _interactionLocked ||
+        _startupSetupActive ||
+        _launcherBootstrapLocked ||
+        _launcherDialogPhase != _LauncherDialogPhase.closed ||
+        _launcherController!.busy) {
+      return;
+    }
+    final stage = _launcherController!.loginStage;
+    final canOpen = switch (stage) {
+      TerminalLoginStage.accountTypeSelection => true,
+      TerminalLoginStage.credentials => true,
+      TerminalLoginStage.areaSelection =>
+        _launcherController!.availableWorkAreas.isNotEmpty,
+      TerminalLoginStage.modeSelection =>
+        _launcherController!.supportedModes.isNotEmpty,
+      _ => false,
+    };
+    if (!canOpen) return;
+    _deferredLauncherResult = null;
+    _setLauncherDialogPhase(
+      _LauncherDialogPhase.preparing,
+      source: 'interaction_surface_prepare',
+    );
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_dialog_prepare',
+      context: _contextLabel,
+      meta: <String, Object?>{'stage': stage.name},
+    );
+    try {
+      await _playbackController.waitUntilIdle();
+      if (!mounted || _interactionLocked || _launcherController!.busy) return;
+      final currentStage = _launcherController!.loginStage;
+      switch (currentStage) {
+        case TerminalLoginStage.accountTypeSelection:
+          await _showLauncherAccountTypeDialog();
+          break;
+        case TerminalLoginStage.credentials:
+          await _showLauncherAccountDialog();
+          break;
+        case TerminalLoginStage.areaSelection:
+          if (_launcherController!.availableWorkAreas.isNotEmpty) {
+            await _showLauncherWorkAreaDialog();
+          }
+          break;
+        case TerminalLoginStage.modeSelection:
+          if (_launcherController!.supportedModes.isNotEmpty) {
+            await _showLauncherModeDialog();
+          }
+          break;
+        case TerminalLoginStage.command:
+        case TerminalLoginStage.authenticating:
+        case TerminalLoginStage.activatingMode:
+          break;
+      }
+    } finally {
+      if (mounted) {
+        _setLauncherDialogPhase(
+          _LauncherDialogPhase.closed,
+          source: 'interaction_surface_complete',
+        );
+      }
+    }
+    if (!mounted || _interactionLocked) return;
+    final deferred = _deferredLauncherResult;
+    _deferredLauncherResult = null;
+    if (deferred != null) {
+      await _handleLauncherResult(deferred);
+      if (!mounted || _interactionLocked) return;
+    }
+    await _syncLauncherInteractionSurface();
+  }
+
+  Future<void> _showLauncherDialog({
+    required WidgetBuilder builder,
+  }) async {
+    _setLauncherDialogPhase(
+      _LauncherDialogPhase.opening,
+      source: 'dialog_route_start',
+    );
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: 'launcher interaction',
+      barrierColor: const Color(0xB8000000),
+      transitionDuration:
+          _reduceMotion ? Duration.zero : _miniTerminalRouteDuration,
+      pageBuilder: (dialogContext, _, __) {
+        final viewInsets = MediaQuery.viewInsetsOf(dialogContext);
+        return Material(
+          type: MaterialType.transparency,
+          child: SafeArea(
+            child: AnimatedPadding(
+              duration: _reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              padding: EdgeInsets.fromLTRB(
+                12,
+                12,
+                12,
+                12 + viewInsets.bottom,
+              ),
+              child: Center(
+                child: SingleChildScrollView(
+                  child: builder(dialogContext),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: child,
+        );
+      },
+    );
+  }
+
+  Future<void> _showLauncherAccountTypeDialog() async {
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_account_type_dialog_open',
+      context: _contextLabel,
+    );
+    await _showLauncherDialog(
+      builder: (dialogContext) => _LauncherSelectionDialog(
+        title: 'ACCOUNT TYPE',
+        description: '계정 유형을 선택하세요.',
+        options: const <String>['일반 계정', '개인형 계정', '태블릿형 계정'],
+        confirmLabel: '확인',
+        reduceMotion: _reduceMotion,
+        onStatus: _showDeveloperStatus,
+        onOpened: _handleLauncherDialogOpened,
+        onClosing: _handleLauncherDialogClosing,
+        onConfirm: (index) async {
+          const kinds = <TerminalAccountKind>[
+            TerminalAccountKind.user,
+            TerminalAccountKind.personal,
+            TerminalAccountKind.tablet,
+          ];
+          final before = _launcherController!.errorSerial;
+          final result = await _launcherController!.selectAccountKind(
+            kinds[index],
+            reduceMotion: _reduceMotion,
+          );
+          if (!mounted) return '처리를 완료하지 못했습니다.';
+          _syncPlayback();
+          if (_launcherController!.loginStage ==
+              TerminalLoginStage.credentials) {
+            _deferredLauncherResult = result;
+            ParkinWorkinTerminalDiagnostics.record(
+              'launcher_account_type_dialog_complete',
+              context: _contextLabel,
+              meta: <String, Object?>{
+                'selection': TerminalAuthCoordinator.accountKindId(
+                  kinds[index],
+                ),
+              },
+            );
+            return null;
+          }
+          if (_launcherController!.errorSerial > before) {
+            return _latestLauncherError('계정 유형을 다시 확인하세요.');
+          }
+          return '계정 유형을 적용하지 못했습니다.';
+        },
+      ),
+    );
+  }
+
+  Future<void> _showLauncherAccountDialog() async {
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_account_dialog_open',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'accountKind': _launcherController!.selectedAccountKindLabel,
+      },
+    );
+    await _showLauncherDialog(
+      builder: (dialogContext) => _LauncherAccountDialog(
+        accountKind: _launcherController!.selectedAccountKindLabel,
+        initialName: _launcherController!.enteredName,
+        initialPhone: _launcherController!.enteredPhone,
+        reduceMotion: _reduceMotion,
+        onStatus: _showDeveloperStatus,
+        onOpened: _handleLauncherDialogOpened,
+        onClosing: _handleLauncherDialogClosing,
+        onAuthenticate: _authenticateLauncherAccount,
+      ),
+    );
+  }
+
+  Future<LauncherCredentialSubmitResult> _authenticateLauncherAccount(
+    String name,
+    String phone,
+    String password,
+  ) async {
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_account_dialog_submit',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'nameLength': name.trim().length,
+        'phoneLength': phone.replaceAll(RegExp(r'[^0-9]'), '').length,
+        'passwordLength': password.length,
+      },
+    );
+    final result = await _launcherController!.authenticateCredentials(
+      context,
+      name: name,
+      phone: phone,
+      password: password,
+      reduceMotion: _reduceMotion,
+    );
+    if (!mounted) return result;
+    _syncPlayback();
+    if (result.accepted) {
+      _deferredLauncherResult = result.flowResult;
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_account_dialog_complete',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'stage': _launcherController!.loginStage.name,
+          'nameLength': name.trim().length,
+          'phoneLength': phone.replaceAll(RegExp(r'[^0-9]'), '').length,
+          'hasTargetRoute': result.flowResult.targetRoute != null,
+        },
+      );
+    } else {
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_account_dialog_rejected',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'stage': _launcherController!.loginStage.name,
+          'nameError': result.nameError != null,
+          'phoneError': result.phoneError != null,
+          'passwordError': result.passwordError != null,
+          'authenticationError': result.authenticationError != null,
+        },
+      );
+    }
+    return result;
+  }
+
+  Future<void> _showLauncherWorkAreaDialog() async {
+    final areas = _launcherController!.availableWorkAreas;
+    final labels = areas.map((area) => area.areaName).toList(growable: false);
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_work_area_dialog_open',
+      context: _contextLabel,
+      meta: <String, Object?>{'optionCount': labels.length},
+    );
+    await _showLauncherDialog(
+      builder: (dialogContext) => _LauncherSelectionDialog(
+        title: 'WORK AREA',
+        description: '근무 지역을 선택하세요.',
+        options: labels,
+        confirmLabel: '확인',
+        reduceMotion: _reduceMotion,
+        onStatus: _showDeveloperStatus,
+        onOpened: _handleLauncherDialogOpened,
+        onClosing: _handleLauncherDialogClosing,
+        onConfirm: (index) async {
+          final before = _launcherController!.errorSerial;
+          final area = areas[index];
+          final result = await _launcherController!.selectWorkArea(
+            context,
+            area: area,
+            reduceMotion: _reduceMotion,
+          );
+          if (!mounted) return '업무 지역을 적용하지 못했습니다.';
+          _syncPlayback();
+          final stage = _launcherController!.loginStage;
+          if (_launcherController!.errorSerial > before &&
+              stage == TerminalLoginStage.areaSelection) {
+            return _latestLauncherError('업무 지역을 다시 확인하세요.');
+          }
+          if (stage == TerminalLoginStage.areaSelection &&
+              result.targetRoute == null) {
+            return _latestLauncherError('업무 지역을 적용하지 못했습니다.');
+          }
+          _deferredLauncherResult = result;
+          ParkinWorkinTerminalDiagnostics.record(
+            'launcher_work_area_dialog_complete',
+            context: _contextLabel,
+            meta: <String, Object?>{
+              'area': area.areaName,
+              'nextStage': stage.name,
+              'hasTargetRoute': result.targetRoute != null,
+            },
+          );
+          return null;
+        },
+      ),
+    );
+  }
+
+  Future<void> _showLauncherModeDialog() async {
+    final modes = _launcherController!.supportedModes;
+    final labels = modes.map((mode) => mode.koreanName).toList(growable: false);
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_mode_dialog_open',
+      context: _contextLabel,
+      meta: <String, Object?>{'optionCount': labels.length},
+    );
+    await _showLauncherDialog(
+      builder: (dialogContext) => _LauncherSelectionDialog(
+        title: 'WORK MODE',
+        description: '사용할 모드를 선택하세요.',
+        options: labels,
+        confirmLabel: '확인',
+        reduceMotion: _reduceMotion,
+        onStatus: _showDeveloperStatus,
+        onOpened: _handleLauncherDialogOpened,
+        onClosing: _handleLauncherDialogClosing,
+        onConfirm: (index) async {
+          final before = _launcherController!.errorSerial;
+          final mode = modes[index];
+          final result = await _launcherController!.selectMode(
+            context,
+            mode: mode,
+            reduceMotion: _reduceMotion,
+          );
+          if (!mounted) return '업무 모드를 적용하지 못했습니다.';
+          _syncPlayback();
+          final stage = _launcherController!.loginStage;
+          if (_launcherController!.errorSerial > before &&
+              stage == TerminalLoginStage.modeSelection) {
+            return _latestLauncherError('업무 모드를 다시 확인하세요.');
+          }
+          if (stage == TerminalLoginStage.modeSelection &&
+              result.targetRoute == null) {
+            return _latestLauncherError('업무 모드를 적용하지 못했습니다.');
+          }
+          _deferredLauncherResult = result;
+          ParkinWorkinTerminalDiagnostics.record(
+            'launcher_mode_dialog_complete',
+            context: _contextLabel,
+            meta: <String, Object?>{
+              'mode': mode.id,
+              'hasTargetRoute': result.targetRoute != null,
+            },
+          );
+          return null;
+        },
+      ),
+    );
+  }
+
+  String _latestLauncherError(String fallback) {
+    for (final line in _launcherController!.lines.reversed) {
+      if (line.type == TerminalLineType.error) {
+        return line.text
+            .replaceFirst('[ERROR] ', '')
+            .replaceFirst('[DENIED] ', '')
+            .trim();
+      }
+    }
+    return fallback;
   }
 
   Future<void> _submitWorkspaceRaw(String raw) async {
@@ -820,7 +1140,11 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
           ? Duration.zero
           : Duration(milliseconds: 75 + (_contextLabel.hashCode.abs() % 45)),
     );
-    if (mounted && !_busy && !_interactionLocked && !_startupSetupActive) {
+    if (mounted &&
+        !_isLauncher &&
+        !_busy &&
+        !_interactionLocked &&
+        !_startupSetupActive) {
       _promptFocusNode.requestFocus();
     }
   }
@@ -900,35 +1224,62 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
             'Output queue: ${_playbackController.busy ? 'ACTIVE' : 'IDLE'}',
           ].join('\n');
     final promptLayout = _promptLayoutSnapshot;
-    final promptLayoutDescription = promptLayout == null
-        ? 'Prompt layout: -'
-        : <String>[
-            'Prompt layout: ${promptLayout.density.name}',
-            'Prompt width: ${promptLayout.availableWidth.toStringAsFixed(1)}',
-            'Prompt prefix max: ${promptLayout.promptMaxWidth.toStringAsFixed(1)}',
-            'Prompt input reserve: ${promptLayout.minimumInputWidth.toStringAsFixed(1)}',
-          ].join('\n');
+    final surfaceDescription = _isLauncher
+        ? <String>[
+            'Launcher input surface: dialog',
+            'Account dialog policy: credentials_only',
+            'Session restore account dialog: bypass',
+            'Launcher dialog phase: ${_launcherDialogPhase.name}',
+            'Launcher dialog visible: ${_launcherDialogPhase == _LauncherDialogPhase.visible}',
+            'Mini terminal open: ${_miniTerminalOpenDuration.inMilliseconds}ms',
+            'Mini terminal close: ${_miniTerminalCloseDuration.inMilliseconds}ms',
+            'Dialog route transition: ${_miniTerminalRouteDuration.inMilliseconds}ms',
+            'Selection transport: structured',
+            'Activity signature: ${_lastLauncherActivitySignature.isEmpty ? '-' : _lastLauncherActivitySignature}',
+          ].join('\n')
+        : promptLayout == null
+            ? 'Prompt layout: -'
+            : <String>[
+                'Prompt layout: ${promptLayout.density.name}',
+                'Prompt width: ${promptLayout.availableWidth.toStringAsFixed(1)}',
+                'Prompt prefix max: ${promptLayout.promptMaxWidth.toStringAsFixed(1)}',
+                'Prompt input reserve: ${promptLayout.minimumInputWidth.toStringAsFixed(1)}',
+              ].join('\n');
     final interactionDescription = <String>[
       'App exiting: $_exitInProgress',
       'Interaction locked: $_interactionLocked',
       if (_isLauncher)
-        'Auth name label: ${ModeLauncherController.nameDisplayLabel}',
+        'Runtime context ready: ${_launcherController!.runtimeContextReady}',
       if (_isLauncher)
-        'Auth phone label: ${ModeLauncherController.phoneDisplayLabel}',
+        'Terminal playback: ${_playbackController.busy ? 'ACTIVE' : 'IDLE'}',
       if (_isLauncher)
-        'Auth password label: ${ModeLauncherController.passwordDisplayLabel}',
-      if (_isLauncher) 'Auth label width: 120',
-      if (_isLauncher) 'Auth summary resize ms: ${_reduceMotion ? 0 : 190}',
-      if (_isLauncher) 'Auth value switch ms: ${_reduceMotion ? 0 : 160}',
+        'Presentation ready: $_launcherPresentationReady',
+      if (_isLauncher)
+        'Navigation finalizing: $_launcherNavigationFinalizing',
+      if (_isLauncher)
+        'Login stage: ${_launcherController!.loginStage.name}',
+      if (_isLauncher)
+        'Running command: ${_launcherController!.runningCommand.isEmpty ? '-' : _launcherController!.runningCommand}',
+      if (_isLauncher)
+        'Account kind: ${_launcherController!.selectedAccountKindLabel.isEmpty ? '-' : _launcherController!.selectedAccountKindLabel}',
+      if (_isLauncher)
+        'Work area: ${_launcherController!.selectedWorkArea?.areaName ?? '-'}',
+      if (_isLauncher)
+        'Mode: ${_launcherController!.selectedMode?.koreanName ?? '-'}',
     ].join('\n');
     final description =
-        '$baseDescription\n$interactionDescription\n$promptLayoutDescription\n${gmailStatus.developerDescription}';
+        '$baseDescription\n$interactionDescription\n$surfaceDescription\n${gmailStatus.developerDescription}';
     await ParkinWorkinTerminalDiagnostics.showStatus(
       context,
       terminalContext: _contextLabel,
       description: description,
     );
-    if (mounted && !_busy && !_interactionLocked) _promptFocusNode.requestFocus();
+    if (mounted &&
+        !_isLauncher &&
+        !_busy &&
+        !_interactionLocked) {
+      _promptFocusNode.requestFocus();
+    }
   }
 
   Widget _buildTerminal(
@@ -1033,7 +1384,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         children: [
           _TerminalHeader(
             busy: _busy || _startupSetupBusy || _interactionLocked,
-            navigationLocked: _startupSetupActive,
+            navigationLocked: _startupSetupActive || _launcherBootstrapLocked,
             importingUnlocked: _importingUnlocked,
             reduceMotion: _reduceMotion,
             onCloseTerminal: () => _submitHeaderCommand('out'),
@@ -1074,43 +1425,53 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
                             _launcherController!.selectedAccountKindLabel,
                         modeName:
                             _launcherController!.selectedMode?.koreanName ?? '',
+                        areaName:
+                            _launcherController!.selectedWorkArea?.areaName ?? '',
                         name: _launcherController!.enteredName,
-                        phone: _launcherController!.enteredPhone,
-                        password: _launcherController!.maskedPassword,
                         reduceMotion: _reduceMotion,
                       )
                     : const SizedBox.shrink(),
               ),
             const Divider(height: 1, thickness: 1, color: _terminalBorder),
-            _TerminalPrompt(
-              controller: _promptController,
-              promptPath: _promptPath,
-              focusNode: _promptFocusNode,
-              busy: _busy || _interactionLocked,
-              runningCommand: _exitInProgress
-                  ? 'EXITING'
-                  : _closing
-                      ? 'CLOSING'
-                      : _runningCommand,
-              reduceMotion: _reduceMotion,
-              keyboardType: _keyboardType,
-              inputAction: _inputAction,
-              obscureText: _obscureText,
-              readOnly: _launcherAutoSubmitInFlight,
-              inputVisible: _launcherAutoInputVisible,
-              emailEditMode: _emailEditMode,
-              canBack: _canBack,
-              canCancel: _canCancel,
-              canModes: _canModes,
-              modesLabel:
-                  _isLauncher ? _launcherController!.returnSelectionLabel : 'MODES',
-              onBack: () => _submitControlCommand('back'),
-              onCancel: () => _submitControlCommand('cancel'),
-              onModes: () => _submitControlCommand('modes'),
-              onFocusRequested: _requestPromptFocusFromRow,
-              onLayoutChanged: _handlePromptLayoutChanged,
-              onSubmitted: _submit,
-            ),
+            if (_isLauncher)
+              _LauncherActivityPanel(
+                controller: _launcherController!,
+                dialogPhase: _launcherDialogPhase,
+                presentationReady: _launcherPresentationReady,
+                closing: _closing,
+                exiting: _exitInProgress,
+                reduceMotion: _reduceMotion,
+                onSignatureChanged: _handleLauncherActivitySignatureChanged,
+              )
+            else
+              _TerminalPrompt(
+                controller: _promptController,
+                promptPath: _promptPath,
+                focusNode: _promptFocusNode,
+                busy: _busy || _interactionLocked,
+                runningCommand: _exitInProgress
+                    ? 'EXITING'
+                    : _closing
+                        ? 'CLOSING'
+                        : _runningCommand,
+                reduceMotion: _reduceMotion,
+                keyboardType: _keyboardType,
+                inputAction: _inputAction,
+                obscureText: _obscureText,
+                readOnly: false,
+                inputVisible: true,
+                emailEditMode: _emailEditMode,
+                canBack: false,
+                canCancel: false,
+                canModes: false,
+                modesLabel: 'MODES',
+                onBack: () {},
+                onCancel: () {},
+                onModes: () {},
+                onFocusRequested: _requestPromptFocusFromRow,
+                onLayoutChanged: _handlePromptLayoutChanged,
+                onSubmitted: _submit,
+              ),
           ],
         ],
       ),
@@ -1131,15 +1492,16 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         ),
         child: Scaffold(
           backgroundColor: const Color(0xFF130810),
-          resizeToAvoidBottomInset: true,
+          resizeToAvoidBottomInset: !_isLauncher,
           body: SafeArea(
             child: Padding(
               padding: EdgeInsets.fromLTRB(
                 12,
                 12,
                 12,
-                MediaQuery.of(context).viewInsets.bottom > 0 ||
-                        _promptFocusNode.hasFocus
+                !_isLauncher &&
+                        (MediaQuery.of(context).viewInsets.bottom > 0 ||
+                            _promptFocusNode.hasFocus)
                     ? 0
                     : 12,
               ),
@@ -1147,9 +1509,10 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
                 builder: (context, constraints) {
                   final keyboardVisible =
                       MediaQuery.of(context).viewInsets.bottom > 0;
-                  final alignBottom = keyboardVisible ||
-                      _promptFocusNode.hasFocus ||
-                      _interactionLocked;
+                  final alignBottom = !_isLauncher &&
+                      (keyboardVisible ||
+                          _promptFocusNode.hasFocus ||
+                          _interactionLocked);
                   return Align(
                     alignment:
                         alignBottom ? Alignment.bottomCenter : Alignment.center,
@@ -2285,17 +2648,15 @@ class _TerminalAuthSummary extends StatelessWidget {
     super.key,
     required this.accountKind,
     required this.modeName,
+    required this.areaName,
     required this.name,
-    required this.phone,
-    required this.password,
     required this.reduceMotion,
   });
 
   final String accountKind;
   final String modeName;
+  final String areaName;
   final String name;
-  final String phone;
-  final String password;
   final bool reduceMotion;
 
   @override
@@ -2304,21 +2665,11 @@ class _TerminalAuthSummary extends StatelessWidget {
       if (accountKind.isNotEmpty)
         MapEntry<String, String>('ACCOUNT', accountKind),
       if (name.isNotEmpty)
-        MapEntry<String, String>(
-          ModeLauncherController.nameDisplayLabel,
-          name,
-        ),
-      if (phone.isNotEmpty)
-        MapEntry<String, String>(
-          ModeLauncherController.phoneDisplayLabel,
-          phone,
-        ),
-      if (password.isNotEmpty)
-        MapEntry<String, String>(
-          ModeLauncherController.passwordDisplayLabel,
-          password,
-        ),
-      if (modeName.isNotEmpty) MapEntry<String, String>('MODE', modeName),
+        MapEntry<String, String>('USER', name),
+      if (areaName.isNotEmpty)
+        MapEntry<String, String>('AREA', areaName),
+      if (modeName.isNotEmpty)
+        MapEntry<String, String>('MODE', modeName),
     ];
 
     return AnimatedSize(
@@ -2385,7 +2736,7 @@ class _TerminalAuthSummary extends StatelessWidget {
                           switchOutCurve: Curves.easeInCubic,
                           transitionBuilder: (child, animation) {
                             final slide = Tween<Offset>(
-                              begin: const Offset(0, .12),
+                              begin: const Offset(.025, 0),
                               end: Offset.zero,
                             ).animate(animation);
                             return FadeTransition(
@@ -2398,8 +2749,9 @@ class _TerminalAuthSummary extends StatelessWidget {
                           },
                           child: Text(
                             rows[index].value,
-                            key: ValueKey<String>(rows[index].value),
-                            overflow: TextOverflow.ellipsis,
+                            key: ValueKey<String>(
+                              '${rows[index].key}:${rows[index].value}',
+                            ),
                             style: const TextStyle(
                               color: _terminalText,
                               fontFamily: 'monospace',
@@ -2419,6 +2771,7 @@ class _TerminalAuthSummary extends StatelessWidget {
     );
   }
 }
+
 
 class _TerminalHistory extends StatelessWidget {
   const _TerminalHistory({
@@ -2498,7 +2851,8 @@ class _TerminalOutputLine extends StatelessWidget {
               );
 
     return TweenAnimationBuilder<double>(
-      duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 145),
+      duration:
+          reduceMotion ? Duration.zero : const Duration(milliseconds: 145),
       curve: Curves.easeOutCubic,
       tween: Tween<double>(begin: 0, end: 1),
       builder: (context, value, child) {
@@ -2611,7 +2965,10 @@ class _PromptCommandLine extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const TextSpan(text: ':', style: TextStyle(color: _terminalMuted)),
+          const TextSpan(
+            text: ':',
+            style: TextStyle(color: _terminalMuted),
+          ),
           TextSpan(
             text: promptPath,
             style: const TextStyle(
@@ -2619,7 +2976,10 @@ class _PromptCommandLine extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const TextSpan(text: r'$ ', style: TextStyle(color: _terminalMuted)),
+          const TextSpan(
+            text: r'$ ',
+            style: TextStyle(color: _terminalMuted),
+          ),
           TextSpan(
             text: command,
             style: const TextStyle(
@@ -3210,6 +3570,1472 @@ class _TerminalPromptAction extends StatelessWidget {
                 fontWeight: FontWeight.w800,
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _LauncherActivityTone {
+  waiting,
+  running,
+  success,
+  warning,
+}
+
+class _LauncherActivitySnapshot {
+  const _LauncherActivitySnapshot({
+    required this.title,
+    required this.message,
+    required this.stateLabel,
+    required this.tone,
+  });
+
+  final String title;
+  final String message;
+  final String stateLabel;
+  final _LauncherActivityTone tone;
+
+  bool get animated =>
+      tone == _LauncherActivityTone.waiting ||
+      tone == _LauncherActivityTone.running;
+
+  String get signature => '$title|$message|$stateLabel|${tone.name}';
+
+  static _LauncherActivitySnapshot resolve({
+    required ModeLauncherController controller,
+    required _LauncherDialogPhase dialogPhase,
+    required bool presentationReady,
+    required bool closing,
+    required bool exiting,
+  }) {
+    final dialogVisible = dialogPhase == _LauncherDialogPhase.visible;
+    final dialogOpening = dialogPhase == _LauncherDialogPhase.preparing ||
+        dialogPhase == _LauncherDialogPhase.opening;
+    if (exiting) {
+      return const _LauncherActivitySnapshot(
+        title: 'SYSTEM POWER',
+        message: '애플리케이션 종료 절차를 진행하고 있습니다.',
+        stateLabel: 'EXITING',
+        tone: _LauncherActivityTone.running,
+      );
+    }
+    if (closing) {
+      return const _LauncherActivitySnapshot(
+        title: 'TERMINAL SESSION',
+        message: '런처 세션을 종료하고 다음 화면을 준비하고 있습니다.',
+        stateLabel: 'CLOSING',
+        tone: _LauncherActivityTone.running,
+      );
+    }
+    if (dialogPhase == _LauncherDialogPhase.closing) {
+      return const _LauncherActivitySnapshot(
+        title: 'TERMINAL INTERACTION',
+        message: '작업 창을 닫고 다음 시스템 상태로 전환하고 있습니다.',
+        stateLabel: 'CLOSING',
+        tone: _LauncherActivityTone.running,
+      );
+    }
+    if (controller.busy) {
+      return switch (controller.runningCommand.toUpperCase()) {
+        'STARTUP' => const _LauncherActivitySnapshot(
+            title: 'SYSTEM SERVICES',
+            message: '실행에 필요한 시스템 서비스를 준비하고 있습니다.',
+            stateLabel: 'INITIALIZING',
+            tone: _LauncherActivityTone.running,
+          ),
+        'SESSION_CHECK' => const _LauncherActivitySnapshot(
+            title: 'ACCOUNT SESSION',
+            message: '저장된 로그인 정보를 확인하고 있습니다.',
+            stateLabel: 'CHECKING',
+            tone: _LauncherActivityTone.running,
+          ),
+        'SESSION_RESTORE' => const _LauncherActivitySnapshot(
+            title: 'ACCOUNT SESSION',
+            message: '기존 로그인 세션을 복원하고 있습니다.',
+            stateLabel: 'RESTORING',
+            tone: _LauncherActivityTone.running,
+          ),
+        'SESSION' => const _LauncherActivitySnapshot(
+            title: 'ACCOUNT SESSION',
+            message: '기존 로그인 세션을 확인하고 있습니다.',
+            stateLabel: 'RESTORING',
+            tone: _LauncherActivityTone.running,
+          ),
+        'ACCOUNT' => const _LauncherActivitySnapshot(
+            title: 'ACCOUNT PROFILE',
+            message: '사용 목적에 맞는 계정 프로필을 구성하고 있습니다.',
+            stateLabel: 'PREPARING',
+            tone: _LauncherActivityTone.running,
+          ),
+        'AUTH' => const _LauncherActivitySnapshot(
+            title: 'ACCOUNT AUTHENTICATION',
+            message: '계정 정보를 확인하고 있습니다.',
+            stateLabel: 'VERIFYING',
+            tone: _LauncherActivityTone.running,
+          ),
+        'AREAS' => const _LauncherActivitySnapshot(
+            title: 'WORK AREA',
+            message: '사용 가능한 업무 지역 정보를 불러오고 있습니다.',
+            stateLabel: 'LOADING',
+            tone: _LauncherActivityTone.running,
+          ),
+        'AREA' => const _LauncherActivitySnapshot(
+            title: 'WORK AREA',
+            message: '선택한 업무 지역을 검증하고 있습니다.',
+            stateLabel: 'VERIFYING',
+            tone: _LauncherActivityTone.running,
+          ),
+        'MODE' => const _LauncherActivitySnapshot(
+            title: 'WORK MODE',
+            message: '선택한 업무 모드를 활성화하고 있습니다.',
+            stateLabel: 'CONFIGURING',
+            tone: _LauncherActivityTone.running,
+          ),
+        'HEADQUARTER' => const _LauncherActivitySnapshot(
+            title: 'HEADQUARTER',
+            message: '본사 실행 환경을 구성하고 있습니다.',
+            stateLabel: 'CONFIGURING',
+            tone: _LauncherActivityTone.running,
+          ),
+        _ => _LauncherActivitySnapshot(
+            title: controller.runningCommand.isEmpty
+                ? 'SYSTEM TASK'
+                : controller.runningCommand.toUpperCase(),
+            message: '시스템 작업을 처리하고 있습니다.',
+            stateLabel: 'RUNNING',
+            tone: _LauncherActivityTone.running,
+          ),
+      };
+    }
+    if (controller.runtimeContextReady) {
+      if (!presentationReady) {
+        return const _LauncherActivitySnapshot(
+          title: 'SYSTEM FINALIZATION',
+          message: '마지막 시스템 출력을 정리하고 있습니다.',
+          stateLabel: 'FINALIZING',
+          tone: _LauncherActivityTone.running,
+        );
+      }
+      return const _LauncherActivitySnapshot(
+        title: 'SYSTEM READY',
+        message: '실행 환경 구성이 완료되었습니다.',
+        stateLabel: 'READY',
+        tone: _LauncherActivityTone.success,
+      );
+    }
+    return switch (controller.loginStage) {
+      TerminalLoginStage.accountTypeSelection => _LauncherActivitySnapshot(
+          title: 'ACCOUNT TYPE',
+          message: dialogVisible
+              ? '계정 유형 선택을 기다리고 있습니다.'
+              : '계정 유형 선택 화면을 준비하고 있습니다.',
+          stateLabel: dialogVisible
+              ? 'WAITING'
+              : dialogOpening
+                  ? 'OPENING'
+                  : 'PREPARING',
+          tone: dialogVisible
+              ? _LauncherActivityTone.waiting
+              : _LauncherActivityTone.running,
+        ),
+      TerminalLoginStage.credentials => _LauncherActivitySnapshot(
+          title: 'ACCOUNT AUTHENTICATION',
+          message: dialogVisible
+              ? '계정 정보 입력을 기다리고 있습니다.'
+              : '계정 인증 화면을 준비하고 있습니다.',
+          stateLabel: dialogVisible
+              ? 'WAITING'
+              : dialogOpening
+                  ? 'OPENING'
+                  : 'PREPARING',
+          tone: dialogVisible
+              ? _LauncherActivityTone.waiting
+              : _LauncherActivityTone.running,
+        ),
+      TerminalLoginStage.authenticating => const _LauncherActivitySnapshot(
+          title: 'ACCOUNT AUTHENTICATION',
+          message: '계정 정보를 확인하고 있습니다.',
+          stateLabel: 'VERIFYING',
+          tone: _LauncherActivityTone.running,
+        ),
+      TerminalLoginStage.areaSelection => _LauncherActivitySnapshot(
+          title: 'WORK AREA',
+          message: dialogVisible
+              ? '업무 지역 선택을 기다리고 있습니다.'
+              : '업무 지역 선택 화면을 준비하고 있습니다.',
+          stateLabel: dialogVisible
+              ? 'WAITING'
+              : dialogOpening
+                  ? 'OPENING'
+                  : 'PREPARING',
+          tone: dialogVisible
+              ? _LauncherActivityTone.waiting
+              : _LauncherActivityTone.running,
+        ),
+      TerminalLoginStage.modeSelection => _LauncherActivitySnapshot(
+          title: 'WORK MODE',
+          message: dialogVisible
+              ? '업무 모드 선택을 기다리고 있습니다.'
+              : '업무 모드 선택 화면을 준비하고 있습니다.',
+          stateLabel: dialogVisible
+              ? 'WAITING'
+              : dialogOpening
+                  ? 'OPENING'
+                  : 'PREPARING',
+          tone: dialogVisible
+              ? _LauncherActivityTone.waiting
+              : _LauncherActivityTone.running,
+        ),
+      TerminalLoginStage.activatingMode => const _LauncherActivitySnapshot(
+          title: 'WORK MODE',
+          message: '실행 모드를 적용하고 있습니다.',
+          stateLabel: 'CONFIGURING',
+          tone: _LauncherActivityTone.running,
+        ),
+      TerminalLoginStage.command => const _LauncherActivitySnapshot(
+          title: 'TERMINAL READY',
+          message: '런처 세션이 준비되었습니다.',
+          stateLabel: 'IDLE',
+          tone: _LauncherActivityTone.success,
+        ),
+    };
+  }
+}
+
+class _LauncherActivityPanel extends StatefulWidget {
+  const _LauncherActivityPanel({
+    required this.controller,
+    required this.dialogPhase,
+    required this.presentationReady,
+    required this.closing,
+    required this.exiting,
+    required this.reduceMotion,
+    required this.onSignatureChanged,
+  });
+
+  final ModeLauncherController controller;
+  final _LauncherDialogPhase dialogPhase;
+  final bool presentationReady;
+  final bool closing;
+  final bool exiting;
+  final bool reduceMotion;
+  final ValueChanged<String> onSignatureChanged;
+
+  @override
+  State<_LauncherActivityPanel> createState() => _LauncherActivityPanelState();
+}
+
+class _LauncherActivityPanelState extends State<_LauncherActivityPanel>
+    with TickerProviderStateMixin {
+  late final AnimationController _scanController;
+  late final AnimationController _pulseController;
+  String _lastSignature = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _scanController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1350),
+    );
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _syncAnimationState();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LauncherActivityPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reduceMotion != widget.reduceMotion ||
+        oldWidget.controller.busy != widget.controller.busy ||
+        oldWidget.dialogPhase != widget.dialogPhase) {
+      _syncAnimationState();
+    }
+  }
+
+  void _syncAnimationState() {
+    if (widget.reduceMotion) {
+      _scanController.stop();
+      _scanController.value = .62;
+      _pulseController.stop();
+      _pulseController.value = .45;
+      return;
+    }
+    if (!_scanController.isAnimating) {
+      _scanController.repeat();
+    }
+    if (!_pulseController.isAnimating) {
+      _pulseController.repeat(reverse: true);
+    }
+  }
+
+  Color _toneColor(_LauncherActivityTone tone) {
+    return switch (tone) {
+      _LauncherActivityTone.waiting => _terminalWarning,
+      _LauncherActivityTone.running => _terminalPrompt,
+      _LauncherActivityTone.success => _terminalSuccess,
+      _LauncherActivityTone.warning => _terminalError,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final snapshot = _LauncherActivitySnapshot.resolve(
+      controller: widget.controller,
+      dialogPhase: widget.dialogPhase,
+      presentationReady: widget.presentationReady,
+      closing: widget.closing,
+      exiting: widget.exiting,
+    );
+    if (snapshot.signature != _lastSignature) {
+      _lastSignature = snapshot.signature;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onSignatureChanged(snapshot.signature);
+      });
+    }
+    final toneColor = _toneColor(snapshot.tone);
+    return Semantics(
+      liveRegion: true,
+      label: '${snapshot.title}, ${snapshot.message}, ${snapshot.stateLabel}',
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 76),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 9),
+        color: _terminalHeader.withOpacity(.52),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    final pulse = snapshot.animated
+                        ? .92 + (_pulseController.value * .12)
+                        : 1.0;
+                    return Transform.scale(
+                      scale: pulse,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: toneColor.withOpacity(.08),
+                          border: Border.all(
+                            color: toneColor.withOpacity(.78),
+                          ),
+                        ),
+                        child: AnimatedSwitcher(
+                          duration: widget.reduceMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 180),
+                          child: snapshot.tone == _LauncherActivityTone.success
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  key: const ValueKey<String>('ready'),
+                                  size: 16,
+                                  color: toneColor,
+                                )
+                              : Container(
+                                  key: ValueKey<String>(snapshot.stateLabel),
+                                  width: 7,
+                                  height: 7,
+                                  decoration: BoxDecoration(
+                                    color: toneColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: widget.reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 210),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(.025, 0),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: Column(
+                      key: ValueKey<String>(snapshot.signature),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          snapshot.title,
+                          style: TextStyle(
+                            color: toneColor,
+                            fontFamily: 'monospace',
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: .55,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          snapshot.message,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _terminalMuted,
+                            fontFamily: 'monospace',
+                            fontSize: 10.5,
+                            height: 1.25,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                AnimatedContainer(
+                  duration: widget.reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: toneColor.withOpacity(.08),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: toneColor.withOpacity(.48)),
+                  ),
+                  child: Text(
+                    snapshot.stateLabel,
+                    style: TextStyle(
+                      color: toneColor,
+                      fontFamily: 'monospace',
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: .45,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 9),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: SizedBox(
+                height: 3,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _terminalBorder.withOpacity(.5),
+                  ),
+                  child: snapshot.tone == _LauncherActivityTone.success
+                      ? Align(
+                          alignment: Alignment.centerLeft,
+                          child: FractionallySizedBox(
+                            widthFactor: 1,
+                            child: ColoredBox(color: toneColor),
+                          ),
+                        )
+                      : AnimatedBuilder(
+                          animation: _scanController,
+                          builder: (context, child) {
+                            final x = (_scanController.value * 2.4) - 1.2;
+                            return Align(
+                              alignment: Alignment(x, 0),
+                              child: FractionallySizedBox(
+                                widthFactor: .28,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: <Color>[
+                                        toneColor.withOpacity(0),
+                                        toneColor,
+                                        toneColor.withOpacity(0),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _scanController.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
+}
+
+class _MiniTerminalFrame extends StatefulWidget {
+  const _MiniTerminalFrame({
+    super.key,
+    required this.title,
+    required this.reduceMotion,
+    required this.onStatus,
+    required this.onOpenCompleted,
+    required this.child,
+  });
+
+  final String title;
+  final bool reduceMotion;
+  final VoidCallback onStatus;
+  final VoidCallback onOpenCompleted;
+  final Widget child;
+
+  @override
+  State<_MiniTerminalFrame> createState() => _MiniTerminalFrameState();
+}
+
+class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  bool _openReported = false;
+  bool _closing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget.reduceMotion ? Duration.zero : _miniTerminalOpenDuration,
+      reverseDuration:
+          widget.reduceMotion ? Duration.zero : _miniTerminalCloseDuration,
+    );
+    _controller.addStatusListener(_handleStatus);
+    ParkinWorkinTerminalDiagnostics.record(
+      'mini_terminal_open_started',
+      context: 'launcher',
+      meta: <String, Object?>{
+        'title': widget.title,
+        'durationMs': widget.reduceMotion
+            ? 0
+            : _miniTerminalOpenDuration.inMilliseconds,
+        'reduceMotion': widget.reduceMotion,
+      },
+    );
+    if (widget.reduceMotion) {
+      _controller.value = 1;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _reportOpen());
+    } else {
+      _controller.forward();
+    }
+  }
+
+  void _handleStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) {
+      _reportOpen();
+    }
+  }
+
+  void _reportOpen() {
+    if (_openReported || !mounted) return;
+    setState(() => _openReported = true);
+    ParkinWorkinTerminalDiagnostics.record(
+      'mini_terminal_open_completed',
+      context: 'launcher',
+      meta: <String, Object?>{
+        'title': widget.title,
+        'durationMs': widget.reduceMotion
+            ? 0
+            : _miniTerminalOpenDuration.inMilliseconds,
+      },
+    );
+    widget.onOpenCompleted();
+  }
+
+  Future<void> close() async {
+    if (_closing || !mounted) return;
+    setState(() => _closing = true);
+    ParkinWorkinTerminalDiagnostics.record(
+      'mini_terminal_close_started',
+      context: 'launcher',
+      meta: <String, Object?>{
+        'title': widget.title,
+        'durationMs': widget.reduceMotion
+            ? 0
+            : _miniTerminalCloseDuration.inMilliseconds,
+        'controllerValue': _controller.value.toStringAsFixed(3),
+        'reduceMotion': widget.reduceMotion,
+      },
+    );
+    if (widget.reduceMotion) {
+      _controller.value = 0;
+    } else if (_controller.status != AnimationStatus.dismissed) {
+      await _controller.reverse();
+    }
+    if (!mounted) return;
+    ParkinWorkinTerminalDiagnostics.record(
+      'mini_terminal_close_completed',
+      context: 'launcher',
+      meta: <String, Object?>{
+        'title': widget.title,
+        'durationMs': widget.reduceMotion
+            ? 0
+            : _miniTerminalCloseDuration.inMilliseconds,
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxWidth = math.max(
+      0.0,
+      math.min(MediaQuery.sizeOf(context).width - 24, 520.0),
+    ).toDouble();
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final value = widget.reduceMotion ? 1.0 : _controller.value;
+        final horizontal = Curves.easeOutCubic.transform(
+          (value / .38).clamp(0.0, 1.0).toDouble(),
+        );
+        final vertical = Curves.easeOutCubic.transform(
+          ((value - .22) / .50).clamp(0.0, 1.0).toDouble(),
+        );
+        final headerOpacity = Curves.easeOutCubic.transform(
+          ((value - .50) / .26).clamp(0.0, 1.0).toDouble(),
+        );
+        final contentOpacity = Curves.easeOutCubic.transform(
+          ((value - .58) / .42).clamp(0.0, 1.0).toDouble(),
+        );
+        final contentOffset = 8.0 * (1 - contentOpacity);
+        final beamOpacity = value < .58
+            ? (1 - ((value - .28) / .30).clamp(0.0, 1.0)).toDouble()
+            : 0.0;
+        final interactive = !_closing && _openReported;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Opacity(
+              opacity: beamOpacity,
+              child: Container(
+                width: maxWidth * horizontal,
+                height: 2,
+                color: _terminalPrompt,
+              ),
+            ),
+            IgnorePointer(
+              ignoring: !interactive,
+              child: Transform.scale(
+                scaleX: math.max(.015, horizontal).toDouble(),
+                scaleY: math.max(.006, vertical).toDouble(),
+                alignment: Alignment.center,
+                child: Container(
+                  width: maxWidth,
+                  decoration: BoxDecoration(
+                    color: _terminalBackground,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: _terminalBorder),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x99000000),
+                        blurRadius: 30,
+                        offset: Offset(0, 16),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(7),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Opacity(
+                          opacity: headerOpacity,
+                          child: Container(
+                            height: 40,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            color: _terminalHeader,
+                            child: Row(
+                              children: [
+                                const Text(
+                                  '>_',
+                                  style: TextStyle(
+                                    color: _terminalPrompt,
+                                    fontFamily: 'monospace',
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    widget.title,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: _terminalText,
+                                      fontFamily: 'monospace',
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: .55,
+                                    ),
+                                  ),
+                                ),
+                                ValueListenableBuilder<bool>(
+                                  valueListenable: DevAuth.devModeEnabled,
+                                  builder: (context, enabled, _) {
+                                    if (!enabled) {
+                                      return const SizedBox.shrink();
+                                    }
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: TextButton(
+                                        onPressed: widget.onStatus,
+                                        style: TextButton.styleFrom(
+                                          minimumSize: const Size(0, 28),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                          ),
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: const Text(
+                                          'STATUS',
+                                          style: TextStyle(
+                                            color: _terminalMuted,
+                                            fontFamily: 'monospace',
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(
+                                  width: 7,
+                                  height: 7,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: _terminalPrompt,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Opacity(
+                          opacity: headerOpacity,
+                          child: const Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: _terminalBorder,
+                          ),
+                        ),
+                        Transform.translate(
+                          offset: Offset(0, contentOffset),
+                          child: Opacity(
+                            opacity: contentOpacity,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                              child: widget.child,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.removeStatusListener(_handleStatus);
+    _controller.dispose();
+    super.dispose();
+  }
+}
+
+class _LauncherAccountDialog extends StatefulWidget {
+  const _LauncherAccountDialog({
+    required this.accountKind,
+    required this.initialName,
+    required this.initialPhone,
+    required this.reduceMotion,
+    required this.onStatus,
+    required this.onOpened,
+    required this.onClosing,
+    required this.onAuthenticate,
+  });
+
+  final String accountKind;
+  final String initialName;
+  final String initialPhone;
+  final bool reduceMotion;
+  final VoidCallback onStatus;
+  final VoidCallback onOpened;
+  final VoidCallback onClosing;
+  final Future<LauncherCredentialSubmitResult> Function(
+    String name,
+    String phone,
+    String password,
+  ) onAuthenticate;
+
+  @override
+  State<_LauncherAccountDialog> createState() => _LauncherAccountDialogState();
+}
+
+class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _passwordController;
+  final FocusNode _nameFocus = FocusNode();
+  final FocusNode _phoneFocus = FocusNode();
+  final FocusNode _passwordFocus = FocusNode();
+  final GlobalKey<_MiniTerminalFrameState> _frameKey =
+      GlobalKey<_MiniTerminalFrameState>();
+  bool _busy = false;
+  String? _nameError;
+  String? _phoneError;
+  String? _passwordError;
+  String? _submitError;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+    _phoneController = TextEditingController(text: widget.initialPhone);
+    _passwordController = TextEditingController();
+  }
+
+  void _handleOpened() {
+    widget.onOpened();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _busy) return;
+      if (_nameController.text.isEmpty) {
+        _nameFocus.requestFocus();
+      } else if (_phoneController.text.isEmpty) {
+        _phoneFocus.requestFocus();
+      } else {
+        _passwordFocus.requestFocus();
+      }
+    });
+  }
+
+  Future<void> _authenticate() async {
+    if (_busy) return;
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final password = _passwordController.text;
+    setState(() {
+      _nameError = name.isEmpty ? '입력해 주세요.' : null;
+      _phoneError = phone.isEmpty ? '입력해 주세요.' : null;
+      _passwordError = password.isEmpty ? '입력해 주세요.' : null;
+      _submitError = null;
+    });
+    if (_nameError != null || _phoneError != null || _passwordError != null) {
+      await HapticFeedback.mediumImpact();
+      if (_nameError != null) {
+        _nameFocus.requestFocus();
+      } else if (_phoneError != null) {
+        _phoneFocus.requestFocus();
+      } else {
+        _passwordFocus.requestFocus();
+      }
+      return;
+    }
+    setState(() => _busy = true);
+    await HapticFeedback.selectionClick();
+    final result = await widget.onAuthenticate(name, phone, password);
+    if (!mounted) return;
+    if (result.accepted) {
+      await HapticFeedback.lightImpact();
+      FocusManager.instance.primaryFocus?.unfocus();
+      widget.onClosing();
+      await WidgetsBinding.instance.endOfFrame;
+      await _frameKey.currentState?.close();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      return;
+    }
+    await HapticFeedback.mediumImpact();
+    setState(() {
+      _busy = false;
+      _nameError = result.nameError;
+      _phoneError = result.phoneError;
+      _passwordError = result.passwordError;
+      _submitError = result.authenticationError;
+    });
+    if (_nameError != null) {
+      _nameFocus.requestFocus();
+    } else if (_phoneError != null) {
+      _phoneFocus.requestFocus();
+    } else if (_passwordError != null) {
+      _passwordFocus.requestFocus();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: _MiniTerminalFrame(
+        key: _frameKey,
+        title: 'ACCOUNT AUTHENTICATION',
+        reduceMotion: widget.reduceMotion,
+        onStatus: widget.onStatus,
+        onOpenCompleted: _handleOpened,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.accountKind.isNotEmpty) ...[
+              Row(
+                children: [
+                  const Text(
+                    'PROFILE',
+                    style: TextStyle(
+                      color: _terminalMuted,
+                      fontFamily: 'monospace',
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.accountKind,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: _terminalPrompt,
+                        fontFamily: 'monospace',
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+            ],
+            _TerminalDialogField(
+              label: ModeLauncherController.nameDisplayLabel,
+              controller: _nameController,
+              focusNode: _nameFocus,
+              enabled: !_busy,
+              errorText: _nameError,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _phoneFocus.requestFocus(),
+            ),
+            const SizedBox(height: 12),
+            _TerminalDialogField(
+              label: ModeLauncherController.phoneDisplayLabel,
+              controller: _phoneController,
+              focusNode: _phoneFocus,
+              enabled: !_busy,
+              errorText: _phoneError,
+              keyboardType: TextInputType.phone,
+              textInputAction: TextInputAction.next,
+              inputFormatters: <TextInputFormatter>[
+                FilteringTextInputFormatter.digitsOnly,
+              ],
+              onSubmitted: (_) => _passwordFocus.requestFocus(),
+            ),
+            const SizedBox(height: 12),
+            _TerminalDialogField(
+              label: ModeLauncherController.passwordDisplayLabel,
+              controller: _passwordController,
+              focusNode: _passwordFocus,
+              enabled: !_busy,
+              errorText: _passwordError,
+              obscureText: true,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _authenticate(),
+            ),
+            AnimatedSwitcher(
+              duration: widget.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 160),
+              child: _submitError == null
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      key: ValueKey<String>(_submitError!),
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        _submitError!,
+                        style: const TextStyle(
+                          color: _terminalError,
+                          fontFamily: 'monospace',
+                          fontSize: 10.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: _TerminalDialogActionButton(
+                label: '인증',
+                busy: _busy,
+                enabled: !_busy,
+                reduceMotion: widget.reduceMotion,
+                onPressed: _authenticate,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _passwordController.dispose();
+    _nameFocus.dispose();
+    _phoneFocus.dispose();
+    _passwordFocus.dispose();
+    super.dispose();
+  }
+}
+
+class _LauncherSelectionDialog extends StatefulWidget {
+  const _LauncherSelectionDialog({
+    required this.title,
+    required this.description,
+    required this.options,
+    required this.confirmLabel,
+    required this.reduceMotion,
+    required this.onStatus,
+    required this.onOpened,
+    required this.onClosing,
+    required this.onConfirm,
+  });
+
+  final String title;
+  final String description;
+  final List<String> options;
+  final String confirmLabel;
+  final bool reduceMotion;
+  final VoidCallback onStatus;
+  final VoidCallback onOpened;
+  final VoidCallback onClosing;
+  final Future<String?> Function(int index) onConfirm;
+
+  @override
+  State<_LauncherSelectionDialog> createState() =>
+      _LauncherSelectionDialogState();
+}
+
+class _LauncherSelectionDialogState extends State<_LauncherSelectionDialog> {
+  final GlobalKey<_MiniTerminalFrameState> _frameKey =
+      GlobalKey<_MiniTerminalFrameState>();
+  int? _selectedIndex;
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _confirm() async {
+    final selected = _selectedIndex;
+    if (_busy || selected == null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    await HapticFeedback.selectionClick();
+    final error = await widget.onConfirm(selected);
+    if (!mounted) return;
+    if (error == null) {
+      await HapticFeedback.lightImpact();
+      FocusManager.instance.primaryFocus?.unfocus();
+      widget.onClosing();
+      await WidgetsBinding.instance.endOfFrame;
+      await _frameKey.currentState?.close();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      return;
+    }
+    await HapticFeedback.mediumImpact();
+    setState(() {
+      _busy = false;
+      _error = error;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: _MiniTerminalFrame(
+        key: _frameKey,
+        title: widget.title,
+        reduceMotion: widget.reduceMotion,
+        onStatus: widget.onStatus,
+        onOpenCompleted: widget.onOpened,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              widget.description,
+              style: const TextStyle(
+                color: _terminalText,
+                fontFamily: 'monospace',
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            for (var index = 0; index < widget.options.length; index++) ...[
+              _TerminalSelectionRow(
+                index: index,
+                label: widget.options[index],
+                selected: _selectedIndex == index,
+                enabled: !_busy,
+                reduceMotion: widget.reduceMotion,
+                onPressed: () {
+                  setState(() {
+                    _selectedIndex = index;
+                    _error = null;
+                  });
+                  HapticFeedback.selectionClick();
+                },
+              ),
+              if (index != widget.options.length - 1)
+                const SizedBox(height: 7),
+            ],
+            AnimatedSwitcher(
+              duration: widget.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 160),
+              child: _error == null
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      key: ValueKey<String>(_error!),
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(
+                          color: _terminalError,
+                          fontFamily: 'monospace',
+                          fontSize: 10.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: _TerminalDialogActionButton(
+                label: widget.confirmLabel,
+                busy: _busy,
+                enabled: !_busy && _selectedIndex != null,
+                reduceMotion: widget.reduceMotion,
+                onPressed: _confirm,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TerminalDialogField extends StatelessWidget {
+  const _TerminalDialogField({
+    required this.label,
+    required this.controller,
+    required this.focusNode,
+    required this.enabled,
+    required this.errorText,
+    required this.textInputAction,
+    required this.onSubmitted,
+    this.keyboardType = TextInputType.text,
+    this.obscureText = false,
+    this.inputFormatters,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool enabled;
+  final String? errorText;
+  final TextInputType keyboardType;
+  final bool obscureText;
+  final TextInputAction textInputAction;
+  final List<TextInputFormatter>? inputFormatters;
+  final ValueChanged<String> onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: focusNode,
+      builder: (context, child) {
+        final active = focusNode.hasFocus;
+        final borderColor = errorText != null
+            ? _terminalError
+            : active
+                ? _terminalPrompt
+                : _terminalBorder;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: active ? _terminalPrompt : _terminalMuted,
+                fontFamily: 'monospace',
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .35,
+              ),
+            ),
+            const SizedBox(height: 6),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              curve: Curves.easeOutCubic,
+              constraints: const BoxConstraints(minHeight: 42),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: _terminalHeader.withOpacity(.58),
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(color: borderColor),
+              ),
+              child: TextField(
+                controller: controller,
+                focusNode: focusNode,
+                enabled: enabled,
+                keyboardType: keyboardType,
+                obscureText: obscureText,
+                textInputAction: textInputAction,
+                inputFormatters: inputFormatters,
+                autocorrect: false,
+                enableSuggestions: false,
+                cursorColor: _terminalPrompt,
+                cursorWidth: 2,
+                style: const TextStyle(
+                  color: _terminalText,
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: 11),
+                ),
+                onSubmitted: onSubmitted,
+              ),
+            ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 140),
+              child: errorText == null
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      key: ValueKey<String>(errorText!),
+                      padding: const EdgeInsets.only(top: 5),
+                      child: Text(
+                        errorText!,
+                        style: const TextStyle(
+                          color: _terminalError,
+                          fontFamily: 'monospace',
+                          fontSize: 9.5,
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _TerminalSelectionRow extends StatelessWidget {
+  const _TerminalSelectionRow({
+    required this.index,
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.reduceMotion,
+    required this.onPressed,
+  });
+
+  final int index;
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final bool reduceMotion;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onPressed : null,
+          borderRadius: BorderRadius.circular(5),
+          child: AnimatedContainer(
+            duration:
+                reduceMotion ? Duration.zero : const Duration(milliseconds: 150),
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            decoration: BoxDecoration(
+              color: selected
+                  ? _terminalPrompt.withOpacity(.08)
+                  : _terminalHeader.withOpacity(.42),
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(
+                color: selected ? _terminalPrompt : _terminalBorder,
+              ),
+            ),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 150),
+                  width: 20,
+                  height: 20,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected ? _terminalPrompt : _terminalMuted,
+                    ),
+                  ),
+                  child: AnimatedScale(
+                    scale: selected ? 1 : 0,
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 150),
+                    curve: Curves.easeOutBack,
+                    child: Container(
+                      width: 10,
+                      height: 10,
+                      decoration: const BoxDecoration(
+                        color: _terminalPrompt,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '${index + 1}'.padLeft(2, '0'),
+                  style: const TextStyle(
+                    color: _terminalPath,
+                    fontFamily: 'monospace',
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: selected ? _terminalText : _terminalMuted,
+                      fontFamily: 'monospace',
+                      fontSize: 11.5,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TerminalDialogActionButton extends StatelessWidget {
+  const _TerminalDialogActionButton({
+    required this.label,
+    required this.busy,
+    required this.enabled,
+    required this.reduceMotion,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool busy;
+  final bool enabled;
+  final bool reduceMotion;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      duration:
+          reduceMotion ? Duration.zero : const Duration(milliseconds: 140),
+      opacity: enabled || busy ? 1 : .42,
+      child: SizedBox(
+        height: 40,
+        child: OutlinedButton(
+          onPressed: enabled ? onPressed : null,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _terminalPrompt,
+            side: BorderSide(
+              color: enabled ? _terminalPrompt : _terminalBorder,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(5),
+            ),
+          ),
+          child: AnimatedSwitcher(
+            duration:
+                reduceMotion ? Duration.zero : const Duration(milliseconds: 150),
+            child: busy
+                ? const SizedBox(
+                    key: ValueKey<String>('busy'),
+                    width: 17,
+                    height: 17,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.8,
+                      color: _terminalPrompt,
+                    ),
+                  )
+                : Text(
+                    label,
+                    key: ValueKey<String>(label),
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: .4,
+                    ),
+                  ),
           ),
         ),
       ),

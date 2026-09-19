@@ -181,6 +181,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WorkStatusNotificationController.flushPendingNavigation();
+    });
   }
 
   @override
@@ -205,7 +208,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
     if (state == AppLifecycleState.resumed) {
       unawaited(
-        WorkStatusNotificationController.refresh(
+        WorkStatusNotificationController.reconcileOnResume(
           source: 'app_lifecycle_resumed',
         ),
       );
@@ -235,6 +238,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             onUnknownRoute: (_) =>
                 MaterialPageRoute(builder: (_) => const NotFoundPage()),
             navigatorKey: AppNavigator.key,
+            navigatorObservers: <NavigatorObserver>[AppNavigator.observer],
             builder: (context, child) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 debugPrint('[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');

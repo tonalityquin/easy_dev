@@ -11,6 +11,7 @@ import '../../../shared/tts/services/plate/plate_tts_listener_service.dart';
 import '../../commute/domain/repositories/commute_log_repository.dart';
 import '../../mode_single/application/att_brk_repository.dart';
 import '../../dashboard/applications/common/firebase_google_auth_bridge.dart';
+import '../../launcher/application/launcher_diagnostics.dart';
 import '../../dev/application/area_state.dart';
 import 'tablet_account_diagnostics.dart';
 import '../domain/models/session_account.dart';
@@ -212,6 +213,22 @@ class UserState extends ChangeNotifier {
   }
 
   Future<void> setWorkingStatus(bool isWorking) async {
+    final prefs = await SharedPreferences.getInstance();
+    final localBefore = prefs.getBool('isWorking') ?? false;
+    final sessionBefore = _session?.isWorking;
+    await prefs.setBool('isWorking', isWorking);
+    LauncherDiagnostics.record(
+      'working_state_write',
+      scope: 'working_state',
+      meta: <String, Object?>{
+        'source': 'UserState.setWorkingStatus',
+        'localBefore': localBefore,
+        'sessionBefore': sessionBefore,
+        'requested': isWorking,
+        'tablet': _isTablet,
+      },
+    );
+
     if (_isTablet) {
       if (_tablet == null || _tablet!.isWorking == isWorking) return;
       await _repository.updateWorkingTabletStatus(
@@ -221,6 +238,15 @@ class UserState extends ChangeNotifier {
       _tablet = _tablet!.copyWith(isWorking: isWorking);
       _session = TabletSessionAccount(_tablet!);
       notifyListeners();
+      LauncherDiagnostics.record(
+        'working_state_applied',
+        scope: 'working_state',
+        meta: <String, Object?>{
+          'source': 'UserState.setWorkingStatus',
+          'effective': _session?.isWorking,
+          'tablet': true,
+        },
+      );
       return;
     }
 
@@ -233,6 +259,15 @@ class UserState extends ChangeNotifier {
     _user = _user!.copyWith(isWorking: isWorking);
     _session = UserSessionAccount(_user!);
     notifyListeners();
+    LauncherDiagnostics.record(
+      'working_state_applied',
+      scope: 'working_state',
+      meta: <String, Object?>{
+        'source': 'UserState.setWorkingStatus',
+        'effective': _session?.isWorking,
+        'tablet': false,
+      },
+    );
   }
 
   Future<void> isHeWorking() async {
@@ -1082,9 +1117,17 @@ class UserState extends ChangeNotifier {
     await WorkSchedulePrefs.saveUserSchedule(prefs: prefs, user: user);
 
     try {
-      final map = user.toMap();
+      final map = Map<String, dynamic>.from(user.toMap());
+      map.remove('isWorking');
       final json = jsonEncode(map);
       await prefs.setString(_prefsKeyCachedUser, json);
+      LauncherDiagnostics.record(
+        'user_cache_saved',
+        scope: 'working_state',
+        meta: <String, Object?>{
+          'isWorkingExcluded': true,
+        },
+      );
     } catch (e, st) {
       debugPrint('saveCardToUserPhone cachedUserJson 저장 실패: $e\n$st');
     }
@@ -1124,6 +1167,7 @@ class UserState extends ChangeNotifier {
           prefs, WorkSchedulePrefs.endMapKey);
       final position = prefs.getString('position');
       final cachedJson = prefs.getString(_prefsKeyCachedUser);
+      final localIsWorking = prefs.getBool('isWorking') ?? false;
 
       if (phone == null || selectedArea == null || cachedJson == null) {
         return;
@@ -1137,6 +1181,7 @@ class UserState extends ChangeNotifier {
       final userId = "$phone-$selectedArea";
       final decoded = jsonDecode(cachedJson) as Map<String, dynamic>;
       var userData = UserModel.fromMap(userId, decoded);
+      final restoredIsWorking = userData.isWorking;
 
       _isTablet = false;
       final trimmedArea = selectedArea.trim();
@@ -1168,6 +1213,17 @@ class UserState extends ChangeNotifier {
             ? <String>[effectiveDivision]
             : userData.divisions,
         isSaved: true,
+        isWorking: localIsWorking,
+      );
+      LauncherDiagnostics.record(
+        'working_state_restore_reconciled',
+        scope: 'working_state',
+        meta: <String, Object?>{
+          'source': 'cached_user',
+          'modelBefore': restoredIsWorking,
+          'local': localIsWorking,
+          'effective': userData.isWorking,
+        },
       );
       await WorkSchedulePrefs.saveUserSchedule(prefs: prefs, user: userData);
 
@@ -1203,6 +1259,7 @@ class UserState extends ChangeNotifier {
       final endTimeByWeekday = WorkSchedulePrefs.readDayTimeMapFromPrefs(
           prefs, WorkSchedulePrefs.endMapKey);
       final position = prefs.getString('position');
+      final localIsWorking = prefs.getBool('isWorking') ?? false;
 
       if (phone == null || selectedArea == null) return;
 
@@ -1214,6 +1271,7 @@ class UserState extends ChangeNotifier {
       final userId = "$phone-$selectedArea";
       var userData = await _repository.getUserById(userId);
       if (userData == null) return;
+      final restoredIsWorking = userData.isWorking;
 
       _isTablet = false;
       final trimmedArea = selectedArea.trim();
@@ -1238,6 +1296,17 @@ class UserState extends ChangeNotifier {
         endTimeByWeekday: effectiveEndByWeekday,
         divisions: division != null ? [division] : userData.divisions,
         isSaved: true,
+        isWorking: localIsWorking,
+      );
+      LauncherDiagnostics.record(
+        'working_state_restore_reconciled',
+        scope: 'working_state',
+        meta: <String, Object?>{
+          'source': 'remote_user',
+          'modelBefore': restoredIsWorking,
+          'local': localIsWorking,
+          'effective': userData.isWorking,
+        },
       );
       final loginDivision = userData.divisions.firstOrNull ?? '';
       await _areaState.refreshAreaForLogin(
@@ -1277,6 +1346,7 @@ class UserState extends ChangeNotifier {
       final position = prefs.getString('position');
       final englishSelectedAreaName =
           prefs.getString('englishSelectedAreaName')?.trim();
+      final localIsWorking = prefs.getBool('isWorking') ?? false;
 
       if (selectedArea == null || selectedArea.isEmpty) return;
 
@@ -1327,6 +1397,7 @@ class UserState extends ChangeNotifier {
       );
       final sourceId = tablet.id;
       final effectiveId = canonicalId.isEmpty ? sourceId : canonicalId;
+      final restoredIsWorking = tablet.isWorking;
       final tabletData = tablet.copyWith(
         id: effectiveId,
         currentArea: selectedArea,
@@ -1338,6 +1409,17 @@ class UserState extends ChangeNotifier {
             ? englishSelectedAreaName
             : tablet.englishSelectedAreaName,
         isSaved: true,
+        isWorking: localIsWorking,
+      );
+      LauncherDiagnostics.record(
+        'working_state_restore_reconciled',
+        scope: 'working_state',
+        meta: <String, Object?>{
+          'source': 'remote_tablet',
+          'modelBefore': restoredIsWorking,
+          'local': localIsWorking,
+          'effective': tabletData.isWorking,
+        },
       );
 
       if (canonicalId.isNotEmpty && sourceId != canonicalId) {

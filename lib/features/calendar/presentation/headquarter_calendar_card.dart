@@ -1237,33 +1237,51 @@ class _HeadquarterCalendarCardState extends State<HeadquarterCalendarCard>
             children: [
               Icon(Icons.calendar_month_rounded, color: tokens.accent, size: 20),
               const SizedBox(width: 8),
+              Text(
+                '일정',
+                maxLines: 1,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: tokens.textPrimary,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -.15,
+                    ),
+              ),
+              const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  '일정',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: -.15,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ValueListenableBuilder<bool>(
+                      valueListenable: DevAuth.devModeEnabled,
+                      builder: (context, enabled, child) {
+                        if (!enabled) return const SizedBox.shrink();
+                        return IconButton(
+                          onPressed: _showCalendarDeveloperStatus,
+                          tooltip: '상태',
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints.tightFor(
+                            width: 36,
+                            height: 36,
+                          ),
+                          padding: EdgeInsets.zero,
+                          icon: Icon(
+                            Icons.bug_report_outlined,
+                            color: tokens.textSecondary,
+                            size: 18,
+                          ),
+                        );
+                      },
+                    ),
+                    if (widget.headerTrailing != null)
+                      Flexible(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: widget.headerTrailing!,
+                        ),
                       ),
+                  ],
                 ),
               ),
-              ValueListenableBuilder<bool>(
-                valueListenable: DevAuth.devModeEnabled,
-                builder: (context, enabled, child) {
-                  if (!enabled) return const SizedBox.shrink();
-                  return IconButton(
-                    onPressed: _showCalendarDeveloperStatus,
-                    tooltip: '상태',
-                    visualDensity: VisualDensity.compact,
-                    icon: Icon(
-                      Icons.bug_report_outlined,
-                      color: tokens.textSecondary,
-                      size: 18,
-                    ),
-                  );
-                },
-              ),
-              if (widget.headerTrailing != null) widget.headerTrailing!,
             ],
           ),
         );

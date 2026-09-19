@@ -18,6 +18,7 @@ import '../../../shared/work_session/application/work_area_session_coordinator.d
 import '../domain/attendance_action_result.dart';
 import '../domain/attendance_context.dart';
 import 'attendance_diagnostics.dart';
+import 'break_punch_use_case.dart';
 
 class CommonAttendanceService {
   CommonAttendanceService._();
@@ -180,85 +181,29 @@ class CommonAttendanceService {
       );
       return const AttendanceActionResult.failure(message: message);
     }
-
     final now = recordedAt ?? DateTime.now();
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.reload();
-      final requiresBreak = WorkSchedulePrefs.requiresBreakOnDateFromPrefs(
-        prefs,
-        now,
-        defaultWhenUnset: true,
-      );
-      final events = await AttBrkRepository.instance.getEventsForDate(now);
-      final hasWorkIn = events.containsKey(AttBrkModeType.workIn);
-      final hasWorkOut = events.containsKey(AttBrkModeType.workOut);
-      final hasBreak = events.containsKey(AttBrkModeType.breakTime);
+      final result = await BreakPunchUseCase.execute(recordedAt: now);
       _record(
-        'break_policy_check',
-        attendance,
-        trace: trace,
-        extra: <String, Object?>{
-          'requiresBreak': requiresBreak,
-          'hasWorkIn': hasWorkIn,
-          'hasWorkOut': hasWorkOut,
-          'hasBreak': hasBreak,
-          'scheduledTimeRequired': false,
-        },
-      );
-      if (!requiresBreak) {
-        const message = '선택한 날짜에는 휴게가 활성화되어 있지 않습니다.';
-        _record(
-          'break_blocked_not_required',
-          attendance,
-          trace: trace,
-          extra: const <String, Object?>{'message': message},
-        );
-        return const AttendanceActionResult.failure(message: message);
-      }
-      if (!hasWorkIn) {
-        const message = '출근 기록 후 휴게를 기록할 수 있습니다.';
-        _record(
-          'break_blocked_without_clock_in',
-          attendance,
-          trace: trace,
-          extra: const <String, Object?>{'message': message},
-        );
-        return const AttendanceActionResult.failure(message: message);
-      }
-      if (hasWorkOut) {
-        const message = '퇴근이 완료된 뒤에는 휴게를 기록할 수 없습니다.';
-        _record(
-          'break_blocked_after_clock_out',
-          attendance,
-          trace: trace,
-          extra: const <String, Object?>{'message': message},
-        );
-        return const AttendanceActionResult.failure(message: message);
-      }
-      _record(
-        'break_start',
+        result.success ? 'break_complete' : 'break_blocked',
         attendance,
         trace: trace,
         extra: <String, Object?>{
           'at': now.toIso8601String(),
-          'repunch': hasBreak,
+          'success': result.success,
+          'alreadyRecorded': result.alreadyRecorded,
+          'message': result.message,
         },
       );
-      await AttBrkRepository.instance.insertEvent(
-        dateTime: now,
-        type: AttBrkModeType.breakTime,
-      );
-      await prefs.setString('last_break_date', _dateKey(now));
-      _record(
-        'break_complete',
-        attendance,
-        trace: trace,
-        extra: <String, Object?>{'at': now.toIso8601String()},
+      if (!result.success) {
+        return AttendanceActionResult.failure(message: result.message);
+      }
+      await WorkStatusNotificationController.refresh(
+        source: 'attendance_break_recorded',
       );
       return AttendanceActionResult.success(
-        recordedAt: now,
-        message: '휴게 기록이 완료되었습니다.',
+        recordedAt: result.recordedAt ?? now,
+        message: result.message,
       );
     } catch (error, stackTrace) {
       _record(
@@ -307,10 +252,9 @@ class CommonAttendanceService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
-      final requiresBreak = WorkSchedulePrefs.requiresBreakOnDateFromPrefs(
+      final requiresBreak = WorkSchedulePrefs.requiresBreakOnDate(
         prefs,
         now,
-        defaultWhenUnset: true,
       );
       final events = await AttBrkRepository.instance.getEventsForDate(now);
       final hasWorkIn = events.containsKey(AttBrkModeType.workIn);
@@ -645,13 +589,6 @@ class CommonAttendanceService {
     trace?.log(
       'attendance $event ${meta.entries.map((entry) => '${entry.key}=${entry.value}').join(' ')}',
     );
-  }
-
-  static String _dateKey(DateTime value) {
-    final year = value.year.toString().padLeft(4, '0');
-    final month = value.month.toString().padLeft(2, '0');
-    final day = value.day.toString().padLeft(2, '0');
-    return '$year-$month-$day';
   }
 
   static bool _isToday(DateTime value) {

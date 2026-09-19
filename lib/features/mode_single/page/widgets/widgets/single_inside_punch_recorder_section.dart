@@ -72,10 +72,9 @@ class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchReco
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
-      final requiresBreak = WorkSchedulePrefs.requiresBreakOnDateFromPrefs(
+      final requiresBreak = WorkSchedulePrefs.requiresBreakOnDate(
         prefs,
         _selectedDate,
-        defaultWhenUnset: true,
       );
       if (!mounted) return;
       if (_requiresBreak != requiresBreak) {
@@ -97,10 +96,9 @@ class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchReco
       final events = await AttBrkRepository.instance.getEventsForDate(date);
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
-      final requiresBreak = WorkSchedulePrefs.requiresBreakOnDateFromPrefs(
+      final requiresBreak = WorkSchedulePrefs.requiresBreakOnDate(
         prefs,
         date,
-        defaultWhenUnset: true,
       );
       if (!mounted) return;
       setState(() {

@@ -60,10 +60,9 @@ class _DoubleDashboardInsidePunchRecorderSectionState extends State<DoubleDashbo
       final events = await AttBrkRepository.instance.getEventsForDate(date);
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
-      final requiresBreak = WorkSchedulePrefs.requiresBreakOnDateFromPrefs(
+      final requiresBreak = WorkSchedulePrefs.requiresBreakOnDate(
         prefs,
         date,
-        defaultWhenUnset: true,
       );
       if (!mounted) return;
       setState(() {

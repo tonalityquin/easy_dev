@@ -45,8 +45,10 @@ class CommonHqDashBoardPage extends StatelessWidget {
                 headerTrailing: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    HeadquarterWorkStatusHeaderIndicator(),
-                    SizedBox(width: 8),
+                    Flexible(
+                      child: HeadquarterWorkStatusHeaderIndicator(),
+                    ),
+                    SizedBox(width: 6),
                     HeadquarterSideDockLauncherToggle(),
                   ],
                 ),

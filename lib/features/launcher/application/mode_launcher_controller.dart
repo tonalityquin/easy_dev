@@ -34,10 +34,8 @@ import 'terminal_auth_coordinator.dart';
 
 enum TerminalLoginStage {
   command,
-  accountType,
-  name,
-  phone,
-  password,
+  accountTypeSelection,
+  credentials,
   authenticating,
   areaSelection,
   modeSelection,
@@ -49,19 +47,33 @@ class ModeLauncherSubmitResult {
     this.routeReplaced = false,
     this.surfaceCompletion,
     this.targetRoute,
-    this.promptText,
-    this.autoSubmitText,
-    this.selectPromptText = false,
-    this.keepFocus = true,
   });
 
   final bool routeReplaced;
   final Future<void>? surfaceCompletion;
   final String? targetRoute;
-  final String? promptText;
-  final String? autoSubmitText;
-  final bool selectPromptText;
-  final bool keepFocus;
+}
+
+class LauncherCredentialSubmitResult {
+  const LauncherCredentialSubmitResult({
+    this.flowResult = const ModeLauncherSubmitResult(),
+    this.nameError,
+    this.phoneError,
+    this.passwordError,
+    this.authenticationError,
+  });
+
+  final ModeLauncherSubmitResult flowResult;
+  final String? nameError;
+  final String? phoneError;
+  final String? passwordError;
+  final String? authenticationError;
+
+  bool get accepted =>
+      nameError == null &&
+      phoneError == null &&
+      passwordError == null &&
+      authenticationError == null;
 }
 
 class ModeLauncherController extends ChangeNotifier {
@@ -73,17 +85,13 @@ class ModeLauncherController extends ChangeNotifier {
   static const String nameDisplayLabel = 'NAME or Unique';
   static const String phoneDisplayLabel = 'TEL or Code';
   static const String passwordDisplayLabel = 'PW or Serial';
-  static const String _namePrompt = '이름 혹은 유니크 명을 입력하세요.';
-  static const String _nameReprompt = '이름 혹은 유니크 명을 다시 입력하세요.';
-  static const String _phonePrompt = '전화번호 혹은 코드 번호를 입력하세요.';
-  static const String _phoneReprompt = '전화번호 혹은 코드 번호를 다시 입력하세요.';
-  static const String _passwordPrompt = '비밀번호 혹은 시리얼 넘버를 입력하세요.';
-  static const String _passwordReprompt = '비밀번호 혹은 시리얼 넘버를 다시 입력하세요.';
-  static const String _phoneError = '[ERROR] 전화번호 혹은 코드 번호를 다시 확인하세요.';
-  static const String _passwordError = '[ERROR] 비밀번호 혹은 시리얼 넘버를 다시 확인하세요.';
-
-  static String _authOutputLine(String label, String value) =>
-      '${label.padRight(16)}$value';
+  static const String _credentialRequiredMessage = '계정 인증이 필요합니다.';
+  static const String _accountTypeSelectionMessage = '계정 유형 선택이 필요합니다.';
+  static const String _workAreaSelectionMessage = '업무 지역 선택이 필요합니다.';
+  static const String _modeSelectionMessage = '업무 모드 선택이 필요합니다.';
+  static const String _nameError = '이름 혹은 유니크 명을 다시 확인하세요.';
+  static const String _phoneError = '전화번호 혹은 코드 번호를 다시 확인하세요.';
+  static const String _passwordError = '비밀번호 혹은 시리얼 넘버를 다시 확인하세요.';
 
   ModeLauncherController({StartupReport? startupReport})
       : _startupReport = startupReport ?? StartupTasks.lastReport {
@@ -122,7 +130,6 @@ class ModeLauncherController extends ChangeNotifier {
   LauncherWorkAreaOption? _selectedWorkArea;
   List<AppModeDefinition> _supportedModes = <AppModeDefinition>[];
   String? _pendingTargetRoute;
-  String? _pendingAutoSubmitText;
   String _runningCommand = '';
   bool? _foregroundRunning;
   TerminalLoginStage _loginStage = TerminalLoginStage.command;
@@ -135,10 +142,11 @@ class ModeLauncherController extends ChangeNotifier {
 
   List<TerminalLine> get lines => List<TerminalLine>.unmodifiable(_lines);
   LauncherStartupSetupCoordinator get startupSetup => _startupSetupCoordinator;
+  bool get startupSetupPanelActive =>
+      !_startupSetupResolved || !_startupSetupCoordinator.complete;
+  bool get authenticationBootstrapped => _authenticationBootstrapped;
   bool get startupSetupActive =>
-      !_startupSetupResolved ||
-      !_startupSetupCoordinator.complete ||
-      !_authenticationBootstrapped;
+      startupSetupPanelActive || !_authenticationBootstrapped;
   bool get startupSetupBusy => _startupSetupCoordinator.busy;
   bool get startupSetupAwaitingExternalSettings =>
       _startupSetupCoordinator.awaitingExternalSettings;
@@ -170,16 +178,12 @@ class ModeLauncherController extends ChangeNotifier {
   TerminalLoginStage get loginStage => _loginStage;
   String get enteredName => _enteredName;
   String get enteredPhone => _enteredPhone;
-  bool get showAuthSummary => _selectedAccountKind != null ||
+  bool get showAuthSummary =>
+      _selectedAccountKind != null ||
       _selectedMode != null ||
       _selectedWorkArea != null ||
-      _enteredName.isNotEmpty ||
-      _enteredPhone.isNotEmpty ||
-      _enteredPassword.isNotEmpty;
-  bool get obscurePrompt =>
-      !startupSetupActive &&
-      _commandPath.isRoot &&
-      _loginStage == TerminalLoginStage.password;
+      _enteredName.isNotEmpty;
+  bool get obscurePrompt => false;
   bool get commandHistoryEnabled {
     if (startupSetupActive) return false;
     if (_commandPath.isEmailEdit) return false;
@@ -188,24 +192,27 @@ class ModeLauncherController extends ChangeNotifier {
   bool get canNavigateBack {
     if (startupSetupActive) return false;
     if (!_commandPath.isRoot || _busy) return false;
-    if (_loginStage == TerminalLoginStage.name && _accountKindAutoSelected) {
+    if (_loginStage == TerminalLoginStage.credentials &&
+        _accountKindAutoSelected) {
       return false;
     }
     return <TerminalLoginStage>{
-      TerminalLoginStage.name,
-      TerminalLoginStage.phone,
-      TerminalLoginStage.password,
+      TerminalLoginStage.credentials,
       TerminalLoginStage.areaSelection,
       TerminalLoginStage.modeSelection,
     }.contains(_loginStage);
   }
-  bool get canCancelAuthentication => !startupSetupActive &&
-      _commandPath.isRoot && !_busy &&
+  bool get canCancelAuthentication =>
+      !startupSetupActive &&
+      _commandPath.isRoot &&
+      !_busy &&
       _loginStage != TerminalLoginStage.command &&
       _loginStage != TerminalLoginStage.authenticating &&
       _loginStage != TerminalLoginStage.activatingMode;
-  bool get canReturnToModes => !startupSetupActive &&
-      _commandPath.isRoot && !_busy &&
+  bool get canReturnToModes =>
+      !startupSetupActive &&
+      _commandPath.isRoot &&
+      !_busy &&
       _authenticatedAccount != null &&
       ((_authenticatedAccount!.kind == TerminalAccountKind.user &&
               _availableWorkAreas.isNotEmpty) ||
@@ -215,52 +222,14 @@ class ModeLauncherController extends ChangeNotifier {
       _loginStage != TerminalLoginStage.activatingMode;
   String get returnSelectionLabel =>
       _authenticatedAccount?.kind == TerminalAccountKind.user ? 'AREAS' : 'MODES';
-  bool shouldDismissKeyboardForInput(String raw) {
-    if (_commandPath.isSetting) return false;
-    if (_loginStage != TerminalLoginStage.password) return false;
-    final normalized = AppModeRegistry.normalizeToken(raw.trim());
-    return !_isAuthenticationControlCommand(normalized);
-  }
-  TextInputAction get promptInputAction => startupSetupActive
-      ? TextInputAction.done
-      : _commandPath.isSetting
-      ? TextInputAction.done
-      : switch (_loginStage) {
-        TerminalLoginStage.accountType ||
-        TerminalLoginStage.name ||
-        TerminalLoginStage.phone =>
-          TextInputAction.next,
-        _ => TextInputAction.done,
-        };
-  TextInputType get promptKeyboardType {
-    if (startupSetupActive) return TextInputType.text;
-    if (_commandPath.isEmailEdit) return TextInputType.emailAddress;
-    if (_commandPath.isSetting) return TextInputType.text;
-    return switch (_loginStage) {
-      TerminalLoginStage.phone => TextInputType.phone,
-      TerminalLoginStage.password =>
-        _selectedAccountKind == TerminalAccountKind.personal
-            ? TextInputType.number
-            : TextInputType.visiblePassword,
-      _ => TextInputType.text,
-    };
-  }
+  bool shouldDismissKeyboardForInput(String raw) => false;
+  TextInputAction get promptInputAction => TextInputAction.done;
+  TextInputType get promptKeyboardType => TextInputType.text;
 
   String? consumePendingTargetRoute() {
     final route = _pendingTargetRoute;
     _pendingTargetRoute = null;
     return route;
-  }
-
-  String? consumePendingAutoSubmitText() {
-    final value = _pendingAutoSubmitText;
-    _pendingAutoSubmitText = null;
-    return value;
-  }
-
-  String get maskedPassword {
-    if (_enteredPassword.isEmpty) return '';
-    return List<String>.filled(_enteredPassword.length, '•').join();
   }
 
   int _nextId() => ++_sequence;
@@ -475,13 +444,29 @@ class ModeLauncherController extends ChangeNotifier {
       return;
     }
     _authenticationBootstrapInFlight = true;
+    _busy = true;
+    _runningCommand = 'STARTUP';
     notifyListeners();
     try {
-      _append(TerminalLineType.success, '[ OK ] Startup setup complete');
+      _append(
+        TerminalLineType.success,
+        '[ OK ] Startup setup complete',
+        cadence: TerminalCadence.instant,
+      );
       LauncherDiagnostics.record(
         'startup_setup_complete',
         meta: _startupSetupCoordinator.debugMeta(),
       );
+      _append(
+        TerminalLineType.running,
+        'Initializing startup services',
+        cadence: TerminalCadence.instant,
+      );
+      LauncherDiagnostics.record(
+        'startup_services_initialization_started',
+        meta: _startupSetupCoordinator.debugMeta(),
+      );
+      notifyListeners();
       final report = await StartupTasks.runAfterPermissions();
       _startupReport = report;
       await _refreshLiveStatus();
@@ -489,6 +474,7 @@ class ModeLauncherController extends ChangeNotifier {
       _append(
         report.allReady ? TerminalLineType.success : TerminalLineType.system,
         '${report.allReady ? '[ OK ]' : '[WARN]'} Startup services ${report.readyCount}/4',
+        cadence: TerminalCadence.instant,
       );
       LauncherDiagnostics.record(
         'authentication_bootstrap_after_startup_setup',
@@ -509,6 +495,12 @@ class ModeLauncherController extends ChangeNotifier {
     } finally {
       if (!_authenticationBootstrapped) {
         _authenticationBootstrapInFlight = false;
+        if (_runningCommand == 'STARTUP' ||
+            _runningCommand == 'SESSION_CHECK' ||
+            _runningCommand == 'SESSION_RESTORE') {
+          _busy = false;
+          _runningCommand = '';
+        }
         if (!_disposed) notifyListeners();
       }
     }
@@ -571,9 +563,8 @@ class ModeLauncherController extends ChangeNotifier {
         'nameLabel': nameDisplayLabel,
         'phoneLabel': phoneDisplayLabel,
         'passwordLabel': passwordDisplayLabel,
-        'namePrompt': _namePrompt,
-        'phonePrompt': _phonePrompt,
-        'passwordPrompt': _passwordPrompt,
+        'credentialSurface': 'dialog',
+        'credentialStage': 'credentials',
         'historyColumnWidth': 16,
         'summaryLabelWidth': 120,
         'summaryResizeMs': reduceMotion ? 0 : 190,
@@ -868,8 +859,8 @@ class ModeLauncherController extends ChangeNotifier {
     final commands = <String>[
       'modes       업무 지역/모드 목록',
       'account     로그인 전 계정 유형 변경',
-      'back        이전 입력 단계',
-      'cancel      로그인 입력 취소',
+      'back        이전 인증/선택 단계',
+      'cancel      로그인 인증 취소',
       'status      시스템 상태',
       'setting     설정 경로',
       'update      업데이트',
@@ -1056,9 +1047,8 @@ class ModeLauncherController extends ChangeNotifier {
       'Name display: $nameDisplayLabel',
       'Phone display: $phoneDisplayLabel',
       'Password display: $passwordDisplayLabel',
-      'Name prompt: $_namePrompt',
-      'Phone prompt: $_phonePrompt',
-      'Password prompt: $_passwordPrompt',
+      'Credential surface: dialog',
+      'Credential stage: credentials',
       'Account kind: ${_selectedAccountKind == null ? '-' : TerminalAuthCoordinator.accountKindId(_selectedAccountKind!)}',
       'Startup purpose: ${_startupPurpose?.storageValue ?? '-'}',
       'Default account kind: ${_defaultAccountKind == null ? '-' : TerminalAuthCoordinator.accountKindId(_defaultAccountKind!)}',
@@ -1181,7 +1171,7 @@ class ModeLauncherController extends ChangeNotifier {
       if (_isNavigationCommand(normalized)) {
         return _submitNavigationCommand(normalized);
       }
-      final commandWindow = _loginStage == TerminalLoginStage.accountType ||
+      final commandWindow = _loginStage == TerminalLoginStage.accountTypeSelection ||
           _loginStage == TerminalLoginStage.areaSelection ||
           _loginStage == TerminalLoginStage.modeSelection;
       final authenticationGlobal = _isAuthenticationGlobalCommand(normalized);
@@ -1270,12 +1260,6 @@ class ModeLauncherController extends ChangeNotifier {
     return normalized == 'status' || normalized == '상태';
   }
 
-  bool _isAuthenticationControlCommand(String normalized) {
-    return _isNavigationCommand(normalized) ||
-        _isAccountTypeEscapeCommand(normalized) ||
-        _isAuthenticationGlobalCommand(normalized);
-  }
-
   ModeLauncherSubmitResult _submitNavigationCommand(String normalized) {
     switch (normalized) {
       case 'back':
@@ -1313,11 +1297,7 @@ class ModeLauncherController extends ChangeNotifier {
       return const ModeLauncherSubmitResult();
     }
     if (_authenticatedAccount != null ||
-        !<TerminalLoginStage>{
-          TerminalLoginStage.name,
-          TerminalLoginStage.phone,
-          TerminalLoginStage.password,
-        }.contains(_loginStage)) {
+        _loginStage != TerminalLoginStage.credentials) {
       _append(TerminalLineType.error, '[DENIED] Account override unavailable');
       _errorSerial += 1;
       LauncherDiagnostics.record(
@@ -1367,12 +1347,12 @@ class ModeLauncherController extends ChangeNotifier {
     _enteredPassword = '';
     _accountKindAutoSelected = false;
     _debugAccountKindOverride = true;
-    _loginStage = TerminalLoginStage.accountType;
+    _loginStage = TerminalLoginStage.accountTypeSelection;
     _busy = false;
     _runningCommand = '';
     _append(TerminalLineType.success, '[ OK ] DEBUG account override');
     _appendAccountTypeList();
-    _append(TerminalLineType.system, '계정 유형을 입력하세요.');
+    _append(TerminalLineType.system, _accountTypeSelectionMessage);
     LauncherDiagnostics.record(
       'auth_account_kind_debug_override_opened',
       meta: <String, Object?>{
@@ -1408,18 +1388,18 @@ class ModeLauncherController extends ChangeNotifier {
       },
     );
     notifyListeners();
-    return const ModeLauncherSubmitResult(promptText: '');
+    return const ModeLauncherSubmitResult();
   }
 
   ModeLauncherSubmitResult _goBackAuthentication() {
     if (_busy) return const ModeLauncherSubmitResult();
     switch (_loginStage) {
-      case TerminalLoginStage.name:
+      case TerminalLoginStage.credentials:
         if (_accountKindAutoSelected) {
           LauncherDiagnostics.record(
             'auth_navigation_back_blocked',
             meta: <String, Object?>{
-              'stage': 'name',
+              'stage': 'credentials',
               'reason': 'startupPurposeAutoSelection',
               'startupPurpose': _startupPurpose?.storageValue ?? '',
               'accountKind': _selectedAccountKind == null
@@ -1431,58 +1411,25 @@ class ModeLauncherController extends ChangeNotifier {
           );
           return const ModeLauncherSubmitResult();
         }
-        _loginStage = TerminalLoginStage.accountType;
+        _loginStage = TerminalLoginStage.accountTypeSelection;
         _appendAccountTypeList();
-        _append(TerminalLineType.system, '계정 유형을 다시 선택하세요.');
+        _append(TerminalLineType.system, _accountTypeSelectionMessage);
         LauncherDiagnostics.record(
           'auth_navigation_back',
-          meta: <String, Object?>{'from': 'name', 'to': 'accountType'},
+          meta: const <String, Object?>{
+            'from': 'credentials',
+            'to': 'accountTypeSelection',
+          },
         );
         notifyListeners();
         return const ModeLauncherSubmitResult();
-      case TerminalLoginStage.phone:
-        _enteredPassword = '';
-        _authenticatedAccount = null;
-        _availableWorkAreas = <LauncherWorkAreaOption>[];
-        _selectedWorkArea = null;
-        _supportedModes = <AppModeDefinition>[];
-        _selectedMode = null;
-        _loginStage = TerminalLoginStage.name;
-        _append(TerminalLineType.system, _nameReprompt);
-        LauncherDiagnostics.record(
-          'auth_navigation_back',
-          meta: <String, Object?>{'from': 'phone', 'to': 'name'},
-        );
-        notifyListeners();
-        return ModeLauncherSubmitResult(
-          promptText: _enteredName,
-          selectPromptText: true,
-        );
-      case TerminalLoginStage.password:
-        _enteredPassword = '';
-        _authenticatedAccount = null;
-        _availableWorkAreas = <LauncherWorkAreaOption>[];
-        _selectedWorkArea = null;
-        _supportedModes = <AppModeDefinition>[];
-        _selectedMode = null;
-        _loginStage = TerminalLoginStage.phone;
-        _append(TerminalLineType.system, _phoneReprompt);
-        LauncherDiagnostics.record(
-          'auth_navigation_back',
-          meta: <String, Object?>{'from': 'password', 'to': 'phone'},
-        );
-        notifyListeners();
-        return ModeLauncherSubmitResult(
-          promptText: _enteredPhone,
-          selectPromptText: true,
-        );
       case TerminalLoginStage.areaSelection:
         final account = _authenticatedAccount;
         if (account?.activated == true) {
           _appendWorkAreaList();
           _append(
             TerminalLineType.system,
-            '복원된 로그인 세션은 유지됩니다. 업무 지역을 선택하세요.',
+            '복원된 로그인 세션은 유지됩니다. 업무 지역 선택이 필요합니다.',
           );
           LauncherDiagnostics.record(
             'auth_navigation_back_blocked',
@@ -1499,11 +1446,14 @@ class ModeLauncherController extends ChangeNotifier {
         _supportedModes = <AppModeDefinition>[];
         _selectedMode = null;
         _enteredPassword = '';
-        _loginStage = TerminalLoginStage.password;
-        _append(TerminalLineType.system, _passwordReprompt);
+        _loginStage = TerminalLoginStage.credentials;
+        _append(TerminalLineType.system, '계정 인증을 다시 진행합니다.');
         LauncherDiagnostics.record(
           'auth_navigation_back',
-          meta: <String, Object?>{'from': 'areaSelection', 'to': 'password'},
+          meta: const <String, Object?>{
+            'from': 'areaSelection',
+            'to': 'credentials',
+          },
         );
         notifyListeners();
         return const ModeLauncherSubmitResult();
@@ -1517,10 +1467,13 @@ class ModeLauncherController extends ChangeNotifier {
           _selectedWorkArea = null;
           _loginStage = TerminalLoginStage.areaSelection;
           _appendWorkAreaList();
-          _append(TerminalLineType.system, '업무 지역을 다시 선택하세요.');
+          _append(TerminalLineType.system, _workAreaSelectionMessage);
           LauncherDiagnostics.record(
             'auth_navigation_back',
-            meta: <String, Object?>{'from': 'modeSelection', 'to': 'areaSelection'},
+            meta: const <String, Object?>{
+              'from': 'modeSelection',
+              'to': 'areaSelection',
+            },
           );
           notifyListeners();
           return const ModeLauncherSubmitResult();
@@ -1528,7 +1481,7 @@ class ModeLauncherController extends ChangeNotifier {
         if (account?.activated == true) {
           _append(
             TerminalLineType.system,
-            '복원된 로그인 세션은 유지됩니다. 지원 모드 중 하나를 선택하세요.',
+            '복원된 로그인 세션은 유지됩니다. 업무 모드 선택이 필요합니다.',
           );
           LauncherDiagnostics.record(
             'auth_navigation_back_blocked',
@@ -1545,15 +1498,18 @@ class ModeLauncherController extends ChangeNotifier {
         _supportedModes = <AppModeDefinition>[];
         _selectedMode = null;
         _enteredPassword = '';
-        _loginStage = TerminalLoginStage.password;
-        _append(TerminalLineType.system, _passwordReprompt);
+        _loginStage = TerminalLoginStage.credentials;
+        _append(TerminalLineType.system, '계정 인증을 다시 진행합니다.');
         LauncherDiagnostics.record(
           'auth_navigation_back',
-          meta: <String, Object?>{'from': 'modeSelection', 'to': 'password'},
+          meta: const <String, Object?>{
+            'from': 'modeSelection',
+            'to': 'credentials',
+          },
         );
         notifyListeners();
         return const ModeLauncherSubmitResult();
-      case TerminalLoginStage.accountType:
+      case TerminalLoginStage.accountTypeSelection:
       case TerminalLoginStage.command:
       case TerminalLoginStage.authenticating:
       case TerminalLoginStage.activatingMode:
@@ -1574,14 +1530,14 @@ class ModeLauncherController extends ChangeNotifier {
         _appendWorkAreaList();
         _append(
           TerminalLineType.system,
-          '복원된 로그인 세션은 유지됩니다. 업무 지역을 입력하세요.',
+          '복원된 로그인 세션은 유지됩니다. 업무 지역 선택이 필요합니다.',
         );
       } else {
         _loginStage = TerminalLoginStage.modeSelection;
         _appendSupportedModeList();
         _append(
           TerminalLineType.system,
-          '복원된 로그인 세션은 유지됩니다. 사용할 모드를 입력하세요.',
+          '복원된 로그인 세션은 유지됩니다. 업무 모드 선택이 필요합니다.',
         );
       }
       LauncherDiagnostics.record(
@@ -1604,9 +1560,16 @@ class ModeLauncherController extends ChangeNotifier {
       _enteredName = '';
       _enteredPhone = '';
       _enteredPassword = '';
-      _loginStage = TerminalLoginStage.name;
-      _append(TerminalLineType.success, '[ OK ] 로그인 입력을 초기화했습니다.');
-      _append(TerminalLineType.system, _namePrompt);
+      _loginStage = TerminalLoginStage.credentials;
+      _append(
+        TerminalLineType.success,
+        '[ OK ] 계정 인증 정보를 초기화했습니다.',
+      );
+      _append(
+        TerminalLineType.system,
+        _credentialRequiredMessage,
+        cadence: TerminalCadence.instant,
+      );
       LauncherDiagnostics.record(
         'auth_navigation_cancel',
         meta: <String, Object?>{
@@ -1621,7 +1584,7 @@ class ModeLauncherController extends ChangeNotifier {
         },
       );
       notifyListeners();
-      return const ModeLauncherSubmitResult(promptText: '');
+      return const ModeLauncherSubmitResult();
     }
     _selectedAccountKind = null;
     _authenticatedAccount = null;
@@ -1636,10 +1599,10 @@ class ModeLauncherController extends ChangeNotifier {
     _sessionPersistence = _debugOverrideSnapshotActive
         ? TerminalSessionPersistence.ephemeral
         : TerminalSessionPersistence.persistent;
-    _loginStage = TerminalLoginStage.accountType;
-    _append(TerminalLineType.success, '[ OK ] 로그인 입력을 취소했습니다.');
+    _loginStage = TerminalLoginStage.accountTypeSelection;
+    _append(TerminalLineType.success, '[ OK ] 계정 인증을 취소했습니다.');
     _appendAccountTypeList();
-    _append(TerminalLineType.system, '계정 유형을 입력하세요.');
+    _append(TerminalLineType.system, _accountTypeSelectionMessage);
     LauncherDiagnostics.record(
       'auth_navigation_cancel',
       meta: const <String, Object?>{
@@ -1663,12 +1626,13 @@ class ModeLauncherController extends ChangeNotifier {
       return const ModeLauncherSubmitResult();
     }
     _selectedMode = null;
-    if (account.kind == TerminalAccountKind.user && _availableWorkAreas.isNotEmpty) {
+    if (account.kind == TerminalAccountKind.user &&
+        _availableWorkAreas.isNotEmpty) {
       _selectedWorkArea = null;
       _supportedModes = account.supportedModes;
       _loginStage = TerminalLoginStage.areaSelection;
       _appendWorkAreaList();
-      _append(TerminalLineType.system, '업무 지역을 입력하세요.');
+      _append(TerminalLineType.system, _workAreaSelectionMessage);
       LauncherDiagnostics.record(
         'auth_navigation_work_areas',
         meta: <String, Object?>{
@@ -1681,7 +1645,7 @@ class ModeLauncherController extends ChangeNotifier {
     } else if (_supportedModes.isNotEmpty) {
       _loginStage = TerminalLoginStage.modeSelection;
       _appendSupportedModeList();
-      _append(TerminalLineType.system, '사용할 모드를 입력하세요.');
+      _append(TerminalLineType.system, _modeSelectionMessage);
       LauncherDiagnostics.record(
         'auth_navigation_modes',
         meta: <String, Object?>{
@@ -2221,6 +2185,20 @@ class ModeLauncherController extends ChangeNotifier {
     BuildContext context, {
     required bool reduceMotion,
   }) async {
+    _busy = true;
+    _runningCommand = 'SESSION_CHECK';
+    _append(
+      TerminalLineType.running,
+      'Checking saved account session',
+      cadence: TerminalCadence.instant,
+    );
+    LauncherDiagnostics.record(
+      'auth_session_check_started',
+      meta: <String, Object?>{
+        'savedMode': _savedModeRaw ?? '',
+      },
+    );
+    notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     _startupPurpose ??= await AppStartFlowPrefs.getUserPurpose();
     _defaultAccountKind =
@@ -2240,11 +2218,32 @@ class ModeLauncherController extends ChangeNotifier {
     final kind = await TerminalAuthCoordinator.readLocalRestoreKind(
       savedMode: _savedModeRaw,
     );
+    LauncherDiagnostics.record(
+      'auth_session_check_completed',
+      meta: <String, Object?>{
+        'hasRestorableSession': kind != null,
+        'accountKind': kind == null
+            ? ''
+            : TerminalAuthCoordinator.accountKindId(kind),
+      },
+    );
 
     if (kind != null && context.mounted) {
       _busy = true;
-      _runningCommand = 'SESSION';
-      _append(TerminalLineType.running, 'Checking previous session');
+      _runningCommand = 'SESSION_RESTORE';
+      _append(
+        TerminalLineType.running,
+        'Restoring previous session',
+        cadence: TerminalCadence.instant,
+      );
+      notifyListeners();
+      LauncherDiagnostics.record(
+        'auth_session_restore_started',
+        meta: <String, Object?>{
+          'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+          'savedMode': _savedModeRaw ?? '',
+        },
+      );
       final restored = await TerminalAuthCoordinator.tryRestoreAccount(
         context,
         kind: kind,
@@ -2267,17 +2266,33 @@ class ModeLauncherController extends ChangeNotifier {
         _selectedWorkArea = null;
         LauncherWorkAreaResolution? restoreWorkAreaResolution;
         if (account.kind == TerminalAccountKind.user && account.user != null) {
+          _busy = true;
+          _runningCommand = 'AREAS';
+          _append(
+            TerminalLineType.running,
+            'Loading work areas from restored session',
+            cadence: TerminalCadence.instant,
+          );
+          notifyListeners();
           restoreWorkAreaResolution = await _resolveLauncherWorkAreas(
             context,
             account: account,
             reduceMotion: reduceMotion,
           );
           _availableWorkAreas = restoreWorkAreaResolution.areas;
+          _busy = false;
+          _runningCommand = '';
         }
         _enteredName = account.displayName;
-        _append(TerminalLineType.success, '[ OK ] ${restored.message}');
+        _enteredPhone = '';
+        _enteredPassword = '';
+        _append(
+          TerminalLineType.success,
+          '[ OK ] ${restored.message}',
+          cadence: TerminalCadence.instant,
+        );
         LauncherDiagnostics.record(
-          'auth_account_restored',
+          'auth_session_restore_succeeded',
           meta: <String, Object?>{
             'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
             'supportedModes': _supportedModes.map((mode) => mode.id).join(','),
@@ -2333,27 +2348,40 @@ class ModeLauncherController extends ChangeNotifier {
               TerminalLineType.system,
               _workAreaAutoSelectMessage(autoSelectReason),
             );
-            _pendingAutoSubmitText = '1';
             LauncherDiagnostics.record(
-              'auth_restore_work_area_auto_input_queued',
+              'auth_restore_work_area_auto_selected',
               meta: <String, Object?>{
                 'reason': autoSelectReason,
                 'areaCount': _availableWorkAreas.length,
                 'area': firstArea.areaName,
                 'isHeadquarter': firstArea.isHeadquarter,
-                'selectionNumber': 1,
-                'supportedModes': firstArea.supportedModes
-                    .map((mode) => mode.id)
-                    .join(','),
+                'supportedModes':
+                    firstArea.supportedModes.map((mode) => mode.id).join(','),
                 'firebaseAreaDocumentReads':
                     restoreWorkAreaResolution?.firebaseAreaDocumentReads ?? 0,
                 'firebaseWrites': 0,
               },
             );
+            final flow = await selectWorkArea(
+              context,
+              area: firstArea,
+              reduceMotion: reduceMotion,
+              automatic: true,
+            );
+            if (flow.targetRoute != null) {
+              _pendingTargetRoute = flow.targetRoute;
+            }
           } else {
-            _append(TerminalLineType.system, '업무 지역을 입력하세요.');
+            _append(TerminalLineType.system, _workAreaSelectionMessage);
+            LauncherDiagnostics.record(
+              'auth_work_area_selection_required',
+              meta: <String, Object?>{
+                'areaCount': _availableWorkAreas.length,
+                'source': 'restored_session',
+              },
+            );
+            notifyListeners();
           }
-          notifyListeners();
           return;
         }
 
@@ -2398,7 +2426,7 @@ class ModeLauncherController extends ChangeNotifier {
             );
             _loginStage = TerminalLoginStage.modeSelection;
             await _appendSupportedModeListPaced(reduceMotion);
-            _append(TerminalLineType.system, '사용할 모드를 입력하세요.');
+            _append(TerminalLineType.system, _modeSelectionMessage);
             LauncherDiagnostics.record(
               'auth_saved_mode_resume_failed',
               meta: <String, Object?>{
@@ -2441,11 +2469,46 @@ class ModeLauncherController extends ChangeNotifier {
         }
         _loginStage = TerminalLoginStage.modeSelection;
         await _appendSupportedModeListPaced(reduceMotion);
-        _append(TerminalLineType.system, '사용할 모드를 입력하세요.');
+        if (_supportedModes.isEmpty) {
+          _append(
+            TerminalLineType.error,
+            '[ERROR] 활성화된 모드가 없습니다.',
+          );
+          _errorSerial += 1;
+          notifyListeners();
+          return;
+        }
+        if (_supportedModes.length == 1) {
+          final flow = await selectMode(
+            context,
+            mode: _supportedModes.first,
+            reduceMotion: reduceMotion,
+            automatic: true,
+          );
+          if (flow.targetRoute != null) {
+            _pendingTargetRoute = flow.targetRoute;
+          }
+          return;
+        }
+        _append(TerminalLineType.system, _modeSelectionMessage);
+        LauncherDiagnostics.record(
+          'auth_mode_selection_required',
+          meta: <String, Object?>{
+            'supportedModeCount': _supportedModes.length,
+            'source': 'restored_session',
+          },
+        );
         notifyListeners();
         return;
       }
 
+      LauncherDiagnostics.record(
+        'auth_session_restore_failed',
+        meta: <String, Object?>{
+          'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+          'message': restored.message,
+        },
+      );
       if ((_savedModeRaw ?? '').trim().isNotEmpty) {
         await prefs.remove('mode');
         _savedModeRaw = null;
@@ -2463,6 +2526,7 @@ class ModeLauncherController extends ChangeNotifier {
       _append(
         TerminalLineType.system,
         'Last account type: ${TerminalAuthCoordinator.accountKindLabel(kind)}',
+        cadence: TerminalCadence.instant,
       );
       LauncherDiagnostics.record(
         'auth_account_restore_fallback',
@@ -2481,6 +2545,9 @@ class ModeLauncherController extends ChangeNotifier {
       return;
     }
 
+    _busy = false;
+    _runningCommand = '';
+    notifyListeners();
     if (await _selectStartupPurposeAccountKind(reduceMotion: reduceMotion)) {
       return;
     }
@@ -2507,7 +2574,7 @@ class ModeLauncherController extends ChangeNotifier {
     _debugAccountKindOverride = false;
     _debugOverrideSnapshotActive = false;
     _sessionPersistence = TerminalSessionPersistence.persistent;
-    _loginStage = TerminalLoginStage.accountType;
+    _loginStage = TerminalLoginStage.accountTypeSelection;
     await _appendPaced(
       TerminalLineType.system,
       'ACCOUNT TYPES',
@@ -2534,7 +2601,7 @@ class ModeLauncherController extends ChangeNotifier {
       reduceMotion,
     );
     _append(TerminalLineType.system, '────────────────────────────────────────');
-    _append(TerminalLineType.system, '계정 유형을 입력하세요.');
+    _append(TerminalLineType.system, _accountTypeSelectionMessage);
     LauncherDiagnostics.record(
       'auth_account_kind_manual_selection_opened',
       meta: <String, Object?>{
@@ -2573,7 +2640,11 @@ class ModeLauncherController extends ChangeNotifier {
       _debugOverrideSnapshotActive = false;
       _busy = true;
       _runningCommand = 'ACCOUNT';
-      _append(TerminalLineType.running, 'Applying account profile');
+      _append(
+        TerminalLineType.running,
+        'Applying account profile',
+        cadence: TerminalCadence.instant,
+      );
       notifyListeners();
       await _commandDelay(reduceMotion);
       if (_disposed) {
@@ -2593,6 +2664,7 @@ class ModeLauncherController extends ChangeNotifier {
       _append(
         TerminalLineType.success,
         '[ OK ] ACCOUNT ${TerminalAuthCoordinator.accountKindLabel(kind)}',
+        cadence: TerminalCadence.instant,
       );
     } else {
       _append(
@@ -2637,15 +2709,42 @@ class ModeLauncherController extends ChangeNotifier {
         'debugSnapshotActive': _debugOverrideSnapshotActive,
       },
     );
-    _loginStage = TerminalLoginStage.name;
-    _append(TerminalLineType.system, _namePrompt);
-    notifyListeners();
-    return ModeLauncherSubmitResult(
-      promptText: _enteredName.isEmpty ? null : _enteredName,
-      selectPromptText: _enteredName.isNotEmpty,
+    _loginStage = TerminalLoginStage.credentials;
+    _append(
+      TerminalLineType.system,
+      _credentialRequiredMessage,
+      cadence: TerminalCadence.instant,
     );
+    LauncherDiagnostics.record(
+      'auth_credentials_required',
+      meta: <String, Object?>{
+        'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+        'autoSelectedAccountKind': autoSelected,
+        'sessionPersistence': TerminalAuthCoordinator.sessionPersistenceId(
+          _sessionPersistence,
+        ),
+      },
+    );
+    notifyListeners();
+    return const ModeLauncherSubmitResult();
   }
 
+  Future<ModeLauncherSubmitResult> selectAccountKind(
+    TerminalAccountKind kind, {
+    required bool reduceMotion,
+  }) {
+    return _selectAccountKind(
+      kind,
+      source: _debugOverrideSnapshotActive
+          ? 'debug_manual_override'
+          : 'dialog_manual',
+      reduceMotion: reduceMotion,
+      autoSelected: false,
+      persistence: _debugOverrideSnapshotActive
+          ? TerminalSessionPersistence.ephemeral
+          : TerminalSessionPersistence.persistent,
+    );
+  }
 
   Future<LauncherWorkAreaResolution> _resolveLauncherWorkAreas(
     BuildContext context, {
@@ -2786,9 +2885,9 @@ class ModeLauncherController extends ChangeNotifier {
 
   String _workAreaAutoSelectMessage(String reason) {
     if (reason == 'single_area') {
-      return '업무 지역이 1개이므로 1번을 자동 선택합니다.';
+      return '업무 지역이 1개이므로 자동 선택합니다.';
     }
-    return '본사 1번을 자동 선택합니다.';
+    return '본사를 우선 업무 지역으로 자동 선택합니다.';
   }
 
   LauncherWorkAreaOption? _findWorkArea(String input) {
@@ -2838,9 +2937,9 @@ class ModeLauncherController extends ChangeNotifier {
       _sessionPersistence = TerminalSessionPersistence.persistent;
       _debugOverrideSnapshotActive = false;
     }
-    _loginStage = TerminalLoginStage.accountType;
+    _loginStage = TerminalLoginStage.accountTypeSelection;
     _appendAccountTypeList();
-    _append(TerminalLineType.system, '계정 유형을 입력하세요.');
+    _append(TerminalLineType.system, _accountTypeSelectionMessage);
     LauncherDiagnostics.record(
       'auth_account_kind_reset',
       meta: <String, Object?>{
@@ -3037,6 +3136,503 @@ class ModeLauncherController extends ChangeNotifier {
     return ModeLauncherSubmitResult(targetRoute: mode.postLoginRoute);
   }
 
+  Future<LauncherCredentialSubmitResult> authenticateCredentials(
+    BuildContext context, {
+    required String name,
+    required String phone,
+    required String password,
+    required bool reduceMotion,
+  }) async {
+    if (_busy || _loginStage != TerminalLoginStage.credentials) {
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '계정 인증을 시작할 수 없습니다.',
+      );
+    }
+    final kind = _selectedAccountKind;
+    if (kind == null) {
+      _resetAccountSelection();
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '계정 유형을 확인할 수 없습니다.',
+      );
+    }
+
+    final normalizedName = name.trim();
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final phonePattern = kind == TerminalAccountKind.personal
+        ? RegExp(r'^\d{9,11}$')
+        : RegExp(r'^\d{10,11}$');
+    final validPassword = kind == TerminalAccountKind.personal
+        ? RegExp(r'^\d{5}$').hasMatch(password)
+        : password.length >= 5;
+
+    final nameError = normalizedName.isEmpty ? _nameError : null;
+    final phoneError = phonePattern.hasMatch(digits) ? null : _phoneError;
+    final passwordError = validPassword ? null : _passwordError;
+
+    if (nameError != null || phoneError != null || passwordError != null) {
+      LauncherDiagnostics.record(
+        'auth_credentials_rejected',
+        meta: <String, Object?>{
+          'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+          'nameValid': nameError == null,
+          'phoneValid': phoneError == null,
+          'passwordValid': passwordError == null,
+          'nameLength': normalizedName.length,
+          'phoneMasked': _maskPhone(digits),
+          'passwordLength': password.length,
+        },
+      );
+      return LauncherCredentialSubmitResult(
+        nameError: nameError,
+        phoneError: phoneError,
+        passwordError: passwordError,
+      );
+    }
+
+    final changed =
+        _enteredName != normalizedName || _enteredPhone != digits;
+    _enteredName = normalizedName;
+    _enteredPhone = digits;
+    _enteredPassword = password;
+    if (changed) {
+      _authenticatedAccount = null;
+      _availableWorkAreas = <LauncherWorkAreaOption>[];
+      _selectedWorkArea = null;
+      _supportedModes = <AppModeDefinition>[];
+      _selectedMode = null;
+    }
+
+    LauncherDiagnostics.record(
+      'auth_credentials_submitted',
+      meta: <String, Object?>{
+        'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+        'nameLength': normalizedName.length,
+        'phoneMasked': _maskPhone(digits),
+        'passwordLength': password.length,
+        'sessionPersistence': TerminalAuthCoordinator.sessionPersistenceId(
+          _sessionPersistence,
+        ),
+      },
+    );
+    DebugSessionController.record(
+      'auth_credentials_submitted',
+      source: 'mode_terminal',
+      meta: <String, Object?>{
+        'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+        'nameLength': normalizedName.length,
+        'phoneMasked': _maskPhone(digits),
+        'passwordLength': password.length,
+      },
+    );
+
+    _loginStage = TerminalLoginStage.authenticating;
+    _busy = true;
+    _runningCommand = 'AUTH';
+    _append(TerminalLineType.system, 'Account credentials received');
+    _append(TerminalLineType.running, 'Authenticating account');
+    notifyListeners();
+    await _commandDelay(reduceMotion);
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '계정 인증을 완료하지 못했습니다.',
+      );
+    }
+
+    final result = await TerminalAuthCoordinator.authenticateAccount(
+      context,
+      kind: kind,
+      name: _enteredName,
+      phone: _enteredPhone,
+      password: _enteredPassword,
+      persistence: _sessionPersistence,
+    );
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '계정 인증을 완료하지 못했습니다.',
+      );
+    }
+
+    final account = result.account;
+    if (!result.success || account == null) {
+      _append(TerminalLineType.error, '[ERROR] Account authentication failed');
+      _busy = false;
+      _runningCommand = '';
+      _enteredPassword = '';
+      _loginStage = TerminalLoginStage.credentials;
+      _errorSerial += 1;
+      LauncherDiagnostics.record(
+        'auth_credentials_failed',
+        meta: <String, Object?>{
+          'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+          'message': result.message,
+          'phoneMasked': _maskPhone(digits),
+        },
+      );
+      notifyListeners();
+      return LauncherCredentialSubmitResult(
+        authenticationError: result.message,
+      );
+    }
+
+    _authenticatedAccount = account;
+    _availableWorkAreas = <LauncherWorkAreaOption>[];
+    _selectedWorkArea = null;
+    _supportedModes = account.supportedModes;
+    _enteredName = account.displayName;
+    _enteredPassword = '';
+    _append(TerminalLineType.success, '[ OK ] Authentication complete');
+    LauncherDiagnostics.record(
+      'auth_credentials_succeeded',
+      meta: <String, Object?>{
+        'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+        'supportedModes': account.supportedModes.map((mode) => mode.id).join(','),
+      },
+    );
+
+    if (account.kind == TerminalAccountKind.user && account.user != null) {
+      _runningCommand = 'AREAS';
+      _append(
+        TerminalLineType.running,
+        'Loading work areas from local snapshot',
+      );
+      notifyListeners();
+      final resolution = await _resolveLauncherWorkAreas(
+        context,
+        account: account,
+        reduceMotion: reduceMotion,
+      );
+      if (_disposed || !context.mounted) {
+        _busy = false;
+        _runningCommand = '';
+        return const LauncherCredentialSubmitResult(
+          authenticationError: '업무 지역 정보를 불러오지 못했습니다.',
+        );
+      }
+      _availableWorkAreas = resolution.areas;
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.areaSelection;
+      if (_availableWorkAreas.isEmpty) {
+        _append(
+          TerminalLineType.error,
+          '[ERROR] 업무 지역 정보를 불러오지 못했습니다.',
+        );
+        LauncherDiagnostics.record(
+          'auth_work_area_selection_blocked',
+          meta: <String, Object?>{
+            'reason': 'work_area_resolution_empty',
+            'division': resolution.division,
+            'dataSource': resolution.dataSource,
+            'firebaseAreaDocumentReads': resolution.firebaseAreaDocumentReads,
+            'firebaseWrites': 0,
+          },
+        );
+        _errorSerial += 1;
+        notifyListeners();
+        return const LauncherCredentialSubmitResult(
+          authenticationError: '업무 지역 정보를 불러오지 못했습니다.',
+        );
+      }
+      await _appendWorkAreaListPaced(reduceMotion);
+      final firstArea = _availableWorkAreas.first;
+      LauncherDiagnostics.record(
+        'auth_work_area_selection_ready',
+        meta: <String, Object?>{
+          'areaCount': _availableWorkAreas.length,
+          'firstArea': firstArea.areaName,
+          'firstIsHeadquarter': firstArea.isHeadquarter,
+          'snapshotAvailable': resolution.hasSnapshot,
+          'requiresServerHeadquarterVerification':
+              firstArea.requiresServerHeadquarterVerification,
+          'requiresServerAreaResolution':
+              firstArea.requiresServerAreaResolution,
+          'firebaseAreaDocumentReads': resolution.firebaseAreaDocumentReads,
+          'firebaseWrites': 0,
+          'dataSource': resolution.dataSource,
+        },
+      );
+      final autoSelectReason = _workAreaAutoSelectReason();
+      if (autoSelectReason != null) {
+        _append(
+          TerminalLineType.system,
+          _workAreaAutoSelectMessage(autoSelectReason),
+        );
+        LauncherDiagnostics.record(
+          'auth_work_area_auto_selected',
+          meta: <String, Object?>{
+            'reason': autoSelectReason,
+            'areaCount': _availableWorkAreas.length,
+            'area': firstArea.areaName,
+            'isHeadquarter': firstArea.isHeadquarter,
+            'supportedModes':
+                firstArea.supportedModes.map((mode) => mode.id).join(','),
+            'firebaseAreaDocumentReads': resolution.firebaseAreaDocumentReads,
+            'firebaseWrites': 0,
+          },
+        );
+        final flow = await selectWorkArea(
+          context,
+          area: firstArea,
+          reduceMotion: reduceMotion,
+          automatic: true,
+        );
+        return LauncherCredentialSubmitResult(flowResult: flow);
+      }
+      _append(TerminalLineType.system, _workAreaSelectionMessage);
+      LauncherDiagnostics.record(
+        'auth_work_area_selection_required',
+        meta: <String, Object?>{
+          'areaCount': _availableWorkAreas.length,
+          'source': 'manual_authentication',
+        },
+      );
+      notifyListeners();
+      return const LauncherCredentialSubmitResult();
+    }
+
+    _busy = false;
+    _runningCommand = '';
+    _loginStage = TerminalLoginStage.modeSelection;
+    await _appendSupportedModeListPaced(reduceMotion);
+    if (_supportedModes.isEmpty) {
+      _append(
+        TerminalLineType.error,
+        '[ERROR] 활성화된 모드가 없습니다.',
+      );
+      _errorSerial += 1;
+      notifyListeners();
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '활성화된 모드가 없습니다.',
+      );
+    }
+    final automaticMode = _supportedModes.first;
+    _append(
+      TerminalLineType.system,
+      '기본 업무 모드를 자동으로 적용합니다.',
+    );
+    LauncherDiagnostics.record(
+      'auth_mode_auto_selected',
+      meta: <String, Object?>{
+        'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+        'supportedModeCount': _supportedModes.length,
+        'mode': automaticMode.id,
+        'reason': _supportedModes.length == 1
+            ? 'single_supported_mode'
+            : 'first_supported_mode',
+        'sessionPersistence': TerminalAuthCoordinator.sessionPersistenceId(
+          _sessionPersistence,
+        ),
+      },
+    );
+    final flow = await selectMode(
+      context,
+      mode: automaticMode,
+      reduceMotion: reduceMotion,
+      automatic: true,
+    );
+    return LauncherCredentialSubmitResult(flowResult: flow);
+  }
+
+  Future<ModeLauncherSubmitResult> selectWorkArea(
+    BuildContext context, {
+    required LauncherWorkAreaOption area,
+    required bool reduceMotion,
+    bool automatic = false,
+  }) async {
+    final account = _authenticatedAccount;
+    if (_busy ||
+        _loginStage != TerminalLoginStage.areaSelection ||
+        account == null ||
+        account.kind != TerminalAccountKind.user) {
+      return const ModeLauncherSubmitResult();
+    }
+
+    LauncherWorkAreaOption? selected;
+    for (final option in _availableWorkAreas) {
+      if (identical(option, area) ||
+          option.division == area.division && option.areaName == area.areaName) {
+        selected = option;
+        break;
+      }
+    }
+    if (selected == null) {
+      _append(
+        TerminalLineType.error,
+        '[DENIED] 지원하지 않는 업무 지역입니다.',
+      );
+      _errorSerial += 1;
+      LauncherDiagnostics.record(
+        'auth_work_area_selection_rejected',
+        meta: <String, Object?>{
+          'area': area.areaName,
+          'automatic': automatic,
+        },
+      );
+      notifyListeners();
+      return const ModeLauncherSubmitResult();
+    }
+
+    var resolvedArea = selected;
+    final requiredServerResolution = resolvedArea.requiresServerAreaResolution;
+    if (requiredServerResolution) {
+      final verifiedArea = await _verifyBootstrapWorkArea(
+        context,
+        account: account,
+        area: resolvedArea,
+        reduceMotion: reduceMotion,
+      );
+      if (_disposed || !context.mounted) {
+        _busy = false;
+        _runningCommand = '';
+        return const ModeLauncherSubmitResult();
+      }
+      if (verifiedArea == null) {
+        _append(
+          TerminalLineType.error,
+          '[ERROR] 선택한 업무 지역 정보를 확인하지 못했습니다.',
+        );
+        _errorSerial += 1;
+        notifyListeners();
+        return const ModeLauncherSubmitResult();
+      }
+      resolvedArea = verifiedArea;
+    }
+
+    _selectedWorkArea = resolvedArea;
+    _supportedModes = resolvedArea.supportedModes;
+    LauncherDiagnostics.record(
+      automatic ? 'auth_work_area_auto_selected' : 'auth_work_area_selected',
+      meta: <String, Object?>{
+        'area': resolvedArea.areaName,
+        'isHeadquarter': resolvedArea.isHeadquarter,
+        'supportedModes':
+            resolvedArea.supportedModes.map((mode) => mode.id).join(','),
+        'requiresServerHeadquarterVerification':
+            resolvedArea.requiresServerHeadquarterVerification,
+        'requiredServerAreaResolution': requiredServerResolution,
+        'verifiedAreaRecord': resolvedArea.hasVerifiedAreaRecord,
+        'firebaseAreaDocumentReads': requiredServerResolution ? 1 : 0,
+        'firebaseWrites': 0,
+        'dataSource': resolvedArea.dataSource,
+        'automatic': automatic,
+      },
+    );
+
+    if (resolvedArea.isHeadquarter) {
+      return _activateSelectedHeadquarter(
+        context,
+        account: account,
+        reduceMotion: reduceMotion,
+      );
+    }
+
+    if (_supportedModes.isEmpty) {
+      _append(
+        TerminalLineType.error,
+        '[DENIED] 이 지역에서 사용할 수 있는 업무 모드가 없습니다.',
+      );
+      _selectedWorkArea = null;
+      _supportedModes = account.supportedModes;
+      _errorSerial += 1;
+      notifyListeners();
+      return const ModeLauncherSubmitResult();
+    }
+
+    _loginStage = TerminalLoginStage.modeSelection;
+    await _appendSupportedModeListPaced(reduceMotion);
+    if (_supportedModes.length == 1) {
+      final mode = _supportedModes.first;
+      _append(
+        TerminalLineType.system,
+        '${resolvedArea.areaName}의 지원 업무 모드를 자동으로 적용합니다.',
+      );
+      LauncherDiagnostics.record(
+        'auth_area_single_mode_auto_selected',
+        meta: <String, Object?>{
+          'area': resolvedArea.areaName,
+          'mode': mode.id,
+          'firebaseReads': 0,
+          'firebaseWrites': 0,
+        },
+      );
+      return selectMode(
+        context,
+        mode: mode,
+        reduceMotion: reduceMotion,
+        automatic: true,
+      );
+    }
+
+    _append(
+      TerminalLineType.system,
+      '${resolvedArea.areaName}의 업무 모드 선택이 필요합니다.',
+    );
+    LauncherDiagnostics.record(
+      'auth_mode_selection_required',
+      meta: <String, Object?>{
+        'area': resolvedArea.areaName,
+        'supportedModeCount': _supportedModes.length,
+      },
+    );
+    notifyListeners();
+    return const ModeLauncherSubmitResult();
+  }
+
+  Future<ModeLauncherSubmitResult> selectMode(
+    BuildContext context, {
+    required AppModeDefinition mode,
+    required bool reduceMotion,
+    bool automatic = false,
+  }) async {
+    final account = _authenticatedAccount;
+    if (_busy ||
+        _loginStage != TerminalLoginStage.modeSelection ||
+        account == null) {
+      return const ModeLauncherSubmitResult();
+    }
+
+    AppModeDefinition? selected;
+    for (final candidate in _supportedModes) {
+      if (candidate.id == mode.id) {
+        selected = candidate;
+        break;
+      }
+    }
+    if (selected == null) {
+      _append(TerminalLineType.error, '[DENIED] 지원하지 않는 모드입니다.');
+      _errorSerial += 1;
+      LauncherDiagnostics.record(
+        'auth_mode_selection_rejected',
+        meta: <String, Object?>{
+          'mode': mode.id,
+          'automatic': automatic,
+        },
+      );
+      notifyListeners();
+      return const ModeLauncherSubmitResult();
+    }
+
+    _selectedMode = selected;
+    LauncherDiagnostics.record(
+      automatic ? 'auth_mode_auto_selected' : 'auth_mode_selected_from_dialog',
+      meta: <String, Object?>{
+        'mode': selected.id,
+        'area': _selectedWorkArea?.areaName ?? '',
+        'automatic': automatic,
+      },
+    );
+    return _activateSelectedMode(
+      context,
+      account: account,
+      mode: selected,
+      reduceMotion: reduceMotion,
+    );
+  }
+
   Future<ModeLauncherSubmitResult> _submitAuthenticationInput(
     BuildContext context,
     String input, {
@@ -3050,18 +3646,6 @@ class ModeLauncherController extends ChangeNotifier {
       if (_accountKindAutoSelected) {
         _append(TerminalLineType.error, '[DENIED] Account type is automatic');
         _errorSerial += 1;
-        LauncherDiagnostics.record(
-          'auth_account_kind_manual_open_denied',
-          meta: <String, Object?>{
-            'startupPurpose': _startupPurpose?.storageValue ?? '',
-            'accountKind': _selectedAccountKind == null
-                ? ''
-                : TerminalAuthCoordinator.accountKindId(
-                    _selectedAccountKind!,
-                  ),
-            'debugMode': _devModeEnabled,
-          },
-        );
         notifyListeners();
         return const ModeLauncherSubmitResult();
       }
@@ -3070,431 +3654,58 @@ class ModeLauncherController extends ChangeNotifier {
     }
 
     switch (_loginStage) {
-      case TerminalLoginStage.accountType:
+      case TerminalLoginStage.accountTypeSelection:
         final kind = TerminalAuthCoordinator.parseAccountKind(input);
         if (kind == null) {
-          _append(TerminalLineType.error, '[ERROR] 계정 유형을 다시 확인하세요.');
-          _errorSerial += 1;
-          notifyListeners();
-          return const ModeLauncherSubmitResult();
-        }
-        return _selectAccountKind(
-          kind,
-          source: _debugOverrideSnapshotActive
-              ? 'debug_manual_override'
-              : 'manual',
-          reduceMotion: reduceMotion,
-          autoSelected: false,
-          persistence: _debugOverrideSnapshotActive
-              ? TerminalSessionPersistence.ephemeral
-              : TerminalSessionPersistence.persistent,
-        );
-      case TerminalLoginStage.name:
-        final changed = _enteredName != input;
-        _enteredName = input;
-        if (changed) {
-          _enteredPassword = '';
-          _authenticatedAccount = null;
-          _availableWorkAreas = <LauncherWorkAreaOption>[];
-          _selectedWorkArea = null;
-          _supportedModes = <AppModeDefinition>[];
-          _selectedMode = null;
-        }
-        _append(
-          TerminalLineType.output,
-          _authOutputLine(nameDisplayLabel, _enteredName),
-        );
-        LauncherDiagnostics.record(
-          'auth_name_completed',
-          meta: <String, Object?>{
-            'accountKind': _selectedAccountKind == null
-                ? ''
-                : TerminalAuthCoordinator.accountKindId(_selectedAccountKind!),
-            'nameLength': _enteredName.length,
-            'displayLabel': nameDisplayLabel,
-            'nextPrompt': _phonePrompt,
-          },
-        );
-        _loginStage = TerminalLoginStage.phone;
-        _append(TerminalLineType.system, _phonePrompt);
-        notifyListeners();
-        return ModeLauncherSubmitResult(
-          promptText: _enteredPhone.isEmpty ? null : _enteredPhone,
-          selectPromptText: _enteredPhone.isNotEmpty,
-        );
-      case TerminalLoginStage.phone:
-        final kind = _selectedAccountKind;
-        if (kind == null) {
-          _resetAccountSelection();
-          return const ModeLauncherSubmitResult();
-        }
-        final digits = input.replaceAll(RegExp(r'[^0-9]'), '');
-        final phonePattern = kind == TerminalAccountKind.personal
-            ? RegExp(r'^\d{9,11}$')
-            : RegExp(r'^\d{10,11}$');
-        if (!phonePattern.hasMatch(digits)) {
-          _append(TerminalLineType.error, _phoneError);
-          _errorSerial += 1;
-          LauncherDiagnostics.record(
-            'auth_phone_rejected',
-            meta: <String, Object?>{
-              'accountKind': TerminalAuthCoordinator.accountKindId(kind),
-              'length': digits.length,
-              'displayLabel': phoneDisplayLabel,
-              'errorText': _phoneError,
-            },
-          );
-          notifyListeners();
-          return const ModeLauncherSubmitResult();
-        }
-        final changed = _enteredPhone != digits;
-        _enteredPhone = digits;
-        if (changed) {
-          _enteredPassword = '';
-          _authenticatedAccount = null;
-          _availableWorkAreas = <LauncherWorkAreaOption>[];
-          _selectedWorkArea = null;
-          _supportedModes = <AppModeDefinition>[];
-          _selectedMode = null;
-        }
-        _append(
-          TerminalLineType.output,
-          _authOutputLine(phoneDisplayLabel, _enteredPhone),
-        );
-        LauncherDiagnostics.record(
-          'auth_phone_completed',
-          meta: <String, Object?>{
-            'accountKind': TerminalAuthCoordinator.accountKindId(kind),
-            'phoneMasked': _maskPhone(_enteredPhone),
-            'displayLabel': phoneDisplayLabel,
-            'nextPrompt': _passwordPrompt,
-          },
-        );
-        _loginStage = TerminalLoginStage.password;
-        _append(TerminalLineType.system, _passwordPrompt);
-        notifyListeners();
-        return const ModeLauncherSubmitResult();
-      case TerminalLoginStage.password:
-        final kind = _selectedAccountKind;
-        if (kind == null) {
-          _resetAccountSelection();
-          return const ModeLauncherSubmitResult();
-        }
-        final validPassword = kind == TerminalAccountKind.personal
-            ? RegExp(r'^\d{5}$').hasMatch(input)
-            : input.length >= 5;
-        if (!validPassword) {
-          _append(TerminalLineType.error, _passwordError);
-          _errorSerial += 1;
-          LauncherDiagnostics.record(
-            'auth_password_rejected',
-            meta: <String, Object?>{
-              'accountKind': TerminalAuthCoordinator.accountKindId(kind),
-              'passwordLength': input.length,
-              'displayLabel': passwordDisplayLabel,
-              'errorText': _passwordError,
-            },
-          );
-          notifyListeners();
-          return const ModeLauncherSubmitResult();
-        }
-        _enteredPassword = input;
-        _append(
-          TerminalLineType.output,
-          _authOutputLine(passwordDisplayLabel, maskedPassword),
-        );
-        LauncherDiagnostics.record(
-          'auth_password_completed',
-          meta: <String, Object?>{
-            'accountKind': TerminalAuthCoordinator.accountKindId(kind),
-            'passwordLength': _enteredPassword.length,
-            'displayLabel': passwordDisplayLabel,
-          },
-        );
-        _loginStage = TerminalLoginStage.authenticating;
-        _busy = true;
-        _runningCommand = 'AUTH';
-        _append(TerminalLineType.running, 'Authenticating');
-        notifyListeners();
-        await _commandDelay(reduceMotion);
-        if (_disposed || !context.mounted) {
-          _busy = false;
-          _runningCommand = '';
-          return const ModeLauncherSubmitResult();
-        }
-
-        final result = await TerminalAuthCoordinator.authenticateAccount(
-          context,
-          kind: kind,
-          name: _enteredName,
-          phone: _enteredPhone,
-          password: _enteredPassword,
-          persistence: _sessionPersistence,
-        );
-        if (_disposed || !context.mounted) {
-          _busy = false;
-          _runningCommand = '';
-          return const ModeLauncherSubmitResult();
-        }
-
-        final account = result.account;
-        if (result.success && account != null) {
-          _authenticatedAccount = account;
-          _availableWorkAreas = <LauncherWorkAreaOption>[];
-          _selectedWorkArea = null;
-          _supportedModes = account.supportedModes;
-          _enteredName = account.displayName;
-          _append(TerminalLineType.success, '[ OK ] ${result.message}');
-
-          if (account.kind == TerminalAccountKind.user && account.user != null) {
-            _runningCommand = 'AREAS';
-            _append(TerminalLineType.running, 'Loading work areas from local snapshot');
-            notifyListeners();
-            final resolution = await _resolveLauncherWorkAreas(
-              context,
-              account: account,
-              reduceMotion: reduceMotion,
-            );
-            if (_disposed || !context.mounted) {
-              _busy = false;
-              _runningCommand = '';
-              return const ModeLauncherSubmitResult();
-            }
-            _availableWorkAreas = resolution.areas;
-            _busy = false;
-            _runningCommand = '';
-            _loginStage = TerminalLoginStage.areaSelection;
-            if (_availableWorkAreas.isEmpty) {
-              _append(
-                TerminalLineType.error,
-                '[ERROR] 업무 지역 정보를 불러오지 못했습니다.',
-              );
-              LauncherDiagnostics.record(
-                'auth_work_area_selection_blocked',
-                meta: <String, Object?>{
-                  'reason': 'work_area_resolution_empty',
-                  'division': resolution.division,
-                  'dataSource': resolution.dataSource,
-                  'firebaseAreaDocumentReads':
-                      resolution.firebaseAreaDocumentReads,
-                  'firebaseWrites': 0,
-                },
-              );
-              _errorSerial += 1;
-              notifyListeners();
-              return const ModeLauncherSubmitResult();
-            }
-            await _appendWorkAreaListPaced(reduceMotion);
-            final firstArea = _availableWorkAreas.first;
-            LauncherDiagnostics.record(
-              'auth_work_area_selection_ready',
-              meta: <String, Object?>{
-                'areaCount': _availableWorkAreas.length,
-                'firstArea': firstArea.areaName,
-                'firstIsHeadquarter': firstArea.isHeadquarter,
-                'snapshotAvailable': resolution.hasSnapshot,
-                'requiresServerHeadquarterVerification':
-                    firstArea.requiresServerHeadquarterVerification,
-                'requiresServerAreaResolution':
-                    firstArea.requiresServerAreaResolution,
-                'firebaseAreaDocumentReads':
-                    resolution.firebaseAreaDocumentReads,
-                'firebaseWrites': 0,
-                'dataSource': resolution.dataSource,
-              },
-            );
-            final autoSelectReason = _workAreaAutoSelectReason();
-            if (autoSelectReason != null) {
-              _append(
-                TerminalLineType.system,
-                _workAreaAutoSelectMessage(autoSelectReason),
-              );
-              LauncherDiagnostics.record(
-                'auth_work_area_auto_input_queued',
-                meta: <String, Object?>{
-                  'reason': autoSelectReason,
-                  'areaCount': _availableWorkAreas.length,
-                  'area': firstArea.areaName,
-                  'isHeadquarter': firstArea.isHeadquarter,
-                  'selectionNumber': 1,
-                  'supportedModes': firstArea.supportedModes
-                      .map((mode) => mode.id)
-                      .join(','),
-                  'firebaseAreaDocumentReads':
-                      resolution.firebaseAreaDocumentReads,
-                  'firebaseWrites': 0,
-                },
-              );
-              notifyListeners();
-              return const ModeLauncherSubmitResult(autoSubmitText: '1');
-            }
-            _append(TerminalLineType.system, '업무 지역을 입력하세요.');
-            notifyListeners();
-            return const ModeLauncherSubmitResult();
-          }
-
-          _busy = false;
-          _runningCommand = '';
-          _loginStage = TerminalLoginStage.modeSelection;
-          await _appendSupportedModeListPaced(reduceMotion);
-          if (_supportedModes.isEmpty) {
-            _append(
-              TerminalLineType.error,
-              '[ERROR] 활성화된 모드가 없습니다.',
-            );
-            _errorSerial += 1;
-            notifyListeners();
-            return const ModeLauncherSubmitResult();
-          }
-          final automaticMode = _supportedModes.first;
-          _append(
-            TerminalLineType.system,
-            '기본 모드 1번을 자동 선택합니다.',
-          );
-          LauncherDiagnostics.record(
-            'auth_mode_auto_input_queued',
-            meta: <String, Object?>{
-              'accountKind': TerminalAuthCoordinator.accountKindId(kind),
-              'supportedModeCount': _supportedModes.length,
-              'selectionNumber': 1,
-              'mode': automaticMode.id,
-              'reason': _supportedModes.length == 1
-                  ? 'single_supported_mode'
-                  : 'first_supported_mode',
-              'sessionPersistence': TerminalAuthCoordinator.sessionPersistenceId(
-                _sessionPersistence,
-              ),
-            },
-          );
-          notifyListeners();
-          return const ModeLauncherSubmitResult(autoSubmitText: '1');
-        }
-
-        _append(TerminalLineType.error, '[ERROR] ${result.message}');
-        _busy = false;
-        _runningCommand = '';
-        _enteredPassword = '';
-        _loginStage = TerminalLoginStage.password;
-        _errorSerial += 1;
-        notifyListeners();
-        return const ModeLauncherSubmitResult(promptText: '');
-      case TerminalLoginStage.areaSelection:
-        final account = _authenticatedAccount;
-        if (account == null || account.kind != TerminalAccountKind.user) {
-          _resetAccountSelection();
-          return const ModeLauncherSubmitResult();
-        }
-        var area = _findWorkArea(input);
-        if (area == null) {
-          _append(TerminalLineType.error, '[DENIED] 지원하지 않는 업무 지역입니다.');
-          _appendWorkAreaList();
-          _errorSerial += 1;
-          notifyListeners();
-          return const ModeLauncherSubmitResult();
-        }
-        final requiredServerResolution = area.requiresServerAreaResolution;
-        if (requiredServerResolution) {
-          final verifiedArea = await _verifyBootstrapWorkArea(
-            context,
-            account: account,
-            area: area,
-            reduceMotion: reduceMotion,
-          );
-          if (_disposed || !context.mounted) {
-            _busy = false;
-            _runningCommand = '';
-            return const ModeLauncherSubmitResult();
-          }
-          if (verifiedArea == null) {
-            _append(
-              TerminalLineType.error,
-              '[ERROR] 선택한 업무 지역 정보를 확인하지 못했습니다.',
-            );
-            _errorSerial += 1;
-            notifyListeners();
-            return const ModeLauncherSubmitResult();
-          }
-          area = verifiedArea;
-        }
-        _selectedWorkArea = area;
-        _supportedModes = area.supportedModes;
-        LauncherDiagnostics.record(
-          'auth_work_area_selected',
-          meta: <String, Object?>{
-            'area': area.areaName,
-            'isHeadquarter': area.isHeadquarter,
-            'supportedModes': area.supportedModes.map((mode) => mode.id).join(','),
-            'requiresServerHeadquarterVerification':
-                area.requiresServerHeadquarterVerification,
-            'requiredServerAreaResolution': requiredServerResolution,
-            'verifiedAreaRecord': area.hasVerifiedAreaRecord,
-            'firebaseAreaDocumentReads': requiredServerResolution ? 1 : 0,
-            'firebaseWrites': 0,
-            'dataSource': area.dataSource,
-          },
-        );
-        if (area.isHeadquarter) {
-          return _activateSelectedHeadquarter(
-            context,
-            account: account,
-            reduceMotion: reduceMotion,
-          );
-        }
-        if (_supportedModes.isEmpty) {
           _append(
             TerminalLineType.error,
-            '[DENIED] 이 지역에서 사용할 수 있는 업무 모드가 없습니다.',
+            '[ERROR] 계정 유형을 다시 확인하세요.',
           );
-          _selectedWorkArea = null;
-          _supportedModes = account.supportedModes;
           _errorSerial += 1;
           notifyListeners();
           return const ModeLauncherSubmitResult();
         }
-        _loginStage = TerminalLoginStage.modeSelection;
-        await _appendSupportedModeListPaced(reduceMotion);
-        if (_supportedModes.length == 1) {
-          _append(
-            TerminalLineType.system,
-            '${area.areaName}의 지원 모드 1번을 자동 선택합니다.',
-          );
-          LauncherDiagnostics.record(
-            'auth_area_single_mode_auto_input_queued',
-            meta: <String, Object?>{
-              'area': area.areaName,
-              'mode': _supportedModes.first.id,
-              'selectionNumber': 1,
-              'firebaseReads': 0,
-              'firebaseWrites': 0,
-            },
-          );
-          notifyListeners();
-          return const ModeLauncherSubmitResult(autoSubmitText: '1');
-        }
-        _append(
-          TerminalLineType.system,
-          '${area.areaName}에서 사용할 모드를 입력하세요.',
+        return selectAccountKind(
+          kind,
+          reduceMotion: reduceMotion,
         );
+      case TerminalLoginStage.credentials:
+        _append(
+          TerminalLineType.error,
+          '[DENIED] 계정 인증 Dialog를 사용하세요.',
+        );
+        _errorSerial += 1;
         notifyListeners();
         return const ModeLauncherSubmitResult();
-      case TerminalLoginStage.modeSelection:
-        final account = _authenticatedAccount;
-        if (account == null) {
-          _resetAccountSelection();
-          return const ModeLauncherSubmitResult();
-        }
-        final mode = _findSupportedMode(input);
-        if (mode == null) {
-          _append(TerminalLineType.error, '[DENIED] 지원하지 않는 모드입니다.');
-          _appendSupportedModeList();
+      case TerminalLoginStage.areaSelection:
+        final area = _findWorkArea(input);
+        if (area == null) {
+          _append(
+            TerminalLineType.error,
+            '[DENIED] 지원하지 않는 업무 지역입니다.',
+          );
           _errorSerial += 1;
           notifyListeners();
           return const ModeLauncherSubmitResult();
         }
-        _selectedMode = mode;
-        return _activateSelectedMode(
+        return selectWorkArea(
           context,
-          account: account,
+          area: area,
+          reduceMotion: reduceMotion,
+        );
+      case TerminalLoginStage.modeSelection:
+        final mode = _findSupportedMode(input);
+        if (mode == null) {
+          _append(
+            TerminalLineType.error,
+            '[DENIED] 지원하지 않는 모드입니다.',
+          );
+          _errorSerial += 1;
+          notifyListeners();
+          return const ModeLauncherSubmitResult();
+        }
+        return selectMode(
+          context,
           mode: mode,
           reduceMotion: reduceMotion,
         );

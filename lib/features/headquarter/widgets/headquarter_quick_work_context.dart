@@ -87,10 +87,9 @@ class _HeadquarterQuickWorkContextState
           await AttBrkRepository.instance.getEventsForDate(_selectedDate);
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
-      final requiresBreak = WorkSchedulePrefs.requiresBreakOnDateFromPrefs(
+      final requiresBreak = WorkSchedulePrefs.requiresBreakOnDate(
         prefs,
         _selectedDate,
-        defaultWhenUnset: true,
       );
       if (!mounted) return;
       setState(() {

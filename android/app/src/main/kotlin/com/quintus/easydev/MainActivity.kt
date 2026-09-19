@@ -57,6 +57,7 @@ class MainActivity : FlutterActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return mapOf(
                 "pinned" to true,
+                "notificationFound" to true,
                 "notificationId" to serviceId,
                 "reason" to "legacy_ongoing",
                 "flags" to null
@@ -64,9 +65,8 @@ class MainActivity : FlutterActivity() {
         }
 
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val notifications = manager.activeNotifications
-        val target = notifications.firstOrNull { it.id == serviceId }
-            ?: notifications.firstOrNull { statusBarNotification ->
+        val target = manager.activeNotifications.firstOrNull { it.id == serviceId }
+            ?: manager.activeNotifications.firstOrNull { statusBarNotification ->
                 val notification = statusBarNotification.notification
                 val foregroundService =
                     notification.flags and Notification.FLAG_FOREGROUND_SERVICE != 0
@@ -81,6 +81,7 @@ class MainActivity : FlutterActivity() {
         if (target == null) {
             return mapOf(
                 "pinned" to false,
+                "notificationFound" to false,
                 "notificationId" to null,
                 "reason" to "notification_not_found",
                 "flags" to null
@@ -95,6 +96,7 @@ class MainActivity : FlutterActivity() {
 
         return mapOf(
             "pinned" to true,
+            "notificationFound" to true,
             "notificationId" to target.id,
             "reason" to if (target.id == serviceId) "service_id" else "channel_fallback",
             "flags" to notification.flags

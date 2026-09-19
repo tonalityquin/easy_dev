@@ -96,17 +96,20 @@ class AttBrkRepository {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } else if (type.isBreak) {
-      await db.insert(
-        AttBrkModeDb.breakAttendanceTable,
-        <String, Object?>{
-          'date': date,
-          'type': _breakTypeStart,
-          'time': time,
-          'created_at': createdAt,
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      await insertBreakOnce(dateTime: dateTime);
     }
+  }
+
+  Future<bool> insertBreakOnce({required DateTime dateTime}) async {
+    final db = await _database;
+    final date = _dateFormatter.format(dateTime);
+    final time = _timeFormatter.format(dateTime);
+    final createdAt = dateTime.toIso8601String();
+    final rowId = await db.rawInsert(
+      'INSERT OR IGNORE INTO ${AttBrkModeDb.breakAttendanceTable} (date, type, time, created_at) VALUES (?, ?, ?, ?)',
+      <Object?>[date, _breakTypeStart, time, createdAt],
+    );
+    return rowId > 0;
   }
 
   Future<void> clearEventsForDate(DateTime dateTime) async {

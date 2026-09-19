@@ -130,14 +130,13 @@ class WorkSchedulePrefs {
     return normalizeDayList(prefs.getStringList(breakDaysKey) ?? const <String>[]);
   }
 
-  static bool requiresBreakOnDateFromPrefs(
+  static bool requiresBreakOnDate(
     SharedPreferences prefs,
-    DateTime date, {
-    bool defaultWhenUnset = true,
-  }) {
-    if (!prefs.containsKey(breakDaysKey)) return defaultWhenUnset;
+    DateTime date,
+  ) {
+    if (!prefs.containsKey(breakDaysKey)) return false;
     final index = date.weekday - 1;
-    if (index < 0 || index >= days.length) return defaultWhenUnset;
+    if (index < 0 || index >= days.length) return false;
     return readBreakDaysFromPrefs(prefs).contains(days[index]);
   }
 

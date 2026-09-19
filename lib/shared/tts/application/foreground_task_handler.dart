@@ -8,6 +8,10 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../notification/work_status_notification_protocol.dart';
+import '../../../app/live_work_notification_presenter.dart';
+import '../../../app/live_work_overdue_reminder_coordinator.dart';
+import '../../../app/live_work_snapshot_resolver.dart';
+import '../../../features/attendance/application/break_punch_use_case.dart';
 import '../services/plate/plate_local_notification_service.dart';
 import '../services/plate/plate_tts_listener_service.dart';
 import 'plate_tts_session_protocol.dart';
@@ -46,6 +50,7 @@ class MyTaskHandler implements TaskHandler {
     await prefs.reload();
     final isWorking = prefs.getBool('isWorking') ?? false;
     if (!isWorking) {
+      await LiveWorkOverdueReminderCoordinator.clear();
       await PlateTtsSessionRecoveryStore.clear(
         source: 'handler_start_not_working',
       );
@@ -69,6 +74,13 @@ class MyTaskHandler implements TaskHandler {
       );
       await FlutterForegroundTask.stopService();
       return;
+    }
+
+    try {
+      final snapshot = await LiveWorkSnapshotResolver.resolve();
+      await LiveWorkOverdueReminderCoordinator.evaluate(snapshot);
+    } catch (error, stackTrace) {
+      debugPrint('[HANDLER][${_ts()}] overdue start evaluation error=$error\n$stackTrace');
     }
 
     await PlateLocalNotificationService.instance.ensureInitialized();
@@ -106,7 +118,16 @@ class MyTaskHandler implements TaskHandler {
   }
 
   @override
-  Future<void> onRepeatEvent(DateTime timestamp) async {}
+  Future<void> onRepeatEvent(DateTime timestamp) async {
+    try {
+      await _refreshWorkStatusNotification();
+      _sendWorkStatusNotificationEvent(
+        WorkStatusNotificationProtocol.refreshedEvent,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('[HANDLER][${_ts()}] repeat refresh error=$error\n$stackTrace');
+    }
+  }
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
@@ -134,14 +155,66 @@ class MyTaskHandler implements TaskHandler {
   @override
   void onNotificationPressed() {
     debugPrint('[HANDLER][${_ts()}] onNotificationPressed');
-    _sendWorkStatusNotificationEvent(
-      WorkStatusNotificationProtocol.pressedEvent,
-    );
+    _sendWorkScreenRequest(source: 'notification_body');
   }
 
   @override
   void onNotificationButtonPressed(String id) {
     debugPrint('[HANDLER][${_ts()}] onNotificationButtonPressed id=$id');
+    if (id == WorkStatusNotificationProtocol.breakPunchAction) {
+      _sendWorkStatusNotificationEvent(
+        WorkStatusNotificationProtocol.breakActionEvent,
+        values: <String, Object?>{'phase': 'received'},
+      );
+      unawaited(_handleBreakPunch());
+      return;
+    }
+    debugPrint('[HANDLER][${_ts()}] notification button ignored id=$id');
+  }
+
+
+  void _sendWorkScreenRequest({required String source}) {
+    final now = DateTime.now();
+    debugPrint(
+      '[HANDLER][${now.toIso8601String()}] work_screen_requested source=$source route=/headquarter_page',
+    );
+    _sendWorkStatusNotificationEvent(
+      WorkStatusNotificationProtocol.workScreenRequestedEvent,
+      values: <String, Object?>{
+        'source': source,
+        'route': '/headquarter_page',
+      },
+    );
+  }
+
+  Future<void> _handleBreakPunch() async {
+    try {
+      final result = await BreakPunchUseCase.execute();
+      debugPrint('[HANDLER][${_ts()}] breakPunch success=${result.success} alreadyRecorded=${result.alreadyRecorded} message=${result.message} recordedAt=${result.recordedAt?.toIso8601String() ?? '-'}');
+      _sendWorkStatusNotificationEvent(
+        WorkStatusNotificationProtocol.breakActionEvent,
+        values: <String, Object?>{
+          'phase': 'completed',
+          'success': result.success,
+          'alreadyRecorded': result.alreadyRecorded,
+          'message': result.message,
+          'recordedAt': result.recordedAt?.toIso8601String(),
+        },
+      );
+      await _refreshWorkStatusNotification();
+      _sendWorkStatusNotificationEvent(
+        WorkStatusNotificationProtocol.refreshedEvent,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('[HANDLER][${_ts()}] breakPunch error=$error\n$stackTrace');
+      _sendWorkStatusNotificationEvent(
+        WorkStatusNotificationProtocol.breakActionEvent,
+        values: <String, Object?>{
+          'phase': 'error',
+          'error': error.toString(),
+        },
+      );
+    }
   }
 
   @override
@@ -162,11 +235,7 @@ class MyTaskHandler implements TaskHandler {
         return;
       }
 
-      await FlutterForegroundTask.updateService(
-        notificationTitle: '근무 중',
-        notificationText: '현재 근무 세션이 진행 중입니다.',
-        notificationInitialRoute: '/',
-      );
+      await _refreshWorkStatusNotification();
       debugPrint(
         '[HANDLER][${_ts()}] notification restored after dismissal',
       );
@@ -179,6 +248,28 @@ class MyTaskHandler implements TaskHandler {
         WorkStatusNotificationProtocol.dismissedEvent,
       );
     }
+  }
+
+  Future<void> _refreshWorkStatusNotification() async {
+    final snapshot = await LiveWorkSnapshotResolver.resolve();
+    if (!snapshot.isWorking) return;
+    final presentation = LiveWorkNotificationPresenter.build(snapshot);
+    debugPrint(
+      '[HANDLER][${_ts()}] notification mutation start working=${snapshot.isWorking} title=${presentation.title} shortText=${presentation.shortText}',
+    );
+    await FlutterForegroundTask.updateService(
+      notificationTitle: presentation.title,
+      notificationText: presentation.text,
+      notificationButtons: <NotificationButton>[
+        if (presentation.showBreakAction)
+          const NotificationButton(id: WorkStatusNotificationProtocol.breakPunchAction, text: '휴게 기록'),
+      ],
+      notificationInitialRoute: '/headquarter_page',
+    );
+    debugPrint(
+      '[HANDLER][${_ts()}] notification mutation complete owner=foreground_handler mainFinalizerRequired=true',
+    );
+    await LiveWorkOverdueReminderCoordinator.evaluate(snapshot);
   }
 
   @override
@@ -401,12 +492,16 @@ class MyTaskHandler implements TaskHandler {
     }
   }
 
-  void _sendWorkStatusNotificationEvent(String event) {
+  void _sendWorkStatusNotificationEvent(
+    String event, {
+    Map<String, Object?> values = const <String, Object?>{},
+  }) {
     try {
       FlutterForegroundTask.sendDataToMain(<String, dynamic>{
         'kind': WorkStatusNotificationProtocol.eventKind,
         'event': event,
         'ts': DateTime.now().millisecondsSinceEpoch,
+        ...values,
       });
     } catch (error) {
       debugPrint(

@@ -272,39 +272,62 @@ class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
               maxWidth: 380,
               maxHeight: screenHeight * 0.84,
             ),
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 22,
-              ),
-              decoration: BoxDecoration(
-                color: surface,
-                borderRadius: BorderRadius.circular(
-                  widget.useCommonUi
-                      ? CommonUiShapes.dialog
-                      : 20,
-                ),
-                border: Border.all(color: border),
-                boxShadow: [
-                  BoxShadow(
-                    blurRadius: 24,
-                    offset: const Offset(0, 12),
-                    color: shadow,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0, end: 1),
+              duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                  ? Duration.zero
+                  : CommonUiMotion.component,
+              curve: CommonUiMotion.enter,
+              builder: (context, value, child) {
+                return Opacity(
+                  opacity: value,
+                  child: Transform.translate(
+                    offset: Offset(0, 14 * (1 - value)),
+                    child: Transform.scale(
+                      scale: 0.97 + (0.03 * value),
+                      child: child,
+                    ),
                   ),
-                ],
-              ),
-              child: _StatusDialogContent(
-                title: widget.title,
-                tone: widget.tone,
-                description: widget.description,
-                hasDescription: widget.description.isNotEmpty,
-                hasCopyText: widget.copyText.isNotEmpty,
-                copyButtonLabel:
-                    _copied ? '복사 완료' : widget.copyButtonLabel,
-                onCopy: widget.copyText.isNotEmpty ? _copy : null,
-                onClose: widget.onClose,
-                useCommonUi: widget.useCommonUi,
+                );
+              },
+              child: AnimatedContainer(
+                duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                    ? Duration.zero
+                    : CommonUiMotion.component,
+                curve: CommonUiMotion.standard,
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 22,
+                ),
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: BorderRadius.circular(
+                    widget.useCommonUi
+                        ? CommonUiShapes.dialog
+                        : 20,
+                  ),
+                  border: Border.all(color: border),
+                  boxShadow: [
+                    BoxShadow(
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                      color: shadow,
+                    ),
+                  ],
+                ),
+                child: _StatusDialogContent(
+                  title: widget.title,
+                  tone: widget.tone,
+                  description: widget.description,
+                  hasDescription: widget.description.isNotEmpty,
+                  hasCopyText: widget.copyText.isNotEmpty,
+                  copyButtonLabel:
+                      _copied ? '복사 완료' : widget.copyButtonLabel,
+                  onCopy: widget.copyText.isNotEmpty ? _copy : null,
+                  onClose: widget.onClose,
+                  useCommonUi: widget.useCommonUi,
+                ),
               ),
             ),
           ),

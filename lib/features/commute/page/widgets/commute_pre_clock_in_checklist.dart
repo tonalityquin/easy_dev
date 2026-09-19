@@ -13,6 +13,7 @@ class CommutePreClockInChecklist extends StatelessWidget {
     required this.onCheckAll,
     required this.onConfirm,
     required this.confirming,
+    this.embedded = false,
   });
 
   final String contextLabel;
@@ -22,6 +23,7 @@ class CommutePreClockInChecklist extends StatelessWidget {
   final VoidCallback onCheckAll;
   final Future<void> Function() onConfirm;
   final bool confirming;
+  final bool embedded;
 
   bool get _allChecked =>
       items.isNotEmpty && items.every((item) => checkedIds.contains(item.id));
@@ -38,6 +40,148 @@ class CommutePreClockInChecklist extends StatelessWidget {
         final reportHeight = constraints.hasBoundedHeight
             ? constraints.maxHeight
             : MediaQuery.sizeOf(context).height;
+        final reportBody = Padding(
+          padding: EdgeInsets.fromLTRB(
+            embedded ? 20 : 22,
+            embedded ? 18 : 22,
+            embedded ? 20 : 22,
+            14,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: EdgeInsets.only(right: embedded ? 0 : 52),
+                child: Text(
+                  '출근 전 업무 확인',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
+                      ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              if (normalizedContext.isNotEmpty) ...[
+                _ReportMetadataRow(
+                  label: '근무 위치',
+                  value: Text(
+                    normalizedContext,
+                    textAlign: TextAlign.right,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          height: 1.4,
+                        ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              _ReportMetadataRow(
+                label: '확인 항목',
+                value: Text(
+                  '${items.length}건',
+                  textAlign: TextAlign.right,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _ReportMetadataRow(
+                label: '상태',
+                value: AnimatedSwitcher(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : CommonUiMotion.selection,
+                  switchInCurve: CommonUiMotion.enter,
+                  switchOutCurve: CommonUiMotion.exit,
+                  child: Text(
+                    _allChecked ? '확인 완료' : '확인 진행 중',
+                    key: ValueKey<bool>(_allChecked),
+                    textAlign: TextAlign.right,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: _allChecked
+                              ? tokens.success
+                              : tokens.textSecondary,
+                          fontWeight: FontWeight.w700,
+                          height: 1.4,
+                        ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Divider(height: 1, color: tokens.borderStrong),
+              const SizedBox(height: 4),
+              Expanded(
+                child: ListView.separated(
+                  primary: false,
+                  physics: const ClampingScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) =>
+                      Divider(height: 1, color: tokens.borderSubtle),
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return _ChecklistItem(
+                      index: index,
+                      item: item,
+                      checked: checkedIds.contains(item.id),
+                      onPressed: confirming
+                          ? null
+                          : () => onToggle(item.id),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 4),
+              Divider(height: 1, color: tokens.borderStrong),
+              const SizedBox(height: 14),
+              _ReportMetadataRow(
+                label: '확인 현황',
+                value: AnimatedSwitcher(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : CommonUiMotion.selection,
+                  switchInCurve: CommonUiMotion.enter,
+                  switchOutCurve: CommonUiMotion.exit,
+                  child: Text(
+                    '${checkedIds.length} / ${items.length}',
+                    key: ValueKey<String>(
+                      '${checkedIds.length}_${items.length}',
+                    ),
+                    textAlign: TextAlign.right,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: _allChecked
+                              ? tokens.success
+                              : tokens.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          height: 1.4,
+                        ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _ReportApprovalSection(
+                allChecked: _allChecked,
+                confirming: confirming,
+                onCheckAll: onCheckAll,
+                onConfirm: onConfirm,
+              ),
+            ],
+          ),
+        );
+
+        if (embedded) {
+          return SizedBox(
+            width: double.infinity,
+            height: reportHeight,
+            child: reportBody,
+          );
+        }
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -53,150 +197,7 @@ class CommutePreClockInChecklist extends StatelessWidget {
                     borderRadius: BorderRadius.circular(CommonUiShapes.card),
                     border: Border.all(color: tokens.borderSubtle),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 22, 22, 14),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.max,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(right: 52),
-                          child: Text(
-                            '출근 전 업무 확인',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                  color: tokens.textPrimary,
-                                  fontWeight: FontWeight.w700,
-                                  height: 1.35,
-                                ),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        if (normalizedContext.isNotEmpty) ...[
-                          _ReportMetadataRow(
-                            label: '근무 위치',
-                            value: Text(
-                              normalizedContext,
-                              textAlign: TextAlign.right,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: tokens.textPrimary,
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.4,
-                                  ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                        ],
-                        _ReportMetadataRow(
-                          label: '확인 항목',
-                          value: Text(
-                            '${items.length}건',
-                            textAlign: TextAlign.right,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: tokens.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.4,
-                                ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _ReportMetadataRow(
-                          label: '상태',
-                          value: AnimatedSwitcher(
-                            duration: reduceMotion
-                                ? Duration.zero
-                                : CommonUiMotion.selection,
-                            switchInCurve: CommonUiMotion.enter,
-                            switchOutCurve: CommonUiMotion.exit,
-                            child: Text(
-                              _allChecked ? '확인 완료' : '확인 진행 중',
-                              key: ValueKey<bool>(_allChecked),
-                              textAlign: TextAlign.right,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: _allChecked
-                                        ? tokens.success
-                                        : tokens.textSecondary,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.4,
-                                  ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Divider(height: 1, color: tokens.borderStrong),
-                        const SizedBox(height: 4),
-                        Expanded(
-                          child: ListView.separated(
-                            primary: false,
-                            physics: const ClampingScrollPhysics(),
-                            padding: EdgeInsets.zero,
-                            itemCount: items.length,
-                            separatorBuilder: (_, __) =>
-                                Divider(height: 1, color: tokens.borderSubtle),
-                            itemBuilder: (context, index) {
-                              final item = items[index];
-                              return _ChecklistItem(
-                                index: index,
-                                item: item,
-                                checked: checkedIds.contains(item.id),
-                                onPressed: confirming
-                                    ? null
-                                    : () => onToggle(item.id),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Divider(height: 1, color: tokens.borderStrong),
-                        const SizedBox(height: 14),
-                        _ReportMetadataRow(
-                          label: '확인 현황',
-                          value: AnimatedSwitcher(
-                            duration: reduceMotion
-                                ? Duration.zero
-                                : CommonUiMotion.selection,
-                            switchInCurve: CommonUiMotion.enter,
-                            switchOutCurve: CommonUiMotion.exit,
-                            child: Text(
-                              '${checkedIds.length} / ${items.length}',
-                              key: ValueKey<String>(
-                                '${checkedIds.length}_${items.length}',
-                              ),
-                              textAlign: TextAlign.right,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: _allChecked
-                                        ? tokens.success
-                                        : tokens.textPrimary,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.4,
-                                  ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        _ReportApprovalSection(
-                          allChecked: _allChecked,
-                          confirming: confirming,
-                          onCheckAll: onCheckAll,
-                          onConfirm: onConfirm,
-                        ),
-                      ],
-                    ),
-                  ),
+                  child: reportBody,
                 ),
               ),
             ),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
@@ -14,12 +15,13 @@ import '../../../account/applications/user_state.dart';
 import '../../../attendance/application/common_attendance_service.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../../launcher/application/launcher_diagnostics.dart';
-import '../../../launcher/widgets/app_power_action_control.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../application/commute_pre_clock_in_gate.dart';
 import '../../controllers/common_commute_in_controller.dart';
 import '../../utils/commute_mode_spec.dart';
+import '../../widgets/commute_destination_cinematic_entry.dart';
 import '../widgets/commute_pre_clock_in_checklist.dart';
+import '../widgets/parkinworkin_windows_desktop.dart';
 
 enum _CommutePowerGateStage {
   checking,
@@ -53,6 +55,8 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
   late final CommonCommuteInController controller =
       CommonCommuteInController(spec: widget.spec);
   late final AnimationController _revealController;
+  final GlobalKey<ParkinWorkinApplicationFieldState> _desktopKey =
+      GlobalKey<ParkinWorkinApplicationFieldState>();
   _CommutePowerGateStage _stage = _CommutePowerGateStage.checking;
   String _stateMessage = '';
   static const Duration _menuMotionDuration = Duration(milliseconds: 180);
@@ -101,10 +105,17 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'modeLauncherAction': 'removed',
         'developerStatus': 'developer_only',
         'menuMotionMs': _menuMotionDuration.inMilliseconds,
+        'presentation': 'neutral_application_field',
       },
     );
     unawaited(DevAuth.isDevModeEnabled());
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_reduceMotion) {
+        _revealController.value = 1;
+      } else {
+        unawaited(_revealController.forward(from: 0));
+      }
       unawaited(_prepareGate());
     });
   }
@@ -124,11 +135,42 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
   Future<void> _prepareGate() async {
     if (!mounted) return;
     final userState = context.read<UserState>();
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final localIsWorking = prefs.getBool('isWorking') ?? false;
+    final sessionIsWorking = userState.isWorking;
     LauncherDiagnostics.record(
       'commute_working_check_start',
       scope: 'commute_power',
-      meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'localIsWorking': localIsWorking,
+        'sessionIsWorking': sessionIsWorking,
+      },
     );
+
+    if (sessionIsWorking != localIsWorking) {
+      LauncherDiagnostics.record(
+        'commute_working_state_mismatch',
+        scope: 'commute_power',
+        meta: <String, Object?>{
+          'mode': widget.spec.diagnosticKey,
+          'localIsWorking': localIsWorking,
+          'sessionIsWorking': sessionIsWorking,
+        },
+      );
+      await userState.setWorkingStatus(localIsWorking);
+      if (!mounted) return;
+      LauncherDiagnostics.record(
+        'commute_working_state_reconciled',
+        scope: 'commute_power',
+        meta: <String, Object?>{
+          'mode': widget.spec.diagnosticKey,
+          'localIsWorking': localIsWorking,
+          'sessionIsWorking': userState.isWorking,
+        },
+      );
+    }
 
     await userState.ensureTodayClockInStatus();
     if (!mounted) return;
@@ -165,11 +207,6 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       scope: 'commute_power',
       meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
     );
-    if (_reduceMotion) {
-      _revealController.value = 1;
-    } else {
-      await _revealController.forward(from: 0);
-    }
   }
 
   Future<void> _resetStaleWorkingState() async {
@@ -344,6 +381,9 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
 
   Future<void> _showDeveloperStatus() async {
     final userState = context.read<UserState>();
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final localIsWorking = prefs.getBool('isWorking') ?? false;
     LauncherDiagnostics.record(
       'commute_status_requested',
       scope: 'commute_power',
@@ -351,11 +391,13 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     );
     await LauncherDiagnostics.showStatus(
       context,
-      title: 'Commute Power Status',
+      title: 'Commute Application Status',
       description: <String>[
         'Context: ${widget.spec.diagnosticKey}',
         'Stage: ${_stage.name}',
-        'Working: ${userState.isWorking}',
+        'Working session: ${userState.isWorking}',
+        'Working local: $localIsWorking',
+        'Working synchronized: ${userState.isWorking == localIsWorking}',
         'Clock-in today: ${userState.hasClockInToday}',
         'Issue action visible: $_showClockInIssueResolution',
         'Issue resolving: $_resolvingClockInIssue',
@@ -374,11 +416,28 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'Pre-clock-in decision: ${_preClockInDecision?.reason ?? 'none'}',
         'Pre-clock-in context: ${_preClockInDecision?.contextLabel ?? ''}',
         'Pre-clock-in action surface: report_approval',
-        'Pre-clock-in report layout: full_height_content_scroll',
-        'Pre-clock-in report menu: top_right',
+        'Pre-clock-in report layout: application_surface_embedded',
+        'Pre-clock-in report menu: bottom_actions',
         'Pre-clock-in force armed: $_forcePreClockInGateForAttempt',
         'More open count: $_moreOpenCount',
         'Pre-clock-in diagnostics: ${_preClockInDecision?.diagnosticsSummary ?? ''}',
+        'Application presentation: neutral_application_field',
+        'Application phase: ${_desktopKey.currentState?.diagnosticPhase ?? 'unmounted'}',
+        'ParkinWorkin focused: ${_desktopKey.currentState?.applicationFocused ?? false}',
+        'Start prompt visible: ${_desktopKey.currentState?.promptVisible ?? false}',
+        'ParkinWorkin launched: ${_desktopKey.currentState?.applicationLaunched ?? false}',
+        'Peripheral apps: ${_desktopKey.currentState?.peripheralCount ?? 0}',
+        'Peripheral layout: ${_desktopKey.currentState?.peripheralLayout ?? 'unmounted'}',
+        'Application field reveal ms: ${ParkinWorkinApplicationField.desktopRevealDuration.inMilliseconds}',
+        'Pre-focus hold ms: ${ParkinWorkinApplicationField.preFocusHoldDuration.inMilliseconds}',
+        'ParkinWorkin selection ms: ${ParkinWorkinApplicationField.selectionDuration.inMilliseconds}',
+        'ParkinWorkin focus ms: ${ParkinWorkinApplicationField.focusDuration.inMilliseconds}',
+        'Post-focus hold ms: ${ParkinWorkinApplicationField.postFocusHoldDuration.inMilliseconds}',
+        'Start prompt ms: ${ParkinWorkinApplicationField.promptDuration.inMilliseconds}',
+        'ParkinWorkin press ms: ${ParkinWorkinApplicationField.appPressDuration.inMilliseconds}',
+        'ParkinWorkin launch ms: ${ParkinWorkinApplicationField.appLaunchDuration.inMilliseconds}',
+        'Workspace expand ms: ${ParkinWorkinApplicationField.fullscreenDuration.inMilliseconds}',
+        'Workspace render ms: ${CommuteDestinationCinematicEntry.renderDuration.inMilliseconds}',
       ].join('\n'),
       scope: 'commute_power',
     );
@@ -399,11 +458,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'route': route,
       },
     );
-    if (_reduceMotion) {
-      _revealController.value = 0;
-    } else {
-      await _revealController.reverse(from: 1);
-    }
+    await _desktopKey.currentState?.expandToFullscreen();
     if (!mounted) return;
     LauncherDiagnostics.record(
       'commute_power_exit_complete',
@@ -457,7 +512,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       },
     );
     _trace(
-      '출근 파워 버튼',
+      'ParkinWorkin 실행',
       meta: <String, dynamic>{
         'screen': _screenId,
         'action': 'work_start_attempt',
@@ -524,8 +579,8 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
             'context': decision.contextLabel,
             'itemCount': decision.items.length,
             'reason': decision.reason,
-            'layout': 'full_height_content_scroll',
-            'menuPlacement': 'top_right',
+            'layout': 'application_window_embedded',
+            'menuPlacement': 'bottom_actions',
             'firebaseRead': 0,
             'firebaseWrite': 0,
           },
@@ -848,20 +903,6 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     }
   }
 
-  AppPowerActionVisualState get _powerVisualState {
-    switch (_stage) {
-      case _CommutePowerGateStage.checking:
-      case _CommutePowerGateStage.ready:
-        return AppPowerActionVisualState.idle;
-      case _CommutePowerGateStage.processing:
-        return AppPowerActionVisualState.processing;
-      case _CommutePowerGateStage.success:
-        return AppPowerActionVisualState.success;
-      case _CommutePowerGateStage.failure:
-        return AppPowerActionVisualState.failure;
-    }
-  }
-
   SystemUiOverlayStyle _systemUiStyle(CommonUiTokens tokens) {
     final brightness = tokens.isDark ? Brightness.light : Brightness.dark;
     return SystemUiOverlayStyle(
@@ -1062,11 +1103,18 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     );
   }
 
-  Widget _buildPowerGate(
-    BuildContext context,
-    CommonUiTokens tokens,
-    UserState userState,
-  ) {
+  ParkinWorkinDesktopStage get _desktopStage {
+    return switch (_stage) {
+      _CommutePowerGateStage.checking => ParkinWorkinDesktopStage.checking,
+      _CommutePowerGateStage.ready => ParkinWorkinDesktopStage.ready,
+      _CommutePowerGateStage.processing =>
+        ParkinWorkinDesktopStage.processing,
+      _CommutePowerGateStage.success => ParkinWorkinDesktopStage.success,
+      _CommutePowerGateStage.failure => ParkinWorkinDesktopStage.failure,
+    };
+  }
+
+  Widget _buildDesktopGate(UserState userState) {
     final name = userState.name.trim().isEmpty ? '사용자' : userState.name.trim();
     final reveal = CurvedAnimation(
       parent: _revealController,
@@ -1075,90 +1123,36 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     final enabled = !_routeTransitioning &&
         (_stage == _CommutePowerGateStage.ready ||
             _stage == _CommutePowerGateStage.failure);
+    final decision = _preClockInDecision;
+    final checklist = _gateView == _CommuteGateView.checklist && decision != null
+        ? CommutePreClockInChecklist(
+            key: const ValueKey<String>('pre_clock_in_checklist'),
+            contextLabel: decision.contextLabel,
+            items: decision.items,
+            checkedIds: _checkedPreClockInItemIds,
+            onToggle: _togglePreClockInItem,
+            onCheckAll: _checkAllPreClockInItems,
+            onConfirm: _confirmPreClockInChecklist,
+            confirming: _preClockInConfirming,
+            embedded: true,
+          )
+        : null;
 
     return AppStartCinematicReveal(
       animation: reveal,
       reduceMotion: _reduceMotion,
       exiting: _routeTransitioning,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 480),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppPowerActionControl(
-                semanticLabel: '$name님 업무 시작',
-                enabled: enabled,
-                state: _powerVisualState,
-                onPressed: _startClockIn,
-              ),
-              const SizedBox(height: 30),
-              AnimatedSwitcher(
-                duration: _reduceMotion
-                    ? Duration.zero
-                    : const Duration(milliseconds: 240),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) {
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.08),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
-                    ),
-                  );
-                },
-                child: Column(
-                  key: ValueKey<String>('${_stage.name}:$_stateMessage'),
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$name님, 오늘의 업무를 시작할까요?',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: tokens.textPrimary,
-                            fontWeight: FontWeight.w700,
-                            height: 1.45,
-                          ),
-                    ),
-                    AnimatedSize(
-                      duration: _reduceMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 220),
-                      curve: Curves.easeOutCubic,
-                      child: _stateMessage.isEmpty
-                          ? const SizedBox.shrink()
-                          : Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: Text(
-                                _stateMessage,
-                                textAlign: TextAlign.center,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: _stage ==
-                                              _CommutePowerGateStage.failure
-                                          ? tokens.danger
-                                          : _stage ==
-                                                  _CommutePowerGateStage.success
-                                              ? tokens.success
-                                              : tokens.textSecondary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+      child: ParkinWorkinApplicationField(
+        key: _desktopKey,
+        userName: name,
+        stage: _desktopStage,
+        stateMessage: _stateMessage,
+        enabled: enabled,
+        reduceMotion: _reduceMotion,
+        exiting: _routeTransitioning,
+        modeKey: widget.spec.diagnosticKey,
+        checklist: checklist,
+        onLaunch: _startClockIn,
       ),
     );
   }
@@ -1291,109 +1285,28 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
                           return Stack(
                             fit: StackFit.expand,
                             children: [
-                              AnimatedSwitcher(
-                                duration: _reduceMotion
-                                    ? Duration.zero
-                                    : const Duration(milliseconds: 220),
-                                child: _stage == _CommutePowerGateStage.checking
-                                    ? const SizedBox.shrink(
-                                        key: ValueKey<String>('checking'),
-                                      )
-                                    : Center(
-                                        key: const ValueKey<String>('ready'),
-                                        child: AnimatedSwitcher(
-                                          duration: _reduceMotion
-                                              ? Duration.zero
-                                              : const Duration(
-                                                  milliseconds: 220,
-                                                ),
-                                          reverseDuration: _reduceMotion
-                                              ? Duration.zero
-                                              : const Duration(
-                                                  milliseconds: 190,
-                                                ),
-                                          switchInCurve: Curves.easeOutCubic,
-                                          switchOutCurve: Curves.easeInCubic,
-                                          transitionBuilder: (
-                                            child,
-                                            animation,
-                                          ) {
-                                            final curved = CurvedAnimation(
-                                              parent: animation,
-                                              curve: Curves.easeOutCubic,
-                                              reverseCurve: Curves.easeInCubic,
-                                            );
-                                            return FadeTransition(
-                                              opacity: curved,
-                                              child: SlideTransition(
-                                                position: Tween<Offset>(
-                                                  begin: const Offset(0, 0.018),
-                                                  end: Offset.zero,
-                                                ).animate(curved),
-                                                child: child,
-                                              ),
-                                            );
-                                          },
-                                          child: _gateView ==
-                                                      _CommuteGateView.checklist &&
-                                                  _preClockInDecision != null
-                                              ? CommutePreClockInChecklist(
-                                                  key: const ValueKey<String>(
-                                                    'pre_clock_in_checklist',
-                                                  ),
-                                                  contextLabel:
-                                                      _preClockInDecision!
-                                                          .contextLabel,
-                                                  items:
-                                                      _preClockInDecision!.items,
-                                                  checkedIds:
-                                                      _checkedPreClockInItemIds,
-                                                  onToggle:
-                                                      _togglePreClockInItem,
-                                                  onCheckAll:
-                                                      _checkAllPreClockInItems,
-                                                  onConfirm:
-                                                      _confirmPreClockInChecklist,
-                                                  confirming:
-                                                      _preClockInConfirming,
-                                                )
-                                              : KeyedSubtree(
-                                                  key: const ValueKey<String>(
-                                                    'power_gate',
-                                                  ),
-                                                  child: _buildPowerGate(
-                                                    context,
-                                                    tokens,
-                                                    userState,
-                                                  ),
-                                                ),
-                                        ),
-                                      ),
+                              KeyedSubtree(
+                                key: const ValueKey<String>(
+                                  'application_field_gate',
+                                ),
+                                child: _buildDesktopGate(userState),
                               ),
-                              if (_stage != _CommutePowerGateStage.checking &&
-                                  _gateView == _CommuteGateView.checklist &&
-                                  _preClockInDecision != null)
-                                Align(
-                                  alignment: Alignment.topRight,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                      top: 4,
-                                      right: 4,
-                                    ),
-                                    child: _buildMenu(
-                                      tokens,
-                                      developerMode,
-                                      reportPlacement: true,
-                                    ),
-                                  ),
-                                )
-                              else if (_stage !=
-                                  _CommutePowerGateStage.checking)
+                              if (_stage != _CommutePowerGateStage.checking)
                                 Align(
                                   alignment: Alignment.bottomCenter,
-                                  child: _buildBottomActions(
-                                    tokens,
-                                    developerMode,
+                                  child: IgnorePointer(
+                                    ignoring: _routeTransitioning,
+                                    child: AnimatedOpacity(
+                                      opacity: _routeTransitioning ? 0 : 1,
+                                      duration: _reduceMotion
+                                          ? Duration.zero
+                                          : CommonUiMotion.component,
+                                      curve: CommonUiMotion.exit,
+                                      child: _buildBottomActions(
+                                        tokens,
+                                        developerMode,
+                                      ),
+                                    ),
                                   ),
                                 ),
                             ],
