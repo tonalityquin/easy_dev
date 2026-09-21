@@ -10,6 +10,7 @@ import '../../../../../features/attendance/application/common_attendance_service
 import '../../../../../features/attendance/widgets/common_attendance_punch_feedback.dart';
 import '../../../../../features/commute/widgets/common_punch_recorder_surface.dart';
 import '../../../../../features/mode_single/application/att_brk_repository.dart';
+import '../../../../../features/mode_single/application/single_inside_diagnostics.dart';
 
 class SingleInsidePunchRecorderSection extends StatefulWidget {
   const SingleInsidePunchRecorderSection({
@@ -19,6 +20,7 @@ class SingleInsidePunchRecorderSection extends StatefulWidget {
     required this.area,
     required this.division,
     required this.scheduleRevision,
+    this.embedded = false,
     this.onDeveloperStatus,
   });
 
@@ -27,6 +29,7 @@ class SingleInsidePunchRecorderSection extends StatefulWidget {
   final String area;
   final String division;
   final int scheduleRevision;
+  final bool embedded;
   final Future<void> Function()? onDeveloperStatus;
 
   @override
@@ -55,7 +58,7 @@ class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchReco
   }
 
   void _debug(String message) {
-    debugPrint('[SinglePunchRecorder] $message');
+    SingleInsideDiagnostics.log('punch', message);
   }
 
   @override
@@ -371,6 +374,7 @@ class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchReco
       dateLabel: dateLabel,
       onDateTap: _pickDate,
       loading: _loading,
+      embedded: widget.embedded,
       onDeveloperStatus: widget.onDeveloperStatus ?? _showDeveloperStatus,
       slots: <CommonPunchSlotData>[
         _workInSlot(),

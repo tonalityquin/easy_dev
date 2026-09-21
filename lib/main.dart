@@ -235,6 +235,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             themeMode: themeCtrl.themeMode,
             initialRoute: AppRoutes.startGate,
             routes: appRoutes,
+            onGenerateRoute: onGenerateAppRoute,
             onUnknownRoute: (_) =>
                 MaterialPageRoute(builder: (_) => const NotFoundPage()),
             navigatorKey: AppNavigator.key,

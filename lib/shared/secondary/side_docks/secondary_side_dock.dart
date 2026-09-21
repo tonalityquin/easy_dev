@@ -483,8 +483,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       );
       return;
     }
-    await HapticFeedback.selectionClick();
-    if (!mounted) return;
+    _debugLog.log(
+      'tablet_settings_section_rail_tap mode=${_tabletWorkspace.settingsMode.name} from=${_tabletWorkspace.activeSettingsSection.name} to=${section.name} state=${_tabletWorkspace.stateFor(section).name} railDesign=input_plate_unified',
+    );
     _tabletWorkspace.requestSettingsSection(
       section,
       source: 'secondary_tablet_settings_rail',
@@ -498,8 +499,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       );
       return;
     }
-    await HapticFeedback.selectionClick();
-    if (!mounted) return;
+    _debugLog.log(
+      'bill_settings_section_rail_tap from=${_billWorkspace.activeSettingsSection.name} to=${section.name} state=${_billWorkspace.stateFor(section).name} railDesign=input_plate_unified',
+    );
     _billWorkspace.requestSettingsSection(
       section,
       source: 'secondary_bill_settings_rail',
@@ -515,8 +517,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       );
       return;
     }
-    await HapticFeedback.selectionClick();
-    if (!mounted) return;
+    _debugLog.log(
+      'monthly_settings_section_rail_tap view=${_monthlyWorkspace.view.name} from=${_monthlyWorkspace.activeSection.name} to=${section.name} state=${_monthlyWorkspace.stateFor(section).name} railDesign=input_plate_unified',
+    );
     _monthlyWorkspace.requestSection(
       section,
       source: 'secondary_monthly_settings_rail',
@@ -532,8 +535,9 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       );
       return;
     }
-    await HapticFeedback.selectionClick();
-    if (!mounted) return;
+    _debugLog.log(
+      'sector_settings_section_rail_tap mode=${_sectorWorkspace.settingsMode.name} from=${_sectorWorkspace.activeSettingsSection.name} to=${section.name} state=${_sectorWorkspace.stateFor(section).name} railDesign=input_plate_unified',
+    );
     _sectorWorkspace.requestSettingsSection(
       section,
       source: 'secondary_sector_settings_rail',
@@ -1893,13 +1897,23 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
                           width: effectiveRailWidth,
                           child: ClipRect(
                             child: AnimatedSwitcher(
-                              duration: reduceMotion
+                              duration: reduceMotion ||
+                                      selected == Section.tablet ||
+                                      selected == Section.bill ||
+                                      selected == Section.monthly ||
+                                      selected == Section.sector
                                   ? Duration.zero
                                   : const Duration(milliseconds: 180),
                               switchInCurve: Curves.easeOutCubic,
                               switchOutCurve: Curves.easeInCubic,
                               transitionBuilder: (child, animation) {
-                                if (reduceMotion) return child;
+                                if (reduceMotion ||
+                                    selected == Section.tablet ||
+                                    selected == Section.bill ||
+                                    selected == Section.monthly ||
+                                    selected == Section.sector) {
+                                  return child;
+                                }
                                 final enteringSettings = child.key ==
                                         const ValueKey<String>('secondary-user-settings-rail') ||
                                     child.key ==
@@ -2754,6 +2768,7 @@ class _SecondaryQuickActionRailState extends State<_SecondaryQuickActionRail> {
         selectedSection: widget.tabletSettingsSection,
         sectionStates: widget.tabletSettingsSectionStates,
         saving: widget.tabletSettingsSaving,
+        onDebug: widget.onDebug,
         onSelect: widget.onSelectTabletSettingsSection,
       );
     }
@@ -2763,6 +2778,7 @@ class _SecondaryQuickActionRailState extends State<_SecondaryQuickActionRail> {
         selectedSection: widget.billSettingsSection,
         sectionStates: widget.billSettingsSectionStates,
         saving: widget.billSettingsSaving,
+        onDebug: widget.onDebug,
         onSelect: widget.onSelectBillSettingsSection,
       );
     }
@@ -2773,6 +2789,7 @@ class _SecondaryQuickActionRailState extends State<_SecondaryQuickActionRail> {
         sectionStates: widget.monthlySettingsSectionStates,
         saving: widget.monthlySettingsSaving,
         paymentMode: widget.monthlyPaymentMode,
+        onDebug: widget.onDebug,
         onSelect: widget.onSelectMonthlySettingsSection,
       );
     }
@@ -2782,6 +2799,7 @@ class _SecondaryQuickActionRailState extends State<_SecondaryQuickActionRail> {
         selectedSection: widget.sectorSettingsSection,
         sectionStates: widget.sectorSettingsSectionStates,
         saving: widget.sectorSettingsSaving,
+        onDebug: widget.onDebug,
         onSelect: widget.onSelectSectorSettingsSection,
       );
     }
@@ -3475,12 +3493,13 @@ class _UserSettingsTocItem {
   final IconData icon;
 }
 
-class _TabletSettingsTableOfContentsRail extends StatelessWidget {
+class _TabletSettingsTableOfContentsRail extends StatefulWidget {
   const _TabletSettingsTableOfContentsRail({
     required this.metrics,
     required this.selectedSection,
     required this.sectionStates,
     required this.saving,
+    required this.onDebug,
     required this.onSelect,
   });
 
@@ -3488,6 +3507,7 @@ class _TabletSettingsTableOfContentsRail extends StatelessWidget {
   final TabletSettingsSection selectedSection;
   final Map<TabletSettingsSection, TabletSettingsSectionState> sectionStates;
   final bool saving;
+  final ValueChanged<String> onDebug;
   final ValueChanged<TabletSettingsSection> onSelect;
 
   static const List<_TabletSettingsTocItem> _items = <_TabletSettingsTocItem>[
@@ -3509,59 +3529,83 @@ class _TabletSettingsTableOfContentsRail extends StatelessWidget {
   ];
 
   @override
+  State<_TabletSettingsTableOfContentsRail> createState() =>
+      _TabletSettingsTableOfContentsRailState();
+}
+
+class _TabletSettingsTableOfContentsRailState
+    extends State<_TabletSettingsTableOfContentsRail> {
+  String? _lastLayoutSignature;
+
+  @override
   Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final metrics = widget.metrics;
+    final gap = metrics.ultra ? 4.0 : 6.0;
+    final items = _TabletSettingsTableOfContentsRail._items;
+    final stateSummary = items
+        .map(
+          (item) =>
+              '${item.section.name}:${(widget.sectionStates[item.section] ?? TabletSettingsSectionState.incomplete).name}',
+        )
+        .join(',');
+    final signature = <Object>[
+      metrics.variantName,
+      metrics.minimumButtonExtent.toStringAsFixed(1),
+      gap.toStringAsFixed(1),
+      widget.selectedSection.name,
+      widget.saving,
+      stateSummary,
+      reduceMotion,
+    ].join('|');
+    if (_lastLayoutSignature != signature) {
+      _lastLayoutSignature = signature;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.onDebug(
+          'tablet_settings_rail_layout railDesign=input_plate_unified selected=${widget.selectedSection.name} actions=${items.length} distribution=fixed_top scroll=clamping button_extent=${metrics.minimumButtonExtent.toStringAsFixed(1)} gap=${gap.toStringAsFixed(1)} selectedIndicator=3x20 validationVisual=content_only states=$stateSummary saving=${widget.saving} variant=${metrics.variantName} reduceMotion=$reduceMotion',
+        );
+      });
+    }
+
+    final entries = <Widget>[];
+    for (var i = 0; i < items.length; i++) {
+      if (i > 0) {
+        entries.add(SizedBox(height: gap));
+      }
+      final item = items[i];
+      final state = widget.sectionStates[item.section] ??
+          TabletSettingsSectionState.incomplete;
+      entries.add(
+        _TabletSettingsTocButton(
+          item: item,
+          state: state,
+          selected: widget.selectedSection == item.section,
+          enabled: !widget.saving,
+          compact: metrics.compact,
+          extent: metrics.minimumButtonExtent,
+          onTap: () {
+            widget.onDebug(
+              'tablet_settings_rail_action section=${item.section.name} state=${state.name} selected=${widget.selectedSection == item.section} enabled=${!widget.saving} railDesign=input_plate_unified',
+            );
+            widget.onSelect(item.section);
+          },
+        ),
+      );
+    }
+
     return CommonSideRailSurface(
       title: '태블릿 설정',
       semanticsLabel: '태블릿 설정 입력 목차',
       metrics: metrics,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final available = constraints.maxHeight.isFinite
-              ? constraints.maxHeight
-              : 420.0;
-          final slot = available / _items.length;
-          final scrollable = slot + .5 < metrics.minimumButtonExtent;
-          final extent = scrollable
-              ? metrics.minimumButtonExtent
-              : math.max(
-                  metrics.minimumButtonExtent,
-                  slot - metrics.actionInsetVertical * 2,
-                );
-          final buttons = <Widget>[
-            for (final item in _items)
-              Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: metrics.actionInsetHorizontal,
-                  vertical: metrics.actionInsetVertical,
-                ),
-                child: _TabletSettingsTocButton(
-                  item: item,
-                  state: sectionStates[item.section] ??
-                      TabletSettingsSectionState.incomplete,
-                  selected: selectedSection == item.section,
-                  enabled: !saving,
-                  compact: metrics.compact,
-                  extent: extent,
-                  onTap: () => onSelect(item.section),
-                ),
-              ),
-          ];
-          if (scrollable) {
-            return SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: buttons,
-              ),
-            );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final button in buttons) Expanded(child: button),
-            ],
-          );
-        },
+      child: ListView(
+        physics: const ClampingScrollPhysics(),
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.actionInsetHorizontal,
+          vertical: metrics.actionInsetVertical,
+        ),
+        children: entries,
       ),
     );
   }
@@ -3591,79 +3635,47 @@ class _TabletSettingsTocButton extends StatelessWidget {
     final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final statusColor = switch (state) {
-      TabletSettingsSectionState.complete => tokens.success,
-      TabletSettingsSectionState.incomplete => tokens.warning,
-      TabletSettingsSectionState.error => tokens.danger,
-    };
-    final statusIcon = switch (state) {
-      TabletSettingsSectionState.complete => Icons.check_rounded,
-      TabletSettingsSectionState.incomplete => Icons.priority_high_rounded,
-      TabletSettingsSectionState.error => Icons.error_outline_rounded,
-    };
     final stateLabel = switch (state) {
       TabletSettingsSectionState.complete => '입력 완료',
       TabletSettingsSectionState.incomplete => '입력 필요',
       TabletSettingsSectionState.error => '입력 오류',
     };
-
-    return CommonSideRailActionButton(
-      semanticLabel: '${item.label}, $stateLabel',
-      visualLabel: item.label,
-      selected: selected,
-      enabled: enabled,
-      disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
-      compact: compact,
-      extent: extent,
-      onTap: onTap,
-      iconChild: SizedBox(
-        width: compact ? 21 : 23,
-        height: compact ? 21 : 23,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Align(
-              alignment: Alignment.center,
-              child: Icon(
-                item.icon,
-                size: compact ? 18 : 19,
-                color: selected ? tokens.accent : tokens.iconPrimary,
+    return AnimatedOpacity(
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      opacity: enabled ? 1 : .42,
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          CommonSideRailActionButton(
+            semanticLabel: '${item.label}, $stateLabel',
+            visualLabel: item.label,
+            icon: item.icon,
+            selected: selected,
+            enabled: enabled,
+            disabledReason:
+                enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
+            compact: compact,
+            extent: extent,
+            onTap: onTap,
+          ),
+          IgnorePointer(
+            child: AnimatedContainer(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 170),
+              curve: Curves.easeOutCubic,
+              width: 3,
+              height: selected ? 20 : 0,
+              decoration: BoxDecoration(
+                color: tokens.accent,
+                borderRadius: BorderRadius.circular(999),
               ),
             ),
-            Positioned(
-              right: -4,
-              bottom: -4,
-              child: AnimatedScale(
-                duration:
-                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                curve: CommonUiMotion.enter,
-                scale: 1,
-                child: AnimatedContainer(
-                  duration:
-                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: tokens.surfaceRaised,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: statusColor, width: 1.4),
-                  ),
-                  alignment: Alignment.center,
-                  child: AnimatedSwitcher(
-                    duration:
-                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                    child: Icon(
-                      statusIcon,
-                      key: ValueKey<TabletSettingsSectionState>(state),
-                      size: 9,
-                      color: statusColor,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -3681,13 +3693,14 @@ class _TabletSettingsTocItem {
   final IconData icon;
 }
 
-class _MonthlySettingsTableOfContentsRail extends StatelessWidget {
+class _MonthlySettingsTableOfContentsRail extends StatefulWidget {
   const _MonthlySettingsTableOfContentsRail({
     required this.metrics,
     required this.selectedSection,
     required this.sectionStates,
     required this.saving,
     required this.paymentMode,
+    required this.onDebug,
     required this.onSelect,
   });
 
@@ -3696,10 +3709,20 @@ class _MonthlySettingsTableOfContentsRail extends StatelessWidget {
   final Map<MonthlyWorkspaceSection, MonthlyWorkspaceSectionState> sectionStates;
   final bool saving;
   final bool paymentMode;
+  final ValueChanged<String> onDebug;
   final ValueChanged<MonthlyWorkspaceSection> onSelect;
 
+  @override
+  State<_MonthlySettingsTableOfContentsRail> createState() =>
+      _MonthlySettingsTableOfContentsRailState();
+}
+
+class _MonthlySettingsTableOfContentsRailState
+    extends State<_MonthlySettingsTableOfContentsRail> {
+  String? _lastLayoutSignature;
+
   List<_MonthlySettingsTocItem> get _items {
-    if (paymentMode) {
+    if (widget.paymentMode) {
       return const <_MonthlySettingsTocItem>[
         _MonthlySettingsTocItem(
           section: MonthlyWorkspaceSection.paymentAmount,
@@ -3744,58 +3767,75 @@ class _MonthlySettingsTableOfContentsRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final metrics = widget.metrics;
+    final gap = metrics.ultra ? 4.0 : 6.0;
     final items = _items;
-    return CommonSideRailSurface(
-      title: paymentMode ? '정기권 결제' : '정기권 설정',
-      semanticsLabel: paymentMode ? '정기권 결제 입력 목차' : '정기권 설정 입력 목차',
-      metrics: metrics,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final available = constraints.maxHeight.isFinite
-              ? constraints.maxHeight
-              : 420.0;
-          final slot = available / items.length;
-          final scrollable = slot + .5 < metrics.minimumButtonExtent;
-          final extent = scrollable
-              ? metrics.minimumButtonExtent
-              : math.max(
-                  metrics.minimumButtonExtent,
-                  slot - metrics.actionInsetVertical * 2,
-                );
-          final buttons = <Widget>[
-            for (final item in items)
-              Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: metrics.actionInsetHorizontal,
-                  vertical: metrics.actionInsetVertical,
-                ),
-                child: _MonthlySettingsTocButton(
-                  item: item,
-                  state: sectionStates[item.section] ??
-                      MonthlyWorkspaceSectionState.incomplete,
-                  selected: selectedSection == item.section,
-                  enabled: !saving,
-                  compact: metrics.compact,
-                  extent: extent,
-                  onTap: () => onSelect(item.section),
-                ),
-              ),
-          ];
-          if (scrollable) {
-            return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: buttons,
-              ),
+    final stateSummary = items
+        .map(
+          (item) =>
+              '${item.section.name}:${(widget.sectionStates[item.section] ?? MonthlyWorkspaceSectionState.incomplete).name}',
+        )
+        .join(',');
+    final signature = <Object>[
+      widget.paymentMode ? 'payment' : 'settings',
+      metrics.variantName,
+      metrics.minimumButtonExtent.toStringAsFixed(1),
+      gap.toStringAsFixed(1),
+      widget.selectedSection.name,
+      widget.saving,
+      stateSummary,
+      reduceMotion,
+    ].join('|');
+    if (_lastLayoutSignature != signature) {
+      _lastLayoutSignature = signature;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.onDebug(
+          'monthly_settings_rail_layout railDesign=input_plate_unified mode=${widget.paymentMode ? 'payment' : 'settings'} selected=${widget.selectedSection.name} actions=${items.length} distribution=fixed_top scroll=clamping button_extent=${metrics.minimumButtonExtent.toStringAsFixed(1)} gap=${gap.toStringAsFixed(1)} selectedIndicator=3x20 validationVisual=content_only states=$stateSummary saving=${widget.saving} variant=${metrics.variantName} reduceMotion=$reduceMotion',
+        );
+      });
+    }
+
+    final entries = <Widget>[];
+    for (var i = 0; i < items.length; i++) {
+      if (i > 0) {
+        entries.add(SizedBox(height: gap));
+      }
+      final item = items[i];
+      final state = widget.sectionStates[item.section] ??
+          MonthlyWorkspaceSectionState.incomplete;
+      entries.add(
+        _MonthlySettingsTocButton(
+          item: item,
+          state: state,
+          selected: widget.selectedSection == item.section,
+          enabled: !widget.saving,
+          compact: metrics.compact,
+          extent: metrics.minimumButtonExtent,
+          onTap: () {
+            widget.onDebug(
+              'monthly_settings_rail_action section=${item.section.name} state=${state.name} selected=${widget.selectedSection == item.section} enabled=${!widget.saving} railDesign=input_plate_unified',
             );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final button in buttons) Expanded(child: button),
-            ],
-          );
-        },
+            widget.onSelect(item.section);
+          },
+        ),
+      );
+    }
+
+    return CommonSideRailSurface(
+      title: widget.paymentMode ? '정기권 결제' : '정기권 설정',
+      semanticsLabel:
+          widget.paymentMode ? '정기권 결제 입력 목차' : '정기권 설정 입력 목차',
+      metrics: metrics,
+      child: ListView(
+        physics: const ClampingScrollPhysics(),
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.actionInsetHorizontal,
+          vertical: metrics.actionInsetVertical,
+        ),
+        children: entries,
       ),
     );
   }
@@ -3825,75 +3865,48 @@ class _MonthlySettingsTocButton extends StatelessWidget {
     final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final statusColor = switch (state) {
-      MonthlyWorkspaceSectionState.complete => tokens.success,
-      MonthlyWorkspaceSectionState.incomplete => tokens.warning,
-      MonthlyWorkspaceSectionState.error => tokens.danger,
-      MonthlyWorkspaceSectionState.optional => tokens.info,
-    };
-    final statusIcon = switch (state) {
-      MonthlyWorkspaceSectionState.complete => Icons.check_rounded,
-      MonthlyWorkspaceSectionState.incomplete => Icons.priority_high_rounded,
-      MonthlyWorkspaceSectionState.error => Icons.error_outline_rounded,
-      MonthlyWorkspaceSectionState.optional => Icons.remove_rounded,
-    };
     final stateLabel = switch (state) {
       MonthlyWorkspaceSectionState.complete => '입력 완료',
       MonthlyWorkspaceSectionState.incomplete => '입력 필요',
       MonthlyWorkspaceSectionState.error => '입력 오류',
       MonthlyWorkspaceSectionState.optional => '선택 입력',
     };
-    return CommonSideRailActionButton(
-      semanticLabel: '${item.label}, $stateLabel',
-      visualLabel: item.label,
-      selected: selected,
-      enabled: enabled,
-      disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
-      compact: compact,
-      extent: extent,
-      onTap: onTap,
-      iconChild: SizedBox(
-        width: compact ? 21 : 23,
-        height: compact ? 21 : 23,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Align(
-              alignment: Alignment.center,
-              child: Icon(
-                item.icon,
-                size: compact ? 18 : 19,
-                color: selected ? tokens.accent : tokens.iconPrimary,
+    return AnimatedOpacity(
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      opacity: enabled ? 1 : .42,
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          CommonSideRailActionButton(
+            semanticLabel: '${item.label}, $stateLabel',
+            visualLabel: item.label,
+            icon: item.icon,
+            selected: selected,
+            enabled: enabled,
+            disabledReason:
+                enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
+            compact: compact,
+            extent: extent,
+            onTap: onTap,
+          ),
+          IgnorePointer(
+            child: AnimatedContainer(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 170),
+              curve: Curves.easeOutCubic,
+              width: 3,
+              height: selected ? 20 : 0,
+              decoration: BoxDecoration(
+                color: tokens.accent,
+                borderRadius: BorderRadius.circular(999),
               ),
             ),
-            Positioned(
-              right: -4,
-              bottom: -4,
-              child: AnimatedContainer(
-                duration:
-                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: tokens.surfaceRaised,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: statusColor, width: 1.4),
-                ),
-                alignment: Alignment.center,
-                child: AnimatedSwitcher(
-                  duration:
-                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                  child: Icon(
-                    statusIcon,
-                    key: ValueKey<MonthlyWorkspaceSectionState>(state),
-                    size: 9,
-                    color: statusColor,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -3911,12 +3924,13 @@ class _MonthlySettingsTocItem {
   final IconData icon;
 }
 
-class _BillSettingsTableOfContentsRail extends StatelessWidget {
+class _BillSettingsTableOfContentsRail extends StatefulWidget {
   const _BillSettingsTableOfContentsRail({
     required this.metrics,
     required this.selectedSection,
     required this.sectionStates,
     required this.saving,
+    required this.onDebug,
     required this.onSelect,
   });
 
@@ -3924,6 +3938,7 @@ class _BillSettingsTableOfContentsRail extends StatelessWidget {
   final BillSettingsSection selectedSection;
   final Map<BillSettingsSection, BillSettingsSectionState> sectionStates;
   final bool saving;
+  final ValueChanged<String> onDebug;
   final ValueChanged<BillSettingsSection> onSelect;
 
   static const List<_BillSettingsTocItem> _items = <_BillSettingsTocItem>[
@@ -3940,58 +3955,83 @@ class _BillSettingsTableOfContentsRail extends StatelessWidget {
   ];
 
   @override
+  State<_BillSettingsTableOfContentsRail> createState() =>
+      _BillSettingsTableOfContentsRailState();
+}
+
+class _BillSettingsTableOfContentsRailState
+    extends State<_BillSettingsTableOfContentsRail> {
+  String? _lastLayoutSignature;
+
+  @override
   Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final metrics = widget.metrics;
+    final gap = metrics.ultra ? 4.0 : 6.0;
+    final items = _BillSettingsTableOfContentsRail._items;
+    final stateSummary = items
+        .map(
+          (item) =>
+              '${item.section.name}:${(widget.sectionStates[item.section] ?? BillSettingsSectionState.incomplete).name}',
+        )
+        .join(',');
+    final signature = <Object>[
+      metrics.variantName,
+      metrics.minimumButtonExtent.toStringAsFixed(1),
+      gap.toStringAsFixed(1),
+      widget.selectedSection.name,
+      widget.saving,
+      stateSummary,
+      reduceMotion,
+    ].join('|');
+    if (_lastLayoutSignature != signature) {
+      _lastLayoutSignature = signature;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.onDebug(
+          'bill_settings_rail_layout railDesign=input_plate_unified selected=${widget.selectedSection.name} actions=${items.length} distribution=fixed_top scroll=clamping button_extent=${metrics.minimumButtonExtent.toStringAsFixed(1)} gap=${gap.toStringAsFixed(1)} selectedIndicator=3x20 validationVisual=content_only states=$stateSummary saving=${widget.saving} variant=${metrics.variantName} reduceMotion=$reduceMotion',
+        );
+      });
+    }
+
+    final entries = <Widget>[];
+    for (var i = 0; i < items.length; i++) {
+      if (i > 0) {
+        entries.add(SizedBox(height: gap));
+      }
+      final item = items[i];
+      final state = widget.sectionStates[item.section] ??
+          BillSettingsSectionState.incomplete;
+      entries.add(
+        _BillSettingsTocButton(
+          item: item,
+          state: state,
+          selected: widget.selectedSection == item.section,
+          enabled: !widget.saving,
+          compact: metrics.compact,
+          extent: metrics.minimumButtonExtent,
+          onTap: () {
+            widget.onDebug(
+              'bill_settings_rail_action section=${item.section.name} state=${state.name} selected=${widget.selectedSection == item.section} enabled=${!widget.saving} railDesign=input_plate_unified',
+            );
+            widget.onSelect(item.section);
+          },
+        ),
+      );
+    }
+
     return CommonSideRailSurface(
       title: '정산 설정',
       semanticsLabel: '정산 유형 설정 입력 목차',
       metrics: metrics,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final available = constraints.maxHeight.isFinite
-              ? constraints.maxHeight
-              : 420.0;
-          final slot = available / _items.length;
-          final scrollable = slot + .5 < metrics.minimumButtonExtent;
-          final extent = scrollable
-              ? metrics.minimumButtonExtent
-              : math.max(
-                  metrics.minimumButtonExtent,
-                  slot - metrics.actionInsetVertical * 2,
-                );
-          final buttons = <Widget>[
-            for (final item in _items)
-              Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: metrics.actionInsetHorizontal,
-                  vertical: metrics.actionInsetVertical,
-                ),
-                child: _BillSettingsTocButton(
-                  item: item,
-                  state: sectionStates[item.section] ??
-                      BillSettingsSectionState.incomplete,
-                  selected: selectedSection == item.section,
-                  enabled: !saving,
-                  compact: metrics.compact,
-                  extent: extent,
-                  onTap: () => onSelect(item.section),
-                ),
-              ),
-          ];
-          if (scrollable) {
-            return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: buttons,
-              ),
-            );
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final button in buttons) Expanded(child: button),
-            ],
-          );
-        },
+      child: ListView(
+        physics: const ClampingScrollPhysics(),
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.actionInsetHorizontal,
+          vertical: metrics.actionInsetVertical,
+        ),
+        children: entries,
       ),
     );
   }
@@ -4021,79 +4061,47 @@ class _BillSettingsTocButton extends StatelessWidget {
     final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final statusColor = switch (state) {
-      BillSettingsSectionState.complete => tokens.success,
-      BillSettingsSectionState.incomplete => tokens.warning,
-      BillSettingsSectionState.error => tokens.danger,
-    };
-    final statusIcon = switch (state) {
-      BillSettingsSectionState.complete => Icons.check_rounded,
-      BillSettingsSectionState.incomplete => Icons.priority_high_rounded,
-      BillSettingsSectionState.error => Icons.error_outline_rounded,
-    };
     final stateLabel = switch (state) {
       BillSettingsSectionState.complete => '입력 완료',
       BillSettingsSectionState.incomplete => '입력 필요',
       BillSettingsSectionState.error => '입력 오류',
     };
-
-    return CommonSideRailActionButton(
-      semanticLabel: '${item.label}, $stateLabel',
-      visualLabel: item.label,
-      selected: selected,
-      enabled: enabled,
-      disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
-      compact: compact,
-      extent: extent,
-      onTap: onTap,
-      iconChild: SizedBox(
-        width: compact ? 21 : 23,
-        height: compact ? 21 : 23,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Align(
-              alignment: Alignment.center,
-              child: Icon(
-                item.icon,
-                size: compact ? 18 : 19,
-                color: selected ? tokens.accent : tokens.iconPrimary,
+    return AnimatedOpacity(
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      opacity: enabled ? 1 : .42,
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          CommonSideRailActionButton(
+            semanticLabel: '${item.label}, $stateLabel',
+            visualLabel: item.label,
+            icon: item.icon,
+            selected: selected,
+            enabled: enabled,
+            disabledReason:
+                enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
+            compact: compact,
+            extent: extent,
+            onTap: onTap,
+          ),
+          IgnorePointer(
+            child: AnimatedContainer(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 170),
+              curve: Curves.easeOutCubic,
+              width: 3,
+              height: selected ? 20 : 0,
+              decoration: BoxDecoration(
+                color: tokens.accent,
+                borderRadius: BorderRadius.circular(999),
               ),
             ),
-            Positioned(
-              right: -4,
-              bottom: -4,
-              child: AnimatedScale(
-                duration:
-                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                curve: CommonUiMotion.enter,
-                scale: 1,
-                child: AnimatedContainer(
-                  duration:
-                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: tokens.surfaceRaised,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: statusColor, width: 1.4),
-                  ),
-                  alignment: Alignment.center,
-                  child: AnimatedSwitcher(
-                    duration:
-                        reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                    child: Icon(
-                      statusIcon,
-                      key: ValueKey<BillSettingsSectionState>(state),
-                      size: 9,
-                      color: statusColor,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -4111,12 +4119,13 @@ class _BillSettingsTocItem {
   final IconData icon;
 }
 
-class _SectorSettingsTableOfContentsRail extends StatelessWidget {
+class _SectorSettingsTableOfContentsRail extends StatefulWidget {
   const _SectorSettingsTableOfContentsRail({
     required this.metrics,
     required this.selectedSection,
     required this.sectionStates,
     required this.saving,
+    required this.onDebug,
     required this.onSelect,
   });
 
@@ -4124,28 +4133,71 @@ class _SectorSettingsTableOfContentsRail extends StatelessWidget {
   final SectorSettingsSection selectedSection;
   final Map<SectorSettingsSection, SectorSettingsSectionState> sectionStates;
   final bool saving;
+  final ValueChanged<String> onDebug;
   final ValueChanged<SectorSettingsSection> onSelect;
 
   @override
+  State<_SectorSettingsTableOfContentsRail> createState() =>
+      _SectorSettingsTableOfContentsRailState();
+}
+
+class _SectorSettingsTableOfContentsRailState
+    extends State<_SectorSettingsTableOfContentsRail> {
+  String? _lastLayoutSignature;
+
+  @override
   Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final metrics = widget.metrics;
+    final gap = metrics.ultra ? 4.0 : 6.0;
     final section = SectorSettingsSection.identity;
+    final state = widget.sectionStates[section] ??
+        SectorSettingsSectionState.incomplete;
+    final signature = <Object>[
+      metrics.variantName,
+      metrics.minimumButtonExtent.toStringAsFixed(1),
+      gap.toStringAsFixed(1),
+      widget.selectedSection.name,
+      state.name,
+      widget.saving,
+      reduceMotion,
+    ].join('|');
+    if (_lastLayoutSignature != signature) {
+      _lastLayoutSignature = signature;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.onDebug(
+          'sector_settings_rail_layout railDesign=input_plate_unified selected=${widget.selectedSection.name} actions=1 distribution=fixed_top scroll=clamping button_extent=${metrics.minimumButtonExtent.toStringAsFixed(1)} gap=${gap.toStringAsFixed(1)} selectedIndicator=3x20 validationVisual=content_only state=${state.name} saving=${widget.saving} variant=${metrics.variantName} reduceMotion=$reduceMotion',
+        );
+      });
+    }
+
     return CommonSideRailSurface(
       title: '섹터 설정',
       semanticsLabel: '섹터 설정 입력 목차',
       metrics: metrics,
-      child: Padding(
+      child: ListView(
+        physics: const ClampingScrollPhysics(),
         padding: EdgeInsets.symmetric(
           horizontal: metrics.actionInsetHorizontal,
           vertical: metrics.actionInsetVertical,
         ),
-        child: _SectorSettingsTocButton(
-          state: sectionStates[section] ?? SectorSettingsSectionState.incomplete,
-          selected: selectedSection == section,
-          enabled: !saving,
-          compact: metrics.compact,
-          extent: metrics.minimumButtonExtent,
-          onTap: () => onSelect(section),
-        ),
+        children: [
+          _SectorSettingsTocButton(
+            state: state,
+            selected: widget.selectedSection == section,
+            enabled: !widget.saving,
+            compact: metrics.compact,
+            extent: metrics.minimumButtonExtent,
+            onTap: () {
+              widget.onDebug(
+                'sector_settings_rail_action section=${section.name} state=${state.name} selected=${widget.selectedSection == section} enabled=${!widget.saving} railDesign=input_plate_unified',
+              );
+              widget.onSelect(section);
+            },
+          ),
+        ],
       ),
     );
   }
@@ -4173,75 +4225,47 @@ class _SectorSettingsTocButton extends StatelessWidget {
     final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final statusColor = switch (state) {
-      SectorSettingsSectionState.complete => tokens.success,
-      SectorSettingsSectionState.incomplete => tokens.warning,
-      SectorSettingsSectionState.error => tokens.danger,
-    };
-    final statusIcon = switch (state) {
-      SectorSettingsSectionState.complete => Icons.check_rounded,
-      SectorSettingsSectionState.incomplete => Icons.priority_high_rounded,
-      SectorSettingsSectionState.error => Icons.error_outline_rounded,
-    };
     final stateLabel = switch (state) {
       SectorSettingsSectionState.complete => '입력 완료',
       SectorSettingsSectionState.incomplete => '입력 필요',
       SectorSettingsSectionState.error => '입력 오류',
     };
-
-    return CommonSideRailActionButton(
-      semanticLabel: '기본, $stateLabel',
-      visualLabel: '기본',
-      selected: selected,
-      enabled: enabled,
-      disabledReason: enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
-      compact: compact,
-      extent: extent,
-      onTap: onTap,
-      iconChild: SizedBox(
-        width: compact ? 21 : 23,
-        height: compact ? 21 : 23,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Align(
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.hub_rounded,
-                size: compact ? 18 : 19,
-                color: selected ? tokens.accent : tokens.iconPrimary,
+    return AnimatedOpacity(
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      opacity: enabled ? 1 : .42,
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          CommonSideRailActionButton(
+            semanticLabel: '기본, $stateLabel',
+            visualLabel: '기본',
+            icon: Icons.hub_rounded,
+            selected: selected,
+            enabled: enabled,
+            disabledReason:
+                enabled ? '' : '저장 중에는 목차를 이동할 수 없습니다.',
+            compact: compact,
+            extent: extent,
+            onTap: onTap,
+          ),
+          IgnorePointer(
+            child: AnimatedContainer(
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 170),
+              curve: Curves.easeOutCubic,
+              width: 3,
+              height: selected ? 20 : 0,
+              decoration: BoxDecoration(
+                color: tokens.accent,
+                borderRadius: BorderRadius.circular(999),
               ),
             ),
-            Positioned(
-              right: -4,
-              bottom: -4,
-              child: AnimatedContainer(
-                duration:
-                    reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: tokens.surfaceRaised,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: statusColor, width: 1.4),
-                ),
-                alignment: Alignment.center,
-                child: AnimatedSwitcher(
-                  duration:
-                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                  switchInCurve: CommonUiMotion.enter,
-                  switchOutCurve: CommonUiMotion.exit,
-                  child: Icon(
-                    statusIcon,
-                    key: ValueKey<SectorSettingsSectionState>(state),
-                    size: 8.5,
-                    color: statusColor,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

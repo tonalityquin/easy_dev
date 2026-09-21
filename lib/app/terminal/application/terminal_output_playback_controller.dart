@@ -22,6 +22,7 @@ class TerminalOutputPlaybackController extends ChangeNotifier {
 
   List<TerminalLine> get lines => List<TerminalLine>.unmodifiable(_visible);
   bool get busy => _processing || _pending.isNotEmpty;
+  bool get _acceleratedTyping => contextLabel == 'launcher';
 
   void sync(
     List<TerminalLine> source, {
@@ -124,12 +125,16 @@ class TerminalOutputPlaybackController extends ChangeNotifier {
           'lineType': line.type.name,
           'length': line.text.length,
           'cadence': TerminalOutputPacing.cadenceFor(line).name,
+          'typingProfile': _acceleratedTyping
+              ? TerminalOutputPacing.launcherTypingProfile
+              : 'DEFAULT',
           'firstCharMs': line.text.isEmpty
               ? 0
               : TerminalOutputPacing.characterDelay(
                   line,
                   0,
                   reduceMotion: _reduceMotion,
+                  accelerated: _acceleratedTyping,
                 ).inMilliseconds,
         },
       );
@@ -139,6 +144,7 @@ class TerminalOutputPlaybackController extends ChangeNotifier {
             line,
             index,
             reduceMotion: _reduceMotion,
+            accelerated: _acceleratedTyping,
           ),
         );
         if (_disposed) return;

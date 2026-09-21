@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -47,7 +45,7 @@ Future<void> showParkingCompletedPlateSearchSideDock({
     standardModeMessage: '개발자 모드 OFF: 번호판 검색 Side Dock을 실행합니다.',
   );
   trace.log(
-    'plate_search_dock_open presentation=right_side_dock direction=right_to_left layout=left_rail_management_content resultPresentation=ops_management_list keypadPlacement=fixed_bottom keypadVisibility=persistent railDesign=common_operations railMetricsSource=CommonSideRailMetrics handoffPolicy=close_then_open area=$area variant=${variant.name} developerMode=${trace.developerMode} debugPrint=clipboard_copy_supported',
+    'plate_search_dock_open presentation=right_side_dock direction=right_to_left layout=left_rail_management_content resultPresentation=ops_management_list keypadPlacement=fixed_bottom keypadVisibility=persistent railDesign=input_plate_unified railMetricsSource=CommonSideRailMetrics railDistribution=fixed_top railScroll=clamping selectedIndicator=3x20 handoffPolicy=close_then_open area=$area variant=${variant.name} developerMode=${trace.developerMode} debugPrint=clipboard_copy_supported',
     progress: .08,
   );
 
@@ -383,8 +381,6 @@ class _ParkingCompletedPlateSearchSideDockState
   Future<void> _setSearchMode(PlateSearchMode mode) async {
     if (!mounted || _searchMode == mode || _isLoading || _navigating) return;
     final previous = _searchMode;
-    await HapticFeedback.selectionClick();
-    if (!mounted) return;
     setState(() {
       _querySerial += 1;
       _searchMode = mode;
@@ -395,7 +391,7 @@ class _ParkingCompletedPlateSearchSideDockState
       _openingPlateNumber = null;
     });
     widget.trace.log(
-      'plate_search_mode_changed from=${previous.name} to=${mode.name} queryPreserved=true queryLength=${_controller.text.trim().length} contentAnimation=OpsDockResultSwitcher resultPresentation=ops_management_list',
+      'plate_search_mode_changed from=${previous.name} to=${mode.name} queryPreserved=true queryLength=${_controller.text.trim().length} railDesign=input_plate_unified railHaptic=false railTransition=selection_indicator_only contentAnimation=OpsDockResultSwitcher resultPresentation=ops_management_list',
       progress: .2,
     );
   }
@@ -658,7 +654,7 @@ class _ParkingCompletedPlateSearchSideDockState
   Future<void> _showDeveloperStatus() async {
     if (!widget.trace.developerMode || !mounted) return;
     widget.trace.log(
-      'plate_search_status_dialog_open mode=${_searchMode.name} queryLength=${_controller.text.length} loading=$_isLoading searched=$_hasSearched navigating=$_navigating currentResults=${_results.length} outLogResults=${_outLogResults.length} openingPlate=${_openingPlateNumber ?? '-'} layout=left_rail_management_content resultPresentation=ops_management_list resultSurface=OpsDockListSurface resultRow=OpsDockSelectableRowSurface resultScroll=content_only resultTransition=OpsDockResultSwitcher keypadPlacement=fixed_bottom keypadVisibility=persistent handoffPolicy=close_then_open sourceDock=plate_search targetDock=parking_status sourcePopResolvedBeforeTarget=true overlayStacking=false railDesign=common_operations railMetrics=$_lastRailMetricsSummary debugPrint=clipboard_copy_supported',
+      'plate_search_status_dialog_open mode=${_searchMode.name} queryLength=${_controller.text.length} loading=$_isLoading searched=$_hasSearched navigating=$_navigating currentResults=${_results.length} outLogResults=${_outLogResults.length} openingPlate=${_openingPlateNumber ?? '-'} layout=left_rail_management_content resultPresentation=ops_management_list resultSurface=OpsDockListSurface resultRow=OpsDockSelectableRowSurface resultScroll=content_only resultTransition=OpsDockResultSwitcher keypadPlacement=fixed_bottom keypadVisibility=persistent handoffPolicy=close_then_open sourceDock=plate_search targetDock=parking_status sourcePopResolvedBeforeTarget=true overlayStacking=false railDesign=input_plate_unified railMetrics=$_lastRailMetricsSummary debugPrint=clipboard_copy_supported',
     );
     await widget.trace.showStatusDialog(context);
   }
@@ -811,14 +807,16 @@ class _ParkingCompletedPlateSearchSideDockState
               final effectiveRailWidth =
                   railMetrics.effectiveRailWidth(dockWidth);
               final effectiveRailGap = railMetrics.effectiveRailGap(dockWidth);
+              final railActionGap = railMetrics.ultra ? 4.0 : 6.0;
+              final railEnabled = !_isLoading && !_navigating;
               final railSummary =
-                  'variant=${railMetrics.variantName},width=${effectiveRailWidth.toStringAsFixed(1)},gap=${effectiveRailGap.toStringAsFixed(1)},button=${railMetrics.minimumButtonExtent.toStringAsFixed(1)},outerX=${railMetrics.outerHorizontal.toStringAsFixed(1)},outerY=${railMetrics.outerVertical.toStringAsFixed(1)},insetX=${railMetrics.actionInsetHorizontal.toStringAsFixed(1)},insetY=${railMetrics.actionInsetVertical.toStringAsFixed(1)}';
+                  'variant=${railMetrics.variantName},width=${effectiveRailWidth.toStringAsFixed(1)},railGap=${effectiveRailGap.toStringAsFixed(1)},button=${railMetrics.minimumButtonExtent.toStringAsFixed(1)},actionGap=${railActionGap.toStringAsFixed(1)},outerX=${railMetrics.outerHorizontal.toStringAsFixed(1)},outerY=${railMetrics.outerVertical.toStringAsFixed(1)},insetX=${railMetrics.actionInsetHorizontal.toStringAsFixed(1)},insetY=${railMetrics.actionInsetVertical.toStringAsFixed(1)},selected=${_searchMode.name},enabled=$railEnabled,reduceMotion=$reduceMotion';
               if (_lastRailMetricsSummary != railSummary) {
                 _lastRailMetricsSummary = railSummary;
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   if (!mounted) return;
                   widget.trace.log(
-                    'plate_search_rail_layout railDesign=common_operations railMetricsSource=CommonSideRailMetrics $railSummary alignment=equal_fill_or_scroll_fallback title=번호_검색',
+                    'plate_search_rail_layout railDesign=input_plate_unified railMetricsSource=CommonSideRailMetrics distribution=fixed_top scroll=clamping actions=2 selectedIndicator=3x20 disabledOpacity=.42 railTransition=selection_indicator_only keypadPlacement=fixed_bottom keypadPreserved=true $railSummary title=번호_검색',
                   );
                 });
               }
@@ -837,7 +835,8 @@ class _ParkingCompletedPlateSearchSideDockState
                       child: _PlateSearchRail(
                         value: _searchMode,
                         metrics: railMetrics,
-                        enabled: !_isLoading && !_navigating,
+                        enabled: railEnabled,
+                        onDebug: (message) => widget.trace.log(message),
                         onChanged: (mode) => unawaited(_setSearchMode(mode)),
                       ),
                     ),
@@ -905,18 +904,22 @@ class _PlateSearchRail extends StatelessWidget {
     required this.value,
     required this.metrics,
     required this.enabled,
+    required this.onDebug,
     required this.onChanged,
   });
 
   final PlateSearchMode value;
   final CommonSideRailMetrics metrics;
   final bool enabled;
+  final ValueChanged<String> onDebug;
   final ValueChanged<PlateSearchMode> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final tokens = CommonUiTheme.of(context);
+    final gap = metrics.ultra ? 4.0 : 6.0;
     final items = <({
       PlateSearchMode mode,
       String visualLabel,
@@ -937,108 +940,73 @@ class _PlateSearchRail extends StatelessWidget {
       ),
     ];
 
-    Widget button(
+    Widget action(
       ({
         PlateSearchMode mode,
         String visualLabel,
         String semanticsLabel,
         IconData icon,
-      }) item, {
-      required double extent,
-    }) {
-      return CommonSideRailActionButton(
-        key: ValueKey<PlateSearchMode>(item.mode),
-        semanticLabel: item.semanticsLabel,
-        visualLabel: item.visualLabel,
-        icon: item.icon,
-        selected: value == item.mode,
-        enabled: enabled,
-        disabledReason: enabled ? '' : '검색 작업 처리 중',
-        compact: metrics.compact,
-        extent: extent,
-        onTap: () => onChanged(item.mode),
+      }) item,
+    ) {
+      final selected = value == item.mode;
+      return AnimatedOpacity(
+        duration:
+            reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        opacity: enabled ? 1 : .42,
+        child: Stack(
+          alignment: Alignment.centerLeft,
+          children: [
+            CommonSideRailActionButton(
+              key: ValueKey<PlateSearchMode>(item.mode),
+              semanticLabel: item.semanticsLabel,
+              visualLabel: item.visualLabel,
+              icon: item.icon,
+              selected: selected,
+              enabled: enabled,
+              disabledReason: enabled ? '' : '검색 작업 처리 중',
+              compact: metrics.compact,
+              extent: metrics.minimumButtonExtent,
+              tooltip: item.semanticsLabel,
+              onTap: () {
+                onDebug(
+                  'plate_search_rail_action mode=${item.mode.name} selected=$selected enabled=$enabled railDesign=input_plate_unified distribution=fixed_top scroll=clamping selectedIndicator=3x20 keypadPreserved=true',
+                );
+                onChanged(item.mode);
+              },
+            ),
+            IgnorePointer(
+              child: AnimatedContainer(
+                duration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 170),
+                curve: Curves.easeOutCubic,
+                width: 3,
+                height: selected ? 20 : 0,
+                decoration: BoxDecoration(
+                  color: tokens.accent,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+          ],
+        ),
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final railHeight =
-            constraints.maxHeight.isFinite ? constraints.maxHeight : 720.0;
-        final actionCount = items.length;
-        final availableListHeight = math.max(0.0, railHeight);
-        final equalSlotExtent = availableListHeight / actionCount;
-        final minimumSlotExtent =
-            metrics.minimumButtonExtent + metrics.actionInsetVertical * 2;
-        final scrollable = equalSlotExtent + .5 < minimumSlotExtent;
-        final buttonExtent = scrollable
-            ? metrics.minimumButtonExtent
-            : math.max(
-                0.0,
-                equalSlotExtent - metrics.actionInsetVertical * 2,
-              );
-        final actionArea = scrollable
-            ? SingleChildScrollView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final item in items)
-                      Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: metrics.actionInsetHorizontal,
-                          vertical: metrics.actionInsetVertical,
-                        ),
-                        child: button(
-                          item,
-                          extent: metrics.minimumButtonExtent,
-                        ),
-                      ),
-                  ],
-                ),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final item in items)
-                    Expanded(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: metrics.actionInsetHorizontal,
-                          vertical: metrics.actionInsetVertical,
-                        ),
-                        child: button(item, extent: buttonExtent),
-                      ),
-                    ),
-                ],
-              );
+    final entries = <Widget>[];
+    for (var i = 0; i < items.length; i++) {
+      if (i > 0) entries.add(SizedBox(height: gap));
+      entries.add(action(items[i]));
+    }
 
-        return AnimatedSwitcher(
-          duration:
-              reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeOutCubic,
-          transitionBuilder: (child, animation) {
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(-.05, 0),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
-              ),
-            );
-          },
-          child: KeyedSubtree(
-            key: ValueKey<String>(
-              '${metrics.variantName}|$scrollable|${value.name}|$enabled',
-            ),
-            child: actionArea,
-          ),
-        );
-      },
+    return ListView(
+      physics: const ClampingScrollPhysics(),
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.actionInsetHorizontal,
+        vertical: metrics.actionInsetVertical,
+      ),
+      children: entries,
     );
   }
 }

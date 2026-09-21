@@ -19,6 +19,42 @@ enum WeeklyWorkSchedulePresentation {
   editorOnly,
 }
 
+enum WeeklyWorkScheduleSaveMode {
+  immediate,
+  explicit,
+}
+
+class WeeklyWorkScheduleEditorController extends ChangeNotifier {
+  Future<bool> Function()? _saveHandler;
+  bool _hasChanges = false;
+  bool _saving = false;
+
+  bool get hasChanges => _hasChanges;
+  bool get saving => _saving;
+  bool get canSave => _saveHandler != null && _hasChanges && !_saving;
+
+  Future<bool> save() async {
+    final handler = _saveHandler;
+    if (handler == null || _saving || !_hasChanges) return false;
+    return handler();
+  }
+
+  void _attach(Future<bool> Function() saveHandler) {
+    _saveHandler = saveHandler;
+  }
+
+  void _detach() {
+    _saveHandler = null;
+  }
+
+  void _update({required bool hasChanges, required bool saving}) {
+    if (_hasChanges == hasChanges && _saving == saving) return;
+    _hasChanges = hasChanges;
+    _saving = saving;
+    notifyListeners();
+  }
+}
+
 class WeeklyWorkScheduleEditor extends StatefulWidget {
   const WeeklyWorkScheduleEditor({
     super.key,
@@ -27,6 +63,8 @@ class WeeklyWorkScheduleEditor extends StatefulWidget {
     this.embedded = false,
     this.presentation = WeeklyWorkSchedulePresentation.inline,
     this.compactSummary = false,
+    this.saveMode = WeeklyWorkScheduleSaveMode.immediate,
+    this.controller,
     this.onEditRequested,
     this.onChanged,
   });
@@ -36,6 +74,8 @@ class WeeklyWorkScheduleEditor extends StatefulWidget {
   final bool embedded;
   final WeeklyWorkSchedulePresentation presentation;
   final bool compactSummary;
+  final WeeklyWorkScheduleSaveMode saveMode;
+  final WeeklyWorkScheduleEditorController? controller;
   final VoidCallback? onEditRequested;
   final VoidCallback? onChanged;
 
@@ -50,11 +90,20 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
   bool _loading = true;
   bool _editorExpanded = false;
   bool _sharedSyncQueued = false;
+  bool _ignoreNextSharedSync = false;
   String? _savingDay;
+  bool _savingAll = false;
+  bool _explicitDirty = false;
   late String _selectedDay;
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
   Map<String, TimeOfDay?> _endByDay = <String, TimeOfDay?>{};
   Set<String> _breakDays = <String>{};
+  Map<String, TimeOfDay?> _savedStartByDay = <String, TimeOfDay?>{};
+  Map<String, TimeOfDay?> _savedEndByDay = <String, TimeOfDay?>{};
+  Set<String> _savedBreakDays = <String>{};
+
+  bool get _isExplicit => widget.saveMode == WeeklyWorkScheduleSaveMode.explicit;
+  bool get _isSaving => _savingDay != null || _savingAll;
 
   @override
   void initState() {
@@ -65,6 +114,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
             ? true
             : widget.initiallyExpanded;
     _weeklyWorkScheduleRevision.addListener(_handleSharedScheduleChanged);
+    widget.controller?._attach(_saveExplicitDraft);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _loadSchedule(reason: 'initial');
@@ -72,13 +122,37 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
   }
 
   @override
+  void didUpdateWidget(covariant WeeklyWorkScheduleEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?._detach();
+      widget.controller?._attach(_saveExplicitDraft);
+      _syncControllerState();
+    }
+  }
+
+  @override
   void dispose() {
+    widget.controller?._detach();
     _weeklyWorkScheduleRevision.removeListener(_handleSharedScheduleChanged);
     super.dispose();
   }
 
   void _handleSharedScheduleChanged() {
-    if (!mounted || _loading || _savingDay != null || _sharedSyncQueued) {
+    if (_ignoreNextSharedSync) {
+      _ignoreNextSharedSync = false;
+      debugPrint(
+        '[WeeklyWorkScheduleEditor] source=${widget.source} event=shared_schedule_sync_skipped reason=own_explicit_save revision=${_weeklyWorkScheduleRevision.value}',
+      );
+      return;
+    }
+    if (!mounted || _loading || _isSaving || _sharedSyncQueued) {
+      return;
+    }
+    if (_isExplicit && _explicitDirty) {
+      debugPrint(
+        '[WeeklyWorkScheduleEditor] source=${widget.source} event=shared_schedule_sync_skipped reason=explicit_dirty revision=${_weeklyWorkScheduleRevision.value}',
+      );
       return;
     }
     _sharedSyncQueued = true;
@@ -87,7 +161,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _sharedSyncQueued = false;
-      if (!mounted || _loading || _savingDay != null) return;
+      if (!mounted || _loading || _isSaving) return;
       _loadSchedule(reason: 'shared_editor_change');
     });
   }
@@ -96,6 +170,44 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
     _weeklyWorkScheduleRevision.value = _weeklyWorkScheduleRevision.value + 1;
     debugPrint(
       '[WeeklyWorkScheduleEditor] source=${widget.source} event=shared_schedule_changed revision=${_weeklyWorkScheduleRevision.value}',
+    );
+  }
+
+  bool _timeOfDayEquals(TimeOfDay? a, TimeOfDay? b) {
+    if (a == null || b == null) return a == b;
+    return a.hour == b.hour && a.minute == b.minute;
+  }
+
+  bool _timeMapEquals(
+    Map<String, TimeOfDay?> a,
+    Map<String, TimeOfDay?> b,
+  ) {
+    for (final day in _days) {
+      if (!_timeOfDayEquals(a[day], b[day])) return false;
+    }
+    return true;
+  }
+
+  bool _setEquals(Set<String> a, Set<String> b) {
+    return a.length == b.length && a.containsAll(b);
+  }
+
+  void _recomputeExplicitDirty() {
+    if (!_isExplicit) {
+      _explicitDirty = false;
+      _syncControllerState();
+      return;
+    }
+    _explicitDirty = !_timeMapEquals(_startByDay, _savedStartByDay) ||
+        !_timeMapEquals(_endByDay, _savedEndByDay) ||
+        !_setEquals(_breakDays, _savedBreakDays);
+    _syncControllerState();
+  }
+
+  void _syncControllerState() {
+    widget.controller?._update(
+      hasChanges: _isExplicit && _explicitDirty,
+      saving: _isSaving,
     );
   }
 
@@ -160,7 +272,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
     final endConfigured = _endByDay[selected] != null;
     final hasBreak = _breakDays.contains(selected);
     debugPrint(
-      '[WeeklyWorkScheduleEditor] source=${widget.source} event=$event selectedDay=$selected editorExpanded=$_editorExpanded saving=${_savingDay != null} startConfigured=$startConfigured endConfigured=$endConfigured hasBreak=$hasBreak${success == null ? '' : ' success=$success'}',
+      '[WeeklyWorkScheduleEditor] source=${widget.source} event=$event selectedDay=$selected editorExpanded=$_editorExpanded saving=$_isSaving startConfigured=$startConfigured endConfigured=$endConfigured hasBreak=$hasBreak${success == null ? '' : ' success=$success'}',
     );
   }
 
@@ -222,8 +334,13 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
       _startByDay = WorkSchedulePrefs.normalizeDayTimeMap(startMap);
       _endByDay = WorkSchedulePrefs.normalizeDayTimeMap(endMap);
       _breakDays = normalizedBreakDays;
+      _savedStartByDay = Map<String, TimeOfDay?>.of(_startByDay);
+      _savedEndByDay = Map<String, TimeOfDay?>.of(_endByDay);
+      _savedBreakDays = <String>{..._breakDays};
+      _explicitDirty = false;
       _loading = false;
     });
+    _syncControllerState();
     _log('loaded_$reason');
   }
 
@@ -243,13 +360,24 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
     required TimeOfDay? startTime,
     required TimeOfDay? endTime,
   }) async {
-    if (_savingDay != null) return;
+    if (_isSaving) return;
     if ((startTime == null) != (endTime == null)) {
       _showSnack('출근/퇴근 시간을 모두 입력하거나 모두 비워 주세요.');
       return;
     }
 
+    if (_isExplicit) {
+      setState(() {
+        _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = startTime;
+        _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = endTime;
+      });
+      _recomputeExplicitDirty();
+      _log('draft_time_changed', day: day);
+      return;
+    }
+
     setState(() => _savingDay = day);
+    _syncControllerState();
     _log('save_time_start', day: day);
 
     final ok = await context
@@ -268,6 +396,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
         _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = endTime;
         _savingDay = null;
       });
+      _syncControllerState();
       _log('save_time_complete', day: day, success: true);
       widget.onChanged?.call();
       _showSnack(
@@ -279,6 +408,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
     }
 
     setState(() => _savingDay = null);
+    _syncControllerState();
     _log('save_time_complete', day: day, success: false);
     await _loadSchedule(reason: 'save_time_failure');
     if (!mounted) return;
@@ -286,7 +416,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
   }
 
   Future<void> _setHoliday(String day, bool value) async {
-    if (_savingDay != null) return;
+    if (_isSaving) return;
     HapticFeedback.lightImpact();
     if (value) {
       await _saveWeeklyTime(day: day, startTime: null, endTime: null);
@@ -300,9 +430,25 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
   }
 
   Future<void> _toggleBreakDay(String day, bool value) async {
-    if (_savingDay != null) return;
+    if (_isSaving) return;
     HapticFeedback.selectionClick();
+    if (_isExplicit) {
+      setState(() {
+        final next = <String>{..._breakDays};
+        if (value) {
+          next.add(day);
+        } else {
+          next.remove(day);
+        }
+        _breakDays = next;
+      });
+      _recomputeExplicitDirty();
+      _log('draft_break_changed', day: day);
+      return;
+    }
+
     setState(() => _savingDay = day);
+    _syncControllerState();
     _log('save_break_start', day: day);
 
     final ok = await context.read<UserState>().setCurrentUserBreakDayLocalOnly(
@@ -323,6 +469,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
         _breakDays = next;
         _savingDay = null;
       });
+      _syncControllerState();
       _log('save_break_complete', day: day, success: true);
       widget.onChanged?.call();
       _showSnack(value ? '$day요일 휴게가 설정되었습니다.' : '$day요일 휴게가 해제되었습니다.');
@@ -330,17 +477,61 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
     }
 
     setState(() => _savingDay = null);
+    _syncControllerState();
     _log('save_break_complete', day: day, success: false);
     await _loadSchedule(reason: 'save_break_failure');
     if (!mounted) return;
     _showSnack('휴게 설정 저장에 실패했습니다.');
   }
 
+  Future<bool> _saveExplicitDraft() async {
+    if (!_isExplicit || !_explicitDirty || _isSaving) return false;
+    for (final day in _days) {
+      if ((_startByDay[day] == null) != (_endByDay[day] == null)) {
+        _showSnack('$day요일의 출근/퇴근 시간을 모두 입력하거나 모두 비워 주세요.');
+        return false;
+      }
+    }
+
+    setState(() => _savingAll = true);
+    _syncControllerState();
+    _log('explicit_save_start');
+    final ok = await context.read<UserState>().setCurrentUserWeeklyScheduleLocalOnly(
+      startTimeByWeekday: _startByDay,
+      endTimeByWeekday: _endByDay,
+      breakDays: _breakDays,
+    );
+
+    if (!mounted) return false;
+    if (ok) {
+      setState(() {
+        _savedStartByDay = Map<String, TimeOfDay?>.of(_startByDay);
+        _savedEndByDay = Map<String, TimeOfDay?>.of(_endByDay);
+        _savedBreakDays = <String>{..._breakDays};
+        _explicitDirty = false;
+        _savingAll = false;
+      });
+      _syncControllerState();
+      _ignoreNextSharedSync = true;
+      _broadcastSharedScheduleChange();
+      _log('explicit_save_complete', success: true);
+      widget.onChanged?.call();
+      _showSnack('근무 일정이 저장되었습니다.');
+      return true;
+    }
+
+    setState(() => _savingAll = false);
+    _syncControllerState();
+    _log('explicit_save_complete', success: false);
+    _showSnack('근무 일정 저장에 실패했습니다.');
+    return false;
+  }
+
   Future<void> _pickWeeklyTime({
     required String day,
     required bool isStart,
   }) async {
-    if (_savingDay != null) return;
+    if (_isSaving) return;
     HapticFeedback.selectionClick();
 
     final current = isStart ? _startByDay[day] : _endByDay[day];
@@ -392,7 +583,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
   }
 
   void _selectDay(String day) {
-    if (_selectedDay == day || _savingDay != null) return;
+    if (_selectedDay == day || _isSaving) return;
     HapticFeedback.selectionClick();
     setState(() => _selectedDay = day);
     _log('editor_day_select', day: day);
@@ -425,7 +616,9 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
     trace.log('selectedEditDay=$_selectedDay', progress: 0.71);
     trace.log('selectedStartConfigured=${selectedStart != null}', progress: 0.79);
     trace.log('selectedEndConfigured=${selectedEnd != null}', progress: 0.86);
-    trace.log('saving=${_savingDay != null}', progress: 0.92);
+    trace.log('saving=$_isSaving', progress: 0.9);
+    trace.log('saveMode=${widget.saveMode.name}', progress: 0.92);
+    trace.log('explicitDirty=$_explicitDirty', progress: 0.94);
     trace.log('syncMode=shared_editor_revision', progress: 0.95);
     trace.log('scheduleStorage=local_only', progress: 0.94);
     trace.log('breakPolicy=time_independent', progress: 0.97);
@@ -558,7 +751,7 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
                 ),
               ),
               TextButton.icon(
-                onPressed: _savingDay == null ? _toggleEditor : null,
+                onPressed: !_isSaving ? _toggleEditor : null,
                 icon: const Icon(
                   Icons.keyboard_arrow_up_rounded,
                   size: 18,
@@ -572,21 +765,21 @@ class _WeeklyWorkScheduleEditorState extends State<WeeklyWorkScheduleEditor> {
         _WeekdaySelector(
           days: _days,
           selectedDay: _selectedDay,
-          saving: _savingDay != null,
+          saving: _isSaving,
           reduceMotion: reduceMotion,
           onSelect: _selectDay,
         ),
         const SizedBox(height: 12),
         _animatedContent(
           key:
-              'editor_${_selectedDay}_${_statusOf(_selectedDay).name}_${_formatTime(_startByDay[_selectedDay])}_${_formatTime(_endByDay[_selectedDay])}_${_breakDays.contains(_selectedDay)}_${_savingDay == _selectedDay}',
+              'editor_${_selectedDay}_${_statusOf(_selectedDay).name}_${_formatTime(_startByDay[_selectedDay])}_${_formatTime(_endByDay[_selectedDay])}_${_breakDays.contains(_selectedDay)}_${_savingDay == _selectedDay}_$_savingAll',
           child: _ScheduleEditor(
             day: _selectedDay,
             status: _statusOf(_selectedDay),
             startTime: _startByDay[_selectedDay],
             endTime: _endByDay[_selectedDay],
             hasBreak: _breakDays.contains(_selectedDay),
-            isSaving: _savingDay == _selectedDay,
+            isSaving: _savingDay == _selectedDay || _savingAll,
             formatTime: _formatTime,
             onPickStart: () => _pickWeeklyTime(
               day: _selectedDay,

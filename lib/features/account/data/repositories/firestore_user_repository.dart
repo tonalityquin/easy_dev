@@ -109,6 +109,20 @@ class FirestoreUserRepository implements UserRepository {
       _statusService.updateWorkingUserStatus(phone, area, isWorking: isWorking, isSaved: isSaved);
 
   @override
+  Future<void> updateLoginSession({
+    required String userId,
+    required bool isSaved,
+    String? currentArea,
+    String? selectedArea,
+  }) =>
+      _statusService.updateLoginSession(
+        userId: userId,
+        isSaved: isSaved,
+        currentArea: currentArea,
+        selectedArea: selectedArea,
+      );
+
+  @override
   Future<void> updateLoadCurrentArea(String phone, String area, String currentArea) =>
       _statusService.updateLoadCurrentArea(phone, area, currentArea);
 

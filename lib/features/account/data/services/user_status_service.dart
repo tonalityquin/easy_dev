@@ -1,5 +1,6 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 
 class UserStatusService {
@@ -84,6 +85,50 @@ class UserStatusService {
       updates,
       opName: 'updateWorkingUserStatus',
     );
+  }
+
+  Future<void> updateLoginSession({
+    required String userId,
+    required bool isSaved,
+    String? currentArea,
+    String? selectedArea,
+  }) async {
+    final normalizedUserId = userId.trim();
+    if (normalizedUserId.isEmpty) {
+      throw ArgumentError.value(userId, 'userId');
+    }
+
+    final updates = <String, dynamic>{
+      'isSaved': isSaved,
+    };
+    final normalizedCurrentArea = (currentArea ?? '').trim();
+    final normalizedSelectedArea = (selectedArea ?? '').trim();
+    if (normalizedCurrentArea.isNotEmpty) {
+      updates['currentArea'] = normalizedCurrentArea;
+    }
+    if (normalizedSelectedArea.isNotEmpty) {
+      updates['selectedArea'] = normalizedSelectedArea;
+    }
+
+    final fields = updates.keys.join(',');
+    final startedAt = DateTime.now();
+    debugPrint(
+      '[USER-STATUS][${startedAt.toIso8601String()}] loginSession update start document=user_accounts/$normalizedUserId fields=$fields firebaseRead=0 firebaseWrite=1 userAccountsShowRead=0 userAccountsShowWrite=0',
+    );
+
+    try {
+      await _getUserCollectionRef().doc(normalizedUserId).update(updates);
+      final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
+      debugPrint(
+        '[USER-STATUS][${DateTime.now().toIso8601String()}] loginSession update success document=user_accounts/$normalizedUserId fields=$fields elapsedMs=$elapsedMs firebaseRead=0 firebaseWrite=1 userAccountsShowRead=0 userAccountsShowWrite=0',
+      );
+    } catch (error, stackTrace) {
+      final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
+      debugPrint(
+        '[USER-STATUS][${DateTime.now().toIso8601String()}] loginSession update failed document=user_accounts/$normalizedUserId fields=$fields elapsedMs=$elapsedMs error=$error\n$stackTrace',
+      );
+      rethrow;
+    }
   }
 
   Future<void> updateLoadCurrentArea(

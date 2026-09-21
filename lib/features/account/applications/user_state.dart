@@ -508,18 +508,87 @@ class UserState extends ChangeNotifier {
     _session = UserSessionAccount(updatedUser);
     notifyListeners();
 
+    final startedAt = DateTime.now();
+    debugPrint(
+      '[USER-STATE][${startedAt.toIso8601String()}] updateLoginUser start userId=${updatedUser.id} currentArea=${updatedUser.currentArea ?? ''} selectedArea=${updatedUser.selectedArea ?? ''} isSaved=${updatedUser.isSaved}',
+    );
+
     final firebaseOk = await FirebaseGoogleAuthBridge.instance
         .ensureSignedInFromGoogleSession(interactive: false);
     debugPrint(
-        '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}');
+      '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}',
+    );
 
-    await _repository.updateUser(updatedUser);
+    try {
+      await _repository.updateLoginSession(
+        userId: updatedUser.id,
+        isSaved: updatedUser.isSaved,
+        currentArea: updatedUser.currentArea,
+        selectedArea: updatedUser.selectedArea,
+      );
+      final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
+      final successLine =
+          '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser remote session update success userId=${updatedUser.id} elapsedMs=$elapsedMs firebaseRead=0 firebaseWrite=1 userAccountsShowRead=0 userAccountsShowWrite=0';
+      debugPrint(successLine);
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'user.login.updateLoginSession',
+          details: <String, Object?>{
+            'source': 'UserState.updateLoginUser',
+            'userId': updatedUser.id,
+            'currentArea': updatedUser.currentArea,
+            'selectedArea': updatedUser.selectedArea,
+            'isSaved': updatedUser.isSaved,
+            'firebaseRead': 0,
+            'firebaseWrite': 1,
+            'userAccountsShowRead': 0,
+            'userAccountsShowWrite': 0,
+            'elapsedMs': elapsedMs,
+          },
+          title: '로그인 세션 동기화 완료',
+          success: true,
+          copyAsDebugPrintCode: true,
+          devModeOnly: true,
+        ),
+      );
+    } catch (error, stackTrace) {
+      final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
+      debugPrint(
+        '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser remote session update failed userId=${updatedUser.id} elapsedMs=$elapsedMs error=$error\n$stackTrace',
+      );
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'user.login.updateLoginSession',
+          error: error,
+          stackTrace: stackTrace,
+          details: <String, Object?>{
+            'source': 'UserState.updateLoginUser',
+            'userId': updatedUser.id,
+            'currentArea': updatedUser.currentArea,
+            'selectedArea': updatedUser.selectedArea,
+            'isSaved': updatedUser.isSaved,
+            'firebaseRead': 0,
+            'firebaseWriteAttempted': 1,
+            'userAccountsShowRead': 0,
+            'userAccountsShowWrite': 0,
+            'elapsedMs': elapsedMs,
+          },
+          title: '로그인 세션 동기화 실패',
+          copyAsDebugPrintCode: true,
+          devModeOnly: true,
+        ),
+      );
+      rethrow;
+    }
 
     final area = _areaState.currentArea.trim();
     _userList = _replaceItem(_userList, updatedUser);
     await _repository.updateUsersCache(area, _userList);
 
     await saveCardToUserPhone(updatedUser);
+    debugPrint(
+      '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser complete userId=${updatedUser.id} localCacheArea=$area',
+    );
   }
 
   Future<void> updateLoginUserLocalOnly(UserModel updatedUser) async {
@@ -677,6 +746,58 @@ class UserState extends ChangeNotifier {
     );
   }
 
+
+  Future<bool> setCurrentUserWeeklyScheduleLocalOnly({
+    required Map<String, TimeOfDay?> startTimeByWeekday,
+    required Map<String, TimeOfDay?> endTimeByWeekday,
+    required Iterable<String> breakDays,
+  }) async {
+    if (_isTablet || _user == null) return false;
+
+    final normalizedStart = WorkSchedulePrefs.normalizeDayTimeMap(
+      startTimeByWeekday,
+    );
+    final normalizedEnd = WorkSchedulePrefs.normalizeDayTimeMap(
+      endTimeByWeekday,
+    );
+    for (final day in WorkSchedulePrefs.days) {
+      if ((normalizedStart[day] == null) != (normalizedEnd[day] == null)) {
+        debugPrint(
+          '[USER-STATE][${DateTime.now().toIso8601String()}] weekly_schedule_local validation_failed day=$day reason=partial_work_time',
+        );
+        return false;
+      }
+    }
+
+    final normalizedBreakDays = WorkSchedulePrefs.normalizeBreakDays(breakDays);
+    final workingDays = WorkSchedulePrefs.days
+        .where((day) =>
+            normalizedStart[day] != null && normalizedEnd[day] != null)
+        .length;
+
+    debugPrint(
+      '[USER-STATE][${DateTime.now().toIso8601String()}] weekly_schedule_local save_start workingDays=$workingDays breakDays=${normalizedBreakDays.length} saveMode=explicit',
+    );
+
+    final updatedUser = _user!.copyWith(
+      startTimeByWeekday: normalizedStart,
+      endTimeByWeekday: normalizedEnd,
+      breakDays: normalizedBreakDays,
+    );
+
+    try {
+      await _applyCurrentUserScheduleLocalOnly(updatedUser);
+      debugPrint(
+        '[USER-STATE][${DateTime.now().toIso8601String()}] weekly_schedule_local save_complete success=true workingDays=$workingDays breakDays=${normalizedBreakDays.length}',
+      );
+      return true;
+    } catch (e, st) {
+      debugPrint(
+        '[USER-STATE][${DateTime.now().toIso8601String()}] weekly_schedule_local save_complete success=false error=$e\n$st',
+      );
+      return false;
+    }
+  }
 
   Future<bool> setCurrentUserBreakDayLocalOnly({
     required String day,

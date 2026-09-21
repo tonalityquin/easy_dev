@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 
 import '../../../app/auth/gmail_sender_auth.dart';
 import '../../../app/command/application/service_settings_command_handler.dart';
@@ -76,6 +76,19 @@ class LauncherCredentialSubmitResult {
       authenticationError == null;
 }
 
+
+class LauncherActiveWorkSessionResumeResult {
+  const LauncherActiveWorkSessionResumeResult({
+    required this.shouldResume,
+    required this.reason,
+    this.targetRoute,
+  });
+
+  final bool shouldResume;
+  final String reason;
+  final String? targetRoute;
+}
+
 class ModeLauncherController extends ChangeNotifier {
   static const String _hiddenImportingCommand = 'sudo apt importing';
   static const Set<String> _protectedCommands = <String>{
@@ -111,6 +124,14 @@ class ModeLauncherController extends ChangeNotifier {
   bool _authenticationBootstrapInFlight = false;
   bool _startupSetupResolved = false;
   bool _runtimeContextReady = false;
+  bool _sessionRestoreAttempted = false;
+  bool _sessionRestoreSucceeded = false;
+  bool _automaticSessionResumeCompleted = false;
+  bool _workContextRestored = false;
+  bool _applicationContextReady = false;
+  bool _activeWorkSessionResumePrepared = false;
+  String? _activeWorkSessionResumeRoute;
+  String _activeWorkSessionResumeReason = 'idle';
   bool _devAuthorized = false;
   bool _devModeEnabled = false;
   bool _importingUnlocked = false;
@@ -153,6 +174,19 @@ class ModeLauncherController extends ChangeNotifier {
   bool get startupSetupExternalSettingsRefreshInProgress =>
       _startupSetupCoordinator.externalSettingsRefreshInProgress;
   bool get runtimeContextReady => _runtimeContextReady;
+  bool get sessionRestoreAttempted => _sessionRestoreAttempted;
+  bool get sessionRestoreSucceeded => _sessionRestoreSucceeded;
+  bool get automaticSessionResumeCompleted => _automaticSessionResumeCompleted;
+  bool get workContextRestored => _workContextRestored;
+  bool get applicationContextReady => _applicationContextReady;
+  bool get activeWorkSessionResumePrepared => _activeWorkSessionResumePrepared;
+  String? get activeWorkSessionResumeRoute => _activeWorkSessionResumeRoute;
+  String get activeWorkSessionResumeReason => _activeWorkSessionResumeReason;
+  String get authenticationSourceLabel {
+    if (_sessionRestoreSucceeded) return 'SESSION_RESTORE';
+    if (_sessionRestoreAttempted) return 'MANUAL_FALLBACK';
+    return 'MANUAL';
+  }
   bool get busy => _busy;
   bool get initialized => _initialized;
   bool get devAuthorized => _devAuthorized;
@@ -497,7 +531,9 @@ class ModeLauncherController extends ChangeNotifier {
         _authenticationBootstrapInFlight = false;
         if (_runningCommand == 'STARTUP' ||
             _runningCommand == 'SESSION_CHECK' ||
-            _runningCommand == 'SESSION_RESTORE') {
+            _runningCommand == 'SESSION_RESTORE' ||
+            _runningCommand == 'WORK_CONTEXT' ||
+            _runningCommand == 'APPLICATION_CONTEXT') {
           _busy = false;
           _runningCommand = '';
         }
@@ -1055,6 +1091,17 @@ class ModeLauncherController extends ChangeNotifier {
       'Account auto selected: $_accountKindAutoSelected',
       'Debug account override: $_debugAccountKindOverride',
       'Session persistence: ${TerminalAuthCoordinator.sessionPersistenceId(_sessionPersistence)}',
+      'Authentication source: $authenticationSourceLabel',
+      'Session restore attempted: $_sessionRestoreAttempted',
+      'Session restore succeeded: $_sessionRestoreSucceeded',
+      'Automatic session resume: $_automaticSessionResumeCompleted',
+      'Work context restored: $_workContextRestored',
+      'Application context ready: $_applicationContextReady',
+      'Active work session resume: $_activeWorkSessionResumePrepared',
+      'Active work session route: ${_activeWorkSessionResumeRoute ?? '-'}',
+      'Active work session reason: $_activeWorkSessionResumeReason',
+      'Active work state source: LOCAL',
+      'Active work remote validation: DISABLED',
       'Debug override snapshot: $_debugOverrideSnapshotActive',
       'Supported modes: ${_supportedModes.map((mode) => mode.id).join(',')}',
       'Startup setup phase: ${_startupSetupCoordinator.phase.name}',
@@ -2185,6 +2232,14 @@ class ModeLauncherController extends ChangeNotifier {
     BuildContext context, {
     required bool reduceMotion,
   }) async {
+    _sessionRestoreAttempted = false;
+    _sessionRestoreSucceeded = false;
+    _automaticSessionResumeCompleted = false;
+    _workContextRestored = false;
+    _applicationContextReady = false;
+    _activeWorkSessionResumePrepared = false;
+    _activeWorkSessionResumeRoute = null;
+    _activeWorkSessionResumeReason = 'idle';
     _busy = true;
     _runningCommand = 'SESSION_CHECK';
     _append(
@@ -2229,11 +2284,12 @@ class ModeLauncherController extends ChangeNotifier {
     );
 
     if (kind != null && context.mounted) {
+      _sessionRestoreAttempted = true;
       _busy = true;
       _runningCommand = 'SESSION_RESTORE';
       _append(
         TerminalLineType.running,
-        'Restoring previous session',
+        'Restoring account session',
         cadence: TerminalCadence.instant,
       );
       notifyListeners();
@@ -2255,6 +2311,7 @@ class ModeLauncherController extends ChangeNotifier {
 
       final account = restored.account;
       if (restored.success && account != null) {
+        _sessionRestoreSucceeded = true;
         _accountKindAutoSelected = false;
         _debugAccountKindOverride = false;
         _debugOverrideSnapshotActive = false;
@@ -2264,31 +2321,17 @@ class ModeLauncherController extends ChangeNotifier {
         _supportedModes = account.supportedModes;
         _availableWorkAreas = <LauncherWorkAreaOption>[];
         _selectedWorkArea = null;
-        LauncherWorkAreaResolution? restoreWorkAreaResolution;
-        if (account.kind == TerminalAccountKind.user && account.user != null) {
-          _busy = true;
-          _runningCommand = 'AREAS';
-          _append(
-            TerminalLineType.running,
-            'Loading work areas from restored session',
-            cadence: TerminalCadence.instant,
-          );
-          notifyListeners();
-          restoreWorkAreaResolution = await _resolveLauncherWorkAreas(
-            context,
-            account: account,
-            reduceMotion: reduceMotion,
-          );
-          _availableWorkAreas = restoreWorkAreaResolution.areas;
-          _busy = false;
-          _runningCommand = '';
-        }
         _enteredName = account.displayName;
         _enteredPhone = '';
         _enteredPassword = '';
         _append(
           TerminalLineType.success,
-          '[ OK ] ${restored.message}',
+          '[ OK ] SESSION RESTORED',
+          cadence: TerminalCadence.instant,
+        );
+        _append(
+          TerminalLineType.success,
+          '[ OK ] ACCOUNT PROFILE READY',
           cadence: TerminalCadence.instant,
         );
         LauncherDiagnostics.record(
@@ -2298,15 +2341,38 @@ class ModeLauncherController extends ChangeNotifier {
             'supportedModes': _supportedModes.map((mode) => mode.id).join(','),
             'startupPurpose': _startupPurpose?.storageValue ?? '',
             'restorePriority': 'session_before_startup_purpose',
+            'message': restored.message,
+          },
+        );
+        LauncherDiagnostics.record(
+          'launcher_account_profile_ready',
+          meta: <String, Object?>{
+            'source': 'session_restore',
+            'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
           },
         );
 
         final savedMode = AppModeRegistry.findLegacy(_savedModeRaw);
         final savedModeAllowed = savedMode != null &&
             _supportedModes.any((mode) => mode.id == savedMode.id);
+        _selectedMode = savedModeAllowed ? savedMode : null;
+        _beginAutomaticWorkContextRestore();
 
-        if (account.kind == TerminalAccountKind.user) {
-          _selectedMode = savedModeAllowed ? savedMode : null;
+        if (account.kind == TerminalAccountKind.user && account.user != null) {
+          final restoreWorkAreaResolution = await _resolveLauncherWorkAreas(
+            context,
+            account: account,
+            reduceMotion: reduceMotion,
+            restoredSession: true,
+          );
+          if (_disposed || !context.mounted) {
+            _busy = false;
+            _runningCommand = '';
+            return;
+          }
+          _availableWorkAreas = restoreWorkAreaResolution.areas;
+          _busy = false;
+          _runningCommand = '';
           _loginStage = TerminalLoginStage.areaSelection;
           if (_availableWorkAreas.isEmpty) {
             _append(
@@ -2317,9 +2383,9 @@ class ModeLauncherController extends ChangeNotifier {
               'auth_restore_work_area_selection_blocked',
               meta: <String, Object?>{
                 'reason': 'work_area_resolution_empty',
-                'dataSource': restoreWorkAreaResolution?.dataSource ?? 'none',
+                'dataSource': restoreWorkAreaResolution.dataSource,
                 'firebaseAreaDocumentReads':
-                    restoreWorkAreaResolution?.firebaseAreaDocumentReads ?? 0,
+                    restoreWorkAreaResolution.firebaseAreaDocumentReads,
                 'firebaseWrites': 0,
               },
             );
@@ -2327,7 +2393,6 @@ class ModeLauncherController extends ChangeNotifier {
             notifyListeners();
             return;
           }
-          await _appendWorkAreaListPaced(reduceMotion);
           final firstArea = _availableWorkAreas.first;
           LauncherDiagnostics.record(
             'auth_restore_work_area_selection_ready',
@@ -2337,17 +2402,13 @@ class ModeLauncherController extends ChangeNotifier {
               'firstIsHeadquarter': firstArea.isHeadquarter,
               'savedMode': savedModeAllowed ? savedMode.id : '',
               'firebaseAreaDocumentReads':
-                  restoreWorkAreaResolution?.firebaseAreaDocumentReads ?? 0,
+                  restoreWorkAreaResolution.firebaseAreaDocumentReads,
               'firebaseWrites': 0,
-              'dataSource': restoreWorkAreaResolution?.dataSource ?? 'none',
+              'dataSource': restoreWorkAreaResolution.dataSource,
             },
           );
           final autoSelectReason = _workAreaAutoSelectReason();
           if (autoSelectReason != null) {
-            _append(
-              TerminalLineType.system,
-              _workAreaAutoSelectMessage(autoSelectReason),
-            );
             LauncherDiagnostics.record(
               'auth_restore_work_area_auto_selected',
               meta: <String, Object?>{
@@ -2358,7 +2419,7 @@ class ModeLauncherController extends ChangeNotifier {
                 'supportedModes':
                     firstArea.supportedModes.map((mode) => mode.id).join(','),
                 'firebaseAreaDocumentReads':
-                    restoreWorkAreaResolution?.firebaseAreaDocumentReads ?? 0,
+                    restoreWorkAreaResolution.firebaseAreaDocumentReads,
                 'firebaseWrites': 0,
               },
             );
@@ -2367,11 +2428,27 @@ class ModeLauncherController extends ChangeNotifier {
               area: firstArea,
               reduceMotion: reduceMotion,
               automatic: true,
+              restoredSession: true,
             );
             if (flow.targetRoute != null) {
+              await _completeAutomaticSessionResume(
+                reduceMotion: reduceMotion,
+                source: 'restored_user_context',
+                targetRoute: flow.targetRoute!,
+              );
+              if (_disposed || !context.mounted) return;
               _pendingTargetRoute = flow.targetRoute;
+            } else {
+              LauncherDiagnostics.record(
+                'launcher_work_context_restore_interaction_required',
+                meta: <String, Object?>{
+                  'source': 'restored_user_context',
+                  'stage': _loginStage.name,
+                },
+              );
             }
           } else {
+            await _appendWorkAreaListPaced(reduceMotion);
             _append(TerminalLineType.system, _workAreaSelectionMessage);
             LauncherDiagnostics.record(
               'auth_work_area_selection_required',
@@ -2380,85 +2457,38 @@ class ModeLauncherController extends ChangeNotifier {
                 'source': 'restored_session',
               },
             );
+            LauncherDiagnostics.record(
+              'launcher_work_context_restore_interaction_required',
+              meta: <String, Object?>{
+                'source': 'work_area_selection',
+                'stage': _loginStage.name,
+              },
+            );
             notifyListeners();
           }
           return;
         }
 
+        _busy = false;
+        _runningCommand = '';
+        _loginStage = TerminalLoginStage.modeSelection;
         if (savedModeAllowed) {
-          _selectedMode = savedMode;
-          _loginStage = TerminalLoginStage.activatingMode;
-          _busy = true;
-          _runningCommand = 'MODE';
-          _append(
-            TerminalLineType.success,
-            '[ OK ] ${savedMode.koreanName}',
-          );
-          await _appendPaced(
-            TerminalLineType.running,
-            'Restoring runtime session',
-            reduceMotion,
-          );
-          LauncherDiagnostics.record(
-            'auth_saved_mode_resume_start',
-            meta: <String, Object?>{
-              'mode': savedMode.id,
-              'targetRoute': savedMode.postLoginRoute,
-            },
-          );
-          final activated = await TerminalAuthCoordinator.activateMode(
+          final flow = await selectMode(
             context,
-            account: account,
             mode: savedMode,
-            persistence: TerminalSessionPersistence.persistent,
+            reduceMotion: reduceMotion,
+            automatic: true,
+            restoredSession: true,
           );
-          _busy = false;
-          _runningCommand = '';
-          if (_disposed || !context.mounted) return;
-          if (!activated.success) {
-            await prefs.remove('mode');
-            _savedModeRaw = null;
-            _assignedMode = null;
-            _selectedMode = null;
-            _append(
-              TerminalLineType.error,
-              '[FAILED] ${activated.message}',
+          if (flow.targetRoute != null) {
+            await _completeAutomaticSessionResume(
+              reduceMotion: reduceMotion,
+              source: 'saved_mode_restore',
+              targetRoute: flow.targetRoute!,
             );
-            _loginStage = TerminalLoginStage.modeSelection;
-            await _appendSupportedModeListPaced(reduceMotion);
-            _append(TerminalLineType.system, _modeSelectionMessage);
-            LauncherDiagnostics.record(
-              'auth_saved_mode_resume_failed',
-              meta: <String, Object?>{
-                'mode': savedMode.id,
-                'message': activated.message,
-              },
-            );
-            notifyListeners();
-            return;
+            if (_disposed || !context.mounted) return;
+            _pendingTargetRoute = flow.targetRoute;
           }
-          _authenticatedAccount = account.copyWith(activated: true);
-          _runtimeContextReady = true;
-          _savedModeRaw = AppModeRegistry.persistedValue(savedMode.id);
-          _assignedMode = savedMode;
-          _append(TerminalLineType.success, '[ OK ] ${activated.message}');
-          _pendingTargetRoute = savedMode.postLoginRoute;
-          LauncherDiagnostics.record(
-            'auth_runtime_context_ready',
-            meta: <String, Object?>{
-              'source': 'saved_mode_restore',
-              'mode': savedMode.id,
-              'targetRoute': savedMode.postLoginRoute,
-            },
-          );
-          LauncherDiagnostics.record(
-            'auth_saved_mode_resume_success',
-            meta: <String, Object?>{
-              'mode': savedMode.id,
-              'targetRoute': savedMode.postLoginRoute,
-            },
-          );
-          notifyListeners();
           return;
         }
 
@@ -2466,9 +2496,8 @@ class ModeLauncherController extends ChangeNotifier {
           await prefs.remove('mode');
           _savedModeRaw = null;
           _assignedMode = null;
+          _selectedMode = null;
         }
-        _loginStage = TerminalLoginStage.modeSelection;
-        await _appendSupportedModeListPaced(reduceMotion);
         if (_supportedModes.isEmpty) {
           _append(
             TerminalLineType.error,
@@ -2484,18 +2513,33 @@ class ModeLauncherController extends ChangeNotifier {
             mode: _supportedModes.first,
             reduceMotion: reduceMotion,
             automatic: true,
+            restoredSession: true,
           );
           if (flow.targetRoute != null) {
+            await _completeAutomaticSessionResume(
+              reduceMotion: reduceMotion,
+              source: 'single_mode_restore',
+              targetRoute: flow.targetRoute!,
+            );
+            if (_disposed || !context.mounted) return;
             _pendingTargetRoute = flow.targetRoute;
           }
           return;
         }
+        await _appendSupportedModeListPaced(reduceMotion);
         _append(TerminalLineType.system, _modeSelectionMessage);
         LauncherDiagnostics.record(
           'auth_mode_selection_required',
           meta: <String, Object?>{
             'supportedModeCount': _supportedModes.length,
             'source': 'restored_session',
+          },
+        );
+        LauncherDiagnostics.record(
+          'launcher_work_context_restore_interaction_required',
+          meta: <String, Object?>{
+            'source': 'mode_selection',
+            'stage': _loginStage.name,
           },
         );
         notifyListeners();
@@ -2552,6 +2596,265 @@ class ModeLauncherController extends ChangeNotifier {
       return;
     }
     await _showAccountTypeSelectionPaced(reduceMotion);
+  }
+
+  void _beginAutomaticWorkContextRestore() {
+    _workContextRestored = false;
+    _applicationContextReady = false;
+    _activeWorkSessionResumePrepared = false;
+    _activeWorkSessionResumeRoute = null;
+    _activeWorkSessionResumeReason = 'idle';
+    _automaticSessionResumeCompleted = false;
+    _busy = true;
+    _runningCommand = 'WORK_CONTEXT';
+    _append(
+      TerminalLineType.running,
+      'Restoring work context',
+      cadence: TerminalCadence.instant,
+    );
+    LauncherDiagnostics.record(
+      'launcher_work_context_restore_started',
+      meta: <String, Object?>{
+        'source': 'session_restore',
+        'savedMode': _savedModeRaw ?? '',
+      },
+    );
+    notifyListeners();
+  }
+
+  Future<void> _completeAutomaticSessionResume({
+    required bool reduceMotion,
+    required String source,
+    required String targetRoute,
+  }) async {
+    _workContextRestored = true;
+    _append(
+      TerminalLineType.success,
+      '[ OK ] WORK CONTEXT RESTORED',
+      cadence: TerminalCadence.instant,
+    );
+    LauncherDiagnostics.record(
+      'launcher_work_context_restore_completed',
+      meta: <String, Object?>{
+        'source': source,
+        'targetRoute': targetRoute,
+        'area': _selectedWorkArea?.areaName ?? '',
+        'mode': _selectedMode?.id ?? '',
+      },
+    );
+    _busy = true;
+    _runningCommand = 'APPLICATION_CONTEXT';
+    _append(
+      TerminalLineType.running,
+      'Preparing application context',
+      cadence: TerminalCadence.instant,
+    );
+    LauncherDiagnostics.record(
+      'launcher_application_context_prepare_started',
+      meta: <String, Object?>{
+        'source': source,
+        'targetRoute': targetRoute,
+      },
+    );
+    notifyListeners();
+    await _commandDelay(reduceMotion);
+    if (_disposed) {
+      _busy = false;
+      _runningCommand = '';
+      return;
+    }
+    _applicationContextReady = true;
+    _automaticSessionResumeCompleted = true;
+    _append(
+      TerminalLineType.success,
+      '[ OK ] APPLICATION CONTEXT READY',
+      cadence: TerminalCadence.instant,
+    );
+    _busy = false;
+    _runningCommand = '';
+    LauncherDiagnostics.record(
+      'launcher_application_context_ready',
+      meta: <String, Object?>{
+        'source': source,
+        'targetRoute': targetRoute,
+        'automaticResume': true,
+      },
+    );
+    notifyListeners();
+  }
+
+
+  Future<bool> hasActiveWorkSessionResumeCandidate({
+    required String launcherTargetRoute,
+  }) async {
+    if (!_automaticSessionResumeCompleted ||
+        !_sessionRestoreSucceeded ||
+        !_runtimeContextReady) {
+      return false;
+    }
+    if (_resolveActiveWorkspaceRoute(launcherTargetRoute) == null) {
+      LauncherDiagnostics.record(
+        'launcher_active_work_session_candidate_checked',
+        meta: <String, Object?>{
+          'candidate': false,
+          'reason': 'workspace_route_unsupported',
+          'launcherTargetRoute': launcherTargetRoute,
+        },
+      );
+      return false;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final isWorking = prefs.getBool('isWorking') ?? false;
+    final hasClockIn = prefs.getBool('clockInHas') ?? false;
+    final clockInDate = prefs.getString('clockInDate')?.trim() ?? '';
+    final now = DateTime.now();
+    final today = '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final candidate = isWorking && hasClockIn && clockInDate == today;
+    LauncherDiagnostics.record(
+      'launcher_active_work_session_candidate_checked',
+      meta: <String, Object?>{
+        'candidate': candidate,
+        'isWorking': isWorking,
+        'clockInHas': hasClockIn,
+        'clockInDateMatchesToday': clockInDate == today,
+        'launcherTargetRoute': launcherTargetRoute,
+      },
+    );
+    return candidate;
+  }
+
+  Future<LauncherActiveWorkSessionResumeResult> prepareActiveWorkSessionResume(
+    BuildContext context, {
+    required String launcherTargetRoute,
+    void Function(double progress, String message, String phase)? onProgress,
+  }) async {
+    _activeWorkSessionResumePrepared = false;
+    _activeWorkSessionResumeRoute = null;
+    _activeWorkSessionResumeReason = 'checking';
+    onProgress?.call(.18, '출근 상태를 확인하고 있습니다.', 'working_state');
+    LauncherDiagnostics.record(
+      'launcher_active_work_session_restore_started',
+      meta: <String, Object?>{
+        'launcherTargetRoute': launcherTargetRoute,
+        'authenticationSource': authenticationSourceLabel,
+        'workStateSource': 'local',
+        'remoteValidation': false,
+      },
+    );
+    if (!_automaticSessionResumeCompleted ||
+        !_sessionRestoreSucceeded ||
+        !_runtimeContextReady) {
+      _activeWorkSessionResumeReason = 'launcher_context_not_ready';
+      return const LauncherActiveWorkSessionResumeResult(
+        shouldResume: false,
+        reason: 'launcher_context_not_ready',
+      );
+    }
+    final prefs = await SharedPreferences.getInstance();
+    if (!context.mounted) {
+      _activeWorkSessionResumeReason = 'context_unmounted';
+      return const LauncherActiveWorkSessionResumeResult(
+        shouldResume: false,
+        reason: 'context_unmounted',
+      );
+    }
+    final localIsWorking = prefs.getBool('isWorking') ?? false;
+    final hasClockIn = prefs.getBool('clockInHas') ?? false;
+    final clockInDate = prefs.getString('clockInDate')?.trim() ?? '';
+    final now = DateTime.now();
+    final today =
+        '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final clockInDateMatchesToday = clockInDate == today;
+    onProgress?.call(.38, '로컬 출근 상태를 확인하고 있습니다.', 'local_work_state');
+    LauncherDiagnostics.record(
+      'launcher_active_work_session_local_state_trusted',
+      meta: <String, Object?>{
+        'isWorking': localIsWorking,
+        'clockInHas': hasClockIn,
+        'clockInDateMatchesToday': clockInDateMatchesToday,
+        'remoteValidation': false,
+      },
+    );
+    if (!localIsWorking || !hasClockIn || !clockInDateMatchesToday) {
+      _activeWorkSessionResumeReason = !localIsWorking
+          ? 'working_state_inactive'
+          : !hasClockIn
+              ? 'clock_in_record_missing'
+              : 'clock_in_date_mismatch';
+      LauncherDiagnostics.record(
+        'launcher_active_work_session_restore_skipped',
+        meta: <String, Object?>{
+          'reason': _activeWorkSessionResumeReason,
+          'localIsWorking': localIsWorking,
+          'clockInHas': hasClockIn,
+          'clockInDateMatchesToday': clockInDateMatchesToday,
+          'remoteValidation': false,
+        },
+      );
+      return LauncherActiveWorkSessionResumeResult(
+        shouldResume: false,
+        reason: _activeWorkSessionResumeReason,
+      );
+    }
+    onProgress?.call(.58, '오늘의 출근 세션을 확인하고 있습니다.', 'local_clock_in_check');
+    onProgress?.call(.76, '업무 환경을 복원하고 있습니다.', 'work_context');
+    final targetRoute = _resolveActiveWorkspaceRoute(launcherTargetRoute);
+    if (targetRoute == null) {
+      _activeWorkSessionResumeReason = 'workspace_route_unresolved';
+      LauncherDiagnostics.record(
+        'launcher_active_work_session_restore_skipped',
+        meta: <String, Object?>{
+          'reason': _activeWorkSessionResumeReason,
+          'launcherTargetRoute': launcherTargetRoute,
+          'area': _selectedWorkArea?.areaName ?? '',
+          'mode': _selectedMode?.id ?? '',
+          'remoteValidation': false,
+        },
+      );
+      return LauncherActiveWorkSessionResumeResult(
+        shouldResume: false,
+        reason: _activeWorkSessionResumeReason,
+      );
+    }
+    onProgress?.call(.90, 'ParkinWorkin 작업공간을 확인하고 있습니다.', 'workspace_route');
+    _activeWorkSessionResumePrepared = true;
+    _activeWorkSessionResumeRoute = targetRoute;
+    _activeWorkSessionResumeReason = 'ready';
+    onProgress?.call(.96, '기존 작업공간을 준비하고 있습니다.', 'workspace_ready');
+    LauncherDiagnostics.record(
+      'launcher_active_work_session_restore_prepared',
+      meta: <String, Object?>{
+        'launcherTargetRoute': launcherTargetRoute,
+        'workspaceTargetRoute': targetRoute,
+        'area': _selectedWorkArea?.areaName ?? '',
+        'mode': _selectedMode?.id ?? '',
+        'localIsWorking': localIsWorking,
+        'clockInHas': hasClockIn,
+        'clockInDateMatchesToday': clockInDateMatchesToday,
+        'remoteValidation': false,
+      },
+    );
+    notifyListeners();
+    return LauncherActiveWorkSessionResumeResult(
+      shouldResume: true,
+      reason: 'ready',
+      targetRoute: targetRoute,
+    );
+  }
+
+  String? _resolveActiveWorkspaceRoute(String launcherTargetRoute) {
+    if (_selectedWorkArea?.isHeadquarter == true ||
+        launcherTargetRoute == AppRoutes.headquarterCommute) {
+      return AppRoutes.headquarterPage;
+    }
+    final modeId = _selectedMode?.id ?? _assignedMode?.id;
+    return switch (modeId) {
+      'single' => AppRoutes.singleInside,
+      'double' => AppRoutes.doubleTypePage,
+      'triple' => AppRoutes.tripleTypePage,
+      'minor' => AppRoutes.minorTypePage,
+      _ => null,
+    };
   }
 
   Future<bool> _selectStartupPurposeAccountKind({
@@ -2750,6 +3053,7 @@ class ModeLauncherController extends ChangeNotifier {
     BuildContext context, {
     required TerminalAuthenticatedAccount account,
     required bool reduceMotion,
+    bool restoredSession = false,
   }) async {
     final user = account.user;
     if (user == null) {
@@ -2765,23 +3069,41 @@ class ModeLauncherController extends ChangeNotifier {
       accountModes: account.supportedModes,
     );
     if (local.hasSnapshot || local.areas.isNotEmpty) return local;
-    await _appendPaced(
-      TerminalLineType.running,
-      'Local work area snapshot unavailable',
-      reduceMotion,
-    );
     final authorizedAreaCount = user.areas
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toSet()
         .length;
-    await _appendPaced(
-      TerminalLineType.running,
-      authorizedAreaCount == 1
-          ? 'Checking authorized work area'
-          : 'Restoring primary work area',
-      reduceMotion,
+    LauncherDiagnostics.record(
+      'launcher_work_area_snapshot_miss',
+      meta: <String, Object?>{
+        'restoredSession': restoredSession,
+        'authorizedAreaCount': authorizedAreaCount,
+        'localDataSource': local.dataSource,
+      },
     );
+    if (!restoredSession) {
+      await _appendPaced(
+        TerminalLineType.running,
+        'Local work area snapshot unavailable',
+        reduceMotion,
+      );
+      await _appendPaced(
+        TerminalLineType.running,
+        authorizedAreaCount == 1
+            ? 'Checking authorized work area'
+            : 'Restoring primary work area',
+        reduceMotion,
+      );
+    } else {
+      LauncherDiagnostics.record(
+        'launcher_work_area_server_fallback_started',
+        meta: <String, Object?>{
+          'authorizedAreaCount': authorizedAreaCount,
+          'presentation': 'silent_restore',
+        },
+      );
+    }
     final resolved = await LauncherWorkAreaServerResolver.resolve(
       user: user,
       accountModes: account.supportedModes,
@@ -2795,8 +3117,19 @@ class ModeLauncherController extends ChangeNotifier {
         'dataSource': resolved.dataSource,
         'firebaseAreaDocumentReads': resolved.firebaseAreaDocumentReads,
         'serverFallbackUsed': resolved.serverFallbackUsed,
+        'restoredSession': restoredSession,
       },
     );
+    if (restoredSession) {
+      LauncherDiagnostics.record(
+        'launcher_work_area_server_fallback_completed',
+        meta: <String, Object?>{
+          'availableAreaCount': resolved.areas.length,
+          'dataSource': resolved.dataSource,
+          'firebaseAreaDocumentReads': resolved.firebaseAreaDocumentReads,
+        },
+      );
+    }
     return resolved;
   }
 
@@ -2805,16 +3138,28 @@ class ModeLauncherController extends ChangeNotifier {
     required TerminalAuthenticatedAccount account,
     required LauncherWorkAreaOption area,
     required bool reduceMotion,
+    bool restoredSession = false,
   }) async {
     if (!area.requiresServerAreaResolution) return area;
     final user = account.user;
     if (user == null) return null;
     _busy = true;
-    _runningCommand = 'AREA';
-    _append(
-      TerminalLineType.running,
-      'Verifying ${area.areaName}',
-    );
+    _runningCommand = restoredSession ? 'WORK_CONTEXT' : 'AREA';
+    if (!restoredSession) {
+      _append(
+        TerminalLineType.running,
+        'Verifying ${area.areaName}',
+      );
+    } else {
+      LauncherDiagnostics.record(
+        'launcher_work_area_verification_started',
+        meta: <String, Object?>{
+          'division': area.division,
+          'area': area.areaName,
+          'presentation': 'silent_restore',
+        },
+      );
+    }
     LauncherDiagnostics.record(
       'auth_work_area_first_array_verification_start',
       meta: <String, Object?>{
@@ -2845,6 +3190,16 @@ class ModeLauncherController extends ChangeNotifier {
           'firebaseAreaDocumentReads': 1,
         },
       );
+      if (restoredSession) {
+        LauncherDiagnostics.record(
+          'launcher_work_area_verification_failed',
+          meta: <String, Object?>{
+            'division': area.division,
+            'area': area.areaName,
+            'presentation': 'silent_restore',
+          },
+        );
+      }
       notifyListeners();
       return null;
     }
@@ -2870,6 +3225,17 @@ class ModeLauncherController extends ChangeNotifier {
         'verifiedRecordReusedForActivation': true,
       },
     );
+    if (restoredSession) {
+      LauncherDiagnostics.record(
+        'launcher_work_area_verification_completed',
+        meta: <String, Object?>{
+          'division': verified.division,
+          'area': verified.areaName,
+          'isHeadquarter': verified.isHeadquarter,
+          'presentation': 'silent_restore',
+        },
+      );
+    }
     notifyListeners();
     return verified;
   }
@@ -2958,6 +3324,7 @@ class ModeLauncherController extends ChangeNotifier {
     BuildContext context, {
     required TerminalAuthenticatedAccount account,
     required bool reduceMotion,
+    bool restoredSession = false,
   }) async {
     final workArea = _selectedWorkArea;
     if (workArea == null || !workArea.isHeadquarter) {
@@ -2968,11 +3335,13 @@ class ModeLauncherController extends ChangeNotifier {
     }
     _loginStage = TerminalLoginStage.activatingMode;
     _busy = true;
-    _runningCommand = 'HEADQUARTER';
-    _append(
-      TerminalLineType.running,
-      'Preparing ${workArea.areaName}',
-    );
+    _runningCommand = restoredSession ? 'WORK_CONTEXT' : 'HEADQUARTER';
+    if (!restoredSession) {
+      _append(
+        TerminalLineType.running,
+        'Preparing ${workArea.areaName}',
+      );
+    }
     LauncherDiagnostics.record(
       'auth_headquarter_selected',
       meta: <String, Object?>{
@@ -2983,6 +3352,7 @@ class ModeLauncherController extends ChangeNotifier {
         'sessionPersistence': TerminalAuthCoordinator.sessionPersistenceId(
           _sessionPersistence,
         ),
+        'restoredSession': restoredSession,
       },
     );
     notifyListeners();
@@ -3010,6 +3380,10 @@ class ModeLauncherController extends ChangeNotifier {
       _runningCommand = '';
       _loginStage = TerminalLoginStage.areaSelection;
       _errorSerial += 1;
+      if (restoredSession) {
+        await _appendWorkAreaListPaced(reduceMotion);
+        _append(TerminalLineType.system, _workAreaSelectionMessage);
+      }
       notifyListeners();
       return const ModeLauncherSubmitResult();
     }
@@ -3017,15 +3391,20 @@ class ModeLauncherController extends ChangeNotifier {
     _runtimeContextReady = true;
     _assignedMode = null;
     _selectedMode = null;
-    _append(TerminalLineType.success, '[ OK ] ${activated.message}');
+    if (!restoredSession) {
+      _append(TerminalLineType.success, '[ OK ] ${activated.message}');
+    }
     _busy = false;
     _runningCommand = '';
     LauncherDiagnostics.record(
       'auth_runtime_context_ready',
       meta: <String, Object?>{
-        'source': 'headquarter_activation',
+        'source': restoredSession
+            ? 'restored_headquarter_activation'
+            : 'headquarter_activation',
         'area': workArea.areaName,
         'targetRoute': AppRoutes.headquarterCommute,
+        'restoredSession': restoredSession,
       },
     );
     LauncherDiagnostics.record(
@@ -3040,6 +3419,7 @@ class ModeLauncherController extends ChangeNotifier {
         'firebaseWorkAreaListQueries': 0,
         'verifiedAreaRecordReused': workArea.hasVerifiedAreaRecord,
         'workAreaListSource': workArea.dataSource,
+        'restoredSession': restoredSession,
       },
     );
     notifyListeners();
@@ -3053,15 +3433,18 @@ class ModeLauncherController extends ChangeNotifier {
     required TerminalAuthenticatedAccount account,
     required AppModeDefinition mode,
     required bool reduceMotion,
+    bool restoredSession = false,
   }) async {
     final workArea = _selectedWorkArea;
     _loginStage = TerminalLoginStage.activatingMode;
     _busy = true;
-    _runningCommand = 'MODE';
-    _append(
-      TerminalLineType.running,
-      'Preparing ${mode.koreanName}',
-    );
+    _runningCommand = restoredSession ? 'WORK_CONTEXT' : 'MODE';
+    if (!restoredSession) {
+      _append(
+        TerminalLineType.running,
+        'Preparing ${mode.koreanName}',
+      );
+    }
     LauncherDiagnostics.record(
       'auth_mode_selected',
       meta: <String, Object?>{
@@ -3072,6 +3455,7 @@ class ModeLauncherController extends ChangeNotifier {
         'sessionPersistence': TerminalAuthCoordinator.sessionPersistenceId(
           _sessionPersistence,
         ),
+        'restoredSession': restoredSession,
       },
     );
     notifyListeners();
@@ -3100,6 +3484,10 @@ class ModeLauncherController extends ChangeNotifier {
       _runningCommand = '';
       _loginStage = TerminalLoginStage.modeSelection;
       _errorSerial += 1;
+      if (restoredSession) {
+        await _appendSupportedModeListPaced(reduceMotion);
+        _append(TerminalLineType.system, _modeSelectionMessage);
+      }
       notifyListeners();
       return const ModeLauncherSubmitResult();
     }
@@ -3108,16 +3496,19 @@ class ModeLauncherController extends ChangeNotifier {
     _savedModeRaw = AppModeRegistry.persistedValue(mode.id);
     _assignedMode = mode;
     _selectedMode = mode;
-    _append(TerminalLineType.success, '[ OK ] ${activated.message}');
+    if (!restoredSession) {
+      _append(TerminalLineType.success, '[ OK ] ${activated.message}');
+    }
     _busy = false;
     _runningCommand = '';
     LauncherDiagnostics.record(
       'auth_runtime_context_ready',
       meta: <String, Object?>{
-        'source': 'mode_activation',
+        'source': restoredSession ? 'restored_mode_activation' : 'mode_activation',
         'area': workArea?.areaName ?? '',
         'mode': mode.id,
         'targetRoute': mode.postLoginRoute,
+        'restoredSession': restoredSession,
       },
     );
     LauncherDiagnostics.record(
@@ -3130,6 +3521,7 @@ class ModeLauncherController extends ChangeNotifier {
         'firebaseWorkAreaListQueries': 0,
         'verifiedAreaRecordReused': workArea?.hasVerifiedAreaRecord == true,
         'workAreaListSource': workArea?.dataSource ?? 'none',
+        'restoredSession': restoredSession,
       },
     );
     notifyListeners();
@@ -3442,6 +3834,7 @@ class ModeLauncherController extends ChangeNotifier {
     required LauncherWorkAreaOption area,
     required bool reduceMotion,
     bool automatic = false,
+    bool restoredSession = false,
   }) async {
     final account = _authenticatedAccount;
     if (_busy ||
@@ -3470,6 +3863,7 @@ class ModeLauncherController extends ChangeNotifier {
         meta: <String, Object?>{
           'area': area.areaName,
           'automatic': automatic,
+          'restoredSession': restoredSession,
         },
       );
       notifyListeners();
@@ -3484,6 +3878,7 @@ class ModeLauncherController extends ChangeNotifier {
         account: account,
         area: resolvedArea,
         reduceMotion: reduceMotion,
+        restoredSession: restoredSession,
       );
       if (_disposed || !context.mounted) {
         _busy = false;
@@ -3491,10 +3886,22 @@ class ModeLauncherController extends ChangeNotifier {
         return const ModeLauncherSubmitResult();
       }
       if (verifiedArea == null) {
-        _append(
-          TerminalLineType.error,
-          '[ERROR] 선택한 업무 지역 정보를 확인하지 못했습니다.',
-        );
+        if (!restoredSession) {
+          _append(
+            TerminalLineType.error,
+            '[ERROR] 선택한 업무 지역 정보를 확인하지 못했습니다.',
+          );
+        } else {
+          LauncherDiagnostics.record(
+            'launcher_work_area_verification_interaction_required',
+            meta: <String, Object?>{
+              'area': resolvedArea.areaName,
+              'division': resolvedArea.division,
+            },
+          );
+          await _appendWorkAreaListPaced(reduceMotion);
+          _append(TerminalLineType.system, _workAreaSelectionMessage);
+        }
         _errorSerial += 1;
         notifyListeners();
         return const ModeLauncherSubmitResult();
@@ -3519,6 +3926,7 @@ class ModeLauncherController extends ChangeNotifier {
         'firebaseWrites': 0,
         'dataSource': resolvedArea.dataSource,
         'automatic': automatic,
+        'restoredSession': restoredSession,
       },
     );
 
@@ -3527,6 +3935,7 @@ class ModeLauncherController extends ChangeNotifier {
         context,
         account: account,
         reduceMotion: reduceMotion,
+        restoredSession: restoredSession,
       );
     }
 
@@ -3543,13 +3952,44 @@ class ModeLauncherController extends ChangeNotifier {
     }
 
     _loginStage = TerminalLoginStage.modeSelection;
-    await _appendSupportedModeListPaced(reduceMotion);
+    if (restoredSession && _selectedMode != null) {
+      AppModeDefinition? restoredMode;
+      for (final candidate in _supportedModes) {
+        if (candidate.id == _selectedMode!.id) {
+          restoredMode = candidate;
+          break;
+        }
+      }
+      if (restoredMode != null) {
+        LauncherDiagnostics.record(
+          'auth_restore_saved_mode_auto_selected',
+          meta: <String, Object?>{
+            'area': resolvedArea.areaName,
+            'mode': restoredMode.id,
+          },
+        );
+        return selectMode(
+          context,
+          mode: restoredMode,
+          reduceMotion: reduceMotion,
+          automatic: true,
+          restoredSession: true,
+        );
+      }
+      _selectedMode = null;
+    }
+
+    if (!restoredSession) {
+      await _appendSupportedModeListPaced(reduceMotion);
+    }
     if (_supportedModes.length == 1) {
       final mode = _supportedModes.first;
-      _append(
-        TerminalLineType.system,
-        '${resolvedArea.areaName}의 지원 업무 모드를 자동으로 적용합니다.',
-      );
+      if (!restoredSession) {
+        _append(
+          TerminalLineType.system,
+          '${resolvedArea.areaName}의 지원 업무 모드를 자동으로 적용합니다.',
+        );
+      }
       LauncherDiagnostics.record(
         'auth_area_single_mode_auto_selected',
         meta: <String, Object?>{
@@ -3557,6 +3997,7 @@ class ModeLauncherController extends ChangeNotifier {
           'mode': mode.id,
           'firebaseReads': 0,
           'firebaseWrites': 0,
+          'restoredSession': restoredSession,
         },
       );
       return selectMode(
@@ -3564,9 +4005,13 @@ class ModeLauncherController extends ChangeNotifier {
         mode: mode,
         reduceMotion: reduceMotion,
         automatic: true,
+        restoredSession: restoredSession,
       );
     }
 
+    if (restoredSession) {
+      await _appendSupportedModeListPaced(reduceMotion);
+    }
     _append(
       TerminalLineType.system,
       '${resolvedArea.areaName}의 업무 모드 선택이 필요합니다.',
@@ -3576,6 +4021,7 @@ class ModeLauncherController extends ChangeNotifier {
       meta: <String, Object?>{
         'area': resolvedArea.areaName,
         'supportedModeCount': _supportedModes.length,
+        'source': restoredSession ? 'restored_session' : 'work_area_selection',
       },
     );
     notifyListeners();
@@ -3587,6 +4033,7 @@ class ModeLauncherController extends ChangeNotifier {
     required AppModeDefinition mode,
     required bool reduceMotion,
     bool automatic = false,
+    bool restoredSession = false,
   }) async {
     final account = _authenticatedAccount;
     if (_busy ||
@@ -3610,6 +4057,7 @@ class ModeLauncherController extends ChangeNotifier {
         meta: <String, Object?>{
           'mode': mode.id,
           'automatic': automatic,
+          'restoredSession': restoredSession,
         },
       );
       notifyListeners();
@@ -3623,6 +4071,7 @@ class ModeLauncherController extends ChangeNotifier {
         'mode': selected.id,
         'area': _selectedWorkArea?.areaName ?? '',
         'automatic': automatic,
+        'restoredSession': restoredSession,
       },
     );
     return _activateSelectedMode(
@@ -3630,6 +4079,7 @@ class ModeLauncherController extends ChangeNotifier {
       account: account,
       mode: selected,
       reduceMotion: reduceMotion,
+      restoredSession: restoredSession,
     );
   }
 

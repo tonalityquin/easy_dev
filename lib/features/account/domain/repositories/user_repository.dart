@@ -17,6 +17,12 @@ abstract class UserRepository {
   Future<void> areaPickerCurrentArea(String phone, String area, String currentArea);
   Future<void> updateLogOutUserStatus(String phone, String area, {bool? isWorking, bool? isSaved});
   Future<void> updateWorkingUserStatus(String phone, String area, {bool? isWorking, bool? isSaved});
+  Future<void> updateLoginSession({
+    required String userId,
+    required bool isSaved,
+    String? currentArea,
+    String? selectedArea,
+  });
 
   Future<void> setUserActiveStatus(String userId, {required bool isActive});
 

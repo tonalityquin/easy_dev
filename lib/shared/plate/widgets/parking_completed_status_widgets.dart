@@ -38,7 +38,7 @@ Future<DeveloperOperationTrace> traceParkingStatusSectorSummary({
     context: context,
     title: '$statusTitle · $plateNumber',
     initialMessage: '$statusTitle 세션을 준비하고 있습니다.',
-    developerModeMessage: '개발자 모드 ON: 상태 처리 전체 로그를 누적하고 복사할 수 있습니다.',
+    developerModeMessage: '개발자 모드 ON: 상태 처리 전체 로그를 누적하고 Status Dialog에서 debugPrint 코드로 복사할 수 있습니다.',
     standardModeMessage: '개발자 모드 OFF: 상태 처리 로그를 콘솔에 기록합니다.',
     useCommonUi: true,
     showDialogImmediately: false,
@@ -58,7 +58,7 @@ Future<DeveloperOperationTrace> traceParkingStatusSectorSummary({
     progress: .14,
   );
   trace.log(
-    'status_information_architecture=deduplicated summary=plate_status_sector management=left_rail railDesign=common_operations railMetricsSource=CommonSideRailMetrics management_distribution=visible_actions_equal_fill location=parking_guidance_map_and_path billing=compact_single_row memo=conditional footer=status_change_only',
+    'status_information_architecture=deduplicated summary=plate_status_sector management=left_rail railDesign=input_plate_unified railMetricsSource=CommonSideRailMetrics management_distribution=stacked_list location=parking_guidance_map_and_path billing=compact_single_row memo=conditional footer=status_change_only',
     progress: .16,
   );
   return trace;
@@ -1193,7 +1193,7 @@ Future<DeveloperOperationTrace> traceParkingStatusLoadingSession({
     context: context,
     title: '$statusTitle · $plateNumber',
     initialMessage: '$statusTitle 세션을 준비하고 있습니다.',
-    developerModeMessage: '개발자 모드 ON: 상태 처리 전체 로그를 누적하고 복사할 수 있습니다.',
+    developerModeMessage: '개발자 모드 ON: 상태 처리 전체 로그를 누적하고 Status Dialog에서 debugPrint 코드로 복사할 수 있습니다.',
     standardModeMessage: '개발자 모드 OFF: 상태 처리 로그를 콘솔에 기록합니다.',
     useCommonUi: true,
     showDialogImmediately: false,
@@ -2505,7 +2505,6 @@ class ParkingStatusManagementRail extends StatefulWidget {
 
 class _ParkingStatusManagementRailState
     extends State<ParkingStatusManagementRail> {
-  final ScrollController _scrollController = ScrollController();
   String? _lastLayoutSignature;
 
   String get _debugTarget {
@@ -2514,218 +2513,86 @@ class _ParkingStatusManagementRailState
   }
 
   @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final media = MediaQuery.maybeOf(context);
-    final reduceMotion = media?.disableAnimations ?? false;
-    final adaptive = ParkingStatusAdaptiveLayout.maybeOf(context);
     final textScale = media?.textScaler.scale(1.0) ?? 1.0;
-    final railMetrics = CommonSideRailMetrics.resolve(
-      dockHeight: adaptive?.dockHeight ?? media?.size.height ?? 720.0,
-      textScale: textScale,
-    );
-    final compact = railMetrics.compact;
-    final minimumButtonExtent =
-        adaptive?.managementButtonHeight ?? railMetrics.minimumButtonExtent;
-    final actionInsetHorizontal = railMetrics.actionInsetHorizontal;
-    final actionInsetVertical = railMetrics.actionInsetVertical;
-    final variantName = railMetrics.variantName;
-
-    Widget actionButton(
-      ParkingStatusManagementAction action, {
-      required double extent,
-    }) {
-      return KeyedSubtree(
-        key: action.anchorKey,
-        child: AnimatedSwitcher(
-          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-          switchInCurve: CommonUiMotion.standard,
-          switchOutCurve: CommonUiMotion.standard,
-          transitionBuilder: (child, animation) {
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(-.06, 0),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
-              ),
-            );
-          },
-          child: _ParkingStatusManagementRailButton(
-            key: ValueKey<String>(action.stableSlotKey),
-            action: action,
-            debugTarget: _debugTarget,
-            compact: compact,
-            extent: extent,
-          ),
-        ),
-      );
-    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final railHeight = constraints.maxHeight.isFinite
             ? constraints.maxHeight
-            : adaptive?.dockHeight ?? 720.0;
+            : media?.size.height ?? 720.0;
         final railWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
-            : adaptive?.managementRailWidth ?? 52.0;
+            : 52.0;
+        final metrics = CommonSideRailMetrics.resolve(
+          dockHeight: railHeight,
+          textScale: textScale,
+        );
+        final gap = metrics.ultra ? 4.0 : 6.0;
         final actionCount = widget.actions.length;
         final enabledCount =
             widget.actions.where((action) => action.enabled).length;
+        final visualLabels =
+            widget.actions.map((action) => action.visualLabel).join('/');
         final actionStateSignature = widget.actions
             .map(
               (action) =>
-                  '${action.debugAction}:${action.visualLabel}:${action.linkedGroup}:${action.linkedReverse}',
+                  '${action.debugAction}:${action.visualLabel}:${action.enabled}:${action.linkedGroup}:${action.linkedReverse}',
             )
             .join(',');
-        final visualLabels =
-            widget.actions.map((action) => action.visualLabel).join('/');
-        final linkedGroups = widget.actions
-            .map((action) => action.linkedGroup.trim())
-            .where((group) => group.isNotEmpty)
-            .toSet()
-            .join('/');
-        final availableListHeight = math.max(
-          0.0,
-          railHeight - railMetrics.outerVertical * 2 - railMetrics.headerHeight - railMetrics.headerGap,
-        );
-        final equalSlotExtent = actionCount == 0
-            ? 0.0
-            : availableListHeight / actionCount;
-        final minimumSlotExtent =
-            minimumButtonExtent + actionInsetVertical * 2;
-        final scrollable =
-            actionCount > 0 && equalSlotExtent + .5 < minimumSlotExtent;
-        final distributedButtonExtent = scrollable
-            ? minimumButtonExtent
-            : math.max(0.0, equalSlotExtent - actionInsetVertical * 2);
-        final distribution = actionCount == 0
-            ? 'empty'
-            : scrollable
-                ? 'scroll_fallback'
-                : 'equal_fill';
         final signature = [
-          variantName,
+          metrics.variantName,
           railWidth.toStringAsFixed(0),
           railHeight.toStringAsFixed(0),
           actionCount,
           enabledCount,
-          distribution,
-          equalSlotExtent.toStringAsFixed(1),
-          distributedButtonExtent.toStringAsFixed(1),
+          metrics.minimumButtonExtent.toStringAsFixed(1),
+          gap.toStringAsFixed(1),
           actionStateSignature,
         ].join('|');
+
         if (_lastLayoutSignature != signature) {
           _lastLayoutSignature = signature;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             parkingStatusTraceLog(
               context,
-              'vehicle_management_rail=layout railDesign=common_operations railMetricsSource=CommonSideRailMetrics target=$_debugTarget position=left width=${railWidth.toStringAsFixed(0)} height=${railHeight.toStringAsFixed(0)} visible_actions=$actionCount enabled_actions=$enabledCount distribution=$distribution basis=visible_actions label_policy=two_chars labels=$visualLabels linked_groups=${linkedGroups.isEmpty ? "none" : linkedGroups} scroll=$scrollable slot_extent=${equalSlotExtent.toStringAsFixed(1)} button_extent=${distributedButtonExtent.toStringAsFixed(1)} inset_x=${actionInsetHorizontal.toStringAsFixed(0)} inset_y=${actionInsetVertical.toStringAsFixed(0)} variant=$variantName',
+              'vehicle_management_rail=layout railDesign=input_plate_unified railMetricsSource=CommonSideRailMetrics target=$_debugTarget position=left width=${railWidth.toStringAsFixed(0)} height=${railHeight.toStringAsFixed(0)} visible_actions=$actionCount enabled_actions=$enabledCount distribution=stacked_list scroll=clamping button_extent=${metrics.minimumButtonExtent.toStringAsFixed(1)} gap=${gap.toStringAsFixed(1)} inset_x=${metrics.actionInsetHorizontal.toStringAsFixed(0)} inset_y=${metrics.actionInsetVertical.toStringAsFixed(0)} variant=${metrics.variantName} labels=$visualLabels motion=common_side_rail_selection',
             );
           });
         }
 
-        final actionArea = actionCount == 0
-            ? const SizedBox.expand()
-            : scrollable
-                ? Scrollbar(
-                    controller: _scrollController,
-                    thumbVisibility: true,
-                    thickness: 2,
-                    radius: const Radius.circular(2),
-                    child: SingleChildScrollView(
-                      controller: _scrollController,
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 3),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (final action in widget.actions)
-                              Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: actionInsetHorizontal,
-                                  vertical: actionInsetVertical,
-                                ),
-                                child: actionButton(
-                                  action,
-                                  extent: minimumButtonExtent,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  )
-                : Column(
-                    key: ValueKey<String>(
-                      'equal_fill|$variantName|$actionCount',
-                    ),
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final action in widget.actions)
-                        Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: actionInsetHorizontal,
-                              vertical: actionInsetVertical,
-                            ),
-                            child: actionButton(
-                              action,
-                              extent: distributedButtonExtent,
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
+        final entries = <Widget>[];
+        for (var i = 0; i < widget.actions.length; i++) {
+          if (i > 0) {
+            entries.add(SizedBox(height: gap));
+          }
+          final action = widget.actions[i];
+          entries.add(
+            KeyedSubtree(
+              key: action.anchorKey,
+              child: _ParkingStatusManagementRailButton(
+                key: ValueKey<String>(action.stableSlotKey),
+                action: action,
+                debugTarget: _debugTarget,
+                compact: metrics.compact,
+                extent: metrics.minimumButtonExtent,
+              ),
+            ),
+          );
+        }
 
         return CommonSideRailSurface(
           title: widget.title,
-          metrics: railMetrics,
-          child: AnimatedSwitcher(
-            duration:
-                reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeOutCubic,
-            layoutBuilder: (currentChild, previousChildren) {
-              return Stack(
-                fit: StackFit.expand,
-                alignment: Alignment.center,
-                children: [
-                  ...previousChildren,
-                  if (currentChild != null) currentChild,
-                ],
-              );
-            },
-            transitionBuilder: (child, animation) {
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, -.025),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
-                ),
-              );
-            },
-            child: KeyedSubtree(
-              key: ValueKey<String>(
-                '$distribution|$variantName|$actionCount',
-              ),
-              child: actionArea,
+          metrics: metrics,
+          child: ListView(
+            physics: const ClampingScrollPhysics(),
+            padding: EdgeInsets.symmetric(
+              horizontal: metrics.actionInsetHorizontal,
+              vertical: metrics.actionInsetVertical,
             ),
+            children: entries,
           ),
         );
       },
@@ -3951,15 +3818,27 @@ class _ParkingStatusManagementRailButtonState
     final linkedGroup = widget.action.linkedGroup.trim();
     parkingStatusTraceLog(
       context,
-      'vehicle_management_rail=interaction action=$actionName visual_label=${widget.action.visualLabel} full_label=${jsonEncode(widget.action.label)} linked_group=${linkedGroup.isEmpty ? "none" : linkedGroup} linked_reverse=${widget.action.linkedReverse} target=${widget.debugTarget} railDesign=common_operations',
+      'vehicle_management_rail=interaction phase=start action=$actionName visual_label=${widget.action.visualLabel} full_label=${jsonEncode(widget.action.label)} linked_group=${linkedGroup.isEmpty ? "none" : linkedGroup} linked_reverse=${widget.action.linkedReverse} destructive=${widget.action.destructive} emphasized=${widget.action.emphasized} target=${widget.debugTarget} railDesign=input_plate_unified',
     );
-    if (widget.action.destructive) {
-      await HapticFeedback.mediumImpact();
-    } else {
-      await HapticFeedback.selectionClick();
-    }
     try {
       await widget.action.onPressed();
+      if (!mounted) return;
+      parkingStatusTraceLog(
+        context,
+        'vehicle_management_rail=interaction phase=complete action=$actionName target=${widget.debugTarget} railDesign=input_plate_unified',
+      );
+    } catch (error, stackTrace) {
+      if (mounted) {
+        parkingStatusTraceLog(
+          context,
+          'vehicle_management_rail=interaction phase=error action=$actionName target=${widget.debugTarget} error=${jsonEncode(error.toString())} stack=${jsonEncode(stackTrace.toString())}',
+        );
+      } else {
+        debugPrint(
+          'vehicle_management_rail=interaction phase=error action=$actionName target=${widget.debugTarget} error=$error stack=$stackTrace',
+        );
+      }
+      rethrow;
     } finally {
       if (mounted) {
         setState(() {
@@ -3971,156 +3850,27 @@ class _ParkingStatusManagementRailButtonState
 
   @override
   Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final enabled = widget.action.enabled && !_busy;
-    final linked = widget.action.linkedGroup.trim().isNotEmpty;
-    final foreground = widget.action.destructive
-        ? tokens.danger
-        : linked && enabled
-            ? tokens.accent
-            : widget.action.emphasized && enabled
-                ? tokens.accent
-                : enabled
-                    ? tokens.iconPrimary
-                    : tokens.iconDisabled;
-    final textColor = widget.action.destructive
-        ? tokens.danger
-        : linked && enabled
-            ? tokens.accent
-            : widget.action.emphasized && enabled
-                ? tokens.accent
-                : enabled
-                    ? tokens.textPrimary
-                    : tokens.textDisabled;
-    final background = widget.action.destructive
-        ? tokens.dangerContainer.withOpacity(enabled ? .46 : .22)
-        : linked && enabled
-            ? tokens.accentContainer.withOpacity(
-                widget.action.emphasized
-                    ? .68
-                    : widget.action.linkedReverse
-                        ? .38
-                        : .48,
-              )
-            : widget.action.emphasized && enabled
-                ? tokens.accentContainer.withOpacity(.62)
-                : enabled
-                    ? tokens.surfaceRaised
-                    : tokens.surfaceDisabled;
-    final pressedBackground = widget.action.destructive
-        ? tokens.dangerContainer.withOpacity(enabled ? .56 : .22)
-        : linked && enabled
-            ? tokens.accentContainer.withOpacity(
-                widget.action.emphasized
-                    ? .88
-                    : widget.action.linkedReverse
-                        ? .64
-                        : .72,
-              )
-            : widget.action.emphasized && enabled
-                ? tokens.accentContainer.withOpacity(.86)
-                : enabled
-                    ? tokens.accentContainer.withOpacity(.72)
-                    : tokens.surfaceDisabled;
-    final border = widget.action.destructive
-        ? tokens.danger.withOpacity(enabled ? .34 : .16)
-        : linked && enabled
-            ? tokens.accent.withOpacity(
-                widget.action.emphasized
-                    ? .44
-                    : widget.action.linkedReverse
-                        ? .34
-                        : .38,
-              )
-            : widget.action.emphasized && enabled
-                ? tokens.accent.withOpacity(.38)
-                : tokens.borderSubtle;
-    final pressedBorder = widget.action.destructive
-        ? tokens.danger.withOpacity(enabled ? .5 : .16)
-        : linked && enabled
-            ? tokens.accent.withOpacity(
-                widget.action.emphasized
-                    ? .62
-                    : widget.action.linkedReverse
-                        ? .52
-                        : .56,
-              )
-            : widget.action.emphasized && enabled
-                ? tokens.accent.withOpacity(.58)
-                : enabled
-                    ? tokens.accent.withOpacity(.42)
-                    : tokens.borderSubtle;
 
-    Widget iconChild;
-    if (_busy) {
-      iconChild = SizedBox(
-        key: const ValueKey<String>('busy'),
-        width: 18,
-        height: 18,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: foreground,
-        ),
-      );
-    } else {
-      iconChild = SizedBox(
-        key: ValueKey<String>(
-          'icon:${widget.action.icon.codePoint}:${widget.action.linkedReverse}',
-        ),
-        width: 26,
-        height: 23,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            Icon(
-              widget.action.icon,
-              size: widget.compact ? 19 : 20,
-              color: foreground,
-            ),
-            if (linked)
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: AnimatedRotation(
-                  duration: reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  turns: widget.action.linkedReverse ? .5 : 0,
-                  child: Icon(
-                    Icons.sync_alt_rounded,
-                    size: 10,
-                    color: foreground,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      );
-    }
-
-    return CommonSideRailActionButton(
-      semanticLabel: widget.action.label,
-      visualLabel: widget.action.visualLabel,
-      selected: false,
-      enabled: enabled,
-      compact: widget.compact,
-      extent: widget.extent,
-      onTap: () {
-        unawaited(_invoke());
-      },
-      iconChild: iconChild,
-      tooltip: widget.action.label,
-      visuals: CommonSideRailButtonVisuals(
-        foreground: foreground,
-        textColor: textColor,
-        background: background,
-        pressedBackground: pressedBackground,
-        border: border,
-        pressedBorder: pressedBorder,
+    return AnimatedOpacity(
+      duration:
+          reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      opacity: enabled ? 1 : .42,
+      child: CommonSideRailActionButton(
+        semanticLabel: widget.action.label,
+        visualLabel: widget.action.visualLabel,
+        icon: widget.action.icon,
+        selected: false,
+        enabled: enabled,
+        compact: widget.compact,
+        extent: widget.extent,
+        onTap: () {
+          unawaited(_invoke());
+        },
+        tooltip: widget.action.label,
       ),
     );
   }

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import '../../features/community/page/community_stub_page.dart';
 import '../../features/community/page/faq_page.dart';
@@ -17,6 +20,8 @@ import '../../features/novel/presentation/novel_mobile_writing_page.dart';
 import '../../features/sprint/pages/sprint_mode_loading_page.dart';
 import '../../features/personal/pages/personal_page.dart';
 import '../terminal/presentation/parkinworkin_terminal_screen.dart';
+import '../utils/status_dialog.dart';
+import '../../features/selector/application/dev_auth.dart';
 import '../../features/launcher/page/power_boot_screen.dart';
 import '../../features/tablet/pages/tablet_page.dart';
 import '../../shared/page/pages/double/double_type_page.dart';
@@ -138,15 +143,10 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.tripleLogin: _buildModeLauncherPage,
   AppRoutes.minorLogin: _buildModeLauncherPage,
   AppRoutes.practiceSpaceLab: (context) => const PracticeSpaceLabScreen(),
-  AppRoutes.headquarterCommute: (context) => const HeadquarterCommuteInScreen(),
-  AppRoutes.doubleCommute: (context) => const DoubleCommuteInScreen(),
-  AppRoutes.singleCommute: (context) => const SingleCommuteInScreen(),
   AppRoutes.singleInside: (context) => const CommuteDestinationCinematicEntry(
         routeName: AppRoutes.singleInside,
         child: SingleInsideScreen(),
       ),
-  AppRoutes.tripleCommute: (context) => const TripleCommuteInScreen(),
-  AppRoutes.minorCommute: (context) => const MinorCommuteInScreen(),
   AppRoutes.headquarterPage: (context) =>
       const CommuteDestinationCinematicEntry(
         routeName: AppRoutes.headquarterPage,
@@ -197,3 +197,269 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.devStub: (context) => const DevStubPage(),
   AppRoutes.noteSystem: (context) => const NovelMobileWritingPage(),
 };
+
+WidgetBuilder? resolveCommuteRouteBuilder(String routeName) {
+  switch (routeName) {
+    case AppRoutes.headquarterCommute:
+      return (context) => const HeadquarterCommuteInScreen();
+    case AppRoutes.singleCommute:
+      return (context) => const SingleCommuteInScreen();
+    case AppRoutes.doubleCommute:
+      return (context) => const DoubleCommuteInScreen();
+    case AppRoutes.tripleCommute:
+      return (context) => const TripleCommuteInScreen();
+    case AppRoutes.minorCommute:
+      return (context) => const MinorCommuteInScreen();
+    default:
+      return null;
+  }
+}
+
+WidgetBuilder? resolveAppRouteBuilder(String routeName) {
+  return appRoutes[routeName] ?? resolveCommuteRouteBuilder(routeName);
+}
+
+String appRouteResolverSource(String routeName) {
+  if (appRoutes.containsKey(routeName)) {
+    return 'app_routes';
+  }
+  if (resolveCommuteRouteBuilder(routeName) != null) {
+    return 'commute_resolver';
+  }
+  return 'none';
+}
+
+Route<dynamic>? onGenerateAppRoute(RouteSettings settings) {
+  final routeName = settings.name?.trim() ?? '';
+  if (routeName.isEmpty) return null;
+
+  final builder = resolveCommuteRouteBuilder(routeName);
+  if (builder == null) return null;
+
+  final reduceMotion = WidgetsBinding
+      .instance.platformDispatcher.accessibilityFeatures.disableAnimations;
+  final transitionDuration =
+      reduceMotion ? Duration.zero : const Duration(milliseconds: 620);
+  final reverseTransitionDuration =
+      reduceMotion ? Duration.zero : const Duration(milliseconds: 320);
+
+  debugPrint(
+    '[COMMUTE-MONITOR][${DateTime.now().toIso8601String()}] route create route=$routeName reduceMotion=$reduceMotion transitionMs=${transitionDuration.inMilliseconds}',
+  );
+
+  return PageRouteBuilder<dynamic>(
+    settings: settings,
+    opaque: true,
+    barrierDismissible: false,
+    transitionDuration: transitionDuration,
+    reverseTransitionDuration: reverseTransitionDuration,
+    pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return _CommuteMonitorPowerOnTransition(
+        animation: animation,
+        routeName: routeName,
+        reduceMotion: reduceMotion,
+        transitionDuration: transitionDuration,
+        child: child,
+      );
+    },
+  );
+}
+
+class _CommuteMonitorPowerOnTransition extends StatefulWidget {
+  const _CommuteMonitorPowerOnTransition({
+    required this.animation,
+    required this.routeName,
+    required this.reduceMotion,
+    required this.transitionDuration,
+    required this.child,
+  });
+
+  final Animation<double> animation;
+  final String routeName;
+  final bool reduceMotion;
+  final Duration transitionDuration;
+  final Widget child;
+
+  @override
+  State<_CommuteMonitorPowerOnTransition> createState() =>
+      _CommuteMonitorPowerOnTransitionState();
+}
+
+class _CommuteMonitorPowerOnTransitionState
+    extends State<_CommuteMonitorPowerOnTransition> {
+  static const Color _beamColor = Color(0xFF8AE234);
+  final List<String> _debugLines = <String>[];
+  bool _completionHandled = false;
+  bool _statusDialogRequested = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.animation.addStatusListener(_handleAnimationStatus);
+    _log(
+      'start route=${widget.routeName} reduceMotion=${widget.reduceMotion} transitionMs=${widget.transitionDuration.inMilliseconds}',
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.reduceMotion || widget.animation.isCompleted) {
+        _handleCompleted();
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _CommuteMonitorPowerOnTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.animation != widget.animation) {
+      oldWidget.animation.removeStatusListener(_handleAnimationStatus);
+      widget.animation.addStatusListener(_handleAnimationStatus);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.animation.removeStatusListener(_handleAnimationStatus);
+    super.dispose();
+  }
+
+  void _handleAnimationStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed) {
+      _handleCompleted();
+    }
+  }
+
+  void _handleCompleted() {
+    if (_completionHandled) return;
+    _completionHandled = true;
+    _log(
+      'complete route=${widget.routeName} reduceMotion=${widget.reduceMotion} horizontalSlide=false monitorPowerOn=true',
+    );
+    unawaited(_showDeveloperStatusDialog());
+  }
+
+  void _log(String message) {
+    final line =
+        '[COMMUTE-MONITOR][${DateTime.now().toIso8601String()}] $message';
+    _debugLines.add(line);
+    debugPrint(line);
+  }
+
+  Future<void> _showDeveloperStatusDialog() async {
+    if (_statusDialogRequested) return;
+    _statusDialogRequested = true;
+
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled || !mounted) return;
+
+    final lines = List<String>.from(_debugLines);
+    final description = lines.join('\n');
+    final copyText = lines
+        .map((line) => 'debugPrint(${jsonEncode(line)});')
+        .join('\n');
+
+    await StatusDialog.showSuccess(
+      context,
+      title: '출근 화면 전환 디버그',
+      description: description,
+      copyText: copyText,
+      copyButtonLabel: 'debugPrint 코드 복사',
+      visibleDuration: Duration.zero,
+      awaitManualClose: true,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.reduceMotion) {
+      return widget.child;
+    }
+
+    return AnimatedBuilder(
+      animation: widget.animation,
+      child: widget.child,
+      builder: (context, child) {
+        final value = widget.animation.value.clamp(0.0, 1.0).toDouble();
+        final horizontal = Curves.easeOutCubic.transform(
+          (value / 0.38).clamp(0.0, 1.0).toDouble(),
+        );
+        final vertical = Curves.easeOutCubic.transform(
+          ((value - 0.18) / 0.50).clamp(0.0, 1.0).toDouble(),
+        );
+        final contentOpacity = Curves.easeOutCubic.transform(
+          ((value - 0.48) / 0.52).clamp(0.0, 1.0).toDouble(),
+        );
+        final beamOpacity = value < 0.58
+            ? (1 - ((value - 0.24) / 0.34).clamp(0.0, 1.0)).toDouble()
+            : 0.0;
+        final glowOpacity = value < 0.68
+            ? (1 - ((value - 0.20) / 0.48).clamp(0.0, 1.0)).toDouble()
+            : 0.0;
+        final settleScale = 0.992 + (0.008 * contentOpacity);
+
+        return ColoredBox(
+          color: Colors.black,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth.isFinite
+                  ? constraints.maxWidth
+                  : MediaQuery.sizeOf(context).width;
+
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IgnorePointer(
+                    ignoring: widget.animation.status != AnimationStatus.completed,
+                    child: Transform.scale(
+                      scaleX: horizontal < 0.012 ? 0.012 : horizontal,
+                      scaleY: vertical < 0.004 ? 0.004 : vertical,
+                      alignment: Alignment.center,
+                      child: Opacity(
+                        opacity: contentOpacity,
+                        child: Transform.scale(
+                          scale: settleScale,
+                          alignment: Alignment.center,
+                          child: child,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IgnorePointer(
+                    child: Opacity(
+                      opacity: glowOpacity * 0.72,
+                      child: Container(
+                        width: width * horizontal,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: _beamColor.withOpacity(0.14),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x998AE234),
+                              blurRadius: 24,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  IgnorePointer(
+                    child: Opacity(
+                      opacity: beamOpacity,
+                      child: Container(
+                        width: width * horizontal,
+                        height: 2,
+                        color: _beamColor,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+

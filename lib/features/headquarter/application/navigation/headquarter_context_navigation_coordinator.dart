@@ -178,7 +178,16 @@ class HeadquarterContextNavigationCoordinator {
 
       if (snapshotArea.isHeadquarter) {
         final routeName = AppRoutes.headquarterCommute;
-        final builder = appRoutes[routeName];
+        trace.log(
+          'route_resolve_start route=$routeName targetArea=${snapshotArea.name} targetMode=none isHeadquarter=true',
+          progress: 0.36,
+        );
+        final builder = resolveAppRouteBuilder(routeName);
+        final resolverSource = appRouteResolverSource(routeName);
+        trace.log(
+          'route_resolve_complete route=$routeName resolver=$resolverSource builderFound=${builder != null} targetArea=${snapshotArea.name} targetMode=none isHeadquarter=true',
+          progress: 0.4,
+        );
         if (builder == null) {
           await fail('이동할 본사 화면을 찾을 수 없습니다.');
           return;
@@ -255,6 +264,12 @@ class HeadquarterContextNavigationCoordinator {
           'local_context_applied mode=none area=${snapshotArea.name} isHeadquarter=true homeArea=$homeArea ttsMode=${sessionResult.mode} persistMode=false storedModeFallback=false publishMode=false route=$routeName firebaseRead=0 firebaseWrite=0',
           progress: 0.78,
         );
+        final reduceMotion =
+            MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+        trace.log(
+          'navigation_commit fromMode=${currentMode.isEmpty ? 'none' : currentMode} toMode=none fromArea=$currentArea toArea=${snapshotArea.name} route=$routeName resolver=$resolverSource animation=${reduceMotion ? 'none' : 'fade_slide_scale'} durationMs=${reduceMotion ? 0 : 320}',
+          progress: 0.96,
+        );
         await trace.succeed('SQLite 기준 본사 업무 지역 전환이 완료되었습니다.');
         if (!context.mounted) return;
         if (trace.developerMode) {
@@ -265,16 +280,16 @@ class HeadquarterContextNavigationCoordinator {
           );
         }
         if (!context.mounted) return;
-        final reduceMotion =
-            MediaQuery.maybeOf(context)?.disableAnimations ?? false;
         debugPrint(
-          '[HQ-CONTEXT-NAV] navigate source=$source fromMode=${currentMode.isEmpty ? 'none' : currentMode} fromArea=$currentArea toMode=none toArea=${snapshotArea.name} isHeadquarter=true modeIndependent=true persistMode=false publishMode=false storedModeFallback=false route=$routeName dataSource=sqlite firebaseRead=0 firebaseWrite=0 reduceMotion=$reduceMotion',
+          '[HQ-CONTEXT-NAV] navigate source=$source fromMode=${currentMode.isEmpty ? 'none' : currentMode} fromArea=$currentArea toMode=none toArea=${snapshotArea.name} isHeadquarter=true modeIndependent=true persistMode=false publishMode=false storedModeFallback=false route=$routeName resolver=$resolverSource dataSource=sqlite firebaseRead=0 firebaseWrite=0 reduceMotion=$reduceMotion animation=${reduceMotion ? 'none' : 'fade_slide_scale'} durationMs=${reduceMotion ? 0 : 320}',
         );
         Navigator.of(context).pushReplacement(
           _buildRoute(
             routeName: routeName,
             builder: builder,
             reduceMotion: reduceMotion,
+            duration: 320,
+            scale: true,
           ),
         );
         return;
@@ -300,8 +315,25 @@ class HeadquarterContextNavigationCoordinator {
         modeKey: targetMode,
         isHeadquarter: false,
       );
-      final builder = routeName == null ? null : appRoutes[routeName];
-      if (routeName == null || builder == null) {
+      trace.log(
+        'mode_transition_allowed from=${currentMode.isEmpty ? 'none' : currentMode} to=$targetMode policy=target_valid_only targetArea=${snapshotArea.name}',
+        progress: 0.34,
+      );
+      if (routeName == null) {
+        await fail('이동할 화면을 찾을 수 없습니다.');
+        return;
+      }
+      trace.log(
+        'route_resolve_start route=$routeName targetArea=${snapshotArea.name} targetMode=$targetMode isHeadquarter=false',
+        progress: 0.36,
+      );
+      final builder = resolveAppRouteBuilder(routeName);
+      final resolverSource = appRouteResolverSource(routeName);
+      trace.log(
+        'route_resolve_complete route=$routeName resolver=$resolverSource builderFound=${builder != null} targetArea=${snapshotArea.name} targetMode=$targetMode isHeadquarter=false',
+        progress: 0.4,
+      );
+      if (builder == null) {
         await fail('이동할 화면을 찾을 수 없습니다.');
         return;
       }
@@ -379,6 +411,12 @@ class HeadquarterContextNavigationCoordinator {
         progress: 0.78,
       );
 
+      final reduceMotion =
+          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+      trace.log(
+        'navigation_commit fromMode=${currentMode.isEmpty ? 'none' : currentMode} toMode=$targetMode fromArea=$currentArea toArea=${snapshotArea.name} route=$routeName resolver=$resolverSource animation=${reduceMotion ? 'none' : 'fade_slide_scale'} durationMs=${reduceMotion ? 0 : 320}',
+        progress: 0.96,
+      );
       await trace.succeed('SQLite 기준 업무 지역 전환과 TTS 재바인딩이 완료되었습니다.');
       if (!context.mounted) return;
       if (trace.developerMode) {
@@ -390,17 +428,16 @@ class HeadquarterContextNavigationCoordinator {
         );
       }
       if (!context.mounted) return;
-
-      final reduceMotion =
-          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
       debugPrint(
-        '[HQ-CONTEXT-NAV] navigate source=$source fromMode=${currentMode.isEmpty ? 'none' : currentMode} fromArea=$currentArea toMode=$targetMode toArea=${snapshotArea.name} isHeadquarter=false route=$routeName dataSource=sqlite firebaseRead=0 firebaseWrite=0 reduceMotion=$reduceMotion',
+        '[HQ-CONTEXT-NAV] navigate source=$source fromMode=${currentMode.isEmpty ? 'none' : currentMode} fromArea=$currentArea toMode=$targetMode toArea=${snapshotArea.name} isHeadquarter=false route=$routeName resolver=$resolverSource dataSource=sqlite firebaseRead=0 firebaseWrite=0 reduceMotion=$reduceMotion animation=${reduceMotion ? 'none' : 'fade_slide_scale'} durationMs=${reduceMotion ? 0 : 320}',
       );
       Navigator.of(context).pushReplacement(
         _buildRoute(
           routeName: routeName,
           builder: builder,
           reduceMotion: reduceMotion,
+          duration: 320,
+          scale: true,
         ),
       );
     } catch (error, stackTrace) {
@@ -427,7 +464,7 @@ class HeadquarterContextNavigationCoordinator {
       );
       return;
     }
-    final builder = appRoutes[AppRoutes.sprintModeLoading];
+    final builder = resolveAppRouteBuilder(AppRoutes.sprintModeLoading);
     if (builder == null) {
       showFailedSnackbar(
         context,

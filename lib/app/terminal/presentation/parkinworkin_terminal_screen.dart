@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../features/launcher/application/launcher_diagnostics.dart';
 import '../../../features/launcher/application/mode_launcher_controller.dart';
 import '../../../features/launcher/application/terminal_auth_coordinator.dart';
 import '../../auth/gmail_sender_auth.dart';
@@ -18,6 +19,7 @@ import '../../init/work_status_notification.dart';
 import '../../init/startup_tasks.dart';
 import '../../tutorial/tutorial/app_start_setup_specs.dart';
 import '../application/parkinworkin_terminal_diagnostics.dart';
+import '../application/terminal_output_pacing.dart';
 import '../application/terminal_output_playback_controller.dart';
 
 const Color _terminalBackground = Color(0xFF300A24);
@@ -33,6 +35,12 @@ const Color _terminalWarning = Color(0xFFFCE94F);
 const Duration _miniTerminalOpenDuration = Duration(milliseconds: 660);
 const Duration _miniTerminalCloseDuration = Duration(milliseconds: 410);
 const Duration _miniTerminalRouteDuration = Duration(milliseconds: 170);
+const Duration _automaticSessionReadyHoldDuration = Duration(milliseconds: 140);
+const Duration _interactiveReadyHoldDuration = Duration(milliseconds: 240);
+const Duration _activeSessionRestoreOpenDuration = Duration(milliseconds: 220);
+const Duration _activeSessionRestoreCloseDuration = Duration(milliseconds: 320);
+const Duration _activeSessionRestoreProgressSettleDuration = Duration(milliseconds: 260);
+const Duration _activeSessionRestoreCompleteHoldDuration = Duration(milliseconds: 280);
 
 enum ParkinWorkinTerminalContext {
   launcher,
@@ -44,6 +52,15 @@ enum _LauncherDialogPhase {
   preparing,
   opening,
   visible,
+  closing,
+}
+
+enum _ActiveWorkSessionRestorePhase {
+  idle,
+  opening,
+  restoring,
+  settling,
+  completing,
   closing,
 }
 
@@ -70,11 +87,12 @@ class ParkinWorkinTerminalScreen extends StatefulWidget {
 }
 
 class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   ModeLauncherController? _launcherController;
   TerminalSessionController? _workspaceController;
   late final TerminalOutputPlaybackController _playbackController;
   late final AnimationController _openController;
+  late final AnimationController _activeSessionRestoreController;
   final TextEditingController _promptController = TextEditingController();
   late final FocusNode _promptFocusNode;
   final ScrollController _scrollController = ScrollController();
@@ -86,6 +104,14 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   bool _launcherPresentationReady = false;
   bool _launcherNavigationFinalizing = false;
   _LauncherDialogPhase _launcherDialogPhase = _LauncherDialogPhase.closed;
+  _ActiveWorkSessionRestorePhase _activeSessionRestorePhase =
+      _ActiveWorkSessionRestorePhase.idle;
+  double _activeSessionRestoreProgress = 0;
+  String _activeSessionRestoreMessage = '기존 출근 세션을 확인하고 있습니다.';
+  String _activeSessionRestoreStep = 'idle';
+  String? _activeSessionRestoreTargetRoute;
+  bool _activeSessionRestoreVisible = false;
+  bool _activeSessionRestoreCompleted = false;
   ModeLauncherSubmitResult? _deferredLauncherResult;
   String _lastLauncherActivitySignature = '';
   Timer? _bottomLockTimer;
@@ -98,7 +124,8 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   bool get _exitInProgress =>
       _appExiting || (_isLauncher && _launcherController?.runningCommand == 'exit');
 
-  bool get _interactionLocked => _closing || _exitInProgress;
+  bool get _interactionLocked =>
+      _closing || _exitInProgress || _activeSessionRestoreVisible;
 
   String get _contextLabel => _isLauncher ? 'launcher' : widget.source;
 
@@ -175,6 +202,11 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       vsync: this,
       duration: const Duration(milliseconds: 920),
       reverseDuration: const Duration(milliseconds: 460),
+    );
+    _activeSessionRestoreController = AnimationController(
+      vsync: this,
+      duration: _activeSessionRestoreOpenDuration,
+      reverseDuration: _activeSessionRestoreCloseDuration,
     );
     _promptFocusNode = FocusNode(onKeyEvent: _handlePromptKeyEvent);
     _promptFocusNode.addListener(_handlePromptFocusChanged);
@@ -657,6 +689,272 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     }
   }
 
+  Future<String> _resolveActiveWorkSessionNavigationTarget(
+    String route, {
+    required String source,
+  }) async {
+    if (!_isLauncher ||
+        !_launcherController!.automaticSessionResumeCompleted ||
+        !mounted) {
+      return route;
+    }
+    final candidate =
+        await _launcherController!.hasActiveWorkSessionResumeCandidate(
+      launcherTargetRoute: route,
+    );
+    if (!mounted || !candidate) return route;
+    setState(() {
+      _activeSessionRestoreVisible = true;
+      _activeSessionRestorePhase = _ActiveWorkSessionRestorePhase.opening;
+      _activeSessionRestoreProgress = .08;
+      _activeSessionRestoreMessage = '기존 출근 세션을 확인하고 있습니다.';
+      _activeSessionRestoreStep = 'opening';
+      _activeSessionRestoreTargetRoute = route;
+      _activeSessionRestoreCompleted = false;
+    });
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_work_session_restore_open_started',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'source': source,
+        'launcherTargetRoute': route,
+        'durationMs': _reduceMotion
+            ? 0
+            : _activeSessionRestoreOpenDuration.inMilliseconds,
+      },
+    );
+    LauncherDiagnostics.record(
+      'launcher_work_session_restore_open_started',
+      meta: <String, Object?>{
+        'source': source,
+        'launcherTargetRoute': route,
+      },
+    );
+    if (_reduceMotion) {
+      _activeSessionRestoreController.value = 1;
+    } else {
+      await _activeSessionRestoreController.forward(from: 0);
+    }
+    if (!mounted) return route;
+    setState(() {
+      _activeSessionRestorePhase = _ActiveWorkSessionRestorePhase.restoring;
+      _activeSessionRestoreStep = 'restoring';
+    });
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_work_session_restore_open_completed',
+      context: _contextLabel,
+      meta: <String, Object?>{'launcherTargetRoute': route},
+    );
+    final result = await _launcherController!.prepareActiveWorkSessionResume(
+      context,
+      launcherTargetRoute: route,
+      onProgress: (progress, message, phase) {
+        ParkinWorkinTerminalDiagnostics.record(
+          'launcher_work_session_restore_progress',
+          context: _contextLabel,
+          meta: <String, Object?>{
+            'progress': (progress * 100).round(),
+            'phase': phase,
+            'launcherTargetRoute': route,
+          },
+        );
+        LauncherDiagnostics.record(
+          'launcher_work_session_restore_progress',
+          meta: <String, Object?>{
+            'progress': (progress * 100).round(),
+            'phase': phase,
+            'launcherTargetRoute': route,
+          },
+        );
+        if (!mounted) return;
+        setState(() {
+          _activeSessionRestoreProgress = progress.clamp(0.0, 1.0).toDouble();
+          _activeSessionRestoreMessage = message;
+          _activeSessionRestoreStep = phase;
+        });
+      },
+    );
+    if (!mounted) return route;
+    if (!result.shouldResume || result.targetRoute == null) {
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_work_session_restore_fallback',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'reason': result.reason,
+          'launcherTargetRoute': route,
+        },
+      );
+      await _closeActiveWorkSessionRestoreOverlay(completed: false);
+      return route;
+    }
+    setState(() {
+      _activeSessionRestorePhase = _ActiveWorkSessionRestorePhase.settling;
+      _activeSessionRestoreProgress = 1;
+      _activeSessionRestoreMessage = '기존 작업공간을 준비하고 있습니다.';
+      _activeSessionRestoreStep = 'progress_settle';
+      _activeSessionRestoreTargetRoute = result.targetRoute;
+      _activeSessionRestoreCompleted = false;
+    });
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_work_session_restore_progress_settle_started',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'workspaceTargetRoute': result.targetRoute,
+        'durationMs': _reduceMotion
+            ? 0
+            : _activeSessionRestoreProgressSettleDuration.inMilliseconds,
+      },
+    );
+    LauncherDiagnostics.record(
+      'launcher_work_session_restore_progress_settle_started',
+      meta: <String, Object?>{
+        'workspaceTargetRoute': result.targetRoute,
+        'durationMs': _reduceMotion
+            ? 0
+            : _activeSessionRestoreProgressSettleDuration.inMilliseconds,
+      },
+    );
+    if (!_reduceMotion) {
+      await Future<void>.delayed(_activeSessionRestoreProgressSettleDuration);
+    }
+    if (!mounted) return result.targetRoute!;
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_work_session_restore_progress_settle_completed',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'workspaceTargetRoute': result.targetRoute,
+        'progress': 100,
+      },
+    );
+    LauncherDiagnostics.record(
+      'launcher_work_session_restore_progress_settle_completed',
+      meta: <String, Object?>{
+        'workspaceTargetRoute': result.targetRoute,
+        'progress': 100,
+      },
+    );
+    setState(() {
+      _activeSessionRestorePhase = _ActiveWorkSessionRestorePhase.completing;
+      _activeSessionRestoreMessage = 'ParkinWorkin 작업공간으로 복귀합니다.';
+      _activeSessionRestoreStep = 'completion_hold';
+      _activeSessionRestoreCompleted = true;
+    });
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_work_session_restore_completed',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'workspaceTargetRoute': result.targetRoute,
+        'progressSettleMs': _reduceMotion
+            ? 0
+            : _activeSessionRestoreProgressSettleDuration.inMilliseconds,
+        'holdMs': _reduceMotion
+            ? 0
+            : _activeSessionRestoreCompleteHoldDuration.inMilliseconds,
+      },
+    );
+    LauncherDiagnostics.record(
+      'launcher_work_session_restore_completed',
+      meta: <String, Object?>{
+        'workspaceTargetRoute': result.targetRoute,
+        'progressSettleMs': _reduceMotion
+            ? 0
+            : _activeSessionRestoreProgressSettleDuration.inMilliseconds,
+        'holdMs': _reduceMotion
+            ? 0
+            : _activeSessionRestoreCompleteHoldDuration.inMilliseconds,
+      },
+    );
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_work_session_restore_completion_hold_started',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'workspaceTargetRoute': result.targetRoute,
+        'durationMs': _reduceMotion
+            ? 0
+            : _activeSessionRestoreCompleteHoldDuration.inMilliseconds,
+      },
+    );
+    LauncherDiagnostics.record(
+      'launcher_work_session_restore_completion_hold_started',
+      meta: <String, Object?>{
+        'workspaceTargetRoute': result.targetRoute,
+        'durationMs': _reduceMotion
+            ? 0
+            : _activeSessionRestoreCompleteHoldDuration.inMilliseconds,
+      },
+    );
+    if (!_reduceMotion) {
+      await Future<void>.delayed(_activeSessionRestoreCompleteHoldDuration);
+    }
+    if (!mounted) return result.targetRoute!;
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_work_session_restore_completion_hold_completed',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'workspaceTargetRoute': result.targetRoute,
+      },
+    );
+    LauncherDiagnostics.record(
+      'launcher_work_session_restore_completion_hold_completed',
+      meta: <String, Object?>{
+        'workspaceTargetRoute': result.targetRoute,
+      },
+    );
+    await _closeActiveWorkSessionRestoreOverlay(completed: true);
+    return result.targetRoute!;
+  }
+
+  Future<void> _closeActiveWorkSessionRestoreOverlay({
+    required bool completed,
+  }) async {
+    if (!_activeSessionRestoreVisible) return;
+    if (mounted) {
+      setState(() {
+        _activeSessionRestorePhase = _ActiveWorkSessionRestorePhase.closing;
+        _activeSessionRestoreStep = completed ? 'closing_completed' : 'closing_fallback';
+      });
+    }
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_work_session_restore_close_started',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'completed': completed,
+        'durationMs': _reduceMotion
+            ? 0
+            : _activeSessionRestoreCloseDuration.inMilliseconds,
+      },
+    );
+    if (_reduceMotion) {
+      _activeSessionRestoreController.value = 0;
+    } else {
+      await _activeSessionRestoreController.reverse();
+    }
+    if (!mounted) return;
+    setState(() {
+      _activeSessionRestoreVisible = false;
+      _activeSessionRestorePhase = _ActiveWorkSessionRestorePhase.idle;
+      _activeSessionRestoreProgress = 0;
+      _activeSessionRestoreMessage = '기존 출근 세션을 확인하고 있습니다.';
+      _activeSessionRestoreStep = 'idle';
+      _activeSessionRestoreCompleted = false;
+    });
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_work_session_restore_close_completed',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'completed': completed,
+        'workspaceTargetRoute': _activeSessionRestoreTargetRoute ?? '',
+      },
+    );
+    LauncherDiagnostics.record(
+      'launcher_work_session_restore_close_completed',
+      meta: <String, Object?>{
+        'completed': completed,
+        'workspaceTargetRoute': _activeSessionRestoreTargetRoute ?? '',
+      },
+    );
+  }
+
   Future<void> _finalizeLauncherAndNavigate(
     String route, {
     required String source,
@@ -699,11 +997,41 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         },
       );
       await WidgetsBinding.instance.endOfFrame;
+      final automaticResume =
+          _launcherController!.automaticSessionResumeCompleted;
+      final readyHold = automaticResume
+          ? _automaticSessionReadyHoldDuration
+          : _interactiveReadyHoldDuration;
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_ready_hold_started',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'source': source,
+          'authenticationSource':
+              _launcherController!.authenticationSourceLabel,
+          'automaticResume': automaticResume,
+          'durationMs': _reduceMotion ? 0 : readyHold.inMilliseconds,
+        },
+      );
       if (!_reduceMotion) {
-        await Future<void>.delayed(const Duration(milliseconds: 240));
+        await Future<void>.delayed(readyHold);
       }
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_ready_hold_completed',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'source': source,
+          'automaticResume': automaticResume,
+          'durationMs': _reduceMotion ? 0 : readyHold.inMilliseconds,
+        },
+      );
       if (!mounted || _interactionLocked) return;
-      await _closeLauncherAndNavigate(route);
+      final navigationRoute = await _resolveActiveWorkSessionNavigationTarget(
+        route,
+        source: source,
+      );
+      if (!mounted || _interactionLocked) return;
+      await _closeLauncherAndNavigate(navigationRoute);
     } finally {
       _launcherNavigationFinalizing = false;
     }
@@ -1249,6 +1577,20 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       'App exiting: $_exitInProgress',
       'Interaction locked: $_interactionLocked',
       if (_isLauncher)
+        'Authentication source: ${_launcherController!.authenticationSourceLabel}',
+      if (_isLauncher)
+        'Session restore attempted: ${_launcherController!.sessionRestoreAttempted}',
+      if (_isLauncher)
+        'Session restore succeeded: ${_launcherController!.sessionRestoreSucceeded}',
+      if (_isLauncher)
+        'Automatic session resume: ${_launcherController!.automaticSessionResumeCompleted}',
+      if (_isLauncher)
+        'Work context restored: ${_launcherController!.workContextRestored}',
+      if (_isLauncher)
+        'Application context ready: ${_launcherController!.applicationContextReady}',
+      if (_isLauncher)
+        'Ready hold: ${(_launcherController!.automaticSessionResumeCompleted ? _automaticSessionReadyHoldDuration : _interactiveReadyHoldDuration).inMilliseconds}ms',
+      if (_isLauncher)
         'Runtime context ready: ${_launcherController!.runtimeContextReady}',
       if (_isLauncher)
         'Terminal playback: ${_playbackController.busy ? 'ACTIVE' : 'IDLE'}',
@@ -1256,6 +1598,28 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         'Presentation ready: $_launcherPresentationReady',
       if (_isLauncher)
         'Navigation finalizing: $_launcherNavigationFinalizing',
+      if (_isLauncher)
+        'Active session restore phase: ${_activeSessionRestorePhase.name}',
+      if (_isLauncher)
+        'Active session restore progress: ${(_activeSessionRestoreProgress * 100).round()}%',
+      if (_isLauncher)
+        'Active session restore step: $_activeSessionRestoreStep',
+      if (_isLauncher)
+        'Active session restore completed: $_activeSessionRestoreCompleted',
+      if (_isLauncher)
+        'Active session restore target: ${_activeSessionRestoreTargetRoute ?? '-'}',
+      if (_isLauncher)
+        'Progress settle: ${_activeSessionRestoreProgressSettleDuration.inMilliseconds}ms',
+      if (_isLauncher)
+        'Completion hold: ${_activeSessionRestoreCompleteHoldDuration.inMilliseconds}ms',
+      if (_isLauncher)
+        'Local work state: TRUSTED',
+      if (_isLauncher)
+        'Remote work-state check: DISABLED',
+      if (_isLauncher)
+        'Terminal typing profile: ${TerminalOutputPacing.launcherTypingProfile}',
+      if (_isLauncher)
+        'Terminal paragraph pacing: ${TerminalOutputPacing.paragraphPacingProfile}',
       if (_isLauncher)
         'Login stage: ${_launcherController!.loginStage.name}',
       if (_isLauncher)
@@ -1377,6 +1741,30 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
                 ),
               ),
             ),
+            if (_isLauncher && _activeSessionRestoreVisible) ...[
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AnimatedBuilder(
+                    animation: _activeSessionRestoreController,
+                    builder: (context, child) {
+                      final value = _reduceMotion
+                          ? 1.0
+                          : _activeSessionRestoreController.value;
+                      return ColoredBox(
+                        color: Color.fromRGBO(0, 0, 0, .46 * value),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              _ActiveWorkSessionRestoreOverlay(
+                animation: _activeSessionRestoreController,
+                progress: _activeSessionRestoreProgress,
+                message: _activeSessionRestoreMessage,
+                completed: _activeSessionRestoreCompleted,
+                reduceMotion: _reduceMotion,
+              ),
+            ],
           ],
         );
       },
@@ -1536,6 +1924,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     _promptFocusNode.removeListener(_handlePromptFocusChanged);
     _promptFocusNode.dispose();
     _promptController.dispose();
+    _activeSessionRestoreController.dispose();
     _openController.dispose();
     _playbackController.removeListener(_handlePlaybackChanged);
     _playbackController.dispose();
@@ -3577,6 +3966,206 @@ class _TerminalPromptAction extends StatelessWidget {
   }
 }
 
+class _ActiveWorkSessionRestoreOverlay extends StatelessWidget {
+  const _ActiveWorkSessionRestoreOverlay({
+    required this.animation,
+    required this.progress,
+    required this.message,
+    required this.completed,
+    required this.reduceMotion,
+  });
+
+  final Animation<double> animation;
+  final double progress;
+  final String message;
+  final bool completed;
+  final bool reduceMotion;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final compact = media.size.width < 640;
+    final panelWidth = compact
+        ? math.min(media.size.width - 40, 420.0).toDouble()
+        : math.min(media.size.width * .46, 520.0).toDouble();
+    return Center(
+      child: AnimatedBuilder(
+        animation: animation,
+        builder: (context, child) {
+          final value = reduceMotion ? 1.0 : animation.value;
+          final eased = Curves.easeOutCubic.transform(value);
+          return Opacity(
+            opacity: eased,
+            child: Transform.translate(
+              offset: Offset(0, 7 * (1 - eased)),
+              child: Transform.scale(
+                scale: .985 + .015 * eased,
+                child: child,
+              ),
+            ),
+          );
+        },
+        child: IgnorePointer(
+          child: Container(
+            width: panelWidth,
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 22 : 28,
+              vertical: compact ? 22 : 26,
+            ),
+            decoration: BoxDecoration(
+              color: _terminalHeader,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _terminalBorder),
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x99000000),
+                  blurRadius: 30,
+                  offset: Offset(0, 16),
+                ),
+                BoxShadow(
+                  color: Color(0x2239FF8A),
+                  blurRadius: 22,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: _terminalPrompt.withOpacity(.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _terminalPrompt.withOpacity(.52),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.apps_rounded,
+                        size: 16,
+                        color: _terminalPrompt,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'PARKINWORKIN',
+                        style: TextStyle(
+                          color: _terminalText,
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                AnimatedSwitcher(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  child: Text(
+                    completed
+                        ? '업무 환경이 준비되었습니다.'
+                        : '기존 출근 세션 복구 중...',
+                    key: ValueKey<bool>(completed),
+                    style: const TextStyle(
+                      color: _terminalText,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                AnimatedSwitcher(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  child: Text(
+                    message,
+                    key: ValueKey<String>(message),
+                    style: const TextStyle(
+                      color: _terminalMuted,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final targetWidth = constraints.maxWidth *
+                        progress.clamp(0.0, 1.0).toDouble();
+                    return Container(
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: _terminalBorder.withOpacity(.48),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      alignment: Alignment.centerLeft,
+                      child: AnimatedContainer(
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : _activeSessionRestoreProgressSettleDuration,
+                        curve: Curves.easeOutCubic,
+                        width: targetWidth,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: completed ? _terminalSuccess : _terminalPrompt,
+                          borderRadius: BorderRadius.circular(999),
+                          boxShadow: <BoxShadow>[
+                            BoxShadow(
+                              color: (completed
+                                      ? _terminalSuccess
+                                      : _terminalPrompt)
+                                  .withOpacity(.28),
+                              blurRadius: 12,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: AnimatedSwitcher(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 160),
+                    child: Text(
+                      '${(progress.clamp(0.0, 1.0) * 100).round()}%',
+                      key: ValueKey<int>(
+                        (progress.clamp(0.0, 1.0) * 100).round(),
+                      ),
+                      style: TextStyle(
+                        color: completed ? _terminalSuccess : _terminalMuted,
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 enum _LauncherActivityTone {
   waiting,
   running,
@@ -3666,6 +4255,18 @@ class _LauncherActivitySnapshot {
         'ACCOUNT' => const _LauncherActivitySnapshot(
             title: 'ACCOUNT PROFILE',
             message: '사용 목적에 맞는 계정 프로필을 구성하고 있습니다.',
+            stateLabel: 'PREPARING',
+            tone: _LauncherActivityTone.running,
+          ),
+        'WORK_CONTEXT' => const _LauncherActivitySnapshot(
+            title: 'WORK CONTEXT',
+            message: '이전 업무 환경을 복원하고 있습니다.',
+            stateLabel: 'RESTORING',
+            tone: _LauncherActivityTone.running,
+          ),
+        'APPLICATION_CONTEXT' => const _LauncherActivitySnapshot(
+            title: 'APPLICATION CONTEXT',
+            message: '응용 프로그램 실행 환경을 준비하고 있습니다.',
             stateLabel: 'PREPARING',
             tone: _LauncherActivityTone.running,
           ),

@@ -3,6 +3,9 @@ import '../../command/application/terminal_line.dart';
 class TerminalOutputPacing {
   const TerminalOutputPacing._();
 
+  static const String launcherTypingProfile = 'FAST_SYSTEM_35';
+  static const String paragraphPacingProfile = 'DEFAULT';
+
   static TerminalCadence cadenceFor(TerminalLine line) {
     if (line.cadence != TerminalCadence.automatic) return line.cadence;
     if (line.type == TerminalLineType.command) return TerminalCadence.instant;
@@ -40,6 +43,7 @@ class TerminalOutputPacing {
     TerminalLine line,
     int index, {
     required bool reduceMotion,
+    bool accelerated = false,
   }) {
     if (reduceMotion) return const Duration(milliseconds: 2);
     if (line.type == TerminalLineType.command) return Duration.zero;
@@ -67,6 +71,9 @@ class TerminalOutputPacing {
       delay += 52;
     } else if (char == '?' || char == '!') {
       delay += 62;
+    }
+    if (accelerated) {
+      delay = (delay * .65).round().clamp(4, 64).toInt();
     }
     return Duration(milliseconds: delay);
   }
