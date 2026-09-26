@@ -11,7 +11,6 @@ class TripleClockOutSave {
     final result = await CommonAttendanceService.clockOut(
       context,
       source: 'legacy_triple_clock_out_save',
-      modeKey: 'triple',
     );
     return SheetUploadResult(
       success: result.success,

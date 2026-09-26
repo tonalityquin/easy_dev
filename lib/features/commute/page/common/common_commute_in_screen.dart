@@ -60,6 +60,8 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
   _CommutePowerGateStage _stage = _CommutePowerGateStage.checking;
   String _stateMessage = '';
   static const Duration _menuMotionDuration = Duration(milliseconds: 180);
+  static const Duration _preClockInChecklistMotionDuration =
+      Duration(milliseconds: 360);
 
   bool _routeTransitioning = false;
   bool _showClockInIssueResolution = false;
@@ -111,13 +113,29 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     unawaited(DevAuth.isDevModeEnabled());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (_reduceMotion) {
-        _revealController.value = 1;
-      } else {
-        unawaited(_revealController.forward(from: 0));
-      }
       unawaited(_prepareGate());
     });
+  }
+
+  void _startGateReveal({required String source}) {
+    if (!mounted) return;
+    LauncherDiagnostics.record(
+      'commute_power_gate_reveal_start',
+      scope: 'commute_power',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'source': source,
+        'durationMs': _revealController.duration?.inMilliseconds ?? 0,
+        'reduceMotion': _reduceMotion,
+      },
+    );
+    if (_reduceMotion) {
+      _revealController.value = 1;
+      return;
+    }
+    _revealController
+      ..stop()
+      ..forward(from: 0);
   }
 
   void _trace(
@@ -192,9 +210,23 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         meta: <String, Object?>{
           'mode': widget.spec.diagnosticKey,
           'hasClockInToday': userState.hasClockInToday,
+          'gateRevealStarted': _revealController.value > 0,
         },
       );
-      controller.redirectIfWorking(context, userState);
+      setState(() {
+        _routeTransitioning = true;
+      });
+      final destination = await controller.redirectIfWorking(
+        context,
+        userState,
+      );
+      if (!mounted || destination != CommuteDestination.none) return;
+      setState(() {
+        _routeTransitioning = false;
+        _stage = _CommutePowerGateStage.ready;
+        _stateMessage = '';
+      });
+      _startGateReveal(source: 'working_redirect_unresolved');
       return;
     }
 
@@ -207,6 +239,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       scope: 'commute_power',
       meta: <String, Object?>{'mode': widget.spec.diagnosticKey},
     );
+    _startGateReveal(source: 'not_working');
   }
 
   Future<void> _resetStaleWorkingState() async {
@@ -418,13 +451,14 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'Pre-clock-in action surface: report_approval',
         'Pre-clock-in report layout: application_surface_embedded',
         'Pre-clock-in report menu: bottom_actions',
+        'Pre-clock-in report motion ms: ${_preClockInChecklistMotionDuration.inMilliseconds}',
         'Pre-clock-in force armed: $_forcePreClockInGateForAttempt',
         'More open count: $_moreOpenCount',
         'Pre-clock-in diagnostics: ${_preClockInDecision?.diagnosticsSummary ?? ''}',
         'Application presentation: neutral_application_field',
         'Application phase: ${_desktopKey.currentState?.diagnosticPhase ?? 'unmounted'}',
         'ParkinWorkin focused: ${_desktopKey.currentState?.applicationFocused ?? false}',
-        'Start prompt visible: ${_desktopKey.currentState?.promptVisible ?? false}',
+        'Start message visible: ${_desktopKey.currentState?.startMessageVisible ?? false}',
         'ParkinWorkin launched: ${_desktopKey.currentState?.applicationLaunched ?? false}',
         'Peripheral apps: ${_desktopKey.currentState?.peripheralCount ?? 0}',
         'Peripheral layout: ${_desktopKey.currentState?.peripheralLayout ?? 'unmounted'}',
@@ -433,7 +467,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'ParkinWorkin selection ms: ${ParkinWorkinApplicationField.selectionDuration.inMilliseconds}',
         'ParkinWorkin focus ms: ${ParkinWorkinApplicationField.focusDuration.inMilliseconds}',
         'Post-focus hold ms: ${ParkinWorkinApplicationField.postFocusHoldDuration.inMilliseconds}',
-        'Start prompt ms: ${ParkinWorkinApplicationField.promptDuration.inMilliseconds}',
+        'Start message ms: ${ParkinWorkinApplicationField.startMessageDuration.inMilliseconds}',
         'ParkinWorkin press ms: ${ParkinWorkinApplicationField.appPressDuration.inMilliseconds}',
         'ParkinWorkin launch ms: ${ParkinWorkinApplicationField.appLaunchDuration.inMilliseconds}',
         'Workspace expand ms: ${ParkinWorkinApplicationField.fullscreenDuration.inMilliseconds}',
@@ -524,13 +558,13 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     if (gate != null && !_preClockInConfirmed) {
       var decision = _preClockInDecision;
       if (decision == null) {
-        final forcePrompt = _forcePreClockInGateForAttempt;
+        final forceReminder = _forcePreClockInGateForAttempt;
         _forcePreClockInGateForAttempt = false;
         _moreOpenCount = 0;
         try {
           decision = await gate.evaluate(
             context,
-            force: forcePrompt,
+            force: forceReminder,
           );
         } catch (error, stackTrace) {
           LauncherDiagnostics.record(
@@ -953,7 +987,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       meta: <String, Object?>{
         'mode': widget.spec.diagnosticKey,
         'source': 'more_opened_twice',
-        'forcePrompt': true,
+        'forceReminder': true,
       },
     );
   }
@@ -1125,16 +1159,33 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
             _stage == _CommutePowerGateStage.failure);
     final decision = _preClockInDecision;
     final checklist = _gateView == _CommuteGateView.checklist && decision != null
-        ? CommutePreClockInChecklist(
-            key: const ValueKey<String>('pre_clock_in_checklist'),
-            contextLabel: decision.contextLabel,
-            items: decision.items,
-            checkedIds: _checkedPreClockInItemIds,
-            onToggle: _togglePreClockInItem,
-            onCheckAll: _checkAllPreClockInItems,
-            onConfirm: _confirmPreClockInChecklist,
-            confirming: _preClockInConfirming,
-            embedded: true,
+        ? TweenAnimationBuilder<double>(
+            key: const ValueKey<String>('pre_clock_in_checklist_motion'),
+            tween: Tween<double>(begin: 0, end: 1),
+            duration: _reduceMotion
+                ? Duration.zero
+                : _preClockInChecklistMotionDuration,
+            curve: Curves.easeOutCubic,
+            child: CommutePreClockInChecklist(
+              key: const ValueKey<String>('pre_clock_in_checklist'),
+              contextLabel: decision.contextLabel,
+              items: decision.items,
+              checkedIds: _checkedPreClockInItemIds,
+              onToggle: _togglePreClockInItem,
+              onCheckAll: _checkAllPreClockInItems,
+              onConfirm: _confirmPreClockInChecklist,
+              confirming: _preClockInConfirming,
+              embedded: true,
+            ),
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, (1 - value) * 18),
+                  child: child,
+                ),
+              );
+            },
           )
         : null;
 
@@ -1282,14 +1333,48 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
                       return ValueListenableBuilder<bool>(
                         valueListenable: DevAuth.devModeEnabled,
                         builder: (context, developerMode, child) {
+                          final transitionDuration = _reduceMotion
+                              ? Duration.zero
+                              : CommonUiMotion.component;
                           return Stack(
                             fit: StackFit.expand,
                             children: [
-                              KeyedSubtree(
-                                key: const ValueKey<String>(
-                                  'application_field_gate',
-                                ),
-                                child: _buildDesktopGate(userState),
+                              AnimatedSwitcher(
+                                duration: transitionDuration,
+                                reverseDuration: transitionDuration,
+                                switchInCurve: CommonUiMotion.enter,
+                                switchOutCurve: CommonUiMotion.exit,
+                                transitionBuilder: (child, animation) {
+                                  final curved = CurvedAnimation(
+                                    parent: animation,
+                                    curve: CommonUiMotion.enter,
+                                    reverseCurve: CommonUiMotion.exit,
+                                  );
+                                  final scale = Tween<double>(
+                                    begin: 0.985,
+                                    end: 1,
+                                  ).animate(curved);
+                                  return FadeTransition(
+                                    opacity: curved,
+                                    child: ScaleTransition(
+                                      scale: scale,
+                                      child: child,
+                                    ),
+                                  );
+                                },
+                                child: _stage ==
+                                        _CommutePowerGateStage.checking
+                                    ? const SizedBox.expand(
+                                        key: ValueKey<String>(
+                                          'commute_gate_checking_surface',
+                                        ),
+                                      )
+                                    : KeyedSubtree(
+                                        key: const ValueKey<String>(
+                                          'application_field_gate',
+                                        ),
+                                        child: _buildDesktopGate(userState),
+                                      ),
                               ),
                               if (_stage != _CommutePowerGateStage.checking)
                                 Align(
@@ -1298,9 +1383,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
                                     ignoring: _routeTransitioning,
                                     child: AnimatedOpacity(
                                       opacity: _routeTransitioning ? 0 : 1,
-                                      duration: _reduceMotion
-                                          ? Duration.zero
-                                          : CommonUiMotion.component,
+                                      duration: transitionDuration,
                                       curve: CommonUiMotion.exit,
                                       child: _buildBottomActions(
                                         tokens,

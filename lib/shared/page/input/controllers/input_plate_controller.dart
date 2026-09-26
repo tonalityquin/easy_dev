@@ -413,6 +413,12 @@ class InputPlateController {
         controllerBackDigit.text.length == 4;
   }
 
+  String? get photoLookupPlateNumber {
+    if (!isInputValid()) return null;
+    final value = buildPlateNumber().trim();
+    return value.isEmpty ? null : value;
+  }
+
   void setSelectedSector(SectorModel sector) {
     selectedSectorId = sector.id.trim();
     selectedSectorName = sector.name.trim();

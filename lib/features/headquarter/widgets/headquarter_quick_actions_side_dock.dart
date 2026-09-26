@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/di/routes.dart';
+import '../../../app/theme/theme_settings_dialog.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
@@ -422,6 +423,19 @@ class _HeadquarterQuickActionsPanelState
             useRootNavigator: true,
           );
         },
+      ),
+      _DockAction(
+        id: 'theme',
+        category: _QuickActionCategory.settings,
+        icon: Icons.palette_outlined,
+        label: '테마',
+        description: null,
+        color: tokens.surfaceSelected,
+        foreground: tokens.textPrimary,
+        onTap: (rootContext) => showCommonThemeSettingsDialog(
+          context: rootContext,
+          source: 'headquarter_side_dock',
+        ),
       ),
       _DockAction(
         id: 'third_party_support',

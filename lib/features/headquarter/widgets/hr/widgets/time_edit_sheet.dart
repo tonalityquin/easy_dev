@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
 
@@ -17,66 +16,75 @@ class TimeFieldSpec {
   final String initial;
 }
 
-typedef TimeSheetValidator = String? Function(Map<String, String> values);
+typedef TimeDialogValidator = String? Function(Map<String, String> values);
+typedef TimeDialogDebugLog = void Function(String message);
+typedef TimeDialogDeveloperStatus = Future<void> Function();
 
-Future<Map<String, String>?> showTimeEditSheet({
+Future<Map<String, String>?> showTimeEditDialog({
   required BuildContext context,
   required DateTime date,
   required List<TimeFieldSpec> fields,
-  List<TimeSheetValidator> validators = const [],
+  List<TimeDialogValidator> validators = const [],
   String? title,
   bool useCommonUi = false,
+  bool developerMode = false,
+  TimeDialogDebugLog? onDebugLog,
+  TimeDialogDeveloperStatus? onDeveloperStatus,
 }) {
-  Widget buildSheet(BuildContext sheetContext) {
-    return _TimeEditSheet(
-      date: date,
-      fields: fields,
-      validators: validators,
-      title: title,
-      useCommonUi: useCommonUi,
-    );
-  }
-
-  if (useCommonUi) {
-    return showCommonOverlayBottomSheet<Map<String, String>>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      transparentBackground: false,
-      builder: buildSheet,
-    );
-  }
-
-  return showModalBottomSheet<Map<String, String>>(
-    context: context,
-    isScrollControlled: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: buildSheet,
+  onDebugLog?.call(
+    'dialog_route_push date=${date.toIso8601String()} fields=${fields.map((field) => field.id).join(',')} commonUi=$useCommonUi developerMode=$developerMode',
   );
+
+  return showCommonOverlayDialog<Map<String, String>>(
+    context: context,
+    useRootNavigator: true,
+    barrierDismissible: true,
+    barrierLabel: title ?? '시간 기록 수정',
+    builder: (dialogContext) {
+      return _TimeEditDialog(
+        date: date,
+        fields: fields,
+        validators: validators,
+        title: title,
+        useCommonUi: useCommonUi,
+        developerMode: developerMode,
+        onDebugLog: onDebugLog,
+        onDeveloperStatus: onDeveloperStatus,
+      );
+    },
+  ).whenComplete(() {
+    onDebugLog?.call(
+      'dialog_route_closed date=${date.toIso8601String()} commonUi=$useCommonUi',
+    );
+  });
 }
 
-class _TimeEditSheet extends StatefulWidget {
-  const _TimeEditSheet({
+class _TimeEditDialog extends StatefulWidget {
+  const _TimeEditDialog({
     required this.date,
     required this.fields,
     required this.validators,
     required this.title,
     required this.useCommonUi,
+    required this.developerMode,
+    required this.onDebugLog,
+    required this.onDeveloperStatus,
   });
 
   final DateTime date;
   final List<TimeFieldSpec> fields;
-  final List<TimeSheetValidator> validators;
+  final List<TimeDialogValidator> validators;
   final String? title;
   final bool useCommonUi;
+  final bool developerMode;
+  final TimeDialogDebugLog? onDebugLog;
+  final TimeDialogDeveloperStatus? onDeveloperStatus;
 
   @override
-  State<_TimeEditSheet> createState() => _TimeEditSheetState();
+  State<_TimeEditDialog> createState() => _TimeEditDialogState();
 }
 
-class _TimeEditSheetState extends State<_TimeEditSheet> {
+class _TimeEditDialogState extends State<_TimeEditDialog> {
   late final Map<String, TextEditingController> _hourControllers;
   late final Map<String, TextEditingController> _minuteControllers;
   String? _error;
@@ -85,8 +93,8 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
   @override
   void initState() {
     super.initState();
-    _hourControllers = {};
-    _minuteControllers = {};
+    _hourControllers = <String, TextEditingController>{};
+    _minuteControllers = <String, TextEditingController>{};
     for (final field in widget.fields) {
       final parts = (field.initial.isNotEmpty ? field.initial : '00:00')
           .split(':');
@@ -97,6 +105,12 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
         text: parts.length > 1 ? parts[1] : '00',
       );
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _log(
+        'dialog_presented date=${widget.date.toIso8601String()} fieldCount=${widget.fields.length} commonUi=${widget.useCommonUi}',
+      );
+    });
   }
 
   @override
@@ -108,6 +122,15 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  void _log(String message) {
+    final callback = widget.onDebugLog;
+    if (callback != null) {
+      callback(message);
+      return;
+    }
+    debugPrint('[TimeEditDialog] $message');
   }
 
   String _dateLabel(DateTime value) {
@@ -134,8 +157,7 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
     return null;
   }
 
-  Future<void> _save() async {
-    if (_saving) return;
+  Map<String, String> _collectValues() {
     final values = <String, String>{};
     for (final field in widget.fields) {
       final hour = _hourControllers[field.id]!.text.trim().padLeft(2, '0');
@@ -143,8 +165,18 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
           _minuteControllers[field.id]!.text.trim().padLeft(2, '0');
       values[field.id] = '$hour:$minute';
     }
+    return values;
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    FocusScope.of(context).unfocus();
+    final values = _collectValues();
     final error = _validate(values);
     if (error != null) {
+      _log(
+        'validation_failed date=${widget.date.toIso8601String()} message=$error values=$values',
+      );
       setState(() => _error = error);
       await HapticFeedback.mediumImpact();
       return;
@@ -153,9 +185,23 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
       _saving = true;
       _error = null;
     });
+    _log(
+      'apply_requested date=${widget.date.toIso8601String()} values=$values',
+    );
     await HapticFeedback.selectionClick();
     if (!mounted) return;
-    Navigator.of(context).pop<Map<String, String>>(values);
+    Navigator.of(context, rootNavigator: true)
+        .pop<Map<String, String>>(values);
+  }
+
+  Future<void> _showDeveloperStatus() async {
+    if (!widget.developerMode) return;
+    final callback = widget.onDeveloperStatus;
+    if (callback == null) return;
+    _log(
+      'developer_status_requested date=${widget.date.toIso8601String()} values=${_collectValues()} error=${_error ?? '-'} saving=$_saving',
+    );
+    await callback();
   }
 
   @override
@@ -163,139 +209,207 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
     final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final screen = MediaQuery.sizeOf(context);
+    final maxWidth = (screen.width - 32).clamp(280.0, 420.0).toDouble();
+    final maxHeight = (screen.height - viewInsets.bottom - 32)
+        .clamp(260.0, screen.height * .78)
+        .toDouble();
 
-    return ColoredBox(
-      color: tokens.surfaceRaised,
-      child: SafeArea(
-        top: false,
-        child: AnimatedPadding(
-          duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
-          curve: CommonUiMotion.standard,
-          padding: EdgeInsets.fromLTRB(
-            20,
-            12,
-            20,
-            MediaQuery.viewInsetsOf(context).bottom + 20,
-          ),
-          child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + viewInsets.bottom),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: maxWidth,
+          maxHeight: maxHeight,
+        ),
+        child: Material(
+          color: tokens.surfaceRaised,
+          borderRadius: BorderRadius.circular(CommonUiShapes.sheet),
+          clipBehavior: Clip.antiAlias,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border.all(color: tokens.borderSubtle),
+              borderRadius: BorderRadius.circular(CommonUiShapes.sheet),
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: tokens.handle,
-                      borderRadius: BorderRadius.circular(CommonUiShapes.pill),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: tokens.accentContainer,
-                        borderRadius:
-                            BorderRadius.circular(CommonUiShapes.control),
-                      ),
-                      alignment: Alignment.center,
-                      child: Icon(
-                        Icons.schedule_rounded,
-                        color: tokens.onAccentContainer,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        widget.title ?? _dateLabel(widget.date),
-                        style: textTheme.titleMedium?.copyWith(
-                          color: tokens.textPrimary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    CommonIconButton(
-                      icon: Icons.close_rounded,
-                      tooltip: '닫기',
-                      onPressed: () => Navigator.of(context).pop(),
-                      haptic: CommonHaptic.selection,
-                    ),
-                  ],
-                ),
-                AnimatedSize(
-                  duration:
-                      reduceMotion ? Duration.zero : CommonUiMotion.component,
-                  curve: CommonUiMotion.standard,
-                  child: _error == null
-                      ? const SizedBox(height: 14)
-                      : Padding(
-                          padding: const EdgeInsets.only(top: 14),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 13,
-                              vertical: 11,
-                            ),
-                            decoration: BoxDecoration(
-                              color: tokens.dangerContainer,
-                              borderRadius:
-                                  BorderRadius.circular(CommonUiShapes.control),
-                              border: Border.all(
-                                color: tokens.danger.withOpacity(
-                                  tokens.isDark ? .60 : .38,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onLongPress: widget.developerMode
+                              ? _showDeveloperStatus
+                              : null,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.title ?? '시간 기록 수정',
+                                style: textTheme.titleMedium?.copyWith(
+                                  color: tokens.textPrimary,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.error_outline_rounded,
-                                  color: tokens.danger,
+                              const SizedBox(height: 4),
+                              Text(
+                                _dateLabel(widget.date),
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: tokens.textSecondary,
+                                  fontWeight: FontWeight.w700,
                                 ),
-                                const SizedBox(width: 9),
-                                Expanded(
-                                  child: Text(
-                                    _error!,
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: tokens.onDangerContainer,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
+                      ),
+                      IconButton(
+                        tooltip: '닫기',
+                        onPressed: _saving
+                            ? null
+                            : () {
+                                _log(
+                                  'dismiss_requested date=${widget.date.toIso8601String()} source=close_button',
+                                );
+                                Navigator.of(context, rootNavigator: true).pop();
+                              },
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
                 ),
-                ...widget.fields.asMap().entries.map(
-                      (entry) => CommonAnimatedReveal(
-                        delay: Duration(milliseconds: entry.key * 45),
-                        offset: const Offset(0, .025),
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _TimeInputRow(
+                Divider(height: 1, color: tokens.borderSubtle),
+                Flexible(
+                  child: SingleChildScrollView(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ...widget.fields.asMap().entries.expand((entry) sync* {
+                          if (entry.key > 0) {
+                            yield Divider(
+                              height: 1,
+                              indent: 20,
+                              endIndent: 20,
+                              color: tokens.borderSubtle,
+                            );
+                          }
+                          yield _TimeInputListRow(
                             label: entry.value.label,
                             hourController:
                                 _hourControllers[entry.value.id]!,
                             minuteController:
                                 _minuteControllers[entry.value.id]!,
-                          ),
+                          );
+                        }),
+                        AnimatedSize(
+                          duration: reduceMotion
+                              ? Duration.zero
+                              : const Duration(milliseconds: 170),
+                          curve: Curves.easeOutCubic,
+                          child: _error == null
+                              ? const SizedBox.shrink()
+                              : Column(
+                                  children: [
+                                    Divider(
+                                      height: 1,
+                                      color: tokens.borderSubtle,
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        20,
+                                        12,
+                                        20,
+                                        12,
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Icon(
+                                            Icons.error_outline_rounded,
+                                            size: 19,
+                                            color: tokens.danger,
+                                          ),
+                                          const SizedBox(width: 9),
+                                          Expanded(
+                                            child: Text(
+                                              _error!,
+                                              style: textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: tokens.danger,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                         ),
-                      ),
+                      ],
                     ),
-                const SizedBox(height: 4),
-                CommonButton(
-                  label: '저장',
-                  icon: Icons.save_rounded,
-                  onPressed: _save,
-                  loading: _saving,
-                  expand: true,
-                  haptic: CommonHaptic.selection,
+                  ),
+                ),
+                Divider(height: 1, color: tokens.borderSubtle),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: _saving
+                            ? null
+                            : () {
+                                _log(
+                                  'dismiss_requested date=${widget.date.toIso8601String()} source=cancel_button',
+                                );
+                                Navigator.of(context, rootNavigator: true).pop();
+                              },
+                        child: const Text('취소'),
+                      ),
+                      const SizedBox(width: 8),
+                      AnimatedSwitcher(
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 160),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: _saving
+                            ? const SizedBox(
+                                key: ValueKey<String>('applying'),
+                                width: 88,
+                                height: 40,
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : FilledButton.icon(
+                                key: const ValueKey<String>('apply'),
+                                onPressed: _save,
+                                icon: const Icon(
+                                  Icons.check_rounded,
+                                  size: 18,
+                                ),
+                                label: const Text('적용'),
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -306,8 +420,8 @@ class _TimeEditSheetState extends State<_TimeEditSheet> {
   }
 }
 
-class _TimeInputRow extends StatelessWidget {
-  const _TimeInputRow({
+class _TimeInputListRow extends StatelessWidget {
+  const _TimeInputListRow({
     required this.label,
     required this.hourController,
     required this.minuteController,
@@ -317,71 +431,109 @@ class _TimeInputRow extends StatelessWidget {
   final TextEditingController hourController;
   final TextEditingController minuteController;
 
+  Widget _buildTimeFields(
+    BuildContext context,
+    CommonUiTokens tokens,
+    TextTheme textTheme,
+  ) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 66,
+          child: TextField(
+            controller: hourController,
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.next,
+            maxLength: 2,
+            textAlign: TextAlign.center,
+            decoration: const InputDecoration(
+              labelText: '시',
+              counterText: '',
+              isDense: true,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text(
+            ':',
+            style: textTheme.titleLarge?.copyWith(
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        SizedBox(
+          width: 66,
+          child: TextField(
+            controller: minuteController,
+            keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => FocusScope.of(context).unfocus(),
+            maxLength: 2,
+            textAlign: TextAlign.center,
+            decoration: const InputDecoration(
+              labelText: '분',
+              counterText: '',
+              isDense: true,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: tokens.surfaceOverlay,
-        borderRadius: BorderRadius.circular(CommonUiShapes.card),
-        border: Border.all(color: tokens.borderSubtle),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: textTheme.labelLarge?.copyWith(
-              color: tokens.textPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: hourController,
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.next,
-                  maxLength: 2,
-                  textAlign: TextAlign.center,
-                  decoration: const InputDecoration(
-                    labelText: '시',
-                    counterText: '',
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 330;
+        if (compact) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  label,
+                  style: textTheme.labelLarge?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _buildTimeFields(context, tokens, textTheme),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
                 child: Text(
-                  ':',
-                  style: textTheme.titleLarge?.copyWith(
-                    color: tokens.textSecondary,
+                  label,
+                  style: textTheme.labelLarge?.copyWith(
+                    color: tokens.textPrimary,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-              Expanded(
-                child: TextField(
-                  controller: minuteController,
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                  maxLength: 2,
-                  textAlign: TextAlign.center,
-                  decoration: const InputDecoration(
-                    labelText: '분',
-                    counterText: '',
-                  ),
-                ),
-              ),
+              const SizedBox(width: 16),
+              _buildTimeFields(context, tokens, textTheme),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -393,23 +545,28 @@ class AttendanceTimeResult {
   final String outTime;
 }
 
-Future<AttendanceTimeResult?> showAttendanceTimeSheet({
+Future<AttendanceTimeResult?> showAttendanceTimeDialog({
   required BuildContext context,
   required DateTime date,
   required String initialInTime,
   required String initialOutTime,
   bool useCommonUi = false,
+  bool developerMode = false,
+  TimeDialogDebugLog? onDebugLog,
+  TimeDialogDeveloperStatus? onDeveloperStatus,
 }) async {
-  final result = await showTimeEditSheet(
+  final result = await showTimeEditDialog(
     context: context,
     date: date,
-    title:
-        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+    title: '출·퇴근 기록 수정',
     fields: [
-      TimeFieldSpec(id: 'in', label: '출근 시간', initial: initialInTime),
-      TimeFieldSpec(id: 'out', label: '퇴근 시간', initial: initialOutTime),
+      TimeFieldSpec(id: 'in', label: '출근', initial: initialInTime),
+      TimeFieldSpec(id: 'out', label: '퇴근', initial: initialOutTime),
     ],
     useCommonUi: useCommonUi,
+    developerMode: developerMode,
+    onDebugLog: onDebugLog,
+    onDeveloperStatus: onDeveloperStatus,
     validators: [
       (values) {
         final inTime = values['in']!;
@@ -427,19 +584,26 @@ Future<AttendanceTimeResult?> showAttendanceTimeSheet({
   return AttendanceTimeResult(result['in']!, result['out']!);
 }
 
-Future<String?> showBreakTimeSheet({
+Future<String?> showBreakTimeDialog({
   required BuildContext context,
   required DateTime date,
   required String initialTime,
   bool useCommonUi = false,
+  bool developerMode = false,
+  TimeDialogDebugLog? onDebugLog,
+  TimeDialogDeveloperStatus? onDeveloperStatus,
 }) async {
-  final result = await showTimeEditSheet(
+  final result = await showTimeEditDialog(
     context: context,
     date: date,
+    title: '휴게 기록 수정',
     fields: [
-      TimeFieldSpec(id: 'break', label: '휴게 시간', initial: initialTime),
+      TimeFieldSpec(id: 'break', label: '휴게', initial: initialTime),
     ],
     useCommonUi: useCommonUi,
+    developerMode: developerMode,
+    onDebugLog: onDebugLog,
+    onDeveloperStatus: onDeveloperStatus,
   );
   return result?['break'];
 }

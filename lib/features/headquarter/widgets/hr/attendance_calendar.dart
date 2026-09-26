@@ -96,6 +96,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   bool _isSearching = false;
   bool _isSendingMail = false;
   bool _isLoadingMonth = false;
+  bool _editDialogOpen = false;
   bool _developerMode = false;
   bool _showUserPicker = false;
   int _monthDirection = 1;
@@ -215,7 +216,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     final partial = _partialDayCount;
     final dirty = _dirtyDayCount;
     _recordDebug(
-      'developer_status_open presentation=${widget.presentation.name} user=${user?.name ?? '-'} area=$area division=$division month=${_monthKey(_focusedDay)} selectedDay=${_selectedDay?.day ?? -1} complete=$complete partial=$partial dirty=$dirty in=${_clockInMap.length} out=${_clockOutMap.length} deleteIn=${_pendingDeleteInDates.length} deleteOut=${_pendingDeleteOutDates.length} cacheIn=${_inCache.length} cacheOut=${_outCache.length} loading=$_isLoadingMonth monthError=${_monthLoadError != null} searching=$_isSearching searchError=${_searchError != null} candidates=${_candidateUsers.length} picker=$_showUserPicker save=${_saveState.name} mail=$_isSendingMail reduceMotion=${media?.disableAnimations ?? false}',
+      'developer_status_open presentation=${widget.presentation.name} user=${user?.name ?? '-'} area=$area division=$division month=${_monthKey(_focusedDay)} selectedDay=${_selectedDay?.day ?? -1} complete=$complete partial=$partial dirty=$dirty in=${_clockInMap.length} out=${_clockOutMap.length} deleteIn=${_pendingDeleteInDates.length} deleteOut=${_pendingDeleteOutDates.length} cacheIn=${_inCache.length} cacheOut=${_outCache.length} loading=$_isLoadingMonth monthError=${_monthLoadError != null} searching=$_isSearching searchError=${_searchError != null} candidates=${_candidateUsers.length} picker=$_showUserPicker editDialogOpen=$_editDialogOpen save=${_saveState.name} mail=$_isSendingMail reduceMotion=${media?.disableAnimations ?? false}',
     );
     final trace = await DeveloperOperationTrace.start(
       context: context,
@@ -239,7 +240,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       progress: 0.46,
     );
     trace.log(
-      'searching=$_isSearching, searchError=${_searchError ?? '-'}, searchMessage=${_searchMessage ?? '-'}, candidates=${_candidateUsers.length}, picker=$_showUserPicker, saveState=${_saveState.name}, sendingMail=$_isSendingMail, reduceMotion=${media?.disableAnimations ?? false}',
+      'searching=$_isSearching, searchError=${_searchError ?? '-'}, searchMessage=${_searchMessage ?? '-'}, candidates=${_candidateUsers.length}, picker=$_showUserPicker, editDialogOpen=$_editDialogOpen, saveState=${_saveState.name}, sendingMail=$_isSendingMail, reduceMotion=${media?.disableAnimations ?? false}',
       progress: 0.58,
     );
     final snapshot = List<String>.of(_debugLines);
@@ -1380,7 +1381,9 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
             _focusedDay = focusedDay;
           });
           if (_selectedUser != null) {
-            await _showEditBottomSheet(selectedDay);
+            await WidgetsBinding.instance.endOfFrame;
+            if (!mounted) return;
+            await _showEditDialog(selectedDay);
           }
         },
         onPageChanged: (focusedDay) async {
@@ -1669,50 +1672,70 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     );
   }
 
-  Future<void> _showEditBottomSheet(DateTime day) async {
+  Future<void> _showEditDialog(DateTime day) async {
+    if (_editDialogOpen) {
+      _recordDebug(
+        'date_edit_dialog_ignored date=${day.toIso8601String()} reason=already_open',
+      );
+      return;
+    }
+
+    _editDialogOpen = true;
     final dayKey = day.day;
     final inTime = _clockInMap[dayKey] ?? '00:00';
     final outTime = _clockOutMap[dayKey] ?? '00:00';
     _recordDebug(
-      'date_edit_open date=${day.toIso8601String()} in=$inTime out=$outTime',
+      'date_edit_dialog_open date=${day.toIso8601String()} in=$inTime out=$outTime presentation=center_list_surface',
     );
 
-    final res = await showAttendanceTimeSheet(
-      context: context,
-      date: day,
-      initialInTime: inTime,
-      initialOutTime: outTime,
-      useCommonUi: _useCommonUi,
-    );
-    if (res == null) {
-      _recordDebug('date_edit_cancel date=${day.toIso8601String()}');
-      return;
+    try {
+      final res = await showAttendanceTimeDialog(
+        context: context,
+        date: day,
+        initialInTime: inTime,
+        initialOutTime: outTime,
+        useCommonUi: _useCommonUi,
+        developerMode: _developerMode,
+        onDebugLog: (message) => _recordDebug('date_edit_dialog $message'),
+        onDeveloperStatus: _showDeveloperStatus,
+      );
+      if (!mounted) return;
+
+      if (res == null) {
+        _recordDebug('date_edit_dialog_cancel date=${day.toIso8601String()}');
+        return;
+      }
+
+      final dateStr = _dateStr(dayKey);
+      setState(() {
+        final inT = res.inTime.trim();
+        if (inT.isEmpty || inT == '00:00') {
+          _clockInMap.remove(dayKey);
+          _pendingDeleteInDates.add(dateStr);
+        } else {
+          _clockInMap[dayKey] = inT;
+          _pendingDeleteInDates.remove(dateStr);
+        }
+
+        final outT = res.outTime.trim();
+        if (outT.isEmpty || outT == '00:00') {
+          _clockOutMap.remove(dayKey);
+          _pendingDeleteOutDates.add(dateStr);
+        } else {
+          _clockOutMap[dayKey] = outT;
+          _pendingDeleteOutDates.remove(dateStr);
+        }
+        _saveState = _SaveVisualState.idle;
+      });
+      _recordDebug(
+        'date_edit_dialog_apply date=$dateStr in=${res.inTime.trim()} out=${res.outTime.trim()} dirty=$_dirtyDayCount',
+      );
+    } finally {
+      _editDialogOpen = false;
+      _recordDebug(
+        'date_edit_dialog_closed date=${day.toIso8601String()} mounted=$mounted',
+      );
     }
-
-    final dateStr = _dateStr(dayKey);
-    setState(() {
-      final inT = res.inTime.trim();
-      if (inT.isEmpty || inT == '00:00') {
-        _clockInMap.remove(dayKey);
-        _pendingDeleteInDates.add(dateStr);
-      } else {
-        _clockInMap[dayKey] = inT;
-        _pendingDeleteInDates.remove(dateStr);
-      }
-
-      final outT = res.outTime.trim();
-      if (outT.isEmpty || outT == '00:00') {
-        _clockOutMap.remove(dayKey);
-        _pendingDeleteOutDates.add(dateStr);
-      } else {
-        _clockOutMap[dayKey] = outT;
-        _pendingDeleteOutDates.remove(dateStr);
-      }
-      _saveState = _SaveVisualState.idle;
-    });
-    _recordDebug(
-      'date_edit_apply date=$dateStr in=${res.inTime.trim()} out=${res.outTime.trim()} dirty=$_dirtyDayCount',
-    );
   }
 
   @override

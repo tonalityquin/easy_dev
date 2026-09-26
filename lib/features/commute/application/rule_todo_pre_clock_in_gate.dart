@@ -10,17 +10,17 @@ import 'commute_pre_clock_in_gate.dart';
 import '../../dev/application/area_state.dart';
 import '../../launcher/application/launcher_diagnostics.dart';
 import '../../rule/domain/models/rule_model.dart';
-import '../../mode_single/application/single_rule_todo_prompt_policy.dart';
-import '../../mode_single/application/single_rule_todo_prompt_repository.dart';
+import '../../mode_single/application/single_rule_todo_reminder_policy.dart';
+import '../../mode_single/application/single_rule_todo_reminder_repository.dart';
 
 class RuleTodoPreClockInGate implements CommutePreClockInGate {
   const RuleTodoPreClockInGate();
 
   static final Random _random = Random();
-  static const SingleRuleTodoPromptPolicy _policy =
-      SingleRuleTodoPromptPolicy();
-  static const SingleRuleTodoPromptRepository _historyRepository =
-      SingleRuleTodoPromptRepository();
+  static const SingleRuleTodoReminderPolicy _policy =
+      SingleRuleTodoReminderPolicy();
+  static const SingleRuleTodoReminderRepository _historyRepository =
+      SingleRuleTodoReminderRepository();
 
   @override
   Future<CommutePreClockInDecision> evaluate(
@@ -116,23 +116,23 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
         division: division,
         area: area,
       );
-      final state = _RuleTodoPromptDecisionState(
+      final state = _RuleTodoReminderDecisionState(
         userId: userId,
         division: division,
         area: area,
         fingerprint: fingerprint,
-        clockInsSincePrompt: history?.clockInsSincePrompt ?? 0,
-        promptCount: history?.promptCount ?? 0,
+        clockInsSinceReminder: history?.clockInsSinceReminder ?? 0,
+        reminderCount: history?.reminderCount ?? 0,
       );
 
       if (force) {
         final summary = <String>[
           'reason=forced_more_press',
           'identitySource=$identitySource',
-          'forcePrompt=true',
+          'forceReminder=true',
           'todoCount=${todos.length}',
-          'clockInsSincePrompt=${history?.clockInsSincePrompt ?? 0}',
-          'promptCount=${history?.promptCount ?? 0}',
+          'clockInsSinceReminder=${history?.clockInsSinceReminder ?? 0}',
+          'reminderCount=${history?.reminderCount ?? 0}',
           'probability=1.0000',
           'roll=forced',
           'fingerprint=$fingerprint',
@@ -142,7 +142,7 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
         ].join(' ');
 
         LauncherDiagnostics.record(
-          'rule_todo_prompt_evaluated',
+          'rule_todo_reminder_evaluated',
           scope: 'commute_todo',
           meta: <String, Object?>{
             'division': division,
@@ -152,9 +152,9 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
             'todoCount': todos.length,
             'fingerprint': fingerprint,
             'historyFingerprint': history?.todoFingerprint ?? '',
-            'clockInsSincePrompt': history?.clockInsSincePrompt ?? 0,
-            'promptCount': history?.promptCount ?? 0,
-            'forcePrompt': true,
+            'clockInsSinceReminder': history?.clockInsSinceReminder ?? 0,
+            'reminderCount': history?.reminderCount ?? 0,
+            'forceReminder': true,
             'probability': '1.0000',
             'roll': 'forced',
             'decision': 'show',
@@ -185,17 +185,17 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
 
       final roll = _random.nextDouble();
       final policyResult = _policy.evaluate(
-        clockInsSincePrompt: history?.clockInsSincePrompt ?? 0,
-        promptCount: history?.promptCount ?? 0,
+        clockInsSinceReminder: history?.clockInsSinceReminder ?? 0,
+        reminderCount: history?.reminderCount ?? 0,
         roll: roll,
       );
       final summary = <String>[
         'reason=${policyResult.reason}',
         'identitySource=$identitySource',
-        'forcePrompt=false',
+        'forceReminder=false',
         'todoCount=${todos.length}',
-        'clockInsSincePrompt=${history?.clockInsSincePrompt ?? 0}',
-        'promptCount=${history?.promptCount ?? 0}',
+        'clockInsSinceReminder=${history?.clockInsSinceReminder ?? 0}',
+        'reminderCount=${history?.reminderCount ?? 0}',
         'probability=${policyResult.probability.toStringAsFixed(4)}',
         'roll=${policyResult.roll.toStringAsFixed(4)}',
         'fingerprint=$fingerprint',
@@ -205,7 +205,7 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
       ].join(' ');
 
       LauncherDiagnostics.record(
-        'rule_todo_prompt_evaluated',
+        'rule_todo_reminder_evaluated',
         scope: 'commute_todo',
         meta: <String, Object?>{
           'division': division,
@@ -215,9 +215,9 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
           'todoCount': todos.length,
           'fingerprint': fingerprint,
           'historyFingerprint': history?.todoFingerprint ?? '',
-          'clockInsSincePrompt': history?.clockInsSincePrompt ?? 0,
-          'promptCount': history?.promptCount ?? 0,
-          'forcePrompt': false,
+          'clockInsSinceReminder': history?.clockInsSinceReminder ?? 0,
+          'reminderCount': history?.reminderCount ?? 0,
+          'forceReminder': false,
           'probability': policyResult.probability.toStringAsFixed(4),
           'roll': policyResult.roll.toStringAsFixed(4),
           'decision': policyResult.shouldShow ? 'show' : 'skip',
@@ -246,12 +246,12 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
       );
     } catch (error, stackTrace) {
       LauncherDiagnostics.record(
-        'rule_todo_prompt_exception',
+        'rule_todo_reminder_exception',
         scope: 'commute_todo',
         meta: <String, Object?>{
           'error': error,
           'stack': stackTrace,
-          'forcePrompt': force,
+          'forceReminder': force,
           'decision': 'skip',
           'reason': 'gate_exception',
           'firebaseRead': 0,
@@ -262,7 +262,7 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
       return CommutePreClockInDecision.skip(
         reason: 'gate_exception',
         diagnosticsSummary:
-            'reason=gate_exception forcePrompt=$force gate=shared_rule_todo firebaseRead=0 firebaseWrite=0',
+            'reason=gate_exception forceReminder=$force gate=shared_rule_todo firebaseRead=0 firebaseWrite=0',
       );
     }
   }
@@ -273,23 +273,23 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
     CommutePreClockInDecision decision,
   ) async {
     final state = decision.state;
-    if (state is! _RuleTodoPromptDecisionState) return;
+    if (state is! _RuleTodoReminderDecisionState) return;
     try {
-      await _historyRepository.markPrompted(
+      await _historyRepository.markReminderConfirmed(
         userId: state.userId,
         division: state.division,
         area: state.area,
         todoFingerprint: state.fingerprint,
       );
       LauncherDiagnostics.record(
-        'rule_todo_prompt_confirmed',
+        'rule_todo_reminder_confirmed',
         scope: 'commute_todo',
         meta: <String, Object?>{
           'division': state.division,
           'area': state.area,
           'fingerprint': state.fingerprint,
-          'previousClockInsSincePrompt': state.clockInsSincePrompt,
-          'previousPromptCount': state.promptCount,
+          'previousClockInsSinceReminder': state.clockInsSinceReminder,
+          'previousReminderCount': state.reminderCount,
           'firebaseRead': 0,
           'firebaseWrite': 0,
           'gate': 'shared_rule_todo',
@@ -297,7 +297,7 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
       );
     } catch (error, stackTrace) {
       LauncherDiagnostics.record(
-        'rule_todo_prompt_confirm_history_failed',
+        'rule_todo_reminder_confirm_history_failed',
         scope: 'commute_todo',
         meta: <String, Object?>{
           'error': error,
@@ -317,7 +317,7 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
   ) async {
     if (!decision.eligible || decision.shouldShow) return;
     final state = decision.state;
-    if (state is! _RuleTodoPromptDecisionState) return;
+    if (state is! _RuleTodoReminderDecisionState) return;
     try {
       await _historyRepository.markEligibleClockInSucceeded(
         userId: state.userId,
@@ -326,14 +326,14 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
         todoFingerprint: state.fingerprint,
       );
       LauncherDiagnostics.record(
-        'rule_todo_prompt_skip_clock_in_counted',
+        'rule_todo_reminder_skip_clock_in_counted',
         scope: 'commute_todo',
         meta: <String, Object?>{
           'division': state.division,
           'area': state.area,
           'fingerprint': state.fingerprint,
-          'previousClockInsSincePrompt': state.clockInsSincePrompt,
-          'nextClockInsSincePrompt': state.clockInsSincePrompt + 1,
+          'previousClockInsSinceReminder': state.clockInsSinceReminder,
+          'nextClockInsSinceReminder': state.clockInsSinceReminder + 1,
           'reason': decision.reason,
           'firebaseRead': 0,
           'firebaseWrite': 0,
@@ -342,7 +342,7 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
       );
     } catch (error, stackTrace) {
       LauncherDiagnostics.record(
-        'rule_todo_prompt_count_history_failed',
+        'rule_todo_reminder_count_history_failed',
         scope: 'commute_todo',
         meta: <String, Object?>{
           'error': error,
@@ -364,14 +364,14 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
     required bool force,
   }) {
     LauncherDiagnostics.record(
-      'rule_todo_prompt_evaluated',
+      'rule_todo_reminder_evaluated',
       scope: 'commute_todo',
       meta: <String, Object?>{
         'userIdPresent': userIdPresent,
         'division': division,
         'area': area,
         'identitySource': identitySource,
-        'forcePrompt': force,
+        'forceReminder': force,
         'decision': 'skip',
         'reason': reason,
         'firebaseRead': 0,
@@ -382,7 +382,7 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
     return CommutePreClockInDecision.skip(
       reason: reason,
       diagnosticsSummary:
-          'reason=$reason identitySource=$identitySource forcePrompt=$force gate=shared_rule_todo firebaseRead=0 firebaseWrite=0',
+          'reason=$reason identitySource=$identitySource forceReminder=$force gate=shared_rule_todo firebaseRead=0 firebaseWrite=0',
     );
   }
 
@@ -401,20 +401,20 @@ class RuleTodoPreClockInGate implements CommutePreClockInGate {
   }
 }
 
-class _RuleTodoPromptDecisionState {
-  const _RuleTodoPromptDecisionState({
+class _RuleTodoReminderDecisionState {
+  const _RuleTodoReminderDecisionState({
     required this.userId,
     required this.division,
     required this.area,
     required this.fingerprint,
-    required this.clockInsSincePrompt,
-    required this.promptCount,
+    required this.clockInsSinceReminder,
+    required this.reminderCount,
   });
 
   final String userId;
   final String division;
   final String area;
   final String fingerprint;
-  final int clockInsSincePrompt;
-  final int promptCount;
+  final int clockInsSinceReminder;
+  final int reminderCount;
 }

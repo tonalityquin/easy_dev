@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../app/init/app_exit_service.dart';
 import '../../../../../app/init/work_schedule_prefs.dart';
+import '../../../../../app/init/work_status_notification.dart';
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../../features/attendance/application/attendance_diagnostics.dart';
 import '../../../../../features/attendance/application/common_attendance_service.dart';
@@ -36,7 +39,8 @@ class SingleInsidePunchRecorderSection extends StatefulWidget {
   State<SingleInsidePunchRecorderSection> createState() => _SingleInsidePunchRecorderSectionState();
 }
 
-class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchRecorderSection> {
+class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchRecorderSection>
+    with WidgetsBindingObserver {
   late DateTime _selectedDate;
   String? _workInTime;
   String? _breakTime;
@@ -44,6 +48,14 @@ class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchReco
   bool _loading = true;
   bool _requiresBreak = true;
   AttBrkModeType? _submitting;
+  bool _externalRefreshInFlight = false;
+  bool _externalRefreshQueued = false;
+  String _queuedExternalRefreshReason = 'queued';
+  int _externalRefreshCount = 0;
+  String _lastExternalRefreshReason = '-';
+  String _lastExternalNotificationSource = '-';
+  DateTime? _lastExternalRefreshAt;
+  String _lastExternalBreakTime = '-';
 
   bool get _hasWorkIn => (_workInTime ?? '').trim().isNotEmpty;
   bool get _hasBreak => (_breakTime ?? '').trim().isNotEmpty;
@@ -53,8 +65,100 @@ class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchReco
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WorkStatusNotificationController.status.addListener(
+      _handleWorkStatusNotificationChanged,
+    );
     _selectedDate = DateTime.now();
     _loadForDate(_selectedDate);
+  }
+
+  @override
+  void dispose() {
+    WorkStatusNotificationController.status.removeListener(
+      _handleWorkStatusNotificationChanged,
+    );
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    unawaited(
+      _refreshExternalAttendanceState(
+        reason: 'app_resumed',
+        notificationSource:
+            WorkStatusNotificationController.status.value.source,
+      ),
+    );
+  }
+
+  void _handleWorkStatusNotificationChanged() {
+    final snapshot = WorkStatusNotificationController.status.value;
+    if (snapshot.source != 'break_action_completed') return;
+    final now = DateTime.now();
+    final selectedToday = _selectedDate.year == now.year &&
+        _selectedDate.month == now.month &&
+        _selectedDate.day == now.day;
+    if (!selectedToday) {
+      _debug(
+        'external_refresh_skip reason=notification_break_completed selectedDate=${DateFormat('yyyy-MM-dd').format(_selectedDate)} today=${DateFormat('yyyy-MM-dd').format(now)} source=${snapshot.source}',
+      );
+      return;
+    }
+    unawaited(
+      _refreshExternalAttendanceState(
+        reason: 'notification_break_completed',
+        notificationSource: snapshot.source,
+      ),
+    );
+  }
+
+  Future<void> _refreshExternalAttendanceState({
+    required String reason,
+    required String notificationSource,
+  }) async {
+    if (!mounted) return;
+    if (_externalRefreshInFlight) {
+      _externalRefreshQueued = true;
+      _queuedExternalRefreshReason = reason;
+      _debug(
+        'external_refresh_queued reason=$reason source=$notificationSource date=${DateFormat('yyyy-MM-dd').format(_selectedDate)}',
+      );
+      return;
+    }
+
+    _externalRefreshInFlight = true;
+    var activeReason = reason;
+    var activeSource = notificationSource;
+    try {
+      do {
+        _externalRefreshQueued = false;
+        final beforeBreak = (_breakTime ?? '').trim();
+        _lastExternalRefreshReason = activeReason;
+        _lastExternalNotificationSource = activeSource;
+        _debug(
+          'external_refresh_start reason=$activeReason source=$activeSource date=${DateFormat('yyyy-MM-dd').format(_selectedDate)} beforeBreak=$beforeBreak',
+        );
+        await _loadForDate(_selectedDate);
+        if (!mounted) return;
+        _externalRefreshCount++;
+        _lastExternalRefreshAt = DateTime.now();
+        _lastExternalBreakTime = (_breakTime ?? '').trim().isEmpty
+            ? '-'
+            : (_breakTime ?? '').trim();
+        _debug(
+          'external_refresh_complete reason=$activeReason source=$activeSource count=$_externalRefreshCount workIn=${_workInTime ?? ''} break=${_breakTime ?? ''} workOut=${_workOutTime ?? ''}',
+        );
+        if (_externalRefreshQueued) {
+          activeReason = _queuedExternalRefreshReason;
+          activeSource = WorkStatusNotificationController.status.value.source;
+        }
+      } while (_externalRefreshQueued);
+    } finally {
+      _externalRefreshInFlight = false;
+    }
   }
 
   void _debug(String message) {
@@ -166,29 +270,50 @@ class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchReco
     _debug(
       'punch_start type=${type.code} mode=single repunch=$repunch dateTime=${targetDateTime.toIso8601String()}',
     );
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '근태 처리 상태',
+      initialMessage: 'Single 근태 처리를 시작합니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+      standardModeMessage: '근태 처리를 진행합니다.',
+      showDialogImmediately: false,
+    );
+    trace.log(
+      'source=single_punch_recorder type=${type.code} repunch=$repunch at=${targetDateTime.toIso8601String()}',
+      progress: .12,
+    );
     try {
       final result = type == AttBrkModeType.breakTime
           ? await CommonAttendanceService.recordBreak(
               context,
               source: 'single_punch_recorder',
-              modeKey: 'single',
               recordedAt: targetDateTime,
+              trace: trace,
             )
           : repunch
               ? await CommonAttendanceService.replaceClockOut(
                   context,
                   source: 'single_punch_recorder_repunch',
-                  modeKey: 'single',
                   recordedAt: targetDateTime,
+                  trace: trace,
                 )
               : await CommonAttendanceService.clockOut(
                   context,
                   source: 'single_punch_recorder',
-                  modeKey: 'single',
                   recordedAt: targetDateTime,
+                  trace: trace,
                 );
       if (!result.success) {
         throw StateError(result.message);
+      }
+      trace.log(
+        'attendance_result success=true message=${result.message}',
+        progress: .78,
+      );
+      await trace.succeed(result.message);
+      if (trace.developerMode && mounted) {
+        await trace.showStatusDialog(context);
       }
       if (!mounted) return;
       await showCommonAttendancePunchFeedback(
@@ -204,6 +329,14 @@ class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchReco
         await _exitAppAfterClockOut(context);
       }
     } catch (error, stackTrace) {
+      await trace.fail(
+        '근태 처리에 실패했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (trace.developerMode && mounted) {
+        await trace.showStatusDialog(context);
+      }
       _debug(
         'punch_failure type=${type.code} mode=single repunch=$repunch error=$error stack=$stackTrace',
       );
@@ -236,6 +369,57 @@ class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchReco
     trace.log('breakAllowedWithoutScheduledTimes=true', progress: .86);
     trace.log('clockOutRequiresBreakWhenConfigured=true', progress: .9);
     trace.log('workInReadOnly=$_disableWorkInPunch', progress: .92);
+    final notificationStatus = WorkStatusNotificationController.status.value;
+    trace.log(
+      'notificationSource=${notificationStatus.source}',
+      progress: .925,
+    );
+    trace.log(
+      'notificationUpdatedAt=${notificationStatus.updatedAt?.toIso8601String() ?? '-'}',
+      progress: .93,
+    );
+    trace.log(
+      'externalRefreshInFlight=$_externalRefreshInFlight',
+      progress: .935,
+    );
+    trace.log(
+      'externalRefreshQueued=$_externalRefreshQueued',
+      progress: .94,
+    );
+    trace.log(
+      'externalRefreshCount=$_externalRefreshCount',
+      progress: .945,
+    );
+    trace.log(
+      'lastExternalRefreshReason=$_lastExternalRefreshReason',
+      progress: .95,
+    );
+    trace.log(
+      'lastExternalNotificationSource=$_lastExternalNotificationSource',
+      progress: .955,
+    );
+    trace.log(
+      'lastExternalRefreshAt=${_lastExternalRefreshAt?.toIso8601String() ?? '-'}',
+      progress: .96,
+    );
+    trace.log(
+      'lastExternalBreakTime=$_lastExternalBreakTime',
+      progress: .965,
+    );
+    final attendanceSession =
+        await AttBrkRepository.instance.getAttendanceSessionForDate(_selectedDate);
+    trace.log(
+      'sessionContext=${attendanceSession?.contextKey ?? '-'}',
+      progress: .96,
+    );
+    trace.log(
+      'sessionMode=${attendanceSession?.modeKey ?? '-'}',
+      progress: .965,
+    );
+    trace.log(
+      'sessionHeadquarter=${attendanceSession?.isHeadquarter ?? false}',
+      progress: .97,
+    );
     trace.log('submitting=${_submitting?.code ?? ''}', progress: .95);
     trace.log('scheduleRevision=${widget.scheduleRevision}', progress: .98);
     for (final line in AttendanceDiagnostics.lines) {

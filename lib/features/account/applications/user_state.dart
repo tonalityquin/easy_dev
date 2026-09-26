@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../../../app/init/work_schedule_prefs.dart';
+import '../../../app/utils/area_context_debug_trace.dart';
 import '../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../shared/auth/tablet_phone.dart';
 import '../../../shared/tts/services/plate/plate_tts_listener_service.dart';
@@ -127,7 +128,11 @@ class UserState extends ChangeNotifier {
   String get division =>
       _user?.divisions.firstOrNull ?? _tablet?.divisions.firstOrNull ?? '';
 
-  String get currentArea => _session?.currentArea ?? area;
+  String get selectedArea => _session?.selectedArea ?? '';
+
+  String get homeArea => selectedArea.isNotEmpty ? selectedArea : area;
+
+  String get currentArea => _session?.currentArea ?? homeArea;
 
   String? get _clockInCacheDateKey => _session == null ? null : 'clockInDate';
 
@@ -1607,77 +1612,190 @@ class UserState extends ChangeNotifier {
   }) {
     final normalizedArea = newArea.trim();
     if (normalizedArea.isEmpty) {
-      debugPrint('[UserState] local currentArea 적용 중단: area_empty source=$source');
+      AreaContextDebugTrace.record(
+        'UserState',
+        'current_area_local_skipped',
+        fields: <String, Object?>{
+          'reason': 'area_empty',
+          'source': source,
+        },
+      );
       return;
     }
 
+    final previousSelectedArea = selectedArea.trim();
+    final previousCurrentArea = currentArea.trim();
+
     if (_isTablet) {
       if (_tablet == null) return;
-      _tablet = _tablet!.copyWith(
-        currentArea: normalizedArea,
-        selectedArea: normalizedArea,
-      );
+      _tablet = _tablet!.copyWith(currentArea: normalizedArea);
       _session = TabletSessionAccount(_tablet!);
       notifyListeners();
-      debugPrint(
-        '[UserState] local currentArea 적용 완료: $normalizedArea / tablet=true / source=$source / firebaseRead=0 firebaseWrite=0',
+      AreaContextDebugTrace.record(
+        'UserState',
+        'current_area_local_applied',
+        fields: <String, Object?>{
+          'tablet': true,
+          'source': source,
+          'selectedArea': selectedArea.trim(),
+          'selectedAreaPreserved': selectedArea.trim() == previousSelectedArea,
+          'previousCurrentArea': previousCurrentArea,
+          'currentArea': currentArea.trim(),
+          'firebaseRead': 0,
+          'firebaseWrite': 0,
+        },
       );
       return;
     }
 
     if (_user == null) return;
-    _user = _user!.copyWith(
-      currentArea: normalizedArea,
-      selectedArea: normalizedArea,
-    );
+    _user = _user!.copyWith(currentArea: normalizedArea);
     _session = UserSessionAccount(_user!);
     notifyListeners();
-    debugPrint(
-      '[UserState] local currentArea 적용 완료: $normalizedArea / tablet=false / source=$source / firebaseRead=0 firebaseWrite=0',
+    AreaContextDebugTrace.record(
+      'UserState',
+      'current_area_local_applied',
+      fields: <String, Object?>{
+        'tablet': false,
+        'source': source,
+        'selectedArea': selectedArea.trim(),
+        'selectedAreaPreserved': selectedArea.trim() == previousSelectedArea,
+        'previousCurrentArea': previousCurrentArea,
+        'currentArea': currentArea.trim(),
+        'firebaseRead': 0,
+        'firebaseWrite': 0,
+      },
     );
   }
 
   Future<void> areaPickerCurrentArea(String newArea) async {
+    final normalizedArea = newArea.trim();
+    if (normalizedArea.isEmpty) {
+      AreaContextDebugTrace.record(
+        'UserState',
+        'area_picker_skipped',
+        fields: const <String, Object?>{
+          'reason': 'area_empty',
+        },
+      );
+      return;
+    }
+
+    final previousSelectedArea = selectedArea.trim();
+    final previousCurrentArea = currentArea.trim();
+
     if (_isTablet) {
       if (_tablet == null) return;
-      _tablet = _tablet!.copyWith(currentArea: newArea, selectedArea: newArea);
+      _tablet = _tablet!.copyWith(currentArea: normalizedArea);
       _session = TabletSessionAccount(_tablet!);
       notifyListeners();
+      AreaContextDebugTrace.record(
+        'UserState',
+        'area_picker_local_applied',
+        fields: <String, Object?>{
+          'tablet': true,
+          'selectedArea': selectedArea.trim(),
+          'selectedAreaPreserved': selectedArea.trim() == previousSelectedArea,
+          'previousCurrentArea': previousCurrentArea,
+          'currentArea': currentArea.trim(),
+        },
+      );
 
       try {
         await _repository.areaPickerCurrentAreaTablet(
           _tablet!.id,
-          newArea.trim(),
+          normalizedArea,
+        );
+        AreaContextDebugTrace.record(
+          'UserState',
+          'area_picker_remote_applied',
+          fields: <String, Object?>{
+            'tablet': true,
+            'currentArea': normalizedArea,
+          },
         );
       } catch (e) {
-        debugPrint("areaPickerCurrentArea 실패: $e");
+        AreaContextDebugTrace.record(
+          'UserState',
+          'area_picker_remote_failed',
+          fields: <String, Object?>{
+            'tablet': true,
+            'currentArea': normalizedArea,
+            'error': '$e',
+          },
+        );
       }
 
-      await _areaState.updateArea(newArea, isSyncing: true);
+      await _areaState.updateArea(normalizedArea, isSyncing: true);
+      AreaContextDebugTrace.record(
+        'UserState',
+        'area_state_applied',
+        fields: <String, Object?>{
+          'tablet': true,
+          'selectedArea': selectedArea.trim(),
+          'currentArea': _areaState.currentArea.trim(),
+          'division': _areaState.currentDivision.trim(),
+        },
+      );
       return;
     }
 
     if (_user == null) return;
 
-    _user = _user!.copyWith(
-      currentArea: newArea,
-      selectedArea: newArea,
-    );
+    _user = _user!.copyWith(currentArea: normalizedArea);
     _session = UserSessionAccount(_user!);
     notifyListeners();
+    AreaContextDebugTrace.record(
+      'UserState',
+      'area_picker_local_applied',
+      fields: <String, Object?>{
+        'tablet': false,
+        'selectedArea': selectedArea.trim(),
+        'selectedAreaPreserved': selectedArea.trim() == previousSelectedArea,
+        'previousCurrentArea': previousCurrentArea,
+        'currentArea': currentArea.trim(),
+      },
+    );
 
     try {
       await _repository.areaPickerCurrentArea(
         _user!.phone.trim(),
-        _user!.areas.firstOrNull ?? '',
-        newArea.trim(),
+        selectedArea.trim().isNotEmpty
+            ? selectedArea.trim()
+            : (_user!.areas.firstOrNull ?? ''),
+        normalizedArea,
+      );
+      AreaContextDebugTrace.record(
+        'UserState',
+        'area_picker_remote_applied',
+        fields: <String, Object?>{
+          'tablet': false,
+          'currentArea': normalizedArea,
+        },
       );
     } catch (e) {
-      debugPrint("areaPickerCurrentArea 실패: $e");
+      AreaContextDebugTrace.record(
+        'UserState',
+        'area_picker_remote_failed',
+        fields: <String, Object?>{
+          'tablet': false,
+          'currentArea': normalizedArea,
+          'error': '$e',
+        },
+      );
     }
 
-    await _areaState.updateArea(newArea, isSyncing: true);
-
+    await _areaState.updateArea(normalizedArea, isSyncing: true);
+    AreaContextDebugTrace.record(
+      'UserState',
+      'area_state_applied',
+      fields: <String, Object?>{
+        'tablet': false,
+        'selectedArea': selectedArea.trim(),
+        'currentArea': _areaState.currentArea.trim(),
+        'division': _areaState.currentDivision.trim(),
+      },
+    );
   }
 
   Future<void> _fetchUsersByAreaWithCache({bool force = false}) async {

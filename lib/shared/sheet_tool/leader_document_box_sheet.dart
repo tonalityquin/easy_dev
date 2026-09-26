@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../features/account/applications/user_state.dart';
+import '../../app/utils/area_context_debug_trace.dart';
 import '../../features/commute/domain/repositories/commute_log_repository.dart';
 import '../../features/dev/application/area_state.dart';
 import '../../features/mode_single/application/att_brk_mode_db.dart';
@@ -122,11 +123,22 @@ Future<void> submitLeaderCommuteRecordsFromSqlite(BuildContext context) async {
 
   final userId = (userState.session?.id ?? '').trim();
   final userName = userState.name.trim();
-  final area = (userState.session?.selectedArea ?? '').trim();
+  final selectedArea = (userState.session?.selectedArea ?? '').trim();
+  final area = userState.currentArea.trim();
   final division = areaState.currentDivision.trim();
 
   const debugTag = 'DashboardQuickActions/LeaderCommuteSubmit';
   debugPrint('[$debugTag] start statuses=출근,퇴근');
+  AreaContextDebugTrace.record(
+    debugTag,
+    'attendance_upload_started',
+    fields: <String, Object?>{
+      'selectedArea': selectedArea,
+      'currentArea': area,
+      'currentDivision': division,
+      'statuses': '출근,퇴근',
+    },
+  );
 
   if (userId.isEmpty || userName.isEmpty || area.isEmpty || division.isEmpty) {
     debugPrint('[$debugTag] skipped reason=missing_required_context');
@@ -187,8 +199,26 @@ Future<void> submitLeaderCommuteRecordsFromSqlite(BuildContext context) async {
       debugPrint('[$debugTag] remoteVerified=$nowExists');
     }
     debugPrint('[$debugTag] complete processed=${records.length}');
+    AreaContextDebugTrace.record(
+      debugTag,
+      'attendance_upload_completed',
+      fields: <String, Object?>{
+        'selectedArea': selectedArea,
+        'currentArea': area,
+        'processed': records.length,
+      },
+    );
   } catch (e, st) {
     debugPrint('❌ [$debugTag] 출퇴근 기록 제출 중 오류: $e');
+    AreaContextDebugTrace.record(
+      debugTag,
+      'attendance_upload_failed',
+      fields: <String, Object?>{
+        'selectedArea': selectedArea,
+        'currentArea': area,
+        'error': '$e',
+      },
+    );
     debugPrint('stack: $st');
   }
 }
@@ -199,11 +229,22 @@ Future<void> submitLeaderRestTimeRecordsFromSqlite(BuildContext context) async {
 
   final userId = (userState.session?.id ?? '').trim();
   final userName = userState.name.trim();
-  final area = (userState.session?.selectedArea ?? '').trim();
+  final selectedArea = (userState.session?.selectedArea ?? '').trim();
+  final area = userState.currentArea.trim();
   final division = areaState.currentDivision.trim();
 
   const debugTag = 'DashboardQuickActions/LeaderBreakSubmit';
   debugPrint('[$debugTag] start statuses=휴게');
+  AreaContextDebugTrace.record(
+    debugTag,
+    'attendance_upload_started',
+    fields: <String, Object?>{
+      'selectedArea': selectedArea,
+      'currentArea': area,
+      'currentDivision': division,
+      'statuses': '휴게',
+    },
+  );
 
   if (userId.isEmpty || userName.isEmpty || area.isEmpty || division.isEmpty) {
     debugPrint('[$debugTag] skipped reason=missing_required_context');
@@ -265,8 +306,26 @@ Future<void> submitLeaderRestTimeRecordsFromSqlite(BuildContext context) async {
       }
     }
     debugPrint('[$debugTag] complete processed=${records.length}');
+    AreaContextDebugTrace.record(
+      debugTag,
+      'attendance_upload_completed',
+      fields: <String, Object?>{
+        'selectedArea': selectedArea,
+        'currentArea': area,
+        'processed': records.length,
+      },
+    );
   } catch (e, st) {
     debugPrint('❌ [$debugTag] 휴게시간 기록 제출 중 오류: $e');
+    AreaContextDebugTrace.record(
+      debugTag,
+      'attendance_upload_failed',
+      fields: <String, Object?>{
+        'selectedArea': selectedArea,
+        'currentArea': area,
+        'error': '$e',
+      },
+    );
     debugPrint('stack: $st');
   }
 }

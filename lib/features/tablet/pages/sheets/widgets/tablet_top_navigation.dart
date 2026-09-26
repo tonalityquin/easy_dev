@@ -12,9 +12,8 @@ import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../app/init/app_exit_service.dart';
 import '../../../../../app/init/logout_helper.dart';
 import '../../../../../app/utils/operational_data_sync_workflow.dart';
+import '../../../../../app/theme/theme_settings_dialog.dart';
 import '../../../../../app/utils/status_dialog.dart';
-import '../../../../../app/theme/brand_theme.dart';
-import '../../../../../app/theme/theme_prefs_controller.dart';
 import '../../../../dev/application/area_state.dart';
 import '../../../../selector/application/dev_auth.dart';
 import '../../../applications/tablet_grid_render_mode_state.dart';
@@ -97,12 +96,6 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
     );
   }
 
-  String _themeModeLabel(String id) {
-    return themeModeSpecs()
-        .firstWhere((m) => m.id == id, orElse: () => themeModeSpecs().first)
-        .label;
-  }
-
   String _formatLastSync(DateTime dt) {
     String two(int n) => n.toString().padLeft(2, '0');
     final d = dt.toLocal();
@@ -143,162 +136,9 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
   }
 
   Future<void> _openThemeSettingsDialog(BuildContext context) async {
-    await showCommonOverlayDialog<void>(
+    await showCommonThemeSettingsDialog(
       context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return Consumer<ThemePrefsController>(
-          builder: (ctx, themeCtrl, _) {
-            final cs = Theme.of(ctx).colorScheme;
-            final text = Theme.of(ctx).textTheme;
-
-            final modes = themeModeSpecs();
-            final presets = brandPresets();
-
-            return AlertDialog(
-              insetPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
-              contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-              title: Row(
-                children: [
-                  const Icon(Icons.tune_rounded),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '테마 설정',
-                      style: text.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                ],
-              ),
-              content: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        '테마 모드(시스템/라이트/다크)와 색 프리셋을 선택하면 앱 전체에 즉시 적용됩니다.',
-                        style: text.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '테마 모드',
-                        style: text.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: modes.map((m) {
-                          final selected = m.id == themeCtrl.themeModeId;
-                          return ChoiceChip(
-                            selected: selected,
-                            onSelected: (_) async {
-                              HapticFeedback.selectionClick();
-                              await themeCtrl.setThemeModeId(m.id);
-                            },
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(m.icon, size: 16),
-                                const SizedBox(width: 6),
-                                Text(m.label),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 14),
-                      Divider(
-                          height: 1, color: cs.outlineVariant.withOpacity(0.7)),
-                      const SizedBox(height: 14),
-                      Text(
-                        '테마 색(프리셋)',
-                        style: text.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '컨셉 컬러는 포인트(primary)만 변경되고, 표면(surfaces)은 중립으로 유지됩니다.',
-                        style: text.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: presets.map((p) {
-                          final selected = p.id == themeCtrl.presetId;
-                          return ChoiceChip(
-                            selected: selected,
-                            onSelected: (_) async {
-                              HapticFeedback.selectionClick();
-                              await themeCtrl.setPresetId(p.id);
-                            },
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _PresetPreviewDots(colors: p.preview),
-                                const SizedBox(width: 8),
-                                Text(p.label),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: cs.outlineVariant.withOpacity(0.75)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline,
-                                color: cs.onSurfaceVariant, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                '현재: ${_themeModeLabel(themeCtrl.themeModeId)} / ${presetById(themeCtrl.presetId).label}',
-                                style: text.bodySmall?.copyWith(
-                                  color: cs.onSurfaceVariant,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: <Widget>[
-                CommonButton(
-                  label: '닫기',
-                  variant: CommonButtonVariant.tertiary,
-                  minHeight: 44,
-                  onPressed: () => Navigator.of(ctx).pop(),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      source: 'tablet_top_navigation',
     );
   }
 
@@ -1421,36 +1261,6 @@ class _DialogPill extends StatelessWidget {
           fontWeight: FontWeight.w700,
         ),
       ),
-    );
-  }
-}
-
-class _PresetPreviewDots extends StatelessWidget {
-  const _PresetPreviewDots({required this.colors});
-
-  final List<Color> colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final dots = colors.take(3).toList();
-    final outline =
-    Theme.of(context).colorScheme.outlineVariant.withOpacity(0.6);
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(dots.length, (i) {
-        final c = dots[i];
-        return Container(
-          width: 10,
-          height: 10,
-          margin: EdgeInsets.only(right: i == dots.length - 1 ? 0 : 4),
-          decoration: BoxDecoration(
-            color: c,
-            shape: BoxShape.circle,
-            border: Border.all(color: outline),
-          ),
-        );
-      }),
     );
   }
 }

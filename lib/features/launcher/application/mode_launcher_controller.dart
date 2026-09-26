@@ -194,7 +194,7 @@ class ModeLauncherController extends ChangeNotifier {
   bool get importingUnlocked => _importingUnlocked;
   int get errorSerial => _errorSerial;
   String get runningCommand => _runningCommand;
-  String get currentPromptPath => _commandPath.promptPath;
+  String get currentTerminalPath => _commandPath.terminalPath;
   bool get emailEditMode => _commandPath.isEmailEdit;
   String? get savedModeRaw => _savedModeRaw;
   AppModeDefinition? get assignedMode => _assignedMode;
@@ -217,7 +217,7 @@ class ModeLauncherController extends ChangeNotifier {
       _selectedMode != null ||
       _selectedWorkArea != null ||
       _enteredName.isNotEmpty;
-  bool get obscurePrompt => false;
+  bool get obscureCommandInput => false;
   bool get commandHistoryEnabled {
     if (startupSetupActive) return false;
     if (_commandPath.isEmailEdit) return false;
@@ -257,8 +257,8 @@ class ModeLauncherController extends ChangeNotifier {
   String get returnSelectionLabel =>
       _authenticatedAccount?.kind == TerminalAccountKind.user ? 'AREAS' : 'MODES';
   bool shouldDismissKeyboardForInput(String raw) => false;
-  TextInputAction get promptInputAction => TextInputAction.done;
-  TextInputType get promptKeyboardType => TextInputType.text;
+  TextInputAction get commandInputAction => TextInputAction.done;
+  TextInputType get commandKeyboardType => TextInputType.text;
 
   String? consumePendingTargetRoute() {
     final route = _pendingTargetRoute;
@@ -546,7 +546,7 @@ class ModeLauncherController extends ChangeNotifier {
     TerminalLineType type,
     String text, {
     TerminalCadence cadence = TerminalCadence.automatic,
-    String? promptPath,
+    String? terminalPath,
   }) {
     _lines.add(
       TerminalLine(
@@ -554,7 +554,7 @@ class ModeLauncherController extends ChangeNotifier {
         type: type,
         text: text,
         cadence: cadence,
-        promptPath: promptPath ?? _commandPath.promptPath,
+        terminalPath: terminalPath ?? _commandPath.terminalPath,
       ),
     );
     if (_lines.length > 120) {
@@ -1058,7 +1058,7 @@ class ModeLauncherController extends ChangeNotifier {
     );
     _append(
       TerminalLineType.output,
-      'Terminal path       ${_commandPath.promptPath}',
+      'Terminal path       ${_commandPath.terminalPath}',
     );
     _append(TerminalLineType.system, '────────────────────────────────────────');
   }
@@ -1121,7 +1121,7 @@ class ModeLauncherController extends ChangeNotifier {
       'Work notification service: ${WorkStatusNotificationController.status.value.serviceRunning}',
       'Work notification source: ${WorkStatusNotificationController.status.value.source}',
       'Auth stage: ${_loginStage.name}',
-      'Terminal path: ${_commandPath.promptPath}',
+      'Terminal path: ${_commandPath.terminalPath}',
       'Email edit mode: ${_commandPath.isEmailEdit}',
       'Name length: ${_enteredName.length}',
       'Phone: ${_maskPhone(_enteredPhone)}',
@@ -1176,7 +1176,7 @@ class ModeLauncherController extends ChangeNotifier {
       _append(
         TerminalLineType.command,
         input,
-        promptPath: _commandPath.promptPath,
+        terminalPath: _commandPath.terminalPath,
       );
       return _unlockImporting(
         context,
@@ -1194,7 +1194,7 @@ class ModeLauncherController extends ChangeNotifier {
       _append(
         TerminalLineType.command,
         input,
-        promptPath: _commandPath.promptPath,
+        terminalPath: _commandPath.terminalPath,
       );
       return _submitSettingPathCommand(
         context,
@@ -1208,7 +1208,7 @@ class ModeLauncherController extends ChangeNotifier {
         _append(
           TerminalLineType.command,
           input,
-          promptPath: _commandPath.promptPath,
+          terminalPath: _commandPath.terminalPath,
         );
         return _submitDebugAccountTypeEscape(
           normalized,
@@ -1232,7 +1232,7 @@ class ModeLauncherController extends ChangeNotifier {
         _append(
           TerminalLineType.command,
           input,
-          promptPath: _commandPath.promptPath,
+          terminalPath: _commandPath.terminalPath,
         );
         return _submitGlobalCommand(
           context,
@@ -1256,7 +1256,7 @@ class ModeLauncherController extends ChangeNotifier {
     _append(
       TerminalLineType.command,
       input,
-      promptPath: _commandPath.promptPath,
+      terminalPath: _commandPath.terminalPath,
     );
 
     final mode = AppModeRegistry.find(input);
@@ -1726,7 +1726,7 @@ class ModeLauncherController extends ChangeNotifier {
       'terminal_importing_unlock_start',
       scope: 'mode_terminal',
       meta: <String, Object?>{
-        'path': _commandPath.promptPath,
+        'path': _commandPath.terminalPath,
         'command': '<hidden>',
       },
     );
@@ -1745,7 +1745,7 @@ class ModeLauncherController extends ChangeNotifier {
       'terminal_importing_unlock_complete',
       scope: 'mode_terminal',
       meta: <String, Object?>{
-        'path': _commandPath.promptPath,
+        'path': _commandPath.terminalPath,
         'command': '<hidden>',
       },
     );
@@ -1767,7 +1767,7 @@ class ModeLauncherController extends ChangeNotifier {
       scope: 'mode_terminal',
       meta: <String, Object?>{
         'command': normalized,
-        'path': _commandPath.promptPath,
+        'path': _commandPath.terminalPath,
       },
     );
     notifyListeners();
@@ -1822,14 +1822,14 @@ class ModeLauncherController extends ChangeNotifier {
     }
     switch (normalized) {
       case 'setting':
-        final from = _commandPath.promptPath;
+        final from = _commandPath.terminalPath;
         _commandPath = TerminalCommandPath.setting;
         LauncherDiagnostics.record(
           'terminal_path_enter',
           scope: 'mode_terminal',
           meta: <String, Object?>{
             'from': from,
-            'to': _commandPath.promptPath,
+            'to': _commandPath.terminalPath,
           },
         );
         notifyListeners();
@@ -2051,7 +2051,7 @@ class ModeLauncherController extends ChangeNotifier {
           'terminal_unknown_command',
           meta: <String, Object?>{
             'input': input,
-            'path': _commandPath.promptPath,
+            'path': _commandPath.terminalPath,
           },
         );
         notifyListeners();
@@ -2067,7 +2067,7 @@ class ModeLauncherController extends ChangeNotifier {
   }) async {
     if (_commandPath.isEmailEdit) {
       if (normalized == 'cancel' || normalized == 'cd ..') {
-        final from = _commandPath.promptPath;
+        final from = _commandPath.terminalPath;
         _commandPath = TerminalCommandPath.setting;
         _append(TerminalLineType.system, '[ok] email edit cancelled');
         LauncherDiagnostics.record(
@@ -2075,7 +2075,7 @@ class ModeLauncherController extends ChangeNotifier {
           scope: 'mode_terminal',
           meta: <String, Object?>{
             'from': from,
-            'to': _commandPath.promptPath,
+            'to': _commandPath.terminalPath,
           },
         );
         notifyListeners();
@@ -2099,14 +2099,14 @@ class ModeLauncherController extends ChangeNotifier {
       return const ModeLauncherSubmitResult();
     }
     if (normalized == 'cd ..') {
-      final from = _commandPath.promptPath;
+      final from = _commandPath.terminalPath;
       _commandPath = TerminalCommandPath.root;
       LauncherDiagnostics.record(
         'terminal_path_leave',
         scope: 'mode_terminal',
         meta: <String, Object?>{
           'from': from,
-          'to': _commandPath.promptPath,
+          'to': _commandPath.terminalPath,
         },
       );
       notifyListeners();
@@ -2154,8 +2154,8 @@ class ModeLauncherController extends ChangeNotifier {
         'terminal_setting_path_change',
         scope: 'mode_terminal',
         meta: <String, Object?>{
-          'from': previousPath.promptPath,
-          'to': _commandPath.promptPath,
+          'from': previousPath.terminalPath,
+          'to': _commandPath.terminalPath,
         },
       );
     }
@@ -2206,14 +2206,14 @@ class ModeLauncherController extends ChangeNotifier {
       );
     }
     if (result.nextPath != null) {
-      final from = _commandPath.promptPath;
+      final from = _commandPath.terminalPath;
       _commandPath = result.nextPath!;
       LauncherDiagnostics.record(
         'terminal_email_edit_path_change',
         scope: 'mode_terminal',
         meta: <String, Object?>{
           'from': from,
-          'to': _commandPath.promptPath,
+          'to': _commandPath.terminalPath,
         },
       );
     }

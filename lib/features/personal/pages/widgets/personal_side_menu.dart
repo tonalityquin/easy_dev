@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -8,12 +7,11 @@ import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_completion_exit_dialog.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
-import '../../../../app/theme/brand_theme.dart';
 import '../../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
-import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../app/theme/theme_prefs_controller.dart';
+import '../../../../app/theme/theme_settings_dialog.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 import '../../../dev/application/area_state.dart';
@@ -131,146 +129,9 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
   }
 
   Future<void> _openThemeSettingsDialog() async {
-    await showCommonOverlayDialog<void>(
+    await showCommonThemeSettingsDialog(
       context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return Consumer<ThemePrefsController>(
-          builder: (ctx, themeCtrl, _) {
-            final cs = Theme.of(ctx).colorScheme;
-            final tokens = CommonUiTheme.of(ctx);
-            final text = Theme.of(ctx).textTheme;
-            final modes = themeModeSpecs();
-            final presets = brandPresets();
-
-            return AlertDialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
-              contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-              title: Row(
-                children: [
-                  const Icon(Icons.tune_rounded),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '테마 설정',
-                      style: text.titleMedium?.copyWith(fontWeight: FontWeight.w900),
-                    ),
-                  ),
-                ],
-              ),
-              content: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        '브랜드 테마 컬러를 개인형 화면 전체에 적용합니다.',
-                        style: text.bodySmall?.copyWith(
-                          color: tokens.textSecondary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        '테마 모드',
-                        style: text.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: modes.map((m) {
-                          final selected = m.id == themeCtrl.themeModeId;
-                          return AnimatedScale(
-                            scale: selected ? 1.03 : 1,
-                            duration: personalCommonDuration(
-                              ctx,
-                              CommonUiMotion.selection,
-                            ),
-                            curve: CommonUiMotion.standard,
-                            child: ChoiceChip(
-                              selected: selected,
-                              onSelected: (_) async {
-                                HapticFeedback.selectionClick();
-                                await themeCtrl.setThemeModeId(m.id);
-                              },
-                              label: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(m.icon, size: 16),
-                                  const SizedBox(width: 6),
-                                  Text(m.label),
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 14),
-                      Divider(height: 1, color: cs.outlineVariant.withOpacity(.7)),
-                      const SizedBox(height: 14),
-                      Text(
-                        '테마 색',
-                        style: text.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: presets.map((p) {
-                          final selected = p.id == themeCtrl.presetId;
-                          return AnimatedScale(
-                            scale: selected ? 1.03 : 1,
-                            duration: personalCommonDuration(
-                              ctx,
-                              CommonUiMotion.selection,
-                            ),
-                            curve: CommonUiMotion.standard,
-                            child: ChoiceChip(
-                              selected: selected,
-                              onSelected: (_) async {
-                                HapticFeedback.selectionClick();
-                                await themeCtrl.setPresetId(p.id);
-                              },
-                              label: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _PresetPreviewDots(colors: p.preview),
-                                  const SizedBox(width: 8),
-                                  Text(p.label),
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                CommonButton(
-                  label: '닫기',
-                  variant: CommonButtonVariant.tertiary,
-                  minHeight: 40,
-                  haptic: CommonHaptic.selection,
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      source: 'personal_side_menu',
     );
   }
 
@@ -519,7 +380,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                   _MenuTile(
                     icon: Icons.palette_outlined,
                     title: '테마 설정',
-                    subtitle: '현재 ${_themeModeLabel(themeCtrl.themeModeId)}',
+                    subtitle: '현재 ${themeCtrl.effectivePreset.label}',
                     onTap: () => _runAfterClose(_openThemeSettingsDialog),
                   ),
                   _MenuTile(
@@ -544,9 +405,6 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
     );
   }
 
-  String _themeModeLabel(String id) {
-    return themeModeSpecs().firstWhere((m) => m.id == id, orElse: () => themeModeSpecs().first).label;
-  }
 }
 
 class _MenuSectionLabel extends StatelessWidget {
@@ -656,40 +514,6 @@ class _MenuTile extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _PresetPreviewDots extends StatelessWidget {
-  const _PresetPreviewDots({required this.colors});
-
-  final List<Color> colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final shown = colors.isEmpty ? <Color>[cs.primary] : colors.take(3).toList();
-    return SizedBox(
-      width: 34,
-      height: 16,
-      child: Stack(
-        children: [
-          for (var i = 0; i < shown.length; i++)
-            Positioned(
-              left: i * 9.0,
-              top: 2,
-              child: Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: shown[i],
-                  shape: BoxShape.circle,
-                  border: Border.all(color: cs.surface, width: 1.4),
-                ),
-              ),
-            ),
-        ],
       ),
     );
   }

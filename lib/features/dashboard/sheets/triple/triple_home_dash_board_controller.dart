@@ -18,7 +18,6 @@ class TripleHomeDashBoardController {
     final result = await CommonAttendanceService.clockOut(
       context,
       source: 'triple_home_dashboard_controller',
-      modeKey: 'triple',
     );
     if (!result.success) {
       debugPrint(
@@ -31,7 +30,6 @@ class TripleHomeDashBoardController {
     final result = await CommonAttendanceService.recordBreak(
       context,
       source: 'triple_home_dashboard_controller',
-      modeKey: 'triple',
     );
     final recordedAt = result.recordedAt;
     if (!result.success || recordedAt == null) {

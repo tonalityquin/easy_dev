@@ -18,7 +18,6 @@ class MinorHomeDashBoardController {
     final result = await CommonAttendanceService.clockOut(
       context,
       source: 'minor_home_dashboard_controller',
-      modeKey: 'minor',
     );
     if (!result.success) {
       debugPrint(
@@ -31,7 +30,6 @@ class MinorHomeDashBoardController {
     final result = await CommonAttendanceService.recordBreak(
       context,
       source: 'minor_home_dashboard_controller',
-      modeKey: 'minor',
     );
     final recordedAt = result.recordedAt;
     if (!result.success || recordedAt == null) {

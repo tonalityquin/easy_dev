@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../../../features/attendance/domain/attendance_context.dart';
+import '../../../features/attendance/domain/attendance_session.dart';
 import '../../../features/commute/domain/repositories/commute_log_repository.dart';
 import 'att_brk_mode_db.dart';
 enum AttBrkModeType {
@@ -74,6 +77,84 @@ class AttBrkRepository {
 
   Future<Database> get _database async => AttBrkModeDb.instance.database;
 
+  Future<AttendanceSession> insertClockInWithSession({
+    required DateTime dateTime,
+    required AttendanceContext attendance,
+  }) async {
+    final db = await _database;
+    final date = _dateFormatter.format(dateTime);
+    final time = _timeFormatter.format(dateTime);
+    final createdAt = dateTime.toIso8601String();
+    final now = DateTime.now();
+    final session = AttendanceSession(
+      date: date,
+      userId: attendance.userId.trim(),
+      userName: attendance.userName.trim(),
+      area: attendance.area.trim(),
+      division: attendance.division.trim(),
+      contextKey: attendance.contextKey.trim(),
+      modeKey: attendance.isHeadquarter ? '' : attendance.modeKey.trim(),
+      isHeadquarter: attendance.isHeadquarter,
+      clockInAt: dateTime,
+      createdAt: now,
+      updatedAt: now,
+    );
+    if (!session.isValid) {
+      throw StateError('유효하지 않은 근무 세션입니다.');
+    }
+
+    await db.transaction((txn) async {
+      await txn.insert(
+        AttBrkModeDb.workAttendanceTable,
+        <String, Object?>{
+          'date': date,
+          'type': AttBrkModeType.workIn.code,
+          'time': time,
+          'created_at': createdAt,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      await txn.insert(
+        AttBrkModeDb.attendanceSessionTable,
+        session.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
+
+    debugPrint(
+      '[ATTENDANCE_SESSION] saved date=$date context=${session.contextKey} mode=${session.modeKey} headquarter=${session.isHeadquarter} area=${session.area} division=${session.division}',
+    );
+    return session;
+  }
+
+  Future<AttendanceSession?> getAttendanceSessionForDate(
+    DateTime dateTime,
+  ) async {
+    final db = await _database;
+    final date = _dateFormatter.format(dateTime);
+    final rows = await db.query(
+      AttBrkModeDb.attendanceSessionTable,
+      where: 'date = ?',
+      whereArgs: <Object?>[date],
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      debugPrint('[ATTENDANCE_SESSION] missing date=$date');
+      return null;
+    }
+    final session = AttendanceSession.fromMap(
+      Map<String, Object?>.from(rows.first),
+    );
+    if (session == null) {
+      debugPrint('[ATTENDANCE_SESSION] invalid date=$date');
+      return null;
+    }
+    debugPrint(
+      '[ATTENDANCE_SESSION] loaded date=$date context=${session.contextKey} mode=${session.modeKey} headquarter=${session.isHeadquarter}',
+    );
+    return session;
+  }
+
   Future<void> insertEvent({
     required DateTime dateTime,
     required AttBrkModeType type,
@@ -127,6 +208,13 @@ class AttBrkRepository {
       where: 'date = ?',
       whereArgs: <Object?>[date],
     );
+
+    await db.delete(
+      AttBrkModeDb.attendanceSessionTable,
+      where: 'date = ?',
+      whereArgs: <Object?>[date],
+    );
+    debugPrint('[ATTENDANCE_SESSION] cleared date=$date');
   }
 
   Future<Map<AttBrkModeType, String>> getEventsForDate(

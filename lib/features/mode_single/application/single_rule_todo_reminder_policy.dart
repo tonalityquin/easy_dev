@@ -1,5 +1,5 @@
-class SingleRuleTodoPromptPolicyResult {
-  const SingleRuleTodoPromptPolicyResult({
+class SingleRuleTodoReminderPolicyResult {
+  const SingleRuleTodoReminderPolicyResult({
     required this.shouldShow,
     required this.reason,
     required this.probability,
@@ -12,8 +12,8 @@ class SingleRuleTodoPromptPolicyResult {
   final double roll;
 }
 
-class SingleRuleTodoPromptPolicy {
-  const SingleRuleTodoPromptPolicy();
+class SingleRuleTodoReminderPolicy {
+  const SingleRuleTodoReminderPolicy();
 
   static const int cooldownClockIns = 3;
   static const int baseProbabilityUntilMisses = 8;
@@ -22,18 +22,18 @@ class SingleRuleTodoPromptPolicy {
   static const double probabilityStep = 0.015;
   static const double maxProbability = 0.18;
 
-  SingleRuleTodoPromptPolicyResult evaluate({
-    required int clockInsSincePrompt,
-    required int promptCount,
+  SingleRuleTodoReminderPolicyResult evaluate({
+    required int clockInsSinceReminder,
+    required int reminderCount,
     required double roll,
   }) {
-    final normalizedCount = clockInsSincePrompt < 0 ? 0 : clockInsSincePrompt;
-    final normalizedPromptCount = promptCount < 0 ? 0 : promptCount;
+    final normalizedCount = clockInsSinceReminder < 0 ? 0 : clockInsSinceReminder;
+    final normalizedReminderCount = reminderCount < 0 ? 0 : reminderCount;
     final normalizedRoll = roll.clamp(0.0, 1.0).toDouble();
 
-    if (normalizedPromptCount > 0 &&
+    if (normalizedReminderCount > 0 &&
         normalizedCount < cooldownClockIns) {
-      return SingleRuleTodoPromptPolicyResult(
+      return SingleRuleTodoReminderPolicyResult(
         shouldShow: false,
         reason: 'cooldown',
         probability: 0,
@@ -42,7 +42,7 @@ class SingleRuleTodoPromptPolicy {
     }
 
     if (normalizedCount >= guaranteedAttempt - 1) {
-      return SingleRuleTodoPromptPolicyResult(
+      return SingleRuleTodoReminderPolicyResult(
         shouldShow: true,
         reason: 'guaranteed_threshold',
         probability: 1,
@@ -58,7 +58,7 @@ class SingleRuleTodoPromptPolicy {
         .toDouble();
     final shouldShow = normalizedRoll < probability;
 
-    return SingleRuleTodoPromptPolicyResult(
+    return SingleRuleTodoReminderPolicyResult(
       shouldShow: shouldShow,
       reason: shouldShow ? 'random_hit' : 'random_miss',
       probability: probability,

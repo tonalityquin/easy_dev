@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../../app/utils/area_context_debug_trace.dart';
 import '../../../../../app/utils/block_dialog/break_duration_blocking_dialog.dart';
 import '../../../../../app/utils/status_dialog.dart';
 import '../../../../../design_system/common_ui/common_ui_side_dock.dart';
@@ -52,7 +53,7 @@ class _SingleDocumentBoxDiagnostics {
       context,
       title: '서류함 상태',
       description: '서류함 Side Dock의 debugPrint 코드를 복사할 수 있습니다.',
-      copyText: debugPrintCode,
+      copyText: '$debugPrintCode\n${AreaContextDebugTrace.debugPrintCode}',
       copyButtonLabel: 'debugPrint 코드 복사',
       visibleDuration: Duration.zero,
       useCommonUi: true,
@@ -554,8 +555,19 @@ Future<void> _submitLocalAttendanceRecordsToFirestore(
 
   final userId = (userState.session?.id ?? '').trim();
   final userName = userState.name.trim();
-  final area = (userState.session?.selectedArea ?? '').trim();
+  final selectedArea = (userState.session?.selectedArea ?? '').trim();
+  final area = userState.currentArea.trim();
   final division = areaState.currentDivision.trim();
+  AreaContextDebugTrace.record(
+    debugTag,
+    'attendance_upload_started',
+    fields: <String, Object?>{
+      'selectedArea': selectedArea,
+      'currentArea': area,
+      'currentDivision': division,
+      'statuses': statuses.join(','),
+    },
+  );
 
   if (userId.isEmpty || userName.isEmpty || area.isEmpty || division.isEmpty) {
     debugPrint(validationFailMessage);
@@ -649,12 +661,32 @@ Future<void> _submitLocalAttendanceRecordsToFirestore(
       '로컬 삭제 $deletedCount건.\n'
       '(최신일 $latestDayStr 제외, $cutoffDayStr까지 업로드)',
     );
+    AreaContextDebugTrace.record(
+      debugTag,
+      'attendance_upload_completed',
+      fields: <String, Object?>{
+        'selectedArea': selectedArea,
+        'currentArea': area,
+        'success': successCount,
+        'skipped': skippedCount,
+        'failed': failedCount,
+      },
+    );
   } catch (e, st) {
     debugPrint('❌ [$debugTag] 제출 중 오류: $e');
     debugPrint('stack: $st');
     debugPrint(
       '기록 제출 중 오류가 발생했습니다.\n'
       '네트워크 또는 Firebase 설정을 확인해 주세요.',
+    );
+    AreaContextDebugTrace.record(
+      debugTag,
+      'attendance_upload_failed',
+      fields: <String, Object?>{
+        'selectedArea': selectedArea,
+        'currentArea': area,
+        'error': '$e',
+      },
     );
   }
 }

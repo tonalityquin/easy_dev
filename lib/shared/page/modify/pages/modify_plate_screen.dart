@@ -21,14 +21,15 @@ import '../../../plate/domain/enums/plate_type.dart';
 import '../../../plate/domain/models/plate_model.dart';
 import '../../../plate/editor/domain/plate_editor_workspace.dart';
 import '../../../plate/editor/domain/plate_parking_display.dart';
+import '../application/modify_plate_service.dart';
 import '../controllers/modify_plate_controller.dart';
 import '../../../plate/editor/workspaces/plate_camera_workspace.dart';
 import '../../../plate/editor/widgets/plate_editor_footer.dart';
 import '../../../plate/editor/widgets/plate_editor_rail.dart';
 import '../../../plate/editor/workspaces/plate_billing_workspace.dart';
 import '../../../plate/editor/workspaces/plate_memo_workspace.dart';
+import '../../../plate/editor/workspaces/plate_saved_photos_content.dart';
 import 'workspaces/modify_overview_workspace.dart';
-import 'widgets/modify_photo_section.dart';
 import 'sheets/modify_region_picker_bottom_sheet.dart';
 import '../../../plate/editor/widgets/plate_parking_picker_content.dart';
 import '../../../plate/editor/workspaces/plate_sector_workspace.dart';
@@ -418,6 +419,9 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
       _cameraInitialPreviewIndex = previewImages.isEmpty
           ? 0
           : previewIndex.clamp(0, previewImages.length - 1).toInt();
+      _log(
+        'camera=session_prepare source=$source savedPhotosEnabled=true lookupPlate=${widget.plate.plateNumber} sessionKey=$_cameraSessionKey',
+      );
     }
     setState(() => _activeDialog = workspace);
     _log('dialog=${workspace.name}_open source=$source');
@@ -624,7 +628,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     }
     if (!mounted) return;
     _log(
-      'close=forced source=parking_mixed_configuration discardPrompt=false',
+      'close=forced source=parking_mixed_configuration discardConfirmation=false',
     );
     Navigator.of(context).pop();
   }
@@ -944,10 +948,19 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
               'camera=deleted path=${image.path} count=${_controller.capturedImages.length}',
             );
           },
-          savedPhotosBuilder: (context, onBack) => ModifySavedPhotosContent(
+          savedPhotosBuilder: (context, onBack) => PlateSavedPhotosContent(
             plateNumber: widget.plate.plateNumber,
+            diagnosticSource: 'modify',
+            loadImages: (loadContext, yearMonth) {
+              return ModifyPlateService.listPlateImages(
+                context: loadContext,
+                plateNumber: widget.plate.plateNumber,
+                yearMonth: yearMonth,
+              );
+            },
             onBack: onBack,
             onDebug: _log,
+            trace: widget.trace,
           ),
           onDebug: _log,
         );

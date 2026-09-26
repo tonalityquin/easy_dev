@@ -11,7 +11,6 @@ class TripleBreakSave {
     final result = await CommonAttendanceService.recordBreak(
       context,
       source: 'legacy_triple_break_save',
-      modeKey: 'triple',
     );
     return SheetUploadResult(
       success: result.success,

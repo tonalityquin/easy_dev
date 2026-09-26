@@ -4,10 +4,12 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../design_system/common_ui/common_ui_overlays.dart';
+import '../../../app/utils/area_context_debug_trace.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 
 import '../../account/applications/user_state.dart';
 import '../../account/domain/models/session_account.dart';
+import '../../selector/application/dev_auth.dart';
 import '../application/chat_account_scope.dart';
 import '../application/chat_area_key.dart';
 import '../application/chat_area_resolver.dart';
@@ -161,6 +163,7 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
       session?.id.trim() ?? '',
       scope.division,
       scope.selectedArea,
+      scope.currentArea,
       area,
       isHeadquarterChannel ? '1' : '0',
     ].join('\u0001');
@@ -169,6 +172,17 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
       return;
     }
 
+    AreaContextDebugTrace.record(
+      'AreaChatPanel',
+      'binding_scheduled',
+      fields: <String, Object?>{
+        'selectedArea': scope.selectedArea,
+        'currentArea': scope.currentArea,
+        'requestedArea': requestedArea.trim(),
+        'resolvedArea': area,
+        'headquarterChannel': isHeadquarterChannel,
+      },
+    );
     _scheduledSignature = signature;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _scheduledSignature != signature) return;
@@ -185,6 +199,17 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
         session: session,
         areaName: area,
         isHeadquarterChannel: isHeadquarterChannel,
+      );
+      AreaContextDebugTrace.record(
+        'AreaChatPanel',
+        'binding_started',
+        fields: <String, Object?>{
+          'selectedArea': scope.selectedArea,
+          'currentArea': scope.currentArea,
+          'resolvedArea': area,
+          'accessAllowed': _controller.accessAllowed,
+          'headquarterChannel': isHeadquarterChannel,
+        },
       );
       _scrollToBottomSoon();
     });
@@ -267,6 +292,13 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
       context: context,
       showDragHandle: showDragHandle,
       builder: builder,
+    );
+  }
+
+  Future<void> _showAreaContextStatus() async {
+    await AreaContextDebugTrace.showStatusDialog(
+      context,
+      useCommonUi: widget.useCommonUi,
     );
   }
 
@@ -499,27 +531,80 @@ class _AreaChatPanelState extends State<AreaChatPanel> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: (text.titleMedium ?? const TextStyle()).copyWith(
-                      fontWeight: FontWeight.w900,
+              child: AnimatedSwitcher(
+                duration: (MediaQuery.maybeOf(context)?.disableAnimations ?? false)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 220),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  final slide = Tween<Offset>(
+                    begin: const Offset(0.04, 0),
+                    end: Offset.zero,
+                  ).animate(animation);
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(position: slide, child: child),
+                  );
+                },
+                child: Column(
+                  key: ValueKey<String>('chat-header-$areaName-$isHeadquarter'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: (text.titleMedium ?? const TextStyle()).copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: (text.labelMedium ?? const TextStyle()).copyWith(
-                      color: cs.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: (text.labelMedium ?? const TextStyle()).copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: DevAuth.devModeEnabled,
+              builder: (context, enabled, _) {
+                final reduceMotion =
+                    MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+                return AnimatedSwitcher(
+                  duration: reduceMotion
+                      ? Duration.zero
+                      : const Duration(milliseconds: 180),
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(begin: 0.92, end: 1).animate(
+                          CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          ),
+                        ),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: enabled
+                      ? TextButton(
+                          key: const ValueKey<String>('area-debug-on'),
+                          onPressed: _showAreaContextStatus,
+                          child: const Text('DEBUG'),
+                        )
+                      : const SizedBox.shrink(
+                          key: ValueKey<String>('area-debug-off'),
+                        ),
+                );
+              },
             ),
             IconButton(
               tooltip: _searchVisible ? '검색 닫기' : '메시지 검색',

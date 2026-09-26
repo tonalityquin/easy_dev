@@ -18,7 +18,6 @@ class SingleHomeDashBoardController {
     final result = await CommonAttendanceService.clockOut(
       context,
       source: 'single_home_dashboard_controller',
-      modeKey: 'single',
     );
     if (!result.success) {
       debugPrint(
@@ -31,7 +30,6 @@ class SingleHomeDashBoardController {
     final result = await CommonAttendanceService.recordBreak(
       context,
       source: 'single_home_dashboard_controller',
-      modeKey: 'single',
     );
     final recordedAt = result.recordedAt;
     if (!result.success || recordedAt == null) {

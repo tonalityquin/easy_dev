@@ -18,6 +18,7 @@ enum SingleInsideDockRequest {
   leaveApplication,
   operations,
   operationalSync,
+  theme,
   logout,
   exitApp,
 }
@@ -113,6 +114,12 @@ List<SingleInsideDashboardActionSpec> singleInsideDashboardActionSpecs({
       label: SideDockActionCatalog.operationalSyncLabel,
     ),
     const SingleInsideDashboardActionSpec(
+      request: SingleInsideDockRequest.theme,
+      section: SingleInsideDashboardActionSection.settings,
+      icon: Icons.palette_outlined,
+      label: '테마',
+    ),
+    const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.logout,
       section: SingleInsideDashboardActionSection.settings,
       icon: SideDockActionCatalog.logoutIcon,
@@ -174,6 +181,8 @@ class SingleInsideDashboardRail extends StatelessWidget {
       case SingleInsideDockRequest.commuteSubmit:
       case SingleInsideDockRequest.operationalSync:
         return tokens.info;
+      case SingleInsideDockRequest.theme:
+        return tokens.accent;
       case SingleInsideDockRequest.workEndReport:
       case SingleInsideDockRequest.restTimeSubmit:
       case SingleInsideDockRequest.leaveApplication:

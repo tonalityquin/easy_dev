@@ -39,7 +39,7 @@ class TerminalSessionController extends ChangeNotifier {
   bool get busy => _busy;
   String get runningCommand => _runningCommand;
   int get errorSerial => _errorSerial;
-  String get currentPromptPath => _commandPath.promptPath;
+  String get currentTerminalPath => _commandPath.terminalPath;
   bool get commandHistoryEnabled => !_commandPath.isEmailEdit;
   bool get emailEditMode => _commandPath.isEmailEdit;
   bool get importingUnlocked => _importingUnlocked;
@@ -50,7 +50,7 @@ class TerminalSessionController extends ChangeNotifier {
     TerminalLineType type,
     String text, {
     TerminalCadence cadence = TerminalCadence.automatic,
-    String? promptPath,
+    String? terminalPath,
   }) {
     _lines.add(
       TerminalLine(
@@ -58,7 +58,7 @@ class TerminalSessionController extends ChangeNotifier {
         type: type,
         text: text,
         cadence: cadence,
-        promptPath: promptPath ?? _commandPath.promptPath,
+        terminalPath: terminalPath ?? _commandPath.terminalPath,
       ),
     );
     if (_lines.length > maxLines) {
@@ -74,7 +74,7 @@ class TerminalSessionController extends ChangeNotifier {
         type: TerminalLineType.running,
         text: text,
         cadence: TerminalCadence.thinking,
-        promptPath: _commandPath.promptPath,
+        terminalPath: _commandPath.terminalPath,
       ),
     );
     if (_lines.length > maxLines) {
@@ -107,7 +107,7 @@ class TerminalSessionController extends ChangeNotifier {
       TerminalLineType.command,
       command,
       cadence: TerminalCadence.instant,
-      promptPath: _commandPath.promptPath,
+      terminalPath: _commandPath.terminalPath,
     );
   }
 
@@ -119,7 +119,7 @@ class TerminalSessionController extends ChangeNotifier {
       normalized: '',
       source: source,
       result: 'rejected',
-      path: _commandPath.promptPath,
+      path: _commandPath.terminalPath,
     );
     notifyListeners();
   }
@@ -160,7 +160,7 @@ class TerminalSessionController extends ChangeNotifier {
     }
 
     if (normalized == 'setting') {
-      final from = _commandPath.promptPath;
+      final from = _commandPath.terminalPath;
       _commandPath = TerminalCommandPath.setting;
       AppCommandDiagnostics.record(
         phase: 'terminal_path_enter',
@@ -169,7 +169,7 @@ class TerminalSessionController extends ChangeNotifier {
         source: source,
         command: 'setting',
         result: 'success',
-        path: '$from -> ${_commandPath.promptPath}',
+        path: '$from -> ${_commandPath.terminalPath}',
       );
       notifyListeners();
       return AppCommandExecutionResult(
@@ -187,7 +187,7 @@ class TerminalSessionController extends ChangeNotifier {
       source: source,
       command: definition?.command ?? '',
       result: definition == null ? 'unknown' : 'matched',
-      path: _commandPath.promptPath,
+      path: _commandPath.terminalPath,
     );
 
     if (definition == null) {
@@ -221,7 +221,7 @@ class TerminalSessionController extends ChangeNotifier {
   }) async {
     if (_commandPath.isEmailEdit) {
       if (normalized == 'cancel' || normalized == 'cd ..') {
-        final from = _commandPath.promptPath;
+        final from = _commandPath.terminalPath;
         _commandPath = TerminalCommandPath.setting;
         _append(
           TerminalLineType.system,
@@ -235,7 +235,7 @@ class TerminalSessionController extends ChangeNotifier {
           source: source,
           command: 'email',
           result: 'success',
-          path: '$from -> ${_commandPath.promptPath}',
+          path: '$from -> ${_commandPath.terminalPath}',
         );
         notifyListeners();
         return AppCommandExecutionResult(
@@ -270,7 +270,7 @@ class TerminalSessionController extends ChangeNotifier {
     }
 
     if (normalized == 'cd ..') {
-      final from = _commandPath.promptPath;
+      final from = _commandPath.terminalPath;
       _commandPath = TerminalCommandPath.root;
       AppCommandDiagnostics.record(
         phase: 'terminal_path_leave',
@@ -279,7 +279,7 @@ class TerminalSessionController extends ChangeNotifier {
         source: source,
         command: 'cd',
         result: 'success',
-        path: '$from -> ${_commandPath.promptPath}',
+        path: '$from -> ${_commandPath.terminalPath}',
       );
       notifyListeners();
       return AppCommandExecutionResult(
@@ -309,7 +309,7 @@ class TerminalSessionController extends ChangeNotifier {
       source: source,
       command: _runningCommand,
       result: 'visible',
-      path: _commandPath.promptPath,
+      path: _commandPath.terminalPath,
     );
     notifyListeners();
 
@@ -343,7 +343,7 @@ class TerminalSessionController extends ChangeNotifier {
         source: source,
         command: _runningCommand,
         result: 'success',
-        path: '${previousPath.promptPath} -> ${_commandPath.promptPath}',
+        path: '${previousPath.terminalPath} -> ${_commandPath.terminalPath}',
       );
     }
     for (final line in settingResult.lines) {
@@ -369,7 +369,7 @@ class TerminalSessionController extends ChangeNotifier {
       source: source,
       command: _runningCommand,
       result: settingResult.succeeded ? 'success' : 'failure',
-      path: _commandPath.promptPath,
+      path: _commandPath.terminalPath,
     );
     _busy = false;
     _runningCommand = '';
@@ -399,7 +399,7 @@ class TerminalSessionController extends ChangeNotifier {
       source: source,
       command: 'email',
       result: 'visible',
-      path: _commandPath.promptPath,
+      path: _commandPath.terminalPath,
     );
     notifyListeners();
     await Future<void>.delayed(
@@ -431,7 +431,7 @@ class TerminalSessionController extends ChangeNotifier {
       );
     }
     if (result.nextPath != null) {
-      final from = _commandPath.promptPath;
+      final from = _commandPath.terminalPath;
       _commandPath = result.nextPath!;
       AppCommandDiagnostics.record(
         phase: 'terminal_email_edit_path_change',
@@ -440,7 +440,7 @@ class TerminalSessionController extends ChangeNotifier {
         source: source,
         command: 'email',
         result: 'success',
-        path: '$from -> ${_commandPath.promptPath}',
+        path: '$from -> ${_commandPath.terminalPath}',
       );
     }
     if (!result.succeeded) _errorSerial += 1;
@@ -486,7 +486,7 @@ class TerminalSessionController extends ChangeNotifier {
       source: source,
       command: '<hidden>',
       result: 'started',
-      path: _commandPath.promptPath,
+      path: _commandPath.terminalPath,
     );
     notifyListeners();
     await Future<void>.delayed(
@@ -518,7 +518,7 @@ class TerminalSessionController extends ChangeNotifier {
       source: source,
       command: '<hidden>',
       result: 'success',
-      path: _commandPath.promptPath,
+      path: _commandPath.terminalPath,
     );
     notifyListeners();
     await AppCommandDiagnostics.showStatus(
@@ -554,7 +554,7 @@ class TerminalSessionController extends ChangeNotifier {
         source: source,
         command: definition.command,
         result: 'locked',
-        path: _commandPath.promptPath,
+        path: _commandPath.terminalPath,
       );
       notifyListeners();
       return AppCommandExecutionResult(
@@ -574,7 +574,7 @@ class TerminalSessionController extends ChangeNotifier {
       source: source,
       command: definition.command,
       result: 'visible',
-      path: _commandPath.promptPath,
+      path: _commandPath.terminalPath,
     );
     notifyListeners();
 
@@ -629,7 +629,7 @@ class TerminalSessionController extends ChangeNotifier {
         source: source,
         command: definition.command,
         result: 'success',
-        path: _commandPath.promptPath,
+        path: _commandPath.terminalPath,
       );
     } else {
       for (final line in result.outputLines) {
@@ -655,7 +655,7 @@ class TerminalSessionController extends ChangeNotifier {
         command: definition.command,
         result: 'failure',
         error: result.error,
-        path: _commandPath.promptPath,
+        path: _commandPath.terminalPath,
       );
     }
 
@@ -697,7 +697,7 @@ class TerminalSessionController extends ChangeNotifier {
       normalized: AppCommandRegistry.normalize(value),
       source: source,
       result: 'previous',
-      path: _commandPath.promptPath,
+      path: _commandPath.terminalPath,
     );
     return value;
   }
@@ -713,7 +713,7 @@ class TerminalSessionController extends ChangeNotifier {
         normalized: AppCommandRegistry.normalize(value),
         source: source,
         result: 'next',
-        path: _commandPath.promptPath,
+        path: _commandPath.terminalPath,
       );
       return value;
     }

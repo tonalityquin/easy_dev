@@ -19,9 +19,16 @@ class AttendanceContext {
 
   String get contextKey => isHeadquarter ? 'headquarter' : modeKey;
 
-  bool get isValid =>
-      userId.trim().isNotEmpty &&
-      userName.trim().isNotEmpty &&
-      area.trim().isNotEmpty &&
-      division.trim().isNotEmpty;
+  bool get isValid {
+    if (userId.trim().isEmpty ||
+        userName.trim().isEmpty ||
+        area.trim().isEmpty ||
+        division.trim().isEmpty) {
+      return false;
+    }
+    if (isHeadquarter) {
+      return modeKey.trim().isEmpty;
+    }
+    return modeKey.trim().isNotEmpty;
+  }
 }

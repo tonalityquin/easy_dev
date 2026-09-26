@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../../../app/di/routes.dart';
-import '../../../../app/theme/brand_theme.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
@@ -47,9 +44,6 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _redirectAfterLogin;
   String? _requiredMode;
   bool _didInitAuto = false;
-  String _brandPresetId = 'system';
-  String _themeModeId = 'system';
-  bool _prefsLoaded = false;
 
   static String _normalizeMode(String? raw) {
     return AppModeRegistry.normalizeModeOrService(raw);
@@ -111,64 +105,6 @@ class _LoginScreenState extends State<LoginScreen> {
           onLoginSucceeded: _navigateAfterLogin,
         );
         return;
-    }
-  }
-
-  ThemeData _buildThemedLoginTheme(BuildContext context) {
-    final baseTheme = Theme.of(context);
-    final preset = presetById(_brandPresetId);
-
-    if (_themeModeId == 'independent' && preset.independentTokens != null) {
-      return applyIndependentTheme(baseTheme, preset.id);
-    }
-
-    final systemBrightness = MediaQuery.platformBrightnessOf(context);
-    final brightness = resolveBrightness(_themeModeId, systemBrightness);
-    final base = withBrightness(baseTheme, brightness);
-    final accent = preset.id == 'system' || preset.accent == null
-        ? base.colorScheme.primary
-        : preset.accent!;
-    final scheme = buildConceptScheme(brightness: brightness, accent: accent);
-
-    return base.copyWith(
-      useMaterial3: true,
-      colorScheme: scheme,
-      scaffoldBackgroundColor: scheme.surface,
-      appBarTheme: base.appBarTheme.copyWith(
-        backgroundColor: scheme.surface,
-        foregroundColor: scheme.onSurface,
-        surfaceTintColor: scheme.surface.withOpacity(0),
-      ),
-      cardTheme: base.cardTheme.copyWith(
-        color: scheme.surfaceContainerLow,
-        surfaceTintColor: scheme.surface.withOpacity(0),
-      ),
-      bottomSheetTheme: base.bottomSheetTheme.copyWith(
-        backgroundColor: scheme.surface.withOpacity(0),
-        surfaceTintColor: scheme.surface.withOpacity(0),
-      ),
-      dividerTheme: base.dividerTheme.copyWith(
-        color: scheme.outlineVariant,
-        thickness: 1,
-        space: 1,
-      ),
-    );
-  }
-
-  Future<void> _restoreBrandAndThemePrefs() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final preset = (prefs.getString(kBrandPresetKey) ?? 'system').trim();
-      final mode = (prefs.getString(kThemeModeKey) ?? 'system').trim();
-      if (!mounted) return;
-      setState(() {
-        _brandPresetId = preset.isEmpty ? 'system' : preset;
-        _themeModeId = mode.isEmpty ? 'system' : mode;
-        _prefsLoaded = true;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _prefsLoaded = true);
     }
   }
 
@@ -266,7 +202,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     _mode = _normalizeMode(widget.mode);
     _createControllerForMode();
-    _restoreBrandAndThemePrefs();
   }
 
   @override
@@ -284,48 +219,6 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
     _maybeInitControllerAuto();
-  }
-
-  Widget _buildPrefsLoadingShell(BuildContext context) {
-    final brightness = MediaQuery.platformBrightnessOf(context);
-    final base = ThemeData(brightness: brightness, useMaterial3: true);
-    return Theme(
-      data: base,
-      child: CommonUiScope(
-        child: Builder(
-          builder: (context) {
-            final tokens = CommonUiTheme.of(context);
-            return AnnotatedRegion<SystemUiOverlayStyle>(
-              value: _systemUiStyle(tokens),
-              child: Scaffold(
-                backgroundColor: tokens.canvas,
-                body: Center(
-                  child: Container(
-                    width: 54,
-                    height: 54,
-                    decoration: BoxDecoration(
-                      color: tokens.surfaceRaised,
-                      borderRadius:
-                          BorderRadius.circular(CommonUiShapes.control),
-                      border: Border.all(color: tokens.borderSubtle),
-                    ),
-                    alignment: Alignment.center,
-                    child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        color: tokens.accent,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
   }
 
   SystemUiOverlayStyle _systemUiStyle(CommonUiTokens tokens) {
@@ -488,31 +381,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_prefsLoaded) {
-      return _buildPrefsLoadingShell(context);
-    }
-
-    final themed = _buildThemedLoginTheme(context);
     final loginForm = _buildLoginForm();
 
     if (_requiredMode != null && _requiredMode != _mode) {
-      return Theme(
-        data: themed,
-        child: CommonUiScope(child: _buildModeMismatch()),
-      );
+      return CommonUiScope(child: _buildModeMismatch());
     }
 
     if (!_usesCommonUi) {
-      return Theme(
-        data: themed,
-        child: _buildLegacyServiceScreen(loginForm),
-      );
+      return _buildLegacyServiceScreen(loginForm);
     }
 
-    return Theme(
-      data: themed,
-      child: CommonUiScope(child: _buildCommonScreen(loginForm)),
-    );
+    return CommonUiScope(child: _buildCommonScreen(loginForm));
   }
 
   @override

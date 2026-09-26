@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/utils/area_context_debug_trace.dart';
 import '../../../app/utils/block_dialog/break_duration_blocking_dialog.dart';
 import '../../../shared/document/backup/backup_form_page.dart';
 import '../../../shared/document/user_statement/user_statement_form_page.dart';
@@ -116,8 +117,19 @@ class SingleInsideDocumentActionRunner {
     final areaState = context.read<AreaState>();
     final userId = (userState.session?.id ?? '').trim();
     final userName = userState.name.trim();
-    final area = (userState.session?.selectedArea ?? '').trim();
+    final selectedArea = (userState.session?.selectedArea ?? '').trim();
+    final area = userState.currentArea.trim();
     final division = areaState.currentDivision.trim();
+    AreaContextDebugTrace.record(
+      debugTag,
+      'attendance_upload_started',
+      fields: <String, Object?>{
+        'selectedArea': selectedArea,
+        'currentArea': area,
+        'currentDivision': division,
+        'statuses': statuses.join(','),
+      },
+    );
 
     if (userId.isEmpty || userName.isEmpty || area.isEmpty || division.isEmpty) {
       debugPrint(validationFailMessage);
@@ -224,6 +236,17 @@ class SingleInsideDocumentActionRunner {
         'document',
         'submit_result tag=$debugTag success=$successCount skipped=$skippedCount failed=$failedCount deleted=$deletedCount latest=$latestDayStr cutoff=$cutoffDayStr',
       );
+      AreaContextDebugTrace.record(
+        debugTag,
+        'attendance_upload_completed',
+        fields: <String, Object?>{
+          'selectedArea': selectedArea,
+          'currentArea': area,
+          'success': successCount,
+          'skipped': skippedCount,
+          'failed': failedCount,
+        },
+      );
     } catch (error, stackTrace) {
       debugPrint('[$debugTag] 제출 중 오류: $error');
       debugPrint('stack: $stackTrace');
@@ -233,6 +256,15 @@ class SingleInsideDocumentActionRunner {
       SingleInsideDiagnostics.log(
         'document',
         'submit_failure tag=$debugTag error=$error stack=$stackTrace',
+      );
+      AreaContextDebugTrace.record(
+        debugTag,
+        'attendance_upload_failed',
+        fields: <String, Object?>{
+          'selectedArea': selectedArea,
+          'currentArea': area,
+          'error': '$error',
+        },
       );
     }
   }

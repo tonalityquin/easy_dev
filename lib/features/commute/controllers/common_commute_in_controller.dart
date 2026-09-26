@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/init/app_navigator.dart';
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../account/applications/user_state.dart';
 import '../../attendance/application/common_attendance_service.dart';
@@ -82,6 +83,10 @@ class CommonCommuteInController {
       trace?.log(
         '목적지 판정을 시작합니다: context=${spec.diagnosticKey}, division=$division, area=$area, cacheAvailable=${areaState.hasCurrentRecordFor(division: division, area: area)}',
         progress: 0.82,
+      );
+      trace?.log(
+        '현재 업무지역 기준 목적지 판정을 실행합니다: division=$division, area=$area',
+        progress: 0.88,
       );
       final isHeadquarter = await areaState.resolveIsHeadquarter(
         division: division,
@@ -177,21 +182,81 @@ class CommonCommuteInController {
     }
   }
 
-  void redirectIfWorking(BuildContext context, UserState userState) {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final destination = await _decideDestination(context, userState);
-      if (!context.mounted) return;
+  Future<CommuteDestination> redirectIfWorking(
+    BuildContext context,
+    UserState userState,
+  ) async {
+    if (!context.mounted) return CommuteDestination.none;
 
-      switch (destination) {
-        case CommuteDestination.headquarter:
-          Navigator.pushReplacementNamed(context, spec.headquarterRoute);
-          break;
-        case CommuteDestination.type:
-          Navigator.pushReplacementNamed(context, spec.typeRoute);
-          break;
-        case CommuteDestination.none:
-          break;
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '근무 중 화면 이동 상태',
+      initialMessage: '현재 업무지역 기준 근무 중 목적지 판정을 시작합니다.',
+      useCommonUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: 현재 업무지역과 이동 목적지 판정 로그를 최종 화면의 Status Dialog에서 확인할 수 있습니다.',
+      standardModeMessage:
+          '개발자 모드 OFF: 현재 업무지역과 이동 목적지 판정을 debugPrint로 기록합니다.',
+      showDialogImmediately: false,
+    );
+
+    final destination = await _decideDestination(
+      context,
+      userState,
+      trace: trace,
+    );
+    if (!context.mounted) return CommuteDestination.none;
+
+    await trace.succeed(
+      '근무 중 화면 이동 목적지 판정이 완료되었습니다: context=${spec.diagnosticKey}, destination=$destination, headquarterRoute=${spec.headquarterRoute}, typeRoute=${spec.typeRoute}',
+    );
+
+    final String? targetRoute = switch (destination) {
+      CommuteDestination.headquarter => spec.headquarterRoute,
+      CommuteDestination.type => spec.typeRoute,
+      CommuteDestination.none => null,
+    };
+
+    if (targetRoute == null) {
+      trace.log(
+        '근무 중 화면 이동을 실행하지 않습니다: destination=$destination',
+        progress: 1,
+      );
+      if (trace.developerMode && context.mounted) {
+        await trace.showSnapshotStatusDialog(
+          context,
+          title: '근무 중 화면 이동 상태',
+          description:
+              '현재 업무지역 기준 목적지를 결정하지 못했습니다. debugPrint 코드를 복사할 수 있습니다.',
+          failure: true,
+        );
       }
-    });
+      return destination;
+    }
+
+    trace.log(
+      '근무 중 화면 이동을 즉시 실행합니다: route=$targetRoute, destination=$destination',
+      progress: 1,
+    );
+    Navigator.pushReplacementNamed(context, targetRoute);
+
+    if (trace.developerMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final targetContext = AppNavigator.context;
+        if (targetContext == null || !targetContext.mounted) return;
+        trace.log(
+          '최종 화면 렌더링 이후 개발자 Status Dialog를 표시합니다: route=${AppNavigator.currentRoute ?? targetRoute}',
+          progress: 1,
+        );
+        await trace.showSnapshotStatusDialog(
+          targetContext,
+          title: '근무 중 화면 이동 상태',
+          description:
+              '현재 업무지역 기준 목적지 판정과 최종 화면 이동이 완료되었습니다. debugPrint 코드를 복사할 수 있습니다.',
+        );
+      });
+    }
+
+    return destination;
   }
 }

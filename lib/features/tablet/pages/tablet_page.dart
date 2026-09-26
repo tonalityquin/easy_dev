@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../design_system/common_ui/common_ui_components.dart';
@@ -13,6 +14,7 @@ import '../applications/tablet_grid_render_mode_state.dart';
 import '../applications/tablet_pad_mode_state.dart';
 import '../applications/tablet_parking_completed_view_toggle_state.dart';
 import '../applications/tablet_plate_tail4_size_state.dart';
+import '../applications/tablet_side_dock_state.dart';
 import '../applications/tablet_work_session_state.dart';
 import 'panels/tablet_left_panel.dart';
 import 'panels/tablet_right_panel.dart';
@@ -72,6 +74,24 @@ class _TabletPageState extends State<TabletPage> {
 
   void _clearCompletedNoticesForAreaChange() {
     setState(_completedNotices.clear);
+  }
+
+  void _openSideDock() {
+    HapticFeedback.selectionClick();
+    final mode = context.read<TabletPadModeState>().mode;
+    TabletDebugTrace.record(
+      'TabletSideDock',
+      'open_requested',
+      <String, Object?>{
+        'source': 'edge_tap',
+        'mode': mode.name,
+      },
+    );
+    unawaited(
+      context.read<TabletSideDockState>().open(
+            source: 'edge_tap',
+          ),
+    );
   }
 
   @override
@@ -196,9 +216,13 @@ class _TabletPageState extends State<TabletPage> {
           final padMode =
               context.select<TabletPadModeState, PadMode>((state) => state.mode);
           final workState = context.watch<TabletWorkSessionState>();
+          final dockState = context.watch<TabletSideDockState>();
           final workStateReady = workState.isReady;
+          final dockStateReady = dockState.isReady;
           final workActive = workState.isActive;
-          final canRenderWorkingContent = workStateReady && workActive;
+          final canRenderWorkingContent =
+              workStateReady && dockStateReady && workActive;
+          final dockOpen = dockStateReady && dockState.isOpen;
 
           if (_areaCache != area) {
             final previous = _areaCache;
@@ -229,18 +253,34 @@ class _TabletPageState extends State<TabletPage> {
           final scaffold = Scaffold(
             backgroundColor: tokens.surface,
             body: SafeArea(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: Stack(
                 children: <Widget>[
-                  const TabletModeRail(),
-                  VerticalDivider(
-                    width: 1,
-                    thickness: 1,
-                    color: tokens.borderSubtle,
+                  Positioned.fill(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        if (dockStateReady)
+                          _TabletSideDockShell(
+                            open: dockOpen,
+                            rail: const TabletModeRail(),
+                          ),
+                        Expanded(
+                          child: TabletCommonAnimatedSwap(child: content),
+                        ),
+                      ],
+                    ),
                   ),
-                  Expanded(
-                    child: TabletCommonAnimatedSwap(child: content),
-                  ),
+                  if (canRenderWorkingContent && !dockOpen)
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: 24,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTap: _openSideDock,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -257,7 +297,7 @@ class _TabletPageState extends State<TabletPage> {
                 ),
                 Positioned.fill(
                   child: TabletCommonAnimatedSwap(
-                    child: !workStateReady
+                    child: !workStateReady || !dockStateReady
                         ? const _TabletWorkSessionLoadingOverlay(
                             key: ValueKey<String>('work-loading'),
                           )
@@ -275,6 +315,118 @@ class _TabletPageState extends State<TabletPage> {
           );
         },
       ),
+    );
+  }
+}
+
+class _TabletSideDockShell extends StatefulWidget {
+  const _TabletSideDockShell({
+    required this.open,
+    required this.rail,
+  });
+
+  final bool open;
+  final Widget rail;
+
+  @override
+  State<_TabletSideDockShell> createState() => _TabletSideDockShellState();
+}
+
+class _TabletSideDockShellState extends State<_TabletSideDockShell>
+    with SingleTickerProviderStateMixin {
+  static const double _railWidth = 92;
+  static const double _dividerWidth = 1;
+  static const Duration _duration = Duration(milliseconds: 220);
+
+  late final AnimationController _controller;
+  bool _reduceMotion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: _duration,
+      value: widget.open ? 1 : 0,
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextReduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (_reduceMotion == nextReduceMotion) return;
+    _reduceMotion = nextReduceMotion;
+    if (_reduceMotion) {
+      _controller.value = widget.open ? 1 : 0;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _TabletSideDockShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.open == widget.open) return;
+    final target = widget.open ? 1.0 : 0.0;
+    if (_reduceMotion) {
+      _controller.value = target;
+      return;
+    }
+    _controller.animateTo(
+      target,
+      duration: _duration,
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final fullWidth = _railWidth + _dividerWidth;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final value = _controller.value;
+        final opacity = ((value - 0.12) / 0.88).clamp(0.0, 1.0).toDouble();
+
+        return SizedBox(
+          width: fullWidth * value,
+          child: ClipRect(
+            child: Stack(
+              clipBehavior: Clip.hardEdge,
+              children: <Widget>[
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: fullWidth,
+                  child: Opacity(
+                    opacity: opacity,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        widget.rail,
+                        VerticalDivider(
+                          width: _dividerWidth,
+                          thickness: _dividerWidth,
+                          color: tokens.borderSubtle,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

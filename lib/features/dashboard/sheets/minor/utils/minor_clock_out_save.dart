@@ -11,7 +11,6 @@ class MinorClockOutSave {
     final result = await CommonAttendanceService.clockOut(
       context,
       source: 'legacy_minor_clock_out_save',
-      modeKey: 'minor',
     );
     return SheetUploadResult(
       success: result.success,

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -154,8 +155,47 @@ class MyTaskHandler implements TaskHandler {
 
   @override
   void onNotificationPressed() {
-    debugPrint('[HANDLER][${_ts()}] onNotificationPressed');
-    _sendWorkScreenRequest(source: 'notification_body');
+    unawaited(_handleNotificationPressed());
+  }
+
+  Future<void> _handleNotificationPressed() async {
+    final now = DateTime.now();
+    final tapId = now.microsecondsSinceEpoch.toString();
+    final payload = <String, Object?>{
+      'tapId': tapId,
+      'source': 'notification_body',
+      'navigation': WorkStatusNotificationProtocol.navigationNone,
+      'preserveAppState': true,
+      'launchRoute': WorkStatusNotificationProtocol.appLaunchRoute,
+      'tappedAt': now.toIso8601String(),
+    };
+    debugPrint(
+      '[HANDLER][${now.toIso8601String()}] notification_pressed tapId=$tapId source=notification_body navigation=${WorkStatusNotificationProtocol.navigationNone} preserveAppState=true launchRoute=${WorkStatusNotificationProtocol.appLaunchRoute}',
+    );
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final stored = <String, Object?>{
+        'tapId': tapId,
+        'event': WorkStatusNotificationProtocol.pressedEvent,
+        ...payload,
+      };
+      await prefs.setString(
+        WorkStatusNotificationProtocol.pendingTapPrefsKey,
+        jsonEncode(stored),
+      );
+      debugPrint(
+        '[HANDLER][${_ts()}] notification_pending_tap_saved tapId=$tapId tappedAt=${now.toIso8601String()}',
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[HANDLER][${_ts()}] notification_pending_tap_save_failed tapId=$tapId error=$error\n$stackTrace',
+      );
+    }
+    _sendWorkStatusNotificationEvent(
+      WorkStatusNotificationProtocol.pressedEvent,
+      values: payload,
+    );
   }
 
   @override
@@ -173,24 +213,10 @@ class MyTaskHandler implements TaskHandler {
   }
 
 
-  void _sendWorkScreenRequest({required String source}) {
-    final now = DateTime.now();
-    debugPrint(
-      '[HANDLER][${now.toIso8601String()}] work_screen_requested source=$source route=/headquarter_page',
-    );
-    _sendWorkStatusNotificationEvent(
-      WorkStatusNotificationProtocol.workScreenRequestedEvent,
-      values: <String, Object?>{
-        'source': source,
-        'route': '/headquarter_page',
-      },
-    );
-  }
-
   Future<void> _handleBreakPunch() async {
     try {
       final result = await BreakPunchUseCase.execute();
-      debugPrint('[HANDLER][${_ts()}] breakPunch success=${result.success} alreadyRecorded=${result.alreadyRecorded} message=${result.message} recordedAt=${result.recordedAt?.toIso8601String() ?? '-'}');
+      debugPrint('[HANDLER][${_ts()}] breakPunch success=${result.success} alreadyRecorded=${result.alreadyRecorded} message=${result.message} recordedAt=${result.recordedAt?.toIso8601String() ?? '-'} context=${result.session?.contextKey ?? '-'} mode=${result.session?.modeKey ?? '-'} headquarter=${result.session?.isHeadquarter ?? false}');
       _sendWorkStatusNotificationEvent(
         WorkStatusNotificationProtocol.breakActionEvent,
         values: <String, Object?>{
@@ -199,6 +225,11 @@ class MyTaskHandler implements TaskHandler {
           'alreadyRecorded': result.alreadyRecorded,
           'message': result.message,
           'recordedAt': result.recordedAt?.toIso8601String(),
+          'contextKey': result.session?.contextKey,
+          'modeKey': result.session?.modeKey,
+          'isHeadquarter': result.session?.isHeadquarter,
+          'area': result.session?.area,
+          'division': result.session?.division,
         },
       );
       await _refreshWorkStatusNotification();
@@ -264,7 +295,7 @@ class MyTaskHandler implements TaskHandler {
         if (presentation.showBreakAction)
           const NotificationButton(id: WorkStatusNotificationProtocol.breakPunchAction, text: '휴게 기록'),
       ],
-      notificationInitialRoute: '/headquarter_page',
+      notificationInitialRoute: WorkStatusNotificationProtocol.appLaunchRoute,
     );
     debugPrint(
       '[HANDLER][${_ts()}] notification mutation complete owner=foreground_handler mainFinalizerRequired=true',

@@ -17,6 +17,7 @@ import 'app/init/app_mode_migration.dart';
 import 'app/init/app_navigator.dart';
 import 'app/init/work_status_notification.dart';
 import 'app/theme/theme_prefs_controller.dart';
+import 'features/account/applications/user_state.dart';
 import 'features/chat/presentation/work_chat_alert_host.dart';
 import 'features/community/application/game/game_quick_actions.dart';
 import 'features/dashboard/applications/common/firebase_google_auth_bridge.dart';
@@ -51,6 +52,14 @@ void main() async {
   FlutterForegroundTask.initCommunicationPort();
   WorkStatusNotificationController.initializeForegroundTask();
   WorkStatusNotificationController.initializeTaskEventListener();
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    final pendingTap =
+        await WorkStatusNotificationController.restorePendingNotificationTap(
+      source: 'main_pre_run_app_$attempt',
+    );
+    if (pendingTap != null || attempt == 3) break;
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+  }
   PlateTtsEventHub.ensureStarted();
 
   debugPrint('[MAIN][${_ts()}] runApp(AppBootstrapper + ThemePrefsController)');
@@ -88,10 +97,15 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
         return Consumer<ThemePrefsController>(
           builder: (context, themeCtrl, _) {
+            final reduceMotion = WidgetsBinding
+                .instance.platformDispatcher.accessibilityFeatures.disableAnimations;
             return MaterialApp(
-              theme: themeCtrl.buildLightTheme(),
-              darkTheme: themeCtrl.buildDarkTheme(),
-              themeMode: themeCtrl.themeMode,
+              theme: themeCtrl.buildTheme(),
+              themeMode: ThemeMode.light,
+              themeAnimationDuration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 220),
+              themeAnimationCurve: Curves.easeOutCubic,
               home: const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               ),
@@ -181,9 +195,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      WorkStatusNotificationController.flushPendingNavigation();
-    });
   }
 
   @override
@@ -225,14 +236,31 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
     return MultiProvider(
       providers: appProviders,
-      child: Consumer<ThemePrefsController>(
-        builder: (context, themeCtrl, _) {
+      child: Consumer2<ThemePrefsController, UserState>(
+        builder: (context, themeCtrl, userState, _) {
+          final selectedArea = userState.selectedArea.trim();
+          if (themeCtrl.selectedArea != selectedArea) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              unawaited(
+                themeCtrl.syncSelectedArea(
+                  selectedArea,
+                  source: 'main_user_state',
+                ),
+              );
+            });
+          }
+          final reduceMotion = WidgetsBinding
+              .instance.platformDispatcher.accessibilityFeatures.disableAnimations;
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             title: 'ParkinWorkin',
-            theme: themeCtrl.buildLightTheme(),
-            darkTheme: themeCtrl.buildDarkTheme(),
-            themeMode: themeCtrl.themeMode,
+            theme: themeCtrl.buildTheme(),
+            themeMode: ThemeMode.light,
+            themeAnimationDuration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 220),
+            themeAnimationCurve: Curves.easeOutCubic,
             initialRoute: AppRoutes.startGate,
             routes: appRoutes,
             onGenerateRoute: onGenerateAppRoute,

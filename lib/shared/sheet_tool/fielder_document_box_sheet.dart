@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../features/account/applications/user_state.dart';
+import '../../app/utils/area_context_debug_trace.dart';
 import '../../features/commute/domain/repositories/commute_log_repository.dart';
 import '../../features/dev/application/area_state.dart';
 import '../../features/mode_single/application/att_brk_mode_db.dart';
@@ -152,10 +153,21 @@ Future<void> _submitLocalAttendanceRecordsToFirestore(
 
   final userId = (userState.session?.id ?? '').trim();
   final userName = userState.name.trim();
-  final area = (userState.session?.selectedArea ?? '').trim();
+  final selectedArea = (userState.session?.selectedArea ?? '').trim();
+  final area = userState.currentArea.trim();
   final division = areaState.currentDivision.trim();
 
   debugPrint('[$debugTag] start statuses=${statuses.join(',')}');
+  AreaContextDebugTrace.record(
+    debugTag,
+    'attendance_upload_started',
+    fields: <String, Object?>{
+      'selectedArea': selectedArea,
+      'currentArea': area,
+      'currentDivision': division,
+      'statuses': statuses.join(','),
+    },
+  );
 
   if (userId.isEmpty || userName.isEmpty || area.isEmpty || division.isEmpty) {
     debugPrint('[$debugTag] skipped reason=missing_required_context');
@@ -226,9 +238,27 @@ Future<void> _submitLocalAttendanceRecordsToFirestore(
       }
     }
     debugPrint('[$debugTag] complete processed=${uploadTargets.length}');
+    AreaContextDebugTrace.record(
+      debugTag,
+      'attendance_upload_completed',
+      fields: <String, Object?>{
+        'selectedArea': selectedArea,
+        'currentArea': area,
+        'processed': uploadTargets.length,
+      },
+    );
   } catch (e, st) {
     debugPrint('❌ [$debugTag] 기록 제출 중 오류: $e');
     debugPrint('stack: $st');
+    AreaContextDebugTrace.record(
+      debugTag,
+      'attendance_upload_failed',
+      fields: <String, Object?>{
+        'selectedArea': selectedArea,
+        'currentArea': area,
+        'error': '$e',
+      },
+    );
   }
 }
 

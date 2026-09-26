@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../app/di/routes.dart';
 import '../../../../app/models/capability.dart';
 import '../../../../app/init/logout_helper.dart';
+import '../../../../app/theme/theme_settings_dialog.dart';
 import '../../../../app/utils/operational_data_sync_workflow.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
@@ -600,6 +601,19 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     }
 
     actions.addAll([
+      _DashboardAction(
+        id: 'theme',
+        category: _DashboardActionCategory.settings,
+        label: '테마',
+        description: '',
+        icon: Icons.palette_outlined,
+        color: tokens.surfaceSelected,
+        foreground: tokens.textPrimary,
+        onPressed: () => showCommonThemeSettingsDialog(
+          context: context,
+          source: 'dashboard_side_dock',
+        ),
+      ),
       _DashboardAction(
         id: 'third_party_support',
         category: _DashboardActionCategory.settings,

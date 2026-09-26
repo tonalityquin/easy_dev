@@ -123,22 +123,22 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       return;
     }
     setState(() => _poweringOn = false);
-    await _runCinematicPromptSequence(
-      promptStage: _PowerBootStage.purposeIntro,
+    await _runCinematicIntroSequence(
+      introStage: _PowerBootStage.purposeIntro,
       choicesStage: _PowerBootStage.purposeCategory,
       holdDuration: _purposeIntroHoldDuration,
       sequence: 'purpose_category',
-      promptVisibleEvent: 'purpose_intro_visible',
+      introVisibleEvent: 'purpose_intro_visible',
       choicesVisibleEvent: 'purpose_category_entered',
     );
   }
 
-  Future<void> _runCinematicPromptSequence({
-    required _PowerBootStage promptStage,
+  Future<void> _runCinematicIntroSequence({
+    required _PowerBootStage introStage,
     required _PowerBootStage choicesStage,
     required Duration holdDuration,
     required String sequence,
-    required String promptVisibleEvent,
+    required String introVisibleEvent,
     required String choicesVisibleEvent,
   }) async {
     if (_stageTransitioning || !mounted) return;
@@ -154,7 +154,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       meta: <String, Object?>{
         'sequence': sequence,
         'from': _stage.name,
-        'promptStage': promptStage.name,
+        'introStage': introStage.name,
         'choicesStage': choicesStage.name,
         'enterMs': _cinematicEnterDuration.inMilliseconds,
         'holdMs': holdDuration.inMilliseconds,
@@ -172,7 +172,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
     if (!mounted || generation != _cinematicGeneration) return;
 
     setState(() {
-      _stage = promptStage;
+      _stage = introStage;
       _cinematicExiting = false;
     });
     _revealController.duration = _cinematicEnterDuration;
@@ -180,10 +180,10 @@ class _PowerBootScreenState extends State<PowerBootScreen>
     _revealController.value = 0;
     AppStartDebugTrace.log(
       'power_boot',
-      'cinematic_prompt_enter_start',
+      'cinematic_intro_enter_start',
       meta: <String, Object?>{
         'sequence': sequence,
-        'stage': promptStage.name,
+        'stage': introStage.name,
       },
     );
 
@@ -200,10 +200,10 @@ class _PowerBootScreenState extends State<PowerBootScreen>
 
     AppStartDebugTrace.log(
       'power_boot',
-      promptVisibleEvent,
+      introVisibleEvent,
       meta: <String, Object?>{
         'sequence': sequence,
-        'stage': promptStage.name,
+        'stage': introStage.name,
       },
     );
 
@@ -213,10 +213,10 @@ class _PowerBootScreenState extends State<PowerBootScreen>
     setState(() => _cinematicExiting = true);
     AppStartDebugTrace.log(
       'power_boot',
-      'cinematic_prompt_exit_start',
+      'cinematic_intro_exit_start',
       meta: <String, Object?>{
         'sequence': sequence,
-        'stage': promptStage.name,
+        'stage': introStage.name,
       },
     );
 
@@ -233,10 +233,10 @@ class _PowerBootScreenState extends State<PowerBootScreen>
 
     AppStartDebugTrace.log(
       'power_boot',
-      'cinematic_prompt_exit_complete',
+      'cinematic_intro_exit_complete',
       meta: <String, Object?>{
         'sequence': sequence,
-        'stage': promptStage.name,
+        'stage': introStage.name,
       },
     );
 
@@ -342,12 +342,12 @@ class _PowerBootScreenState extends State<PowerBootScreen>
     );
     switch (category) {
       case 'work':
-        await _runCinematicPromptSequence(
-          promptStage: _PowerBootStage.workPurposeIntro,
+        await _runCinematicIntroSequence(
+          introStage: _PowerBootStage.workPurposeIntro,
           choicesStage: _PowerBootStage.workPurpose,
           holdDuration: _workPurposeIntroHoldDuration,
           sequence: 'work_purpose',
-          promptVisibleEvent: 'work_purpose_intro_visible',
+          introVisibleEvent: 'work_purpose_intro_visible',
           choicesVisibleEvent: 'work_purpose_entered',
         );
         return;
@@ -829,7 +829,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
   }
 
   Widget _buildPurposeIntro(BuildContext context) {
-    return _buildCinematicPrompt(
+    return _buildCinematicIntro(
       context,
       '앱 시작에 앞서\n사용 목적에 맞는 버튼을 눌러주세요.',
     );
@@ -860,7 +860,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
   }
 
   Widget _buildWorkPurposeIntro(BuildContext context) {
-    return _buildCinematicPrompt(
+    return _buildCinematicIntro(
       context,
       '업무 사용 유형에 맞는 버튼을 눌러주세요.',
     );
@@ -965,7 +965,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
   }
 
   Widget _buildSetupNotice(BuildContext context) {
-    return _buildCinematicPrompt(
+    return _buildCinematicIntro(
       context,
       '다음은 사용자가 선택한 목적에 따라 필요한 사용 권한과 이용 약관,\n'
       '개인정보보호, 외부 서비스 사용 등에 대한 동의 및 권한 요청을\n'
@@ -973,7 +973,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
     );
   }
 
-  Widget _buildCinematicPrompt(BuildContext context, String prompt) {
+  Widget _buildCinematicIntro(BuildContext context, String message) {
     final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final animation = CurvedAnimation(
@@ -990,7 +990,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 26),
           child: Text(
-            prompt,
+            message,
             textAlign: TextAlign.center,
             style: textTheme.headlineSmall?.copyWith(
               color: tokens.textPrimary,

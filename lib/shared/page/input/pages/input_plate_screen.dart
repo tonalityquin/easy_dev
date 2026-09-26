@@ -34,11 +34,13 @@ import '../../../plate/editor/widgets/plate_editor_rail.dart';
 import '../../../plate/editor/workspaces/plate_billing_workspace.dart';
 import '../../../plate/editor/workspaces/plate_camera_workspace.dart';
 import '../../../plate/editor/workspaces/plate_memo_workspace.dart';
+import '../../../plate/editor/workspaces/plate_saved_photos_content.dart';
 import '../../../plate/editor/widgets/plate_parking_picker_content.dart';
 import '../../../plate/editor/workspaces/plate_sector_workspace.dart';
 import '../../../plate/editor/dialogs/plate_editor_dialog.dart';
 import '../../../plate/editor/workspaces/plate_identity_workspace.dart';
 import '../application/input_plate_registration_policy.dart';
+import '../application/input_plate_service.dart';
 import '../controllers/input_plate_controller.dart';
 import 'live_ocr_page.dart';
 import '../widgets/live_ocr_source_rect_route.dart';
@@ -734,6 +736,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       _cameraInitialPreviewIndex = previewImages.isEmpty
           ? 0
           : previewIndex.clamp(0, previewImages.length - 1).toInt();
+      final lookupPlate = controller.photoLookupPlateNumber;
+      _log(
+        'camera=session_prepare source=$source savedPhotosEnabled=${lookupPlate != null} lookupPlate=${lookupPlate ?? '-'} sessionKey=$_cameraSessionKey',
+      );
     }
     setState(() => _activeDialog = workspace);
     _log('dialog=${workspace.name}_open source=$source');
@@ -1934,7 +1940,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
     if (!mounted) return;
     _log(
-      'close=forced source=parking_mixed_configuration discardPrompt=false',
+      'close=forced source=parking_mixed_configuration discardConfirmation=false',
     );
     Navigator.of(context).pop(false);
   }
@@ -2025,11 +2031,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           onDebug: _log,
         );
       case PlateEditorWorkspace.camera:
+        final photoLookupPlateNumber = controller.photoLookupPlateNumber;
         return PlateCameraWorkspace(
           key: ValueKey<int>(_cameraSessionKey),
-          plateNumber: controller.isInputValid()
-              ? controller.buildPlateNumber()
-              : 'new_plate',
+          plateNumber: photoLookupPlateNumber ?? 'new_plate',
           initialCapturedImages: List<XFile>.from(controller.capturedImages),
           initialPreviewImages: _cameraInitialPreviewImages,
           initialPreviewIndex: _cameraInitialPreviewIndex,
@@ -2058,6 +2063,22 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               'camera=deleted path=${image.path} count=${controller.capturedImages.length}',
             );
           },
+          savedPhotosBuilder: photoLookupPlateNumber == null
+              ? null
+              : (context, onBack) => PlateSavedPhotosContent(
+                    plateNumber: photoLookupPlateNumber,
+                    diagnosticSource: 'input',
+                    loadImages: (loadContext, yearMonth) {
+                      return InputPlateService.listPlateImages(
+                        context: loadContext,
+                        plateNumber: photoLookupPlateNumber,
+                        yearMonth: yearMonth,
+                      );
+                    },
+                    onBack: onBack,
+                    onDebug: _log,
+                    trace: _editorTrace,
+                  ),
           onDebug: _log,
         );
       case PlateEditorWorkspace.sector:

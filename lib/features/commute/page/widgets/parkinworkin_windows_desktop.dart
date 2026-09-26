@@ -35,7 +35,7 @@ class ParkinWorkinApplicationField extends StatefulWidget {
   static const Duration selectionDuration = Duration(milliseconds: 120);
   static const Duration focusDuration = Duration(milliseconds: 620);
   static const Duration postFocusHoldDuration = Duration(milliseconds: 360);
-  static const Duration promptDuration = Duration(milliseconds: 320);
+  static const Duration startMessageDuration = Duration(milliseconds: 320);
   static const Duration appPressDuration = Duration(milliseconds: 180);
   static const Duration appLaunchDuration = Duration(milliseconds: 420);
   static const Duration fullscreenDuration = Duration(milliseconds: 430);
@@ -60,14 +60,14 @@ class ParkinWorkinApplicationFieldState
   late final AnimationController _desktopController;
   late final AnimationController _selectionController;
   late final AnimationController _focusController;
-  late final AnimationController _promptController;
+  late final AnimationController _startMessageController;
   late final AnimationController _pressController;
   late final AnimationController _launchController;
   late final AnimationController _fullscreenController;
   bool _launched = false;
   bool _launchInFlight = false;
   bool _fullscreenInFlight = false;
-  bool _promptVisibleLogged = false;
+  bool _startMessageVisibleLogged = false;
   bool _postFocusHoldComplete = false;
   String _sequencePhase = 'field';
 
@@ -100,7 +100,7 @@ class ParkinWorkinApplicationFieldState
 
   bool get applicationLaunched => _launched;
   bool get applicationFocused => _focusController.value >= 0.999;
-  bool get promptVisible => _promptController.value > 0.01 && !_launched;
+  bool get startMessageVisible => _startMessageController.value > 0.01 && !_launched;
   int get peripheralCount => _resolvePeripheralDirections().length;
   String get peripheralLayout => 'relative_eight_direction_neighbors';
 
@@ -119,9 +119,9 @@ class ParkinWorkinApplicationFieldState
       vsync: this,
       duration: ParkinWorkinApplicationField.focusDuration,
     );
-    _promptController = AnimationController(
+    _startMessageController = AnimationController(
       vsync: this,
-      duration: ParkinWorkinApplicationField.promptDuration,
+      duration: ParkinWorkinApplicationField.startMessageDuration,
     );
     _pressController = AnimationController(
       vsync: this,
@@ -166,7 +166,7 @@ class ParkinWorkinApplicationFieldState
             widget.stage == ParkinWorkinDesktopStage.success ||
             widget.checklist != null)) {
       _launched = true;
-      _promptController.value = 0;
+      _startMessageController.value = 0;
       _selectionController.value = 1;
       _focusController.value = 1;
       _postFocusHoldComplete = true;
@@ -180,7 +180,7 @@ class ParkinWorkinApplicationFieldState
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _syncPromptVisibility();
+      _syncStartMessageVisibility();
     });
   }
 
@@ -212,7 +212,7 @@ class ParkinWorkinApplicationFieldState
       meta: <String, Object?>{'mode': widget.modeKey},
     );
     if (widget.reduceMotion) {
-      _syncPromptVisibility();
+      _syncStartMessageVisibility();
       return;
     }
     if (_launched) return;
@@ -309,10 +309,10 @@ class ParkinWorkinApplicationFieldState
       scope: 'commute_application_field',
       meta: <String, Object?>{'mode': widget.modeKey},
     );
-    _syncPromptVisibility();
+    _syncStartMessageVisibility();
   }
 
-  void _syncPromptVisibility() {
+  void _syncStartMessageVisibility() {
     if (!mounted) return;
     final shouldShow = !_launched &&
         !widget.exiting &&
@@ -321,37 +321,37 @@ class ParkinWorkinApplicationFieldState
         _focusController.value >= 0.999;
 
     if (shouldShow) {
-      _sequencePhase = 'prompt';
+      _sequencePhase = 'start_message';
       if (widget.reduceMotion) {
-        _promptController.value = 1;
-      } else if (!_promptController.isAnimating &&
-          _promptController.value < 1) {
-        unawaited(_promptController.forward());
+        _startMessageController.value = 1;
+      } else if (!_startMessageController.isAnimating &&
+          _startMessageController.value < 1) {
+        unawaited(_startMessageController.forward());
       }
-      if (!_promptVisibleLogged) {
-        _promptVisibleLogged = true;
+      if (!_startMessageVisibleLogged) {
+        _startMessageVisibleLogged = true;
         LauncherDiagnostics.record(
-          'commute_parkinworkin_prompt_visible',
+          'commute_parkinworkin_start_message_visible',
           scope: 'commute_application_field',
           meta: <String, Object?>{
             'mode': widget.modeKey,
             'text': '오늘의 업무를 시작하시겠습니까?',
             'durationMs':
-                ParkinWorkinApplicationField.promptDuration.inMilliseconds,
+                ParkinWorkinApplicationField.startMessageDuration.inMilliseconds,
           },
         );
       }
       return;
     }
 
-    _promptVisibleLogged = false;
+    _startMessageVisibleLogged = false;
     if (_postFocusHoldComplete && !_launched) {
       _sequencePhase = 'focused';
     }
     if (widget.reduceMotion) {
-      _promptController.value = 0;
-    } else if (!_promptController.isAnimating && _promptController.value > 0) {
-      unawaited(_promptController.reverse());
+      _startMessageController.value = 0;
+    } else if (!_startMessageController.isAnimating && _startMessageController.value > 0) {
+      unawaited(_startMessageController.reverse());
     }
   }
 
@@ -400,9 +400,9 @@ class ParkinWorkinApplicationFieldState
     if (!_launched) {
       if (widget.reduceMotion) {
         _pressController.value = 1;
-        _promptController.value = 0;
+        _startMessageController.value = 0;
       } else {
-        unawaited(_promptController.reverse());
+        unawaited(_startMessageController.reverse());
         await _pressController.forward(from: 0);
       }
       if (!mounted) return;
@@ -436,7 +436,7 @@ class ParkinWorkinApplicationFieldState
   Future<void> expandToFullscreen() async {
     if (_fullscreenInFlight || !mounted) return;
     _fullscreenInFlight = true;
-    _promptController.value = 0;
+    _startMessageController.value = 0;
     _focusController.value = 1;
     if (!_launched) {
       setState(() => _launched = true);
@@ -470,7 +470,7 @@ class ParkinWorkinApplicationFieldState
     _desktopController.dispose();
     _selectionController.dispose();
     _focusController.dispose();
-    _promptController.dispose();
+    _startMessageController.dispose();
     _pressController.dispose();
     _launchController.dispose();
     _fullscreenController.dispose();
@@ -547,7 +547,7 @@ class ParkinWorkinApplicationFieldState
             : peripheralTargets.values
                 .map((target) => target.rect.center.dy)
                 .reduce(math.max);
-        final promptTop = math
+        final messageTop = math
             .min(
               sceneHeight - 58,
               math.max(
@@ -562,7 +562,7 @@ class ParkinWorkinApplicationFieldState
             _desktopController,
             _selectionController,
             _focusController,
-            _promptController,
+            _startMessageController,
             _pressController,
             _launchController,
             _fullscreenController,
@@ -580,9 +580,9 @@ class ParkinWorkinApplicationFieldState
             final focusValue = widget.reduceMotion
                 ? rawFocusValue
                 : Curves.easeInOutCubic.transform(rawFocusValue);
-            final promptValue = widget.reduceMotion
-                ? (_promptController.value > 0 ? 1.0 : 0.0)
-                : Curves.easeOutCubic.transform(_promptController.value);
+            final messageValue = widget.reduceMotion
+                ? (_startMessageController.value > 0 ? 1.0 : 0.0)
+                : Curves.easeOutCubic.transform(_startMessageController.value);
             final pressScale = widget.reduceMotion
                 ? 1.0
                 : 1 - (0.045 * math.sin(_pressController.value * math.pi));
@@ -701,11 +701,11 @@ class ParkinWorkinApplicationFieldState
                     Positioned(
                       left: 20,
                       right: 20,
-                      top: promptTop,
+                      top: messageTop,
                       child: IgnorePointer(
-                        child: _StartPrompt(
+                        child: _StartMessage(
                           tokens: tokens,
-                          opacity: promptValue,
+                          opacity: messageValue,
                           checking: widget.stage ==
                               ParkinWorkinDesktopStage.checking,
                           focused: focusValue >= 0.999,
@@ -1130,8 +1130,8 @@ class _ParkinWorkinFocusTile extends StatelessWidget {
   }
 }
 
-class _StartPrompt extends StatelessWidget {
-  const _StartPrompt({
+class _StartMessage extends StatelessWidget {
+  const _StartMessage({
     required this.tokens,
     required this.opacity,
     required this.checking,

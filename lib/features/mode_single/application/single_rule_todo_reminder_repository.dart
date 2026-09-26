@@ -2,32 +2,32 @@ import 'package:sqflite/sqflite.dart';
 
 import 'att_brk_mode_db.dart';
 
-class SingleRuleTodoPromptHistory {
-  const SingleRuleTodoPromptHistory({
+class SingleRuleTodoReminderHistory {
+  const SingleRuleTodoReminderHistory({
     required this.userId,
     required this.division,
     required this.area,
     required this.todoFingerprint,
-    required this.clockInsSincePrompt,
-    required this.promptCount,
-    this.lastPromptedAt,
+    required this.clockInsSinceReminder,
+    required this.reminderCount,
+    this.lastRemindedAt,
   });
 
   final String userId;
   final String division;
   final String area;
   final String todoFingerprint;
-  final int clockInsSincePrompt;
-  final int promptCount;
-  final DateTime? lastPromptedAt;
+  final int clockInsSinceReminder;
+  final int reminderCount;
+  final DateTime? lastRemindedAt;
 }
 
-class SingleRuleTodoPromptRepository {
-  const SingleRuleTodoPromptRepository();
+class SingleRuleTodoReminderRepository {
+  const SingleRuleTodoReminderRepository();
 
   Future<Database> get _database async => AttBrkModeDb.instance.database;
 
-  Future<SingleRuleTodoPromptHistory?> read({
+  Future<SingleRuleTodoReminderHistory?> read({
     required String userId,
     required String division,
     required String area,
@@ -43,7 +43,7 @@ class SingleRuleTodoPromptRepository {
 
     final db = await _database;
     final rows = await db.query(
-      AttBrkModeDb.ruleTodoPromptHistoryTable,
+      AttBrkModeDb.ruleTodoReminderHistoryTable,
       where: 'user_id = ? AND division = ? AND area = ?',
       whereArgs: <Object?>[
         normalizedUserId,
@@ -55,19 +55,19 @@ class SingleRuleTodoPromptRepository {
     if (rows.isEmpty) return null;
 
     final row = rows.first;
-    return SingleRuleTodoPromptHistory(
+    return SingleRuleTodoReminderHistory(
       userId: normalizedUserId,
       division: normalizedDivision,
       area: normalizedArea,
       todoFingerprint: (row['todo_fingerprint'] ?? '').toString(),
-      clockInsSincePrompt:
-          (row['clock_ins_since_prompt'] as num?)?.toInt() ?? 0,
-      promptCount: (row['prompt_count'] as num?)?.toInt() ?? 0,
-      lastPromptedAt: _readDateTime(row['last_prompted_at']),
+      clockInsSinceReminder:
+          (row['clock_ins_since_reminder'] as num?)?.toInt() ?? 0,
+      reminderCount: (row['reminder_count'] as num?)?.toInt() ?? 0,
+      lastRemindedAt: _readDateTime(row['last_reminded_at']),
     );
   }
 
-  Future<void> markPrompted({
+  Future<void> markReminderConfirmed({
     required String userId,
     required String division,
     required String area,
@@ -92,15 +92,15 @@ class SingleRuleTodoPromptRepository {
     final now = DateTime.now().toIso8601String();
     final db = await _database;
     await db.insert(
-      AttBrkModeDb.ruleTodoPromptHistoryTable,
+      AttBrkModeDb.ruleTodoReminderHistoryTable,
       <String, Object?>{
         'user_id': normalizedUserId,
         'division': normalizedDivision,
         'area': normalizedArea,
         'todo_fingerprint': normalizedFingerprint,
-        'last_prompted_at': now,
-        'clock_ins_since_prompt': 0,
-        'prompt_count': (existing?.promptCount ?? 0) + 1,
+        'last_reminded_at': now,
+        'clock_ins_since_reminder': 0,
+        'reminder_count': (existing?.reminderCount ?? 0) + 1,
         'updated_at': now,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
@@ -132,16 +132,16 @@ class SingleRuleTodoPromptRepository {
     final now = DateTime.now().toIso8601String();
     final db = await _database;
     await db.insert(
-      AttBrkModeDb.ruleTodoPromptHistoryTable,
+      AttBrkModeDb.ruleTodoReminderHistoryTable,
       <String, Object?>{
         'user_id': normalizedUserId,
         'division': normalizedDivision,
         'area': normalizedArea,
         'todo_fingerprint': normalizedFingerprint,
-        'last_prompted_at': existing?.lastPromptedAt?.toIso8601String(),
-        'clock_ins_since_prompt':
-            (existing?.clockInsSincePrompt ?? 0) + 1,
-        'prompt_count': existing?.promptCount ?? 0,
+        'last_reminded_at': existing?.lastRemindedAt?.toIso8601String(),
+        'clock_ins_since_reminder':
+            (existing?.clockInsSinceReminder ?? 0) + 1,
+        'reminder_count': existing?.reminderCount ?? 0,
         'updated_at': now,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,

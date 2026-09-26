@@ -5,7 +5,7 @@ enum TerminalCommandPath {
 }
 
 extension TerminalCommandPathX on TerminalCommandPath {
-  String get promptPath => switch (this) {
+  String get terminalPath => switch (this) {
         TerminalCommandPath.root => '~',
         TerminalCommandPath.setting => '~/setting',
         TerminalCommandPath.settingEmailEdit => '~/setting/email',

@@ -6,16 +6,21 @@ class ChatAccountScope {
     required this.userId,
     required this.division,
     required this.selectedArea,
+    required this.currentArea,
     required this.isWorking,
   });
 
   final String userId;
   final String division;
   final String selectedArea;
+  final String currentArea;
   final bool isWorking;
 
   bool get isValid =>
-      userId.isNotEmpty && division.isNotEmpty && selectedArea.isNotEmpty;
+      userId.isNotEmpty &&
+      division.isNotEmpty &&
+      selectedArea.isNotEmpty &&
+      currentArea.isNotEmpty;
 
   bool get isHeadquarter => sameChatIdentity(division, selectedArea);
 
@@ -23,6 +28,7 @@ class ChatAccountScope {
         userId,
         division,
         selectedArea,
+        currentArea,
         isHeadquarter ? '1' : '0',
         isWorking ? '1' : '0',
       ].join('\u0001');
@@ -34,7 +40,7 @@ class ChatAccountScope {
     if (!isValid) return false;
     if (isHeadquarterChannel) return isHeadquarter;
     if (isHeadquarter) return areaName.trim().isNotEmpty;
-    return sameChatIdentity(areaName, selectedArea);
+    return sameChatIdentity(areaName, currentArea);
   }
 
   String channelIdFor({
@@ -60,6 +66,7 @@ class ChatAccountScope {
         userId: '',
         division: '',
         selectedArea: '',
+        currentArea: '',
         isWorking: false,
       );
     }
@@ -67,6 +74,7 @@ class ChatAccountScope {
       userId: session.id.trim(),
       division: _firstNonEmpty(session.divisions),
       selectedArea: session.selectedArea.trim(),
+      currentArea: session.currentArea.trim(),
       isWorking: session.isWorking,
     );
   }

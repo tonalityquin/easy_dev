@@ -127,29 +127,50 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
     _debug(
       'punch_start type=${type.code} mode=triple repunch=$repunch dateTime=${targetDateTime.toIso8601String()}',
     );
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '근태 처리 상태',
+      initialMessage: 'Triple 근태 처리를 시작합니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+      standardModeMessage: '근태 처리를 진행합니다.',
+      showDialogImmediately: false,
+    );
+    trace.log(
+      'source=triple_punch_recorder type=${type.code} repunch=$repunch at=${targetDateTime.toIso8601String()}',
+      progress: .12,
+    );
     try {
       final result = type == AttBrkModeType.breakTime
           ? await CommonAttendanceService.recordBreak(
               context,
               source: 'triple_punch_recorder',
-              modeKey: 'triple',
               recordedAt: targetDateTime,
+              trace: trace,
             )
           : repunch
               ? await CommonAttendanceService.replaceClockOut(
                   context,
                   source: 'triple_punch_recorder_repunch',
-                  modeKey: 'triple',
                   recordedAt: targetDateTime,
+                  trace: trace,
                 )
               : await CommonAttendanceService.clockOut(
                   context,
                   source: 'triple_punch_recorder',
-                  modeKey: 'triple',
                   recordedAt: targetDateTime,
+                  trace: trace,
                 );
       if (!result.success) {
         throw StateError(result.message);
+      }
+      trace.log(
+        'attendance_result success=true message=${result.message}',
+        progress: .78,
+      );
+      await trace.succeed(result.message);
+      if (trace.developerMode && mounted) {
+        await trace.showStatusDialog(context);
       }
       if (!mounted) return;
       await showCommonAttendancePunchFeedback(
@@ -165,6 +186,14 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
         await _exitAppAfterClockOut(context);
       }
     } catch (error, stackTrace) {
+      await trace.fail(
+        '근태 처리에 실패했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (trace.developerMode && mounted) {
+        await trace.showStatusDialog(context);
+      }
       _debug(
         'punch_failure type=${type.code} mode=triple repunch=$repunch error=$error stack=$stackTrace',
       );
@@ -197,6 +226,20 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
     trace.log('breakAllowedWithoutScheduledTimes=true', progress: .86);
     trace.log('clockOutRequiresBreakWhenConfigured=true', progress: .9);
     trace.log('workInReadOnly=$_disableWorkInPunch', progress: .94);
+    final attendanceSession =
+        await AttBrkRepository.instance.getAttendanceSessionForDate(_selectedDate);
+    trace.log(
+      'sessionContext=${attendanceSession?.contextKey ?? '-'}',
+      progress: .96,
+    );
+    trace.log(
+      'sessionMode=${attendanceSession?.modeKey ?? '-'}',
+      progress: .965,
+    );
+    trace.log(
+      'sessionHeadquarter=${attendanceSession?.isHeadquarter ?? false}',
+      progress: .97,
+    );
     trace.log('submitting=${_submitting?.code ?? ''}', progress: .97);
     for (final line in AttendanceDiagnostics.lines) {
       trace.log(line);

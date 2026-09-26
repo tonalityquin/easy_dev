@@ -8,7 +8,8 @@ import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../application/modify_camera_fullscreen_viewer.dart';
 import '../../application/modify_camera_helper.dart';
-import '../widgets/modify_photo_section.dart';
+import '../../application/modify_plate_service.dart';
+import '../../../../plate/editor/workspaces/plate_saved_photos_content.dart';
 import '../widgets/modify_workspace_switcher.dart';
 
 enum _CameraWorkspaceMode {
@@ -606,9 +607,17 @@ class _ModifyCameraWorkspaceState extends State<ModifyCameraWorkspace> {
   }
 
   Widget _buildSavedPhotosMode(BuildContext context) {
-    return ModifySavedPhotosContent(
+    return PlateSavedPhotosContent(
       key: const ValueKey<String>('saved_photos'),
       plateNumber: widget.plateNumber,
+      diagnosticSource: 'modify_legacy_camera',
+      loadImages: (loadContext, yearMonth) {
+        return ModifyPlateService.listPlateImages(
+          context: loadContext,
+          plateNumber: widget.plateNumber,
+          yearMonth: yearMonth,
+        );
+      },
       onBack: () => _setMode(_CameraWorkspaceMode.camera),
       onDebug: widget.onDebug,
     );

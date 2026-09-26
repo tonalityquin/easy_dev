@@ -18,7 +18,6 @@ class DoubleHomeDashBoardController {
     final result = await CommonAttendanceService.clockOut(
       context,
       source: 'double_home_dashboard_controller',
-      modeKey: 'double',
     );
     if (!result.success) {
       debugPrint(
@@ -31,7 +30,6 @@ class DoubleHomeDashBoardController {
     final result = await CommonAttendanceService.recordBreak(
       context,
       source: 'double_home_dashboard_controller',
-      modeKey: 'double',
     );
     final recordedAt = result.recordedAt;
     if (!result.success || recordedAt == null) {

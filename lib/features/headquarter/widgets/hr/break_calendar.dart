@@ -101,6 +101,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
   bool _isSearching = false;
   bool _isSendingMail = false;
   bool _isLoadingMonth = false;
+  bool _editDialogOpen = false;
   bool _developerMode = false;
   bool _showUserPicker = false;
   int _monthDirection = 1;
@@ -200,7 +201,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
         ? user.divisions.first
         : '';
     _recordDebug(
-      'developer_status_open presentation=${widget.presentation.name} user=${user?.name ?? '-'} area=$area division=$division month=${_monthKey(_focusedDay)} selectedDay=${_selectedDay?.day ?? -1} records=${_breakTimeMap.length} dirty=$_dirtyDayCount deletes=${_pendingDeleteBreakDates.length} cache=${_breakTimeCache.length} loading=$_isLoadingMonth monthError=${_monthLoadError != null} searching=$_isSearching searchError=${_searchError != null} candidates=${_candidateUsers.length} picker=$_showUserPicker save=${_saveState.name} mail=$_isSendingMail reduceMotion=${media?.disableAnimations ?? false}',
+      'developer_status_open presentation=${widget.presentation.name} user=${user?.name ?? '-'} area=$area division=$division month=${_monthKey(_focusedDay)} selectedDay=${_selectedDay?.day ?? -1} records=${_breakTimeMap.length} dirty=$_dirtyDayCount deletes=${_pendingDeleteBreakDates.length} cache=${_breakTimeCache.length} loading=$_isLoadingMonth monthError=${_monthLoadError != null} searching=$_isSearching searchError=${_searchError != null} candidates=${_candidateUsers.length} picker=$_showUserPicker editDialogOpen=$_editDialogOpen save=${_saveState.name} mail=$_isSendingMail reduceMotion=${media?.disableAnimations ?? false}',
     );
     final trace = await DeveloperOperationTrace.start(
       context: context,
@@ -224,7 +225,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
       progress: 0.50,
     );
     trace.log(
-      'saveState=${_saveState.name}, sendingMail=$_isSendingMail, reduceMotion=${media?.disableAnimations ?? false}',
+      'editDialogOpen=$_editDialogOpen, saveState=${_saveState.name}, sendingMail=$_isSendingMail, reduceMotion=${media?.disableAnimations ?? false}',
       progress: 0.58,
     );
     final snapshot = List<String>.of(_debugLines);
@@ -1263,7 +1264,9 @@ class _BreakCalendarState extends State<BreakCalendar> {
             _focusedDay = focusedDay;
           });
           if (_selectedUser != null) {
-            await _showEditBottomSheet(selectedDay);
+            await WidgetsBinding.instance.endOfFrame;
+            if (!mounted) return;
+            await _showEditDialog(selectedDay);
           }
         },
         onPageChanged: (focusedDay) async {
@@ -1530,39 +1533,59 @@ class _BreakCalendarState extends State<BreakCalendar> {
     );
   }
 
-  Future<void> _showEditBottomSheet(DateTime day) async {
-    final dayKey = day.day;
-    final initialTime = _breakTimeMap[dayKey] ?? '00:00';
-    _recordDebug(
-      'date_edit_open date=${day.toIso8601String()} break=$initialTime',
-    );
-
-    final newTime = await showBreakTimeSheet(
-      context: context,
-      date: day,
-      initialTime: initialTime,
-      useCommonUi: _useCommonUi,
-    );
-    if (newTime == null) {
-      _recordDebug('date_edit_cancel date=${day.toIso8601String()}');
+  Future<void> _showEditDialog(DateTime day) async {
+    if (_editDialogOpen) {
+      _recordDebug(
+        'date_edit_dialog_ignored date=${day.toIso8601String()} reason=already_open',
+      );
       return;
     }
 
-    final dateStr = _dateStr(dayKey);
-    final value = newTime.trim();
-    setState(() {
-      if (value.isEmpty || value == '00:00') {
-        _breakTimeMap.remove(dayKey);
-        _pendingDeleteBreakDates.add(dateStr);
-      } else {
-        _breakTimeMap[dayKey] = value;
-        _pendingDeleteBreakDates.remove(dateStr);
-      }
-      _saveState = _SaveVisualState.idle;
-    });
+    _editDialogOpen = true;
+    final dayKey = day.day;
+    final initialTime = _breakTimeMap[dayKey] ?? '00:00';
     _recordDebug(
-      'date_edit_apply date=$dateStr break=$value dirty=$_dirtyDayCount',
+      'date_edit_dialog_open date=${day.toIso8601String()} break=$initialTime presentation=center_list_surface',
     );
+
+    try {
+      final newTime = await showBreakTimeDialog(
+        context: context,
+        date: day,
+        initialTime: initialTime,
+        useCommonUi: _useCommonUi,
+        developerMode: _developerMode,
+        onDebugLog: (message) => _recordDebug('date_edit_dialog $message'),
+        onDeveloperStatus: _showDeveloperStatus,
+      );
+      if (!mounted) return;
+
+      if (newTime == null) {
+        _recordDebug('date_edit_dialog_cancel date=${day.toIso8601String()}');
+        return;
+      }
+
+      final dateStr = _dateStr(dayKey);
+      final value = newTime.trim();
+      setState(() {
+        if (value.isEmpty || value == '00:00') {
+          _breakTimeMap.remove(dayKey);
+          _pendingDeleteBreakDates.add(dateStr);
+        } else {
+          _breakTimeMap[dayKey] = value;
+          _pendingDeleteBreakDates.remove(dateStr);
+        }
+        _saveState = _SaveVisualState.idle;
+      });
+      _recordDebug(
+        'date_edit_dialog_apply date=$dateStr break=$value dirty=$_dirtyDayCount',
+      );
+    } finally {
+      _editDialogOpen = false;
+      _recordDebug(
+        'date_edit_dialog_closed date=${day.toIso8601String()} mounted=$mounted',
+      );
+    }
   }
 
   @override

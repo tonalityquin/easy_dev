@@ -27,7 +27,7 @@ const Color _terminalHeader = Color(0xFF24101F);
 const Color _terminalBorder = Color(0xFF5E3A55);
 const Color _terminalText = Color(0xFFF2EEF1);
 const Color _terminalMuted = Color(0xFFB7AAB3);
-const Color _terminalPrompt = Color(0xFF8AE234);
+const Color _terminalAccent = Color(0xFF8AE234);
 const Color _terminalPath = Color(0xFF729FCF);
 const Color _terminalSuccess = Color(0xFF8AE234);
 const Color _terminalError = Color(0xFFEF6A6A);
@@ -93,8 +93,8 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   late final TerminalOutputPlaybackController _playbackController;
   late final AnimationController _openController;
   late final AnimationController _activeSessionRestoreController;
-  final TextEditingController _promptController = TextEditingController();
-  late final FocusNode _promptFocusNode;
+  final TextEditingController _commandInputController = TextEditingController();
+  late final FocusNode _commandInputFocusNode;
   final ScrollController _scrollController = ScrollController();
   bool _initialized = false;
   bool _nearBottom = true;
@@ -116,7 +116,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   String _lastLauncherActivitySignature = '';
   Timer? _bottomLockTimer;
   Future<void>? _openFuture;
-  _TerminalPromptLayoutSnapshot? _promptLayoutSnapshot;
+  _TerminalInputLayoutSnapshot? _inputLayoutSnapshot;
 
   bool get _isLauncher =>
       widget.terminalContext == ParkinWorkinTerminalContext.launcher;
@@ -141,9 +141,9 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       ? _launcherController!.runningCommand
       : _workspaceController!.runningCommand;
 
-  String get _promptPath => _isLauncher
-      ? _launcherController!.currentPromptPath
-      : _workspaceController!.currentPromptPath;
+  String get _terminalPath => _isLauncher
+      ? _launcherController!.currentTerminalPath
+      : _workspaceController!.currentTerminalPath;
 
   bool get _commandHistoryEnabled => _isLauncher
       ? _launcherController!.commandHistoryEnabled
@@ -158,17 +158,17 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       : _workspaceController!.importingUnlocked;
 
   TextInputType get _keyboardType => _isLauncher
-      ? _launcherController!.promptKeyboardType
+      ? _launcherController!.commandKeyboardType
       : _emailEditMode
           ? TextInputType.emailAddress
           : TextInputType.text;
 
   TextInputAction get _inputAction => _isLauncher
-      ? _launcherController!.promptInputAction
+      ? _launcherController!.commandInputAction
       : TextInputAction.done;
 
   bool get _obscureText =>
-      _isLauncher && _launcherController!.obscurePrompt;
+      _isLauncher && _launcherController!.obscureCommandInput;
 
   bool get _startupSetupActive =>
       _isLauncher && _launcherController!.startupSetupPanelActive;
@@ -208,8 +208,8 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       duration: _activeSessionRestoreOpenDuration,
       reverseDuration: _activeSessionRestoreCloseDuration,
     );
-    _promptFocusNode = FocusNode(onKeyEvent: _handlePromptKeyEvent);
-    _promptFocusNode.addListener(_handlePromptFocusChanged);
+    _commandInputFocusNode = FocusNode(onKeyEvent: _handleCommandInputKeyEvent);
+    _commandInputFocusNode.addListener(_handleCommandInputFocusChanged);
     _scrollController.addListener(_handleScroll);
     WidgetsBinding.instance.addObserver(this);
     ParkinWorkinTerminalDiagnostics.record(
@@ -270,7 +270,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     if (_isLauncher) {
       await _syncLauncherInteractionSurface();
     } else if (!_startupSetupActive) {
-      _promptFocusNode.requestFocus();
+      _commandInputFocusNode.requestFocus();
     }
     _scheduleBottomLock(delay: const Duration(milliseconds: 220));
   }
@@ -293,7 +293,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         _startupSetupAwaitingExternalSettings) {
       return;
     }
-    _promptFocusNode.unfocus();
+    _commandInputFocusNode.unfocus();
     await HapticFeedback.selectionClick();
     await _launcherController!.runStartupSetupPrimaryAction(
       context,
@@ -456,45 +456,45 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     _scheduleAutoScroll();
   }
 
-  void _handlePromptFocusChanged() {
-    if (_isLauncher || !_promptFocusNode.hasFocus || _interactionLocked) return;
+  void _handleCommandInputFocusChanged() {
+    if (_isLauncher || !_commandInputFocusNode.hasFocus || _interactionLocked) return;
     ParkinWorkinTerminalDiagnostics.record(
-      'terminal_prompt_focus',
+      'terminal_input_focus',
       context: _contextLabel,
       meta: <String, Object?>{
-        'path': _promptPath,
+        'path': _terminalPath,
       },
     );
     _scheduleBottomLock(delay: const Duration(milliseconds: 220));
   }
 
-  void _requestPromptFocusFromRow() {
+  void _requestCommandInputFocusFromRow() {
     if (_isLauncher || _busy || _interactionLocked) return;
     ParkinWorkinTerminalDiagnostics.record(
-      'terminal_prompt_focus_requested',
+      'terminal_input_focus_requested',
       context: _contextLabel,
       meta: <String, Object?>{
-        'path': _promptPath,
-        'source': 'prompt_row_tap',
-        'alreadyFocused': _promptFocusNode.hasFocus,
+        'path': _terminalPath,
+        'source': 'command_input_row_tap',
+        'alreadyFocused': _commandInputFocusNode.hasFocus,
       },
     );
-    if (!_promptFocusNode.hasFocus) {
-      _promptFocusNode.requestFocus();
+    if (!_commandInputFocusNode.hasFocus) {
+      _commandInputFocusNode.requestFocus();
     }
     _scheduleBottomLock(delay: const Duration(milliseconds: 160));
   }
 
-  void _handlePromptLayoutChanged(_TerminalPromptLayoutSnapshot snapshot) {
-    _promptLayoutSnapshot = snapshot;
+  void _handleInputLayoutChanged(_TerminalInputLayoutSnapshot snapshot) {
+    _inputLayoutSnapshot = snapshot;
     ParkinWorkinTerminalDiagnostics.record(
-      'terminal_prompt_layout_changed',
+      'terminal_input_layout_changed',
       context: _contextLabel,
       meta: <String, Object?>{
-        'path': snapshot.promptPath,
+        'path': snapshot.terminalPath,
         'density': snapshot.density.name,
         'availableWidth': snapshot.availableWidth.toStringAsFixed(1),
-        'promptMaxWidth': snapshot.promptMaxWidth.toStringAsFixed(1),
+        'inputMaxWidth': snapshot.inputMaxWidth.toStringAsFixed(1),
         'minimumInputWidth': snapshot.minimumInputWidth.toStringAsFixed(1),
         'emailSuffix': snapshot.emailSuffixVisible,
         'actionLabel': snapshot.actionLabelVisible,
@@ -508,7 +508,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     if (_isLauncher ||
         !mounted ||
         _interactionLocked ||
-        !_promptFocusNode.hasFocus) {
+        !_commandInputFocusNode.hasFocus) {
       return;
     }
     _scheduleBottomLock(delay: const Duration(milliseconds: 110));
@@ -553,7 +553,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     _nearBottom = position.maxScrollExtent - position.pixels < 96;
   }
 
-  KeyEventResult _handlePromptKeyEvent(FocusNode node, KeyEvent event) {
+  KeyEventResult _handleCommandInputKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     if (_interactionLocked) return KeyEventResult.handled;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
@@ -571,24 +571,24 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       final value = _isLauncher
           ? _launcherController!.previousCommand()
           : _workspaceController!.previousCommand();
-      if (value != null) _setPromptText(value);
+      if (value != null) _setCommandInputText(value);
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       final value = _isLauncher
           ? _launcherController!.nextCommand()
           : _workspaceController!.nextCommand();
-      if (value != null) _setPromptText(value);
+      if (value != null) _setCommandInputText(value);
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }
 
-  void _setPromptText(
+  void _setCommandInputText(
     String value, {
     bool selectAll = false,
   }) {
-    _promptController.value = TextEditingValue(
+    _commandInputController.value = TextEditingValue(
       text: value,
       selection: selectAll
           ? TextSelection(baseOffset: 0, extentOffset: value.length)
@@ -600,7 +600,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
 
   Future<void> _submit() async {
     if (_isLauncher) return;
-    await _submitWorkspaceRaw(_promptController.text);
+    await _submitWorkspaceRaw(_commandInputController.text);
   }
 
   Future<void> _submitHeaderCommand(String command) async {
@@ -609,19 +609,19 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         (_isLauncher && (_startupSetupActive || _launcherBootstrapLocked))) {
       return;
     }
-    if (command == 'setting' && _promptPath == '~/setting') {
-      if (!_promptFocusNode.hasFocus) _promptFocusNode.requestFocus();
+    if (command == 'setting' && _terminalPath == '~/setting') {
+      if (!_commandInputFocusNode.hasFocus) _commandInputFocusNode.requestFocus();
       return;
     }
     if (command == 'setting' && _emailEditMode && !_isLauncher) {
       await HapticFeedback.selectionClick();
-      await _executeWorkspaceCommand('cd ..', preservePrompt: true);
+      await _executeWorkspaceCommand('cd ..', preserveCommandInput: true);
       return;
     }
     final appExit = _isLauncher && command == 'exit';
     if (appExit) {
       _bottomLockTimer?.cancel();
-      _promptFocusNode.unfocus();
+      _commandInputFocusNode.unfocus();
       FocusManager.instance.primaryFocus?.unfocus();
       setState(() => _appExiting = true);
       ParkinWorkinTerminalDiagnostics.record(
@@ -650,7 +650,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         await _handleLauncherResult(result);
         return;
       }
-      await _executeWorkspaceCommand(command, preservePrompt: true);
+      await _executeWorkspaceCommand(command, preserveCommandInput: true);
     } finally {
       if (appExit && mounted) {
         setState(() => _appExiting = false);
@@ -1411,17 +1411,17 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     if (raw.trim().isEmpty) {
       await HapticFeedback.mediumImpact();
       _workspaceController!.rejectEmptyInput();
-      _promptFocusNode.requestFocus();
+      _commandInputFocusNode.requestFocus();
       return;
     }
     await HapticFeedback.selectionClick();
-    _promptController.clear();
+    _commandInputController.clear();
     await _executeWorkspaceCommand(raw);
   }
 
   Future<void> _executeWorkspaceCommand(
     String raw, {
-    bool preservePrompt = false,
+    bool preserveCommandInput = false,
   }) async {
     if (_busy || _interactionLocked) return;
     final normalized = AppCommandRegistry.normalize(raw);
@@ -1447,16 +1447,16 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       return;
     }
     if (result.definition?.launchesSurface == true) {
-      _promptFocusNode.unfocus();
+      _commandInputFocusNode.unfocus();
       final completion = result.surfaceCompletion;
       if (completion != null) unawaited(_restoreFocusAfterSurface(completion));
       return;
     }
-    if (preservePrompt && _promptController.text.isNotEmpty) {
+    if (preserveCommandInput && _commandInputController.text.isNotEmpty) {
       return;
     }
-    if (!_busy && !_interactionLocked && !_promptFocusNode.hasFocus) {
-      _promptFocusNode.requestFocus();
+    if (!_busy && !_interactionLocked && !_commandInputFocusNode.hasFocus) {
+      _commandInputFocusNode.requestFocus();
     }
   }
 
@@ -1473,7 +1473,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         !_busy &&
         !_interactionLocked &&
         !_startupSetupActive) {
-      _promptFocusNode.requestFocus();
+      _commandInputFocusNode.requestFocus();
     }
   }
 
@@ -1481,7 +1481,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     if (_closing) return;
     setState(() => _closing = true);
     _bottomLockTimer?.cancel();
-    _promptFocusNode.unfocus();
+    _commandInputFocusNode.unfocus();
     FocusManager.instance.primaryFocus?.unfocus();
     ParkinWorkinTerminalDiagnostics.record(
       'terminal_close_start',
@@ -1514,7 +1514,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     if (_closing) return;
     setState(() => _closing = true);
     _bottomLockTimer?.cancel();
-    _promptFocusNode.unfocus();
+    _commandInputFocusNode.unfocus();
     FocusManager.instance.primaryFocus?.unfocus();
     ParkinWorkinTerminalDiagnostics.record(
       'terminal_close_start',
@@ -1535,7 +1535,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
 
   Future<void> _showDeveloperStatus() async {
     if (_interactionLocked) return;
-    _promptFocusNode.unfocus();
+    _commandInputFocusNode.unfocus();
     final gmailStatus = await GmailSenderAuth.status();
     if (!mounted) return;
     final baseDescription = _isLauncher
@@ -1545,13 +1545,13 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
             'Source: ${widget.source}',
             'Busy: ${_workspaceController!.busy}',
             'Running: ${_workspaceController!.runningCommand.isEmpty ? '-' : _workspaceController!.runningCommand}',
-            'Path: ${_workspaceController!.currentPromptPath}',
+            'Path: ${_workspaceController!.currentTerminalPath}',
             'Email edit mode: ${_workspaceController!.emailEditMode}',
             'Source lines: ${_workspaceController!.lines.length}',
             'Visible lines: ${_playbackController.lines.length}',
             'Output queue: ${_playbackController.busy ? 'ACTIVE' : 'IDLE'}',
           ].join('\n');
-    final promptLayout = _promptLayoutSnapshot;
+    final inputLayout = _inputLayoutSnapshot;
     final surfaceDescription = _isLauncher
         ? <String>[
             'Launcher input surface: dialog',
@@ -1565,13 +1565,13 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
             'Selection transport: structured',
             'Activity signature: ${_lastLauncherActivitySignature.isEmpty ? '-' : _lastLauncherActivitySignature}',
           ].join('\n')
-        : promptLayout == null
-            ? 'Prompt layout: -'
+        : inputLayout == null
+            ? 'Input layout: -'
             : <String>[
-                'Prompt layout: ${promptLayout.density.name}',
-                'Prompt width: ${promptLayout.availableWidth.toStringAsFixed(1)}',
-                'Prompt prefix max: ${promptLayout.promptMaxWidth.toStringAsFixed(1)}',
-                'Prompt input reserve: ${promptLayout.minimumInputWidth.toStringAsFixed(1)}',
+                'Input layout: ${inputLayout.density.name}',
+                'Input width: ${inputLayout.availableWidth.toStringAsFixed(1)}',
+                'Input prefix max: ${inputLayout.inputMaxWidth.toStringAsFixed(1)}',
+                'Input reserve: ${inputLayout.minimumInputWidth.toStringAsFixed(1)}',
               ].join('\n');
     final interactionDescription = <String>[
       'App exiting: $_exitInProgress',
@@ -1642,7 +1642,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         !_isLauncher &&
         !_busy &&
         !_interactionLocked) {
-      _promptFocusNode.requestFocus();
+      _commandInputFocusNode.requestFocus();
     }
   }
 
@@ -1690,7 +1690,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
               child: Container(
                 width: width * horizontal,
                 height: 2,
-                color: _terminalPrompt,
+                color: _terminalAccent,
               ),
             ),
             Transform.scale(
@@ -1832,10 +1832,10 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
                 onSignatureChanged: _handleLauncherActivitySignatureChanged,
               )
             else
-              _TerminalPrompt(
-                controller: _promptController,
-                promptPath: _promptPath,
-                focusNode: _promptFocusNode,
+              _TerminalCommandInput(
+                controller: _commandInputController,
+                terminalPath: _terminalPath,
+                focusNode: _commandInputFocusNode,
                 busy: _busy || _interactionLocked,
                 runningCommand: _exitInProgress
                     ? 'EXITING'
@@ -1856,8 +1856,8 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
                 onBack: () {},
                 onCancel: () {},
                 onModes: () {},
-                onFocusRequested: _requestPromptFocusFromRow,
-                onLayoutChanged: _handlePromptLayoutChanged,
+                onFocusRequested: _requestCommandInputFocusFromRow,
+                onLayoutChanged: _handleInputLayoutChanged,
                 onSubmitted: _submit,
               ),
           ],
@@ -1889,7 +1889,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
                 12,
                 !_isLauncher &&
                         (MediaQuery.of(context).viewInsets.bottom > 0 ||
-                            _promptFocusNode.hasFocus)
+                            _commandInputFocusNode.hasFocus)
                     ? 0
                     : 12,
               ),
@@ -1899,7 +1899,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
                       MediaQuery.of(context).viewInsets.bottom > 0;
                   final alignBottom = !_isLauncher &&
                       (keyboardVisible ||
-                          _promptFocusNode.hasFocus ||
+                          _commandInputFocusNode.hasFocus ||
                           _interactionLocked);
                   return Align(
                     alignment:
@@ -1921,9 +1921,9 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     _bottomLockTimer?.cancel();
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
-    _promptFocusNode.removeListener(_handlePromptFocusChanged);
-    _promptFocusNode.dispose();
-    _promptController.dispose();
+    _commandInputFocusNode.removeListener(_handleCommandInputFocusChanged);
+    _commandInputFocusNode.dispose();
+    _commandInputController.dispose();
     _activeSessionRestoreController.dispose();
     _openController.dispose();
     _playbackController.removeListener(_handlePlaybackChanged);
@@ -1976,7 +1976,7 @@ class _TerminalHeader extends StatelessWidget {
           const Text(
             '>_',
             style: TextStyle(
-              color: _terminalPrompt,
+              color: _terminalAccent,
               fontFamily: 'monospace',
               fontWeight: FontWeight.w800,
               fontSize: 14,
@@ -2603,7 +2603,7 @@ class _TerminalPolicySetupViewState extends State<_TerminalPolicySetupView> {
                       value: value,
                       backgroundColor: _terminalBorder,
                       valueColor:
-                          const AlwaysStoppedAnimation<Color>(_terminalPrompt),
+                          const AlwaysStoppedAnimation<Color>(_terminalAccent),
                     );
                   },
                 ),
@@ -2826,9 +2826,9 @@ class _TerminalPolicyAgreementRow extends StatelessWidget {
                 duration:
                     reduceMotion ? Duration.zero : const Duration(milliseconds: 150),
                 decoration: BoxDecoration(
-                  color: checked ? _terminalPrompt : Colors.transparent,
+                  color: checked ? _terminalAccent : Colors.transparent,
                   border: Border.all(
-                    color: enabled ? _terminalPrompt : _terminalBorder,
+                    color: enabled ? _terminalAccent : _terminalBorder,
                   ),
                 ),
                 child: AnimatedSwitcher(
@@ -2890,8 +2890,8 @@ class _TerminalSetupActionButtonState extends State<_TerminalSetupActionButton> 
   @override
   Widget build(BuildContext context) {
     final active = widget.enabled && (_pressed || _hovered);
-    final borderColor = widget.enabled ? _terminalPrompt : _terminalBorder;
-    final foreground = widget.enabled ? _terminalPrompt : _terminalMuted;
+    final borderColor = widget.enabled ? _terminalAccent : _terminalBorder;
+    final foreground = widget.enabled ? _terminalAccent : _terminalMuted;
     return Semantics(
       button: true,
       enabled: widget.enabled,
@@ -2948,7 +2948,7 @@ class _TerminalSetupActionButtonState extends State<_TerminalSetupActionButton> 
                                 Icons.chevron_right_rounded,
                                 key: ValueKey<String>('ready'),
                                 size: 17,
-                                color: _terminalPrompt,
+                                color: _terminalAccent,
                               ),
                       ),
                       const SizedBox(width: 6),
@@ -3216,9 +3216,9 @@ class _TerminalOutputLine extends StatelessWidget {
       TerminalLineType.system => _terminalMuted,
     };
     final child = line.type == TerminalLineType.command
-        ? _PromptCommandLine(
+        ? _TerminalCommandLine(
             command: line.text,
-            promptPath: line.promptPath,
+            terminalPath: line.terminalPath,
           )
         : line.type == TerminalLineType.running
             ? _RunningTerminalText(
@@ -3328,14 +3328,14 @@ class _RunningTerminalTextState extends State<_RunningTerminalText> {
   }
 }
 
-class _PromptCommandLine extends StatelessWidget {
-  const _PromptCommandLine({
+class _TerminalCommandLine extends StatelessWidget {
+  const _TerminalCommandLine({
     required this.command,
-    required this.promptPath,
+    required this.terminalPath,
   });
 
   final String command;
-  final String promptPath;
+  final String terminalPath;
 
   @override
   Widget build(BuildContext context) {
@@ -3350,7 +3350,7 @@ class _PromptCommandLine extends StatelessWidget {
           const TextSpan(
             text: 'parkinworkin@terminal',
             style: TextStyle(
-              color: _terminalPrompt,
+              color: _terminalAccent,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -3359,7 +3359,7 @@ class _PromptCommandLine extends StatelessWidget {
             style: TextStyle(color: _terminalMuted),
           ),
           TextSpan(
-            text: promptPath,
+            text: terminalPath,
             style: const TextStyle(
               color: _terminalPath,
               fontWeight: FontWeight.w700,
@@ -3382,38 +3382,38 @@ class _PromptCommandLine extends StatelessWidget {
   }
 }
 
-enum _TerminalPromptDensity {
+enum _TerminalInputDensity {
   full,
   compact,
   pathOnly,
 }
 
-class _TerminalPromptLayoutSnapshot {
-  const _TerminalPromptLayoutSnapshot({
-    required this.promptPath,
+class _TerminalInputLayoutSnapshot {
+  const _TerminalInputLayoutSnapshot({
+    required this.terminalPath,
     required this.density,
     required this.availableWidth,
-    required this.promptMaxWidth,
+    required this.inputMaxWidth,
     required this.minimumInputWidth,
     required this.emailSuffixVisible,
     required this.actionLabelVisible,
     required this.busyLabelVisible,
   });
 
-  final String promptPath;
-  final _TerminalPromptDensity density;
+  final String terminalPath;
+  final _TerminalInputDensity density;
   final double availableWidth;
-  final double promptMaxWidth;
+  final double inputMaxWidth;
   final double minimumInputWidth;
   final bool emailSuffixVisible;
   final bool actionLabelVisible;
   final bool busyLabelVisible;
 
   String get signature => <Object>[
-        promptPath,
+        terminalPath,
         density.name,
         availableWidth.round(),
-        promptMaxWidth.round(),
+        inputMaxWidth.round(),
         minimumInputWidth.round(),
         emailSuffixVisible,
         actionLabelVisible,
@@ -3421,10 +3421,10 @@ class _TerminalPromptLayoutSnapshot {
       ].join('|');
 }
 
-class _TerminalPrompt extends StatefulWidget {
-  const _TerminalPrompt({
+class _TerminalCommandInput extends StatefulWidget {
+  const _TerminalCommandInput({
     required this.controller,
-    required this.promptPath,
+    required this.terminalPath,
     required this.focusNode,
     required this.busy,
     required this.runningCommand,
@@ -3448,7 +3448,7 @@ class _TerminalPrompt extends StatefulWidget {
   });
 
   final TextEditingController controller;
-  final String promptPath;
+  final String terminalPath;
   final FocusNode focusNode;
   final bool busy;
   final String runningCommand;
@@ -3467,17 +3467,17 @@ class _TerminalPrompt extends StatefulWidget {
   final VoidCallback onCancel;
   final VoidCallback onModes;
   final VoidCallback onFocusRequested;
-  final ValueChanged<_TerminalPromptLayoutSnapshot> onLayoutChanged;
+  final ValueChanged<_TerminalInputLayoutSnapshot> onLayoutChanged;
   final VoidCallback onSubmitted;
 
   @override
-  State<_TerminalPrompt> createState() => _TerminalPromptState();
+  State<_TerminalCommandInput> createState() => _TerminalCommandInputState();
 }
 
-class _TerminalPromptState extends State<_TerminalPrompt> {
+class _TerminalCommandInputState extends State<_TerminalCommandInput> {
   String? _lastLayoutSignature;
 
-  void _reportLayout(_TerminalPromptLayoutSnapshot snapshot) {
+  void _reportLayout(_TerminalInputLayoutSnapshot snapshot) {
     final signature = snapshot.signature;
     if (_lastLayoutSignature == signature) return;
     _lastLayoutSignature = signature;
@@ -3510,13 +3510,13 @@ class _TerminalPromptState extends State<_TerminalPrompt> {
               final trailingReserve = emailSuffixReserve +
                   busyLabelReserve +
                   actionLabelReserve;
-              final promptAndInputWidth = math.max(
+              final prefixAndInputWidth = math.max(
                 0.0,
                 availableWidth - trailingReserve,
               ).toDouble();
               final preferredInputWidth = math.max(
                 112.0,
-                promptAndInputWidth * .48,
+                prefixAndInputWidth * .48,
               ).toDouble();
               final minimumInputWidth = math.max(
                 0.0,
@@ -3526,25 +3526,25 @@ class _TerminalPromptState extends State<_TerminalPrompt> {
                     preferredInputWidth,
                     math.max(
                       0.0,
-                      promptAndInputWidth - 18.0,
+                      prefixAndInputWidth - 18.0,
                     ),
                   ),
                 ),
               ).toDouble();
-              final promptMaxWidth = math.max(
+              final inputMaxWidth = math.max(
                 0.0,
-                promptAndInputWidth - minimumInputWidth,
+                prefixAndInputWidth - minimumInputWidth,
               ).toDouble();
-              final density = promptMaxWidth >= 250
-                  ? _TerminalPromptDensity.full
-                  : promptMaxWidth >= 150
-                      ? _TerminalPromptDensity.compact
-                      : _TerminalPromptDensity.pathOnly;
-              final snapshot = _TerminalPromptLayoutSnapshot(
-                promptPath: widget.promptPath,
+              final density = inputMaxWidth >= 250
+                  ? _TerminalInputDensity.full
+                  : inputMaxWidth >= 150
+                      ? _TerminalInputDensity.compact
+                      : _TerminalInputDensity.pathOnly;
+              final snapshot = _TerminalInputLayoutSnapshot(
+                terminalPath: widget.terminalPath,
                 density: density,
                 availableWidth: availableWidth,
-                promptMaxWidth: promptMaxWidth,
+                inputMaxWidth: inputMaxWidth,
                 minimumInputWidth: minimumInputWidth,
                 emailSuffixVisible: widget.emailEditMode,
                 actionLabelVisible: showActionLabel,
@@ -3552,23 +3552,23 @@ class _TerminalPromptState extends State<_TerminalPrompt> {
               );
               _reportLayout(snapshot);
               final hostLabel = switch (density) {
-                _TerminalPromptDensity.full => 'parkinworkin@terminal',
-                _TerminalPromptDensity.compact => 'pw@terminal',
-                _TerminalPromptDensity.pathOnly => '',
+                _TerminalInputDensity.full => 'parkinworkin@terminal',
+                _TerminalInputDensity.compact => 'pw@terminal',
+                _TerminalInputDensity.pathOnly => '',
               };
               final hostVisible = hostLabel.isNotEmpty;
               final pathMaxWidth = switch (density) {
-                _TerminalPromptDensity.full => math.max(
+                _TerminalInputDensity.full => math.max(
                     0.0,
-                    promptMaxWidth - 166.0,
+                    inputMaxWidth - 166.0,
                   ).toDouble(),
-                _TerminalPromptDensity.compact => math.max(
+                _TerminalInputDensity.compact => math.max(
                     0.0,
-                    promptMaxWidth - 94.0,
+                    inputMaxWidth - 94.0,
                   ).toDouble(),
-                _TerminalPromptDensity.pathOnly => math.max(
+                _TerminalInputDensity.pathOnly => math.max(
                     0.0,
-                    promptMaxWidth - 16.0,
+                    inputMaxWidth - 16.0,
                   ).toDouble(),
               };
               return GestureDetector(
@@ -3577,7 +3577,7 @@ class _TerminalPromptState extends State<_TerminalPrompt> {
                 child: Row(
                   children: [
                     ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: promptMaxWidth),
+                      constraints: BoxConstraints(maxWidth: inputMaxWidth),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -3615,7 +3615,7 @@ class _TerminalPromptState extends State<_TerminalPrompt> {
                                       maxLines: 1,
                                       softWrap: false,
                                       style: const TextStyle(
-                                        color: _terminalPrompt,
+                                        color: _terminalAccent,
                                         fontFamily: 'monospace',
                                         fontSize: 12.5,
                                         fontWeight: FontWeight.w700,
@@ -3677,8 +3677,8 @@ class _TerminalPromptState extends State<_TerminalPrompt> {
                                     );
                                   },
                                   child: Text(
-                                    widget.promptPath,
-                                    key: ValueKey<String>(widget.promptPath),
+                                    widget.terminalPath,
+                                    key: ValueKey<String>(widget.terminalPath),
                                     maxLines: 1,
                                     softWrap: false,
                                     overflow: TextOverflow.ellipsis,
@@ -3742,7 +3742,7 @@ class _TerminalPromptState extends State<_TerminalPrompt> {
                                     ),
                                   ]
                                 : null,
-                            cursorColor: _terminalPrompt,
+                            cursorColor: _terminalAccent,
                             cursorWidth: 2,
                             style: const TextStyle(
                               color: _terminalText,
@@ -3902,17 +3902,17 @@ class _TerminalPromptState extends State<_TerminalPrompt> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         if (widget.canModes)
-                          _TerminalPromptAction(
+                          _TerminalInputAction(
                             label: widget.modesLabel,
                             onPressed: widget.busy ? null : widget.onModes,
                           ),
                         if (widget.canBack)
-                          _TerminalPromptAction(
+                          _TerminalInputAction(
                             label: 'BACK',
                             onPressed: widget.busy ? null : widget.onBack,
                           ),
                         if (widget.canCancel)
-                          _TerminalPromptAction(
+                          _TerminalInputAction(
                             label: 'CANCEL',
                             onPressed: widget.busy ? null : widget.onCancel,
                           ),
@@ -3929,8 +3929,8 @@ class _TerminalPromptState extends State<_TerminalPrompt> {
   }
 }
 
-class _TerminalPromptAction extends StatelessWidget {
-  const _TerminalPromptAction({
+class _TerminalInputAction extends StatelessWidget {
+  const _TerminalInputAction({
     required this.label,
     required this.onPressed,
   });
@@ -4038,17 +4038,17 @@ class _ActiveWorkSessionRestoreOverlay extends StatelessWidget {
                       width: 28,
                       height: 28,
                       decoration: BoxDecoration(
-                        color: _terminalPrompt.withOpacity(.12),
+                        color: _terminalAccent.withOpacity(.12),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: _terminalPrompt.withOpacity(.52),
+                          color: _terminalAccent.withOpacity(.52),
                         ),
                       ),
                       alignment: Alignment.center,
                       child: const Icon(
                         Icons.apps_rounded,
                         size: 16,
-                        color: _terminalPrompt,
+                        color: _terminalAccent,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -4120,13 +4120,13 @@ class _ActiveWorkSessionRestoreOverlay extends StatelessWidget {
                         width: targetWidth,
                         height: 7,
                         decoration: BoxDecoration(
-                          color: completed ? _terminalSuccess : _terminalPrompt,
+                          color: completed ? _terminalSuccess : _terminalAccent,
                           borderRadius: BorderRadius.circular(999),
                           boxShadow: <BoxShadow>[
                             BoxShadow(
                               color: (completed
                                       ? _terminalSuccess
-                                      : _terminalPrompt)
+                                      : _terminalAccent)
                                   .withOpacity(.28),
                               blurRadius: 12,
                             ),
@@ -4477,7 +4477,7 @@ class _LauncherActivityPanelState extends State<_LauncherActivityPanel>
   Color _toneColor(_LauncherActivityTone tone) {
     return switch (tone) {
       _LauncherActivityTone.waiting => _terminalWarning,
-      _LauncherActivityTone.running => _terminalPrompt,
+      _LauncherActivityTone.running => _terminalAccent,
       _LauncherActivityTone.success => _terminalSuccess,
       _LauncherActivityTone.warning => _terminalError,
     };
@@ -4832,7 +4832,7 @@ class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
               child: Container(
                 width: maxWidth * horizontal,
                 height: 2,
-                color: _terminalPrompt,
+                color: _terminalAccent,
               ),
             ),
             IgnorePointer(
@@ -4871,7 +4871,7 @@ class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
                                 const Text(
                                   '>_',
                                   style: TextStyle(
-                                    color: _terminalPrompt,
+                                    color: _terminalAccent,
                                     fontFamily: 'monospace',
                                     fontSize: 12,
                                     fontWeight: FontWeight.w900,
@@ -4927,7 +4927,7 @@ class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
                                   height: 7,
                                   child: DecoratedBox(
                                     decoration: BoxDecoration(
-                                      color: _terminalPrompt,
+                                      color: _terminalAccent,
                                       shape: BoxShape.circle,
                                     ),
                                   ),
@@ -5126,7 +5126,7 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
                       widget.accountKind,
                       textAlign: TextAlign.right,
                       style: const TextStyle(
-                        color: _terminalPrompt,
+                        color: _terminalAccent,
                         fontFamily: 'monospace',
                         fontSize: 10.5,
                         fontWeight: FontWeight.w800,
@@ -5396,7 +5396,7 @@ class _TerminalDialogField extends StatelessWidget {
         final borderColor = errorText != null
             ? _terminalError
             : active
-                ? _terminalPrompt
+                ? _terminalAccent
                 : _terminalBorder;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -5404,7 +5404,7 @@ class _TerminalDialogField extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color: active ? _terminalPrompt : _terminalMuted,
+                color: active ? _terminalAccent : _terminalMuted,
                 fontFamily: 'monospace',
                 fontSize: 10,
                 fontWeight: FontWeight.w800,
@@ -5432,7 +5432,7 @@ class _TerminalDialogField extends StatelessWidget {
                 inputFormatters: inputFormatters,
                 autocorrect: false,
                 enableSuggestions: false,
-                cursorColor: _terminalPrompt,
+                cursorColor: _terminalAccent,
                 cursorWidth: 2,
                 style: const TextStyle(
                   color: _terminalText,
@@ -5510,11 +5510,11 @@ class _TerminalSelectionRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
             decoration: BoxDecoration(
               color: selected
-                  ? _terminalPrompt.withOpacity(.08)
+                  ? _terminalAccent.withOpacity(.08)
                   : _terminalHeader.withOpacity(.42),
               borderRadius: BorderRadius.circular(5),
               border: Border.all(
-                color: selected ? _terminalPrompt : _terminalBorder,
+                color: selected ? _terminalAccent : _terminalBorder,
               ),
             ),
             child: Row(
@@ -5529,7 +5529,7 @@ class _TerminalSelectionRow extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: selected ? _terminalPrompt : _terminalMuted,
+                      color: selected ? _terminalAccent : _terminalMuted,
                     ),
                   ),
                   child: AnimatedScale(
@@ -5542,7 +5542,7 @@ class _TerminalSelectionRow extends StatelessWidget {
                       width: 10,
                       height: 10,
                       decoration: const BoxDecoration(
-                        color: _terminalPrompt,
+                        color: _terminalAccent,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -5605,9 +5605,9 @@ class _TerminalDialogActionButton extends StatelessWidget {
         child: OutlinedButton(
           onPressed: enabled ? onPressed : null,
           style: OutlinedButton.styleFrom(
-            foregroundColor: _terminalPrompt,
+            foregroundColor: _terminalAccent,
             side: BorderSide(
-              color: enabled ? _terminalPrompt : _terminalBorder,
+              color: enabled ? _terminalAccent : _terminalBorder,
             ),
             padding: const EdgeInsets.symmetric(horizontal: 18),
             shape: RoundedRectangleBorder(
@@ -5624,7 +5624,7 @@ class _TerminalDialogActionButton extends StatelessWidget {
                     height: 17,
                     child: CircularProgressIndicator(
                       strokeWidth: 1.8,
-                      color: _terminalPrompt,
+                      color: _terminalAccent,
                     ),
                   )
                 : Text(

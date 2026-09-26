@@ -97,15 +97,20 @@ class CommonAttendanceService {
       }
 
       final now = recordedAt ?? DateTime.now();
-      await AttBrkRepository.instance.insertEvent(
+      final session = await AttBrkRepository.instance.insertClockInWithSession(
         dateTime: now,
-        type: AttBrkModeType.workIn,
+        attendance: attendance,
       );
       _record(
         'clock_in_local_saved',
         attendance,
         trace: trace,
-        extra: <String, Object?>{'at': now.toIso8601String()},
+        extra: <String, Object?>{
+          'at': now.toIso8601String(),
+          'sessionContext': session.contextKey,
+          'sessionMode': session.modeKey,
+          'sessionHeadquarter': session.isHeadquarter,
+        },
       );
 
       final prefs = await SharedPreferences.getInstance();
@@ -160,30 +165,18 @@ class CommonAttendanceService {
   static Future<AttendanceActionResult> recordBreak(
     BuildContext context, {
     required String source,
-    String modeKey = '',
-    bool? isHeadquarter,
     DateTime? recordedAt,
     DeveloperOperationTrace? trace,
   }) async {
-    final attendance = resolveContext(
-      context,
-      source: source,
-      modeKey: modeKey,
-      isHeadquarter: isHeadquarter,
-    );
-    if (attendance == null || !attendance.isValid) {
-      const message = '휴게 처리에 필요한 사용자 또는 업무 지역 정보가 없습니다.';
-      _record(
-        'break_invalid_context',
-        attendance,
-        trace: trace,
-        extra: const <String, Object?>{'message': message},
-      );
-      return const AttendanceActionResult.failure(message: message);
-    }
     final now = recordedAt ?? DateTime.now();
+    final storedSession =
+        await AttBrkRepository.instance.getAttendanceSessionForDate(now);
+    final storedAttendance =
+        storedSession?.toAttendanceContext(source: source);
     try {
       final result = await BreakPunchUseCase.execute(recordedAt: now);
+      final attendance =
+          result.session?.toAttendanceContext(source: source) ?? storedAttendance;
       _record(
         result.success ? 'break_complete' : 'break_blocked',
         attendance,
@@ -193,6 +186,9 @@ class CommonAttendanceService {
           'success': result.success,
           'alreadyRecorded': result.alreadyRecorded,
           'message': result.message,
+          'sessionContext': result.session?.contextKey ?? '',
+          'sessionMode': result.session?.modeKey ?? '',
+          'sessionHeadquarter': result.session?.isHeadquarter,
         },
       );
       if (!result.success) {
@@ -208,7 +204,7 @@ class CommonAttendanceService {
     } catch (error, stackTrace) {
       _record(
         'break_failure',
-        attendance,
+        storedAttendance,
         trace: trace,
         extra: <String, Object?>{
           'error': error,
@@ -224,31 +220,16 @@ class CommonAttendanceService {
   static Future<AttendanceActionResult> clockOut(
     BuildContext context, {
     required String source,
-    String modeKey = '',
-    bool? isHeadquarter,
     DateTime? recordedAt,
     DeveloperOperationTrace? trace,
   }) async {
-    final attendance = resolveContext(
-      context,
-      source: source,
-      modeKey: modeKey,
-      isHeadquarter: isHeadquarter,
-    );
-    if (attendance == null || !attendance.isValid) {
-      const message = '퇴근 처리에 필요한 사용자 또는 업무 지역 정보가 없습니다.';
-      _record(
-        'clock_out_invalid_context',
-        attendance,
-        trace: trace,
-        extra: const <String, Object?>{'message': message},
-      );
-      return const AttendanceActionResult.failure(message: message);
-    }
-
     final now = recordedAt ?? DateTime.now();
     final affectsWorkingState = _isToday(now);
     final userState = context.read<UserState>();
+    final storedSession =
+        await AttBrkRepository.instance.getAttendanceSessionForDate(now);
+    final attendance =
+        storedSession?.toAttendanceContext(source: source);
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.reload();
@@ -302,6 +283,16 @@ class CommonAttendanceService {
         );
         return const AttendanceActionResult.failure(message: message);
       }
+      if (attendance == null || !attendance.isValid) {
+        const message = '현재 근무 세션 정보를 확인할 수 없습니다.';
+        _record(
+          'clock_out_session_missing',
+          attendance,
+          trace: trace,
+          extra: const <String, Object?>{'message': message},
+        );
+        return const AttendanceActionResult.failure(message: message);
+      }
       _record(
         'clock_out_start',
         attendance,
@@ -320,7 +311,12 @@ class CommonAttendanceService {
         'clock_out_local_saved',
         attendance,
         trace: trace,
-        extra: <String, Object?>{'at': now.toIso8601String()},
+        extra: <String, Object?>{
+          'at': now.toIso8601String(),
+          'sessionContext': storedSession?.contextKey ?? '',
+          'sessionMode': storedSession?.modeKey ?? '',
+          'sessionHeadquarter': storedSession?.isHeadquarter,
+        },
       );
 
       if (affectsWorkingState) {
@@ -352,7 +348,6 @@ class CommonAttendanceService {
         },
       );
 
-
       return AttendanceActionResult.success(
         recordedAt: now,
         message: '퇴근 기록이 완료되었습니다.',
@@ -376,29 +371,27 @@ class CommonAttendanceService {
   static Future<AttendanceActionResult> replaceClockOut(
     BuildContext context, {
     required String source,
-    String modeKey = '',
-    bool? isHeadquarter,
     DateTime? recordedAt,
     DeveloperOperationTrace? trace,
   }) async {
-    final attendance = resolveContext(
-      context,
-      source: source,
-      modeKey: modeKey,
-      isHeadquarter: isHeadquarter,
-    );
+    final now = recordedAt ?? DateTime.now();
+    final storedSession =
+        await AttBrkRepository.instance.getAttendanceSessionForDate(now);
+    final attendance =
+        storedSession?.toAttendanceContext(source: source);
     if (attendance == null || !attendance.isValid) {
-      const message = '퇴근 재펀칭에 필요한 사용자 또는 업무 지역 정보가 없습니다.';
+      const message = '현재 근무 세션 정보를 확인할 수 없습니다.';
       _record(
-        'clock_out_replace_invalid_context',
+        'clock_out_replace_session_missing',
         attendance,
         trace: trace,
-        extra: const <String, Object?>{'message': message},
+        extra: <String, Object?>{
+          'message': message,
+        },
       );
       return const AttendanceActionResult.failure(message: message);
     }
 
-    final now = recordedAt ?? DateTime.now();
     try {
       _record(
         'clock_out_replace_start',
@@ -414,7 +407,12 @@ class CommonAttendanceService {
         'clock_out_replace_complete',
         attendance,
         trace: trace,
-        extra: <String, Object?>{'at': now.toIso8601String()},
+        extra: <String, Object?>{
+          'at': now.toIso8601String(),
+          'sessionContext': storedSession?.contextKey ?? '',
+          'sessionMode': storedSession?.modeKey ?? '',
+          'sessionHeadquarter': storedSession?.isHeadquarter,
+        },
       );
       return AttendanceActionResult.success(
         recordedAt: now,

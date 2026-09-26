@@ -5,7 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'live_work_snapshot.dart';
 
-typedef LiveWorkOverdueOpenWorkScreenHandler = void Function(
+typedef LiveWorkOverdueTapHandler = void Function(
   String source,
   String payload,
 );
@@ -20,14 +20,15 @@ class LiveWorkOverdueNotificationService {
   static const String channelId = 'parkinworkin_work_overdue_v1';
   static const String channelName = '퇴근 기록 알림';
   static const String channelDescription = '예정 퇴근시간 이후 퇴근 기록을 반복해서 알립니다.';
-  static const String openWorkScreenPayload = 'open_work_screen';
+  static const String openAppPayload = 'open_app';
+  static const String legacyOpenWorkScreenPayload = 'open_work_screen';
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   bool _ready = false;
   bool _mainIsolateLaunchChecked = false;
   Completer<void>? _initializing;
-  LiveWorkOverdueOpenWorkScreenHandler? _openWorkScreenHandler;
+  LiveWorkOverdueTapHandler? _tapHandler;
   String _lastTapSource = '-';
   String _lastTapPayload = '-';
 
@@ -35,10 +36,10 @@ class LiveWorkOverdueNotificationService {
   String get lastTapSource => _lastTapSource;
   String get lastTapPayload => _lastTapPayload;
 
-  void setOpenWorkScreenHandler(
-    LiveWorkOverdueOpenWorkScreenHandler handler,
+  void setTapHandler(
+    LiveWorkOverdueTapHandler handler,
   ) {
-    _openWorkScreenHandler = handler;
+    _tapHandler = handler;
   }
 
   Future<void> initializeForMainIsolate() async {
@@ -132,10 +133,10 @@ class LiveWorkOverdueNotificationService {
             presentSound: true,
           ),
         ),
-        payload: openWorkScreenPayload,
+        payload: openAppPayload,
       );
       debugPrint(
-        '[WORK_OVERDUE] notification shown minutes=$minutes scheduledEnd=${snapshot.scheduledEnd!.toIso8601String()} payload=$openWorkScreenPayload',
+        '[WORK_OVERDUE] notification shown minutes=$minutes scheduledEnd=${snapshot.scheduledEnd!.toIso8601String()} payload=$openAppPayload',
       );
       return true;
     } catch (error, stackTrace) {
@@ -164,11 +165,13 @@ class LiveWorkOverdueNotificationService {
     debugPrint(
       '[WORK_OVERDUE] notification response source=$source payload=${payload.isEmpty ? '-' : payload} actionId=${response.actionId ?? '-'}',
     );
-    if (payload != openWorkScreenPayload) return;
-    final handler = _openWorkScreenHandler;
+    final supported =
+        payload == openAppPayload || payload == legacyOpenWorkScreenPayload;
+    if (!supported) return;
+    final handler = _tapHandler;
     if (handler == null) {
       debugPrint(
-        '[WORK_OVERDUE] open work screen deferred source=$source reason=handler_unavailable',
+        '[WORK_OVERDUE] notification tap observed source=$source payload=$payload navigation=none handler=unavailable',
       );
       return;
     }

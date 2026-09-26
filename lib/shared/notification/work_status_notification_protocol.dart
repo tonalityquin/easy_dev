@@ -2,6 +2,9 @@ class WorkStatusNotificationProtocol {
   const WorkStatusNotificationProtocol._();
 
   static const String eventKind = 'work_status_notification_event_v1';
+  static const String appLaunchRoute = '/';
+  static const String notificationTapPolicy = 'resume_or_normal_launch';
+  static const String navigationNone = 'none';
   static const String pressedEvent = 'notification_pressed';
   static const String workScreenRequestedEvent = 'work_screen_requested';
   static const String dismissedEvent = 'notification_dismissed';
@@ -13,4 +16,7 @@ class WorkStatusNotificationProtocol {
   static const String serviceDestroyedEvent = 'service_destroyed';
   static const String serviceStartBlockedNotWorkingEvent =
       'service_start_blocked_not_working';
+  static const String pendingTapPrefsKey =
+      'work_status_notification_pending_tap_v1';
+  static const int pendingTapMaxAgeSeconds = 60;
 }

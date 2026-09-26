@@ -5,11 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/selector/application/dev_auth.dart';
 import '../../shared/notification/work_status_notification_protocol.dart';
 import '../utils/status_dialog.dart';
-import '../di/routes.dart';
 import 'app_navigator.dart';
 import '../live_work_diagnostics.dart';
 import '../live_work_overdue_notification_service.dart';
@@ -20,6 +20,25 @@ import '../live_work_notification_presenter.dart';
 import '../live_work_snapshot_resolver.dart';
 import 'foreground_entrypoints.dart';
 
+
+@immutable
+class WorkStatusNotificationTap {
+  const WorkStatusNotificationTap({
+    required this.id,
+    required this.event,
+    required this.source,
+    required this.launchRoute,
+    required this.tappedAt,
+    required this.legacy,
+  });
+
+  final String id;
+  final String event;
+  final String source;
+  final String launchRoute;
+  final DateTime tappedAt;
+  final bool legacy;
+}
 
 @immutable
 class ForegroundServiceEnsureResult {
@@ -103,7 +122,8 @@ class WorkStatusNotificationSnapshot {
 class WorkStatusNotificationController {
   WorkStatusNotificationController._();
 
-  static const String initialRoute = AppRoutes.headquarterPage;
+  static const String notificationLaunchRoute =
+      WorkStatusNotificationProtocol.appLaunchRoute;
   static const int foregroundServiceId = 42101;
   static const String notificationChannelId = 'parkinworkin_work_status_v1';
   static const MethodChannel _notificationControlChannel =
@@ -118,6 +138,8 @@ class WorkStatusNotificationController {
       ValueNotifier<WorkStatusNotificationSnapshot>(
     const WorkStatusNotificationSnapshot.initial(),
   );
+  static final ValueNotifier<int> notificationTapRevision =
+      ValueNotifier<int>(0);
   static final List<String> _debugLines = <String>[];
 
   static bool _foregroundTaskInitialized = false;
@@ -142,23 +164,37 @@ class WorkStatusNotificationController {
   static int? _lastPinnedNotificationId;
   static String _lastPersistenceAction = 'initial';
   static bool _dismissRestoreInFlight = false;
-  static bool _pendingWorkScreenNavigation = false;
-  static String _lastNavigationRequest = '-';
-  static String _lastNavigationHandled = '-';
-  static String _lastNavigationRequestSource = '-';
-  static String _lastNavigationSuppressedReason = '-';
-  static DateTime? _lastNavigationRequestAt;
-  static DateTime? _lastNavigationHandledAt;
-  static bool _workScreenRequestReceived = false;
-  static DateTime? _lastWorkScreenRequestAt;
-  static String _lastWorkScreenRequestSource = '-';
-  static bool _workScreenNavigationInFlight = false;
+  static bool _notificationTapReceived = false;
+  static DateTime? _lastNotificationTapAt;
+  static String _lastNotificationTapSource = '-';
+  static String _lastNotificationTapId = '-';
+  static String _lastNotificationTapEvent = '-';
+  static String _lastNotificationTapLaunchRoute = '-';
+  static bool _lastNotificationTapLegacy = false;
+  static String _lastNotificationTapNavigation =
+      WorkStatusNotificationProtocol.navigationNone;
+  static bool _lastNotificationTapPreserveStack = true;
+  static WorkStatusNotificationTap? _pendingNotificationTap;
+  static String _lastConsumedNotificationTapId = '-';
+  static int _pendingNotificationTapRestoreCount = 0;
+  static int _pendingNotificationTapConsumeCount = 0;
+  static DateTime? _lastPendingNotificationTapRestoredAt;
+  static DateTime? _lastPendingNotificationTapConsumedAt;
+  static String _lastPendingNotificationTapRestoreSource = '-';
+  static String _lastPendingNotificationTapConsumeSource = '-';
   static bool _breakActionReceived = false;
   static DateTime? _lastBreakActionAt;
   static String _lastBreakActionPhase = '-';
   static String _lastBreakPunchResult = '-';
   static String _lastBreakPunchMessage = '-';
   static String _lastBreakRecordedAt = '-';
+  static String _lastBreakContextKey = '-';
+  static String _lastBreakModeKey = '-';
+  static String _lastBreakArea = '-';
+  static String _lastBreakDivision = '-';
+  static bool? _lastBreakIsHeadquarter;
+  static bool _pendingBreakDeveloperStatus = false;
+  static bool _breakDeveloperStatusShowing = false;
   static int _notificationRecoveryCount = 0;
   static String _lastNotificationRecoveryReason = '-';
   static DateTime? _lastNotificationRecoveryAt;
@@ -171,6 +207,17 @@ class WorkStatusNotificationController {
 
   static List<String> get debugLines =>
       List<String>.unmodifiable(_debugLines);
+
+  static DateTime? get lastNotificationTapAt => _lastNotificationTapAt;
+  static String get lastNotificationTapId => _lastNotificationTapId;
+  static String get lastNotificationTapSource => _lastNotificationTapSource;
+  static String get lastNotificationTapEvent => _lastNotificationTapEvent;
+  static String get lastNotificationTapLaunchRoute =>
+      _lastNotificationTapLaunchRoute;
+  static bool get lastNotificationTapPreserveStack =>
+      _lastNotificationTapPreserveStack;
+  static WorkStatusNotificationTap? get pendingNotificationTap =>
+      _pendingNotificationTap;
 
   static String get debugPrintCode {
     if (_debugLines.isEmpty) {
@@ -218,8 +265,8 @@ class WorkStatusNotificationController {
     if (_taskEventListenerReady) return;
     _taskEventListenerReady = true;
     FlutterForegroundTask.addTaskDataCallback(_onTaskData);
-    LiveWorkOverdueNotificationService.instance.setOpenWorkScreenHandler(
-      _handleOverdueOpenWorkScreen,
+    LiveWorkOverdueNotificationService.instance.setTapHandler(
+      _handleOverdueNotificationTap,
     );
     unawaited(
       LiveWorkOverdueNotificationService.instance.initializeForMainIsolate(),
@@ -227,9 +274,116 @@ class WorkStatusNotificationController {
     _log('task_event_listener_ready');
   }
 
-  static void flushPendingNavigation() {
-    if (!_pendingWorkScreenNavigation) return;
-    _navigateToWorkScreen(source: 'pending_flush');
+  static Future<WorkStatusNotificationTap?> restorePendingNotificationTap({
+    String source = 'restore_pending_notification_tap',
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final raw = prefs.getString(WorkStatusNotificationProtocol.pendingTapPrefsKey);
+      if (raw == null || raw.trim().isEmpty) {
+        _log('pending_notification_tap_restore_none source=$source');
+        return _pendingNotificationTap;
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        await prefs.remove(WorkStatusNotificationProtocol.pendingTapPrefsKey);
+        _log('pending_notification_tap_restore_invalid source=$source reason=not_map');
+        return _pendingNotificationTap;
+      }
+      final data = Map<String, dynamic>.from(decoded);
+      final tapId = data['tapId']?.toString().trim() ?? '';
+      final event = data['event']?.toString().trim() ?? '';
+      final tapSource = data['source']?.toString().trim() ?? '';
+      final launchRoute = data['launchRoute']?.toString().trim() ?? '';
+      final tappedAt = DateTime.tryParse(data['tappedAt']?.toString() ?? '');
+      if (tapId.isEmpty ||
+          event.isEmpty ||
+          tapSource != 'notification_body' ||
+          tappedAt == null) {
+        await prefs.remove(WorkStatusNotificationProtocol.pendingTapPrefsKey);
+        _log(
+          'pending_notification_tap_restore_invalid source=$source tapId=${tapId.isEmpty ? '-' : tapId} event=${event.isEmpty ? '-' : event} tapSource=${tapSource.isEmpty ? '-' : tapSource} tappedAt=${tappedAt?.toIso8601String() ?? '-'}',
+        );
+        return _pendingNotificationTap;
+      }
+      final now = DateTime.now();
+      final age = now.difference(tappedAt);
+      final maxAge = Duration(
+        seconds: WorkStatusNotificationProtocol.pendingTapMaxAgeSeconds,
+      );
+      if (age > maxAge || age < const Duration(seconds: -5)) {
+        await prefs.remove(WorkStatusNotificationProtocol.pendingTapPrefsKey);
+        _log(
+          'pending_notification_tap_restore_stale source=$source tapId=$tapId ageMs=${age.inMilliseconds} maxAgeMs=${maxAge.inMilliseconds}',
+        );
+        return _pendingNotificationTap;
+      }
+      if (_lastConsumedNotificationTapId == tapId) {
+        await prefs.remove(WorkStatusNotificationProtocol.pendingTapPrefsKey);
+        _log(
+          'pending_notification_tap_restore_consumed source=$source tapId=$tapId',
+        );
+        return _pendingNotificationTap;
+      }
+      _pendingNotificationTapRestoreCount++;
+      _lastPendingNotificationTapRestoredAt = now;
+      _lastPendingNotificationTapRestoreSource = source;
+      _recordNotificationTap(
+        event: event,
+        source: tapSource,
+        launchRoute: launchRoute.isEmpty ? notificationLaunchRoute : launchRoute,
+        legacy: false,
+        tapId: tapId,
+        tappedAt: tappedAt,
+      );
+      _log(
+        'pending_notification_tap_restored source=$source tapId=$tapId count=$_pendingNotificationTapRestoreCount ageMs=${age.inMilliseconds}',
+      );
+      return _pendingNotificationTap;
+    } catch (error, stackTrace) {
+      _log(
+        'pending_notification_tap_restore_error source=$source error=$error stack=${jsonEncode(stackTrace.toString())}',
+      );
+      return _pendingNotificationTap;
+    }
+  }
+
+  static Future<void> consumePendingNotificationTap({
+    required String tapId,
+    String source = 'consume_pending_notification_tap',
+  }) async {
+    final normalizedTapId = tapId.trim();
+    if (normalizedTapId.isEmpty) return;
+    final now = DateTime.now();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final raw = prefs.getString(WorkStatusNotificationProtocol.pendingTapPrefsKey);
+      if (raw != null && raw.trim().isNotEmpty) {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          final storedId = decoded['tapId']?.toString().trim() ?? '';
+          if (storedId == normalizedTapId) {
+            await prefs.remove(WorkStatusNotificationProtocol.pendingTapPrefsKey);
+          }
+        }
+      }
+    } catch (error, stackTrace) {
+      _log(
+        'pending_notification_tap_consume_storage_error source=$source tapId=$normalizedTapId error=$error stack=${jsonEncode(stackTrace.toString())}',
+      );
+    }
+    if (_pendingNotificationTap?.id == normalizedTapId) {
+      _pendingNotificationTap = null;
+    }
+    _lastConsumedNotificationTapId = normalizedTapId;
+    _pendingNotificationTapConsumeCount++;
+    _lastPendingNotificationTapConsumedAt = now;
+    _lastPendingNotificationTapConsumeSource = source;
+    _log(
+      'pending_notification_tap_consumed source=$source tapId=$normalizedTapId count=$_pendingNotificationTapConsumeCount',
+    );
   }
 
   static Future<ForegroundServiceEnsureResult> ensureServiceState({
@@ -265,7 +419,7 @@ class WorkStatusNotificationController {
           notificationTitle: presentation.title,
           notificationText: presentation.text,
           notificationButtons: _notificationButtons(presentation),
-          notificationInitialRoute: initialRoute,
+          notificationInitialRoute: notificationLaunchRoute,
         );
         final persistent = await _pinPersistentNotification(
           source: '${source}_reuse',
@@ -298,7 +452,7 @@ class WorkStatusNotificationController {
         notificationTitle: presentation.title,
         notificationText: presentation.text,
         notificationButtons: _notificationButtons(presentation),
-        notificationInitialRoute: initialRoute,
+        notificationInitialRoute: notificationLaunchRoute,
         callback: myForegroundCallback,
       );
       _log(
@@ -419,7 +573,7 @@ class WorkStatusNotificationController {
               notificationTitle: presentation.title,
               notificationText: presentation.text,
               notificationButtons: _notificationButtons(presentation),
-              notificationInitialRoute: initialRoute,
+              notificationInitialRoute: notificationLaunchRoute,
             );
             final persistent = await _pinPersistentNotification(
               source: '${activeSource}_refresh',
@@ -470,6 +624,11 @@ class WorkStatusNotificationController {
 
   static void recordLifecycle(AppLifecycleState state) {
     _log('app_lifecycle state=${state.name}');
+    if (state == AppLifecycleState.resumed) {
+      _log(
+        'app_resume_committed navigation=${WorkStatusNotificationProtocol.navigationNone} preserveStack=true currentRoute=${AppNavigator.currentRoute ?? '-'}',
+      );
+    }
   }
 
   static Future<void> reconcileOnResume({
@@ -479,12 +638,14 @@ class WorkStatusNotificationController {
     final presentation = await _loadPresentation();
     if (!presentation.isWorking) {
       _log('resume_reconcile_skipped source=$source reason=not_working');
+      await _showBreakActionDeveloperStatusIfPossible();
       return;
     }
     final running = await _safeIsRunningService();
     if (!running) {
       _log('resume_reconcile_recovery source=$source reason=service_missing');
       await refresh(source: '${source}_service_missing');
+      await _showBreakActionDeveloperStatusIfPossible();
       return;
     }
     final persistent = await _pinPersistentNotification(
@@ -502,6 +663,7 @@ class WorkStatusNotificationController {
     _log(
       'resume_reconcile_complete source=$source running=true persistent=$persistent',
     );
+    await _showBreakActionDeveloperStatusIfPossible();
   }
 
   static Future<void> showDeveloperStatus(BuildContext context) async {
@@ -535,7 +697,7 @@ class WorkStatusNotificationController {
       'text=${current.text}',
       'source=${current.source}',
       'updatedAt=$updatedAt',
-      'route=$initialRoute',
+      'notificationLaunchRoute=$notificationLaunchRoute',
       'recoveryAttempts=$_recoveryAttempts',
       'recoverySuccesses=$_recoverySuccesses',
       'lastEnsureStartedNow=$_lastEnsureStartedNow',
@@ -565,29 +727,44 @@ class WorkStatusNotificationController {
       'currentOverdueReminderSlot=${currentReminderSlot ?? '-'}',
       'nextOverdueReminderSlot=${nextReminderSlot ?? '-'}',
       'overdueNotificationInitialized=${LiveWorkOverdueNotificationService.instance.isReady}',
-      'overdueTapPayload=${LiveWorkOverdueNotificationService.openWorkScreenPayload}',
+      'overdueTapPayload=${LiveWorkOverdueNotificationService.openAppPayload}',
       'lastOverdueTapSource=${LiveWorkOverdueNotificationService.instance.lastTapSource}',
       'lastOverdueTapPayload=${LiveWorkOverdueNotificationService.instance.lastTapPayload}',
-      'workScreenButtonEnabled=false',
-      'workScreenEntrySurface=notification_body',
-      'workScreenRequestReceived=$_workScreenRequestReceived',
-      'lastWorkScreenRequestSource=$_lastWorkScreenRequestSource',
-      'lastWorkScreenRequestAt=${_lastWorkScreenRequestAt?.toIso8601String() ?? '-'}',
-      'navigationInFlight=$_workScreenNavigationInFlight',
+      'notificationTapPolicy=${WorkStatusNotificationProtocol.notificationTapPolicy}',
+      'preserveNavigatorStack=true',
+      'notificationTapReceived=$_notificationTapReceived',
+      'notificationTapRevision=${notificationTapRevision.value}',
+      'lastNotificationTapId=$_lastNotificationTapId',
+      'pendingNotificationTapId=${_pendingNotificationTap?.id ?? '-'}',
+      'pendingNotificationTapEvent=${_pendingNotificationTap?.event ?? '-'}',
+      'pendingNotificationTapSource=${_pendingNotificationTap?.source ?? '-'}',
+      'pendingNotificationTapAt=${_pendingNotificationTap?.tappedAt.toIso8601String() ?? '-'}',
+      'lastConsumedNotificationTapId=$_lastConsumedNotificationTapId',
+      'pendingNotificationTapRestoreCount=$_pendingNotificationTapRestoreCount',
+      'pendingNotificationTapConsumeCount=$_pendingNotificationTapConsumeCount',
+      'lastPendingNotificationTapRestoredAt=${_lastPendingNotificationTapRestoredAt?.toIso8601String() ?? '-'}',
+      'lastPendingNotificationTapConsumedAt=${_lastPendingNotificationTapConsumedAt?.toIso8601String() ?? '-'}',
+      'lastPendingNotificationTapRestoreSource=$_lastPendingNotificationTapRestoreSource',
+      'lastPendingNotificationTapConsumeSource=$_lastPendingNotificationTapConsumeSource',
+      'lastNotificationTapSource=$_lastNotificationTapSource',
+      'lastNotificationTapAt=${_lastNotificationTapAt?.toIso8601String() ?? '-'}',
+      'lastNotificationTapEvent=$_lastNotificationTapEvent',
       'currentRoute=${AppNavigator.currentRoute ?? '-'}',
-      'lastNavigationRequest=$_lastNavigationRequest',
-      'lastNavigationRequestSource=$_lastNavigationRequestSource',
-      'lastNavigationRequestAt=${_lastNavigationRequestAt?.toIso8601String() ?? '-'}',
-      'lastNavigationHandled=$_lastNavigationHandled',
-      'lastNavigationHandledAt=${_lastNavigationHandledAt?.toIso8601String() ?? '-'}',
-      'lastNavigationSuppressedReason=$_lastNavigationSuppressedReason',
-      'pendingWorkScreenNavigation=$_pendingWorkScreenNavigation',
+      'lastNotificationTapLaunchRoute=$_lastNotificationTapLaunchRoute',
+      'lastNotificationTapNavigation=$_lastNotificationTapNavigation',
+      'lastNotificationTapPreserveStack=$_lastNotificationTapPreserveStack',
+      'lastNotificationTapLegacy=$_lastNotificationTapLegacy',
       'breakActionReceived=$_breakActionReceived',
       'lastBreakActionAt=${_lastBreakActionAt?.toIso8601String() ?? '-'}',
       'lastBreakActionPhase=$_lastBreakActionPhase',
       'lastBreakPunchResult=$_lastBreakPunchResult',
       'lastBreakPunchMessage=$_lastBreakPunchMessage',
       'lastBreakRecordedAt=$_lastBreakRecordedAt',
+      'lastBreakContextKey=$_lastBreakContextKey',
+      'lastBreakModeKey=$_lastBreakModeKey',
+      'lastBreakIsHeadquarter=${_lastBreakIsHeadquarter ?? '-'}',
+      'lastBreakArea=$_lastBreakArea',
+      'lastBreakDivision=$_lastBreakDivision',
       'workNotificationExpected=${current.isWorking}',
       'workNotificationFound=${_lastNotificationFound ?? current.notificationPersistent}',
       'notificationRecoveryCount=$_notificationRecoveryCount',
@@ -616,6 +793,70 @@ class WorkStatusNotificationController {
       useCommonUi: true,
       awaitManualClose: true,
     );
+  }
+
+  static Future<void> _showBreakActionDeveloperStatusIfPossible() async {
+    if (!_pendingBreakDeveloperStatus || _breakDeveloperStatusShowing) return;
+    final developerMode = await DevAuth.isDevModeEnabled();
+    if (!developerMode) {
+      _pendingBreakDeveloperStatus = false;
+      return;
+    }
+    final context = AppNavigator.context;
+    if (context == null || !context.mounted) return;
+
+    _breakDeveloperStatusShowing = true;
+    _pendingBreakDeveloperStatus = false;
+    final success = _lastBreakPunchResult == 'inserted';
+    final description = <String>[
+      'phase=$_lastBreakActionPhase',
+      'result=$_lastBreakPunchResult',
+      'message=$_lastBreakPunchMessage',
+      'recordedAt=$_lastBreakRecordedAt',
+      'contextKey=$_lastBreakContextKey',
+      'modeKey=$_lastBreakModeKey',
+      'isHeadquarter=${_lastBreakIsHeadquarter ?? '-'}',
+      'area=$_lastBreakArea',
+      'division=$_lastBreakDivision',
+    ].join('\n');
+    final operationCode = description
+        .split('\n')
+        .map(
+          (line) =>
+              'debugPrint(${jsonEncode('[WORK_STATUS_BREAK_ACTION] $line')});',
+        )
+        .join('\n');
+    try {
+      await HapticFeedback.mediumImpact();
+      if (!context.mounted) return;
+      if (success) {
+        await StatusDialog.showSuccess(
+          context,
+          title: '알림 휴게 기록 상태',
+          description: description,
+          copyText:
+              '$operationCode\n$debugPrintCode\n${LiveWorkDiagnostics.debugPrintCode}',
+          copyButtonLabel: 'debugPrint 코드 복사',
+          visibleDuration: Duration.zero,
+          useCommonUi: true,
+          awaitManualClose: true,
+        );
+      } else {
+        await StatusDialog.showFailure(
+          context,
+          title: '알림 휴게 기록 상태',
+          description: description,
+          copyText:
+              '$operationCode\n$debugPrintCode\n${LiveWorkDiagnostics.debugPrintCode}',
+          copyButtonLabel: 'debugPrint 코드 복사',
+          visibleDuration: Duration.zero,
+          useCommonUi: true,
+          awaitManualClose: true,
+        );
+      }
+    } finally {
+      _breakDeveloperStatusShowing = false;
+    }
   }
 
   static Future<bool> _recoverService({
@@ -833,7 +1074,7 @@ class WorkStatusNotificationController {
           notificationTitle: presentation.title,
           notificationText: presentation.text,
           notificationButtons: _notificationButtons(presentation),
-          notificationInitialRoute: initialRoute,
+          notificationInitialRoute: notificationLaunchRoute,
         );
         _lastNotificationRecoveryStage = 'verify_after_update';
         pinned = await _pinPersistentNotification(
@@ -1021,73 +1262,69 @@ class WorkStatusNotificationController {
   }
 
 
-  static void _handleOverdueOpenWorkScreen(String source, String payload) {
-    _log('overdue_notification_tap source=$source payload=${jsonEncode(payload)}');
-    _requestWorkScreenNavigation(source: 'overdue_notification:$source');
+  static void _handleOverdueNotificationTap(
+    String source,
+    String payload,
+  ) {
+    final legacy =
+        payload == LiveWorkOverdueNotificationService.legacyOpenWorkScreenPayload;
+    _recordNotificationTap(
+      event: 'overdue_notification',
+      source: 'overdue_notification:$source',
+      launchRoute: notificationLaunchRoute,
+      legacy: legacy,
+    );
   }
 
-  static void _requestWorkScreenNavigation({required String source}) {
+  static void _recordNotificationTap({
+    required String event,
+    required String source,
+    required String launchRoute,
+    required bool legacy,
+    String? tapId,
+    DateTime? tappedAt,
+  }) {
     final now = DateTime.now();
-    _lastNavigationRequest = initialRoute;
-    _lastNavigationRequestSource = source;
-    _lastNavigationRequestAt = now;
-    _lastNavigationSuppressedReason = '-';
-    _pendingWorkScreenNavigation = true;
-    _navigateToWorkScreen(source: source);
-  }
-
-  static void _navigateToWorkScreen({required String source}) {
-    final navigator = AppNavigator.nav;
-    if (navigator == null) {
-      _lastNavigationHandled = 'pending';
-      _lastNavigationSuppressedReason = 'navigator_unavailable';
-      _log('work_screen_navigation_pending route=$initialRoute source=$source reason=navigator_unavailable');
-      return;
-    }
-    if (_workScreenNavigationInFlight) {
-      _lastNavigationHandled = 'suppressed';
-      _lastNavigationSuppressedReason = 'navigation_in_flight';
-      _log('work_screen_navigation_suppressed route=$initialRoute source=$source reason=navigation_in_flight');
-      return;
-    }
-    if (AppNavigator.currentRoute == initialRoute) {
-      _pendingWorkScreenNavigation = false;
-      _lastNavigationHandled = 'suppressed';
-      _lastNavigationSuppressedReason = 'already_on_work_screen';
-      _log('work_screen_navigation_suppressed route=$initialRoute source=$source reason=already_on_work_screen');
-      return;
-    }
-    final lastHandledAt = _lastNavigationHandledAt;
-    if (lastHandledAt != null &&
-        DateTime.now().difference(lastHandledAt) < const Duration(milliseconds: 900)) {
-      _pendingWorkScreenNavigation = false;
-      _lastNavigationHandled = 'suppressed';
-      _lastNavigationSuppressedReason = 'duplicate_request';
-      _log('work_screen_navigation_suppressed route=$initialRoute source=$source reason=duplicate_request');
-      return;
-    }
-    _pendingWorkScreenNavigation = false;
-    _workScreenNavigationInFlight = true;
-    _lastNavigationSuppressedReason = '-';
-    try {
-      navigator.pushNamedAndRemoveUntil(
-        initialRoute,
-        (route) => route.isFirst,
+    final resolvedTappedAt = tappedAt ?? now;
+    final resolvedTapId = (tapId ?? '').trim().isNotEmpty
+        ? tapId!.trim()
+        : '${resolvedTappedAt.microsecondsSinceEpoch}:$event';
+    if (source == 'notification_body') {
+      if (_lastConsumedNotificationTapId == resolvedTapId) {
+        _log(
+          'notification_tap_duplicate_consumed tapId=$resolvedTapId event=$event source=$source',
+        );
+        return;
+      }
+      if (_pendingNotificationTap?.id == resolvedTapId) {
+        _log(
+          'notification_tap_duplicate_pending tapId=$resolvedTapId event=$event source=$source revision=${notificationTapRevision.value}',
+        );
+        return;
+      }
+      _pendingNotificationTap = WorkStatusNotificationTap(
+        id: resolvedTapId,
+        event: event,
+        source: source,
+        launchRoute: launchRoute,
+        tappedAt: resolvedTappedAt,
+        legacy: legacy,
       );
-      _lastNavigationHandled = 'handled';
-      _lastNavigationHandledAt = DateTime.now();
-      _log('work_screen_navigation route=$initialRoute source=$source');
-      Future<void>.delayed(const Duration(milliseconds: 420), () {
-        _workScreenNavigationInFlight = false;
-        _log('work_screen_navigation_transition_complete route=$initialRoute source=$source currentRoute=${AppNavigator.currentRoute ?? '-'}');
-      });
-    } catch (error, stackTrace) {
-      _workScreenNavigationInFlight = false;
-      _lastNavigationHandled = 'error';
-      _lastNavigationSuppressedReason = 'navigation_error';
-      _log('work_screen_navigation_error route=$initialRoute source=$source error=$error');
-      _log('work_screen_navigation_stack source=$source stack=$stackTrace');
     }
+    _notificationTapReceived = true;
+    _lastNotificationTapAt = resolvedTappedAt;
+    _lastNotificationTapId = resolvedTapId;
+    _lastNotificationTapSource = source;
+    _lastNotificationTapEvent = event;
+    _lastNotificationTapLaunchRoute = launchRoute;
+    _lastNotificationTapLegacy = legacy;
+    _lastNotificationTapNavigation = WorkStatusNotificationProtocol.navigationNone;
+    _lastNotificationTapPreserveStack = true;
+    final nextRevision = notificationTapRevision.value + 1;
+    _log(
+      'notification_tap_received tapId=$resolvedTapId event=$event source=$source navigation=${WorkStatusNotificationProtocol.navigationNone} preserveStack=true launchRoute=$launchRoute legacy=$legacy currentRoute=${AppNavigator.currentRoute ?? '-'} revision=$nextRevision tappedAt=${resolvedTappedAt.toIso8601String()}',
+    );
+    notificationTapRevision.value = nextRevision;
   }
 
   static void _onTaskData(dynamic data) {
@@ -1113,11 +1350,26 @@ class WorkStatusNotificationController {
       } else {
         _lastBreakPunchResult = 'received';
       }
-      _lastBreakPunchMessage = data['message']?.toString() ?? '-';
+      _lastBreakPunchMessage =
+          data['message']?.toString() ?? data['error']?.toString() ?? '-';
       _lastBreakRecordedAt = data['recordedAt']?.toString() ?? '-';
-      _log('break_action phase=$_lastBreakActionPhase result=$_lastBreakPunchResult recordedAt=$_lastBreakRecordedAt message=${jsonEncode(_lastBreakPunchMessage)}');
-      if (_lastBreakActionPhase == 'completed') {
-        unawaited(refresh(source: 'break_action_completed'));
+      _lastBreakContextKey = data['contextKey']?.toString() ?? '-';
+      _lastBreakModeKey = data['modeKey']?.toString() ?? '-';
+      _lastBreakArea = data['area']?.toString() ?? '-';
+      _lastBreakDivision = data['division']?.toString() ?? '-';
+      final rawHeadquarter = data['isHeadquarter'];
+      _lastBreakIsHeadquarter =
+          rawHeadquarter is bool ? rawHeadquarter : null;
+      _log(
+        'break_action phase=$_lastBreakActionPhase result=$_lastBreakPunchResult recordedAt=$_lastBreakRecordedAt context=$_lastBreakContextKey mode=$_lastBreakModeKey headquarter=${_lastBreakIsHeadquarter ?? '-'} area=${jsonEncode(_lastBreakArea)} division=${jsonEncode(_lastBreakDivision)} message=${jsonEncode(_lastBreakPunchMessage)}',
+      );
+      if (_lastBreakActionPhase == 'completed' ||
+          _lastBreakActionPhase == 'error') {
+        _pendingBreakDeveloperStatus = true;
+        if (_lastBreakActionPhase == 'completed') {
+          unawaited(refresh(source: 'break_action_completed'));
+        }
+        unawaited(_showBreakActionDeveloperStatusIfPossible());
       }
       return;
     }
@@ -1139,12 +1391,21 @@ class WorkStatusNotificationController {
     if (event == WorkStatusNotificationProtocol.workScreenRequestedEvent ||
         event == WorkStatusNotificationProtocol.openWorkScreenEvent ||
         event == WorkStatusNotificationProtocol.pressedEvent) {
-      final semanticSource = data['source']?.toString() ?? 'foreground_task:$event';
-      _workScreenRequestReceived = true;
-      _lastWorkScreenRequestAt = DateTime.now();
-      _lastWorkScreenRequestSource = semanticSource;
-      _log('work_screen_request_received event=$event source=$semanticSource route=${data['route']?.toString() ?? initialRoute}');
-      _requestWorkScreenNavigation(source: semanticSource);
+      final semanticSource =
+          data['source']?.toString() ?? 'foreground_task:$event';
+      final launchRoute =
+          data['launchRoute']?.toString() ??
+          data['route']?.toString() ??
+          notificationLaunchRoute;
+      final legacy = event != WorkStatusNotificationProtocol.pressedEvent;
+      _recordNotificationTap(
+        event: event,
+        source: semanticSource,
+        launchRoute: launchRoute,
+        legacy: legacy,
+        tapId: data['tapId']?.toString(),
+        tappedAt: DateTime.tryParse(data['tappedAt']?.toString() ?? ''),
+      );
       return;
     }
     if (event == WorkStatusNotificationProtocol.dismissedEvent) {

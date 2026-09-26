@@ -163,9 +163,99 @@ class CommonUiTokens {
   Color get onStatusParkingRequestedContainer => onDangerContainer;
 
   factory CommonUiTokens.fromTheme(ThemeData theme) {
-    return theme.brightness == Brightness.dark
-        ? const CommonUiTokens.dark()
-        : const CommonUiTokens.light();
+    final scheme = theme.colorScheme;
+    final isDark = scheme.brightness == Brightness.dark;
+    final semantic =
+        isDark ? const CommonUiTokens.dark() : const CommonUiTokens.light();
+    Color mix(Color a, Color b, double amount) =>
+        Color.lerp(a, b, amount.clamp(0.0, 1.0).toDouble())!;
+    final canvas = scheme.background;
+    final surface = scheme.surface;
+    final surfaceRaised = isDark
+        ? mix(surface, scheme.onSurface, 0.05)
+        : mix(surface, Colors.white, 0.22);
+    final surfaceOverlay = scheme.surfaceVariant;
+    final surfaceSelected = scheme.primaryContainer;
+    final surfaceDisabled = mix(surface, scheme.onSurface, isDark ? 0.12 : 0.08);
+    final textPrimary = scheme.onSurface;
+    final textSecondary = mix(textPrimary, canvas, isDark ? 0.34 : 0.42);
+    final textDisabled = mix(textPrimary, canvas, isDark ? 0.52 : 0.58);
+    final accent = scheme.primary;
+    final accentHover =
+        mix(accent, isDark ? Colors.white : Colors.black, 0.08);
+    final accentPressed =
+        mix(accent, isDark ? Colors.white : Colors.black, 0.16);
+    final accentContainer = scheme.primaryContainer;
+
+    return CommonUiTokens(
+      brightness: scheme.brightness,
+      canvas: canvas,
+      surface: surface,
+      surfaceRaised: surfaceRaised,
+      surfaceOverlay: surfaceOverlay,
+      surfaceSelected: surfaceSelected,
+      surfaceDisabled: surfaceDisabled,
+      borderSubtle: scheme.outlineVariant,
+      borderStrong: scheme.outline,
+      textPrimary: textPrimary,
+      textSecondary: textSecondary,
+      textDisabled: textDisabled,
+      iconPrimary: textPrimary,
+      iconSecondary: textSecondary,
+      iconDisabled: textDisabled,
+      accent: accent,
+      accentHover: accentHover,
+      accentPressed: accentPressed,
+      accentContainer: accentContainer,
+      onAccent: scheme.onPrimary,
+      onAccentContainer: scheme.onPrimaryContainer,
+      success: semantic.success,
+      onSuccess: semantic.onSuccess,
+      successContainer: semantic.successContainer,
+      onSuccessContainer: semantic.onSuccessContainer,
+      warning: semantic.warning,
+      onWarning: semantic.onWarning,
+      warningContainer: semantic.warningContainer,
+      onWarningContainer: semantic.onWarningContainer,
+      danger: semantic.danger,
+      onDanger: semantic.onDanger,
+      dangerContainer: semantic.dangerContainer,
+      onDangerContainer: semantic.onDangerContainer,
+      info: semantic.info,
+      onInfo: semantic.onInfo,
+      infoContainer: semantic.infoContainer,
+      onInfoContainer: semantic.onInfoContainer,
+      focusRing: accent,
+      scrim: semantic.scrim,
+      shimmerBase: mix(surface, textPrimary, isDark ? 0.12 : 0.08),
+      shimmerHighlight: surfaceRaised,
+      statusParkingCompleted: semantic.statusParkingCompleted,
+      statusParkingCompletedContainer: semantic.statusParkingCompletedContainer,
+      onStatusParkingCompletedContainer:
+          semantic.onStatusParkingCompletedContainer,
+      statusDepartureRequested: semantic.statusDepartureRequested,
+      statusDepartureRequestedContainer:
+          semantic.statusDepartureRequestedContainer,
+      onStatusDepartureRequestedContainer:
+          semantic.onStatusDepartureRequestedContainer,
+      statusSettlementPending: semantic.statusSettlementPending,
+      statusSettlementPendingContainer:
+          semantic.statusSettlementPendingContainer,
+      onStatusSettlementPendingContainer:
+          semantic.onStatusSettlementPendingContainer,
+      statusMonthlyParking: semantic.statusMonthlyParking,
+      statusMonthlyParkingContainer: semantic.statusMonthlyParkingContainer,
+      onStatusMonthlyParkingContainer: semantic.onStatusMonthlyParkingContainer,
+      statusOffline: semantic.statusOffline,
+      statusOfflineContainer: semantic.statusOfflineContainer,
+      onStatusOfflineContainer: semantic.onStatusOfflineContainer,
+      statusSynchronized: semantic.statusSynchronized,
+      statusSynchronizedContainer: semantic.statusSynchronizedContainer,
+      onStatusSynchronizedContainer: semantic.onStatusSynchronizedContainer,
+      shadow: semantic.shadow,
+      handle: mix(textPrimary, canvas, isDark ? 0.48 : 0.54),
+      transparent: Colors.transparent,
+    );
   }
 
   const CommonUiTokens.light()
@@ -681,12 +771,9 @@ class CommonUiTheme {
       outlineVariant: tokens.borderSubtle,
       shadow: tokens.shadow,
       scrim: tokens.scrim,
-      inverseSurface:
-          tokens.isDark ? const Color(0xFFE4EFEC) : const Color(0xFF22302D),
-      onInverseSurface:
-          tokens.isDark ? const Color(0xFF172421) : const Color(0xFFF0F7F5),
-      inversePrimary:
-          tokens.isDark ? const Color(0xFF1F7774) : const Color(0xFF8FE0DA),
+      inverseSurface: tokens.textPrimary,
+      onInverseSurface: tokens.surfaceRaised,
+      inversePrimary: tokens.accentHover,
       surfaceTint: tokens.transparent,
     );
   }

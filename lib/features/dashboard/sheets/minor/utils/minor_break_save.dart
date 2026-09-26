@@ -11,7 +11,6 @@ class MinorBreakSave {
     final result = await CommonAttendanceService.recordBreak(
       context,
       source: 'legacy_minor_break_save',
-      modeKey: 'minor',
     );
     return SheetUploadResult(
       success: result.success,

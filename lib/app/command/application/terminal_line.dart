@@ -24,27 +24,27 @@ class TerminalLine {
     required this.type,
     required this.text,
     this.cadence = TerminalCadence.automatic,
-    this.promptPath = '~',
+    this.terminalPath = '~',
   });
 
   final int id;
   final TerminalLineType type;
   final String text;
   final TerminalCadence cadence;
-  final String promptPath;
+  final String terminalPath;
 
   TerminalLine copyWith({
     TerminalLineType? type,
     String? text,
     TerminalCadence? cadence,
-    String? promptPath,
+    String? terminalPath,
   }) {
     return TerminalLine(
       id: id,
       type: type ?? this.type,
       text: text ?? this.text,
       cadence: cadence ?? this.cadence,
-      promptPath: promptPath ?? this.promptPath,
+      terminalPath: terminalPath ?? this.terminalPath,
     );
   }
 }

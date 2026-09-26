@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
+import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../attendance/application/attendance_diagnostics.dart';
 import '../../../attendance/application/common_attendance_service.dart';
@@ -124,35 +125,68 @@ class HeadquarterCommonActions {
         'modeIndependent': true,
       },
       operation: () async {
-        final result = await CommonAttendanceService.recordBreak(
-          context,
-          source: 'headquarter:$source',
-          isHeadquarter: true,
+        final trace = await DeveloperOperationTrace.start(
+          context: context,
+          title: '근태 처리 상태',
+          initialMessage: '본사 휴게 기록을 시작합니다.',
+          useCommonUi: true,
+          developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+          standardModeMessage: '근태 처리를 진행합니다.',
+          showDialogImmediately: false,
         );
-        final recordedAt = result.recordedAt;
-        if (!result.success || recordedAt == null) {
+        trace.log(
+          'source=headquarter:$source action=record_break',
+          progress: .12,
+        );
+        try {
+          final result = await CommonAttendanceService.recordBreak(
+            context,
+            source: 'headquarter:$source',
+            trace: trace,
+          );
+          final recordedAt = result.recordedAt;
+          if (!result.success || recordedAt == null) {
+            recordEvent(
+              source: source,
+              action: 'record_break',
+              phase: 'record_failed',
+              meta: <String, Object?>{
+                'context': 'headquarter',
+                'message': result.message,
+              },
+            );
+            throw StateError(result.message);
+          }
           recordEvent(
             source: source,
             action: 'record_break',
-            phase: 'record_failed',
+            phase: 'recorded',
             meta: <String, Object?>{
               'context': 'headquarter',
+              'at': recordedAt.toIso8601String(),
               'message': result.message,
             },
           );
-          throw StateError(result.message);
+          trace.log(
+            'attendance_result success=true message=${result.message}',
+            progress: .82,
+          );
+          await trace.succeed(result.message);
+          if (trace.developerMode && context.mounted) {
+            await trace.showStatusDialog(context);
+          }
+          await onRecorded?.call(recordedAt);
+        } catch (error, stackTrace) {
+          await trace.fail(
+            '휴게 기록에 실패했습니다.',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          if (trace.developerMode && context.mounted) {
+            await trace.showStatusDialog(context);
+          }
+          rethrow;
         }
-        recordEvent(
-          source: source,
-          action: 'record_break',
-          phase: 'recorded',
-          meta: <String, Object?>{
-            'context': 'headquarter',
-            'at': recordedAt.toIso8601String(),
-            'message': result.message,
-          },
-        );
-        await onRecorded?.call(recordedAt);
       },
     );
   }
@@ -170,13 +204,30 @@ class HeadquarterCommonActions {
         'modeIndependent': true,
       },
       operation: () async {
+        final trace = await DeveloperOperationTrace.start(
+          context: context,
+          title: '근태 처리 상태',
+          initialMessage: '본사 퇴근 기록을 시작합니다.',
+          useCommonUi: true,
+          developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+          standardModeMessage: '근태 처리를 진행합니다.',
+          showDialogImmediately: false,
+        );
+        trace.log(
+          'source=headquarter:$source action=clock_out',
+          progress: .12,
+        );
         final result = await CommonAttendanceService.clockOut(
           context,
           source: 'headquarter:$source',
-          isHeadquarter: true,
+          trace: trace,
         );
         final recordedAt = result.recordedAt;
         if (!result.success || recordedAt == null) {
+          await trace.fail(result.message);
+          if (trace.developerMode && context.mounted) {
+            await trace.showStatusDialog(context);
+          }
           recordEvent(
             source: source,
             action: 'clock_out',
@@ -198,6 +249,14 @@ class HeadquarterCommonActions {
             'message': result.message,
           },
         );
+        trace.log(
+          'attendance_result success=true message=${result.message}',
+          progress: .82,
+        );
+        await trace.succeed(result.message);
+        if (trace.developerMode && context.mounted) {
+          await trace.showStatusDialog(context);
+        }
         await onRecorded?.call(recordedAt);
         try {
           if (DebugActionRecorder.instance.isRecording) {

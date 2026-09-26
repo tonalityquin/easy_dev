@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
 import '../../../../app/terminal/presentation/parkinworkin_terminal_navigator.dart';
+import '../../../../app/theme/theme_settings_dialog.dart';
 import '../../../../app/utils/operational_data_sync_workflow.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
@@ -16,6 +17,7 @@ import '../../applications/tablet_grid_render_mode_state.dart';
 import '../../applications/tablet_pad_mode_state.dart';
 import '../../applications/tablet_parking_completed_view_toggle_state.dart';
 import '../../applications/tablet_plate_tail4_size_state.dart';
+import '../../applications/tablet_side_dock_state.dart';
 import '../../applications/tablet_work_session_state.dart';
 
 class TabletModeRail extends StatefulWidget {
@@ -68,7 +70,23 @@ class _TabletModeRailState extends State<TabletModeRail>
 
   void _setMode(PadMode mode) {
     final state = context.read<TabletPadModeState>();
-    if (state.mode == mode) return;
+    if (state.mode == mode) {
+      HapticFeedback.selectionClick();
+      TabletDebugTrace.record(
+        'TabletSideDock',
+        'close_requested',
+        <String, Object?>{
+          'source': 'active_mode_tap',
+          'mode': mode.name,
+        },
+      );
+      unawaited(
+        context.read<TabletSideDockState>().close(
+              source: 'active_mode_tap',
+            ),
+      );
+      return;
+    }
     HapticFeedback.selectionClick();
     TabletDebugTrace.record(
       'TabletRail',
@@ -94,15 +112,14 @@ class _TabletModeRailState extends State<TabletModeRail>
     );
   }
 
-  Future<void> _showThemePending() async {
+  Future<void> _openThemeSettings() async {
     HapticFeedback.selectionClick();
-    TabletDebugTrace.record('TabletRail', 'theme_pending_opened');
-    await StatusDialog.showSuccess(
-      context,
-      title: '테마 설정',
-      description: '준비 중입니다.',
-      useCommonUi: true,
+    TabletDebugTrace.record('TabletRail', 'theme_settings_open_requested');
+    await showCommonThemeSettingsDialog(
+      context: context,
+      source: 'tablet_side_dock',
     );
+    TabletDebugTrace.record('TabletRail', 'theme_settings_closed');
   }
 
   Future<void> _refreshData() async {
@@ -216,7 +233,17 @@ class _TabletModeRailState extends State<TabletModeRail>
 
   Future<void> _showDeveloperStatus() async {
     HapticFeedback.selectionClick();
-    TabletDebugTrace.record('TabletRail', 'developer_status_requested');
+    final dockState = context.read<TabletSideDockState>();
+    final mode = context.read<TabletPadModeState>().mode;
+    TabletDebugTrace.record(
+      'TabletRail',
+      'developer_status_requested',
+      <String, Object?>{
+        'mode': mode.name,
+        'dockReady': dockState.isReady,
+        'sideDockOpen': dockState.isOpen,
+      },
+    );
     await TabletDebugTrace.showStatusDialog(
       context,
       title: '태블릿 개발자 상태',
@@ -343,7 +370,7 @@ class _TabletModeRailState extends State<TabletModeRail>
                                   icon: Icons.palette_outlined,
                                   label: '테마',
                                   onPressed: () =>
-                                      unawaited(_showThemePending()),
+                                      unawaited(_openThemeSettings()),
                                 ),
                                 _ActionButton(
                                   iconWidget: RotationTransition(

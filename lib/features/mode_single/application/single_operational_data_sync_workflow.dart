@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../app/init/app_exit_service.dart';
 import '../../../app/models/capability.dart';
+import '../../../app/utils/area_context_debug_trace.dart';
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/ops_delayed_refresh_gate.dart';
 import '../../../app/utils/snackbar_helper.dart';
@@ -54,10 +55,10 @@ class SingleOperationalDataSyncWorkflow {
       final areaState = context.read<AreaState>();
       final userState = context.read<UserState>();
       final session = userState.session;
-      final area = session?.selectedArea.trim() ?? '';
-      final division = session != null && session.divisions.isNotEmpty
-          ? session.divisions.first.trim()
-          : '';
+      final sessionId = session?.id.trim() ?? '';
+      final selectedArea = session?.selectedArea.trim() ?? '';
+      final area = areaState.currentArea.trim();
+      final division = areaState.currentDivision.trim();
       final locationState = context.read<LocationState>();
       final billState = context.read<BillState>();
       final sectorState = context.read<SectorState>();
@@ -93,7 +94,7 @@ class SingleOperationalDataSyncWorkflow {
       }
 
       if (area.isEmpty) {
-        const failureMessage = '선택 지역 정보가 없어 운영 데이터를 동기화할 수 없습니다.';
+        const failureMessage = '현재 지역 정보가 없어 운영 데이터를 동기화할 수 없습니다.';
         await trace.fail(failureMessage);
         if (!trace.developerMode && rootContext.mounted) {
           _showFailure(
@@ -106,7 +107,7 @@ class SingleOperationalDataSyncWorkflow {
       }
 
       if (division.isEmpty) {
-        const failureMessage = '선택 지역의 회사 정보가 없어 운영 데이터를 동기화할 수 없습니다.';
+        const failureMessage = '현재 지역의 회사 정보가 없어 운영 데이터를 동기화할 수 없습니다.';
         await trace.fail(failureMessage);
         if (!trace.developerMode && rootContext.mounted) {
           _showFailure(
@@ -118,19 +119,20 @@ class SingleOperationalDataSyncWorkflow {
         return SingleOperationalDataSyncResult.failed;
       }
 
-      if (areaState.currentArea.trim() != area ||
-          areaState.currentDivision.trim() != division) {
-        const failureMessage = '현재 AreaState와 로그인 선택 지역이 일치하지 않습니다.';
-        await trace.fail(failureMessage);
-        if (!trace.developerMode && rootContext.mounted) {
-          _showFailure(
-            rootContext,
-            failureMessage,
-            useCommonUi: useCommonUi,
-          );
-        }
-        return SingleOperationalDataSyncResult.failed;
-      }
+      trace.log(
+        'areaContext selectedArea=$selectedArea currentArea=$area currentDivision=$division sessionIdPresent=${sessionId.isNotEmpty}',
+        progress: 0.04,
+      );
+      AreaContextDebugTrace.record(
+        'SingleOperationalDataSync',
+        'sync_started',
+        fields: <String, Object?>{
+          'selectedArea': selectedArea,
+          'currentArea': area,
+          'currentDivision': division,
+          'sessionIdPresent': sessionId.isNotEmpty,
+        },
+      );
 
       var dataSaved = false;
       try {
@@ -149,18 +151,13 @@ class SingleOperationalDataSyncWorkflow {
         }
 
         final latestSessionBeforeAreaRefresh = userState.session;
-        final latestSelectedArea =
-            latestSessionBeforeAreaRefresh?.selectedArea.trim() ?? '';
-        final latestDivision = latestSessionBeforeAreaRefresh != null &&
-                latestSessionBeforeAreaRefresh.divisions.isNotEmpty
-            ? latestSessionBeforeAreaRefresh.divisions.first.trim()
-            : '';
-        if (latestSelectedArea != area || latestDivision != division) {
-          throw StateError('동기화 중 로그인 선택 지역이 변경되었습니다.');
+        if (latestSessionBeforeAreaRefresh == null ||
+            latestSessionBeforeAreaRefresh.id.trim() != sessionId) {
+          throw StateError('동기화 중 로그인 세션이 변경되었습니다.');
         }
         if (areaState.currentArea.trim() != area ||
             areaState.currentDivision.trim() != division) {
-          throw StateError('동기화 중 현재 AreaState 지역이 변경되었습니다.');
+          throw StateError('동기화 중 현재 작업 지역이 변경되었습니다.');
         }
 
         final refreshedArea = await areaState.refreshCurrentAreaSnapshotFromServer(
@@ -177,14 +174,13 @@ class SingleOperationalDataSyncWorkflow {
         );
 
         final latestSessionAfterAreaRefresh = userState.session;
-        final selectedAreaAfterRefresh =
-            latestSessionAfterAreaRefresh?.selectedArea.trim() ?? '';
-        final divisionAfterRefresh = latestSessionAfterAreaRefresh != null &&
-                latestSessionAfterAreaRefresh.divisions.isNotEmpty
-            ? latestSessionAfterAreaRefresh.divisions.first.trim()
-            : '';
-        if (selectedAreaAfterRefresh != area || divisionAfterRefresh != division) {
-          throw StateError('Area Snapshot 최신화 중 로그인 선택 지역이 변경되었습니다.');
+        if (latestSessionAfterAreaRefresh == null ||
+            latestSessionAfterAreaRefresh.id.trim() != sessionId) {
+          throw StateError('Area Snapshot 최신화 중 로그인 세션이 변경되었습니다.');
+        }
+        if (areaState.currentArea.trim() != area ||
+            areaState.currentDivision.trim() != division) {
+          throw StateError('Area Snapshot 최신화 중 현재 작업 지역이 변경되었습니다.');
         }
 
         final capabilityRefresh = await LocalAreaCapabilityRefresh.refresh(
@@ -345,8 +341,9 @@ class SingleOperationalDataSyncWorkflow {
           );
         }
 
-        if (areaState.currentArea.trim() != area) {
-          throw StateError('동기화 중 현재 지역이 변경되었습니다.');
+        if (areaState.currentArea.trim() != area ||
+            areaState.currentDivision.trim() != division) {
+          throw StateError('동기화 중 현재 작업 지역이 변경되었습니다.');
         }
 
         trace.log(
@@ -368,6 +365,15 @@ class SingleOperationalDataSyncWorkflow {
           progress: 0.99,
         );
         dataSaved = true;
+        AreaContextDebugTrace.record(
+          'SingleOperationalDataSync',
+          'sync_completed',
+          fields: <String, Object?>{
+            'selectedArea': selectedArea,
+            'currentArea': area,
+            'currentDivision': division,
+          },
+        );
 
         if (trace.developerMode) {
           await trace.succeed(
@@ -444,6 +450,16 @@ class SingleOperationalDataSyncWorkflow {
         }
         return SingleOperationalDataSyncResult.completed;
       } catch (error, stackTrace) {
+        AreaContextDebugTrace.record(
+          'SingleOperationalDataSync',
+          'sync_failed',
+          fields: <String, Object?>{
+            'selectedArea': selectedArea,
+            'currentArea': area,
+            'currentDivision': division,
+            'error': '$error',
+          },
+        );
         if (!dataSaved) {
           trace.log('실패 후 주차 구역 캐시를 정리하고 있습니다.');
           try {

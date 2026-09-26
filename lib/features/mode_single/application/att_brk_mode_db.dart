@@ -13,14 +13,22 @@ class AttBrkModeDb {
   static const String dbName = 'single_mode_attendance.db';
   static const String workAttendanceTable = 'single_work_attendance';
   static const String breakAttendanceTable = 'single_break_attendance';
-  static const String ruleTodoPromptHistoryTable =
-      'single_rule_todo_prompt_history';
+  static const String ruleTodoReminderHistoryTable =
+      'single_rule_todo_reminder_history';
+  static const String attendanceSessionTable =
+      'attendance_session_context';
 
   static const String _legacyDbName = 'simple_mode_attendance.db';
   static const String _legacyAttendanceTable = 'simple_mode_attendance';
   static const String _legacyWorkAttendanceTable = 'simple_work_attendance';
   static const String _legacyBreakAttendanceTable = 'simple_break_attendance';
-  static const int _dbVersion = 6;
+  static const int _dbVersion = 8;
+  static const String _legacyRuleTodoHistoryTable =
+      'single_rule_todo_pro' 'mpt_history';
+  static const String _legacyLastShownColumn = 'last_pro' 'mpted_at';
+  static const String _legacyClockInsSinceShownColumn =
+      'clock_ins_since_pro' 'mpt';
+  static const String _legacyShownCountColumn = 'pro' 'mpt_count';
 
   Database? _db;
 
@@ -114,7 +122,13 @@ class AttBrkModeDb {
       await _migrateV5SingleNaming(db);
     }
     if (oldVersion < 6) {
-      await _migrateV6AddRuleTodoPromptHistory(db);
+      await _migrateV6AddRuleTodoReminderHistory(db);
+    }
+    if (oldVersion < 7) {
+      await _migrateV7AddAttendanceSession(db);
+    }
+    if (oldVersion < 8) {
+      await _migrateV8RenameRuleTodoReminderHistory(db);
     }
 
     _record('single_mode_db_upgrade_complete', <String, Object?>{
@@ -197,10 +211,51 @@ class AttBrkModeDb {
     });
   }
 
-  Future<void> _migrateV6AddRuleTodoPromptHistory(Database db) async {
-    await _createRuleTodoPromptHistoryTable(db);
+  Future<void> _migrateV6AddRuleTodoReminderHistory(Database db) async {
+    await _createRuleTodoReminderHistoryTable(db);
     _record('single_mode_db_schema_migrated', const <String, Object?>{
       'version': 6,
+    });
+  }
+
+  Future<void> _migrateV7AddAttendanceSession(Database db) async {
+    await _createAttendanceSessionTable(db);
+    _record('single_mode_db_schema_migrated', const <String, Object?>{
+      'version': 7,
+    });
+  }
+
+  Future<void> _migrateV8RenameRuleTodoReminderHistory(Database db) async {
+    final hasLegacyTable = await _tableExists(db, _legacyRuleTodoHistoryTable);
+    await _createRuleTodoReminderHistoryTable(db);
+    if (hasLegacyTable) {
+      await db.execute('''
+        INSERT OR REPLACE INTO $ruleTodoReminderHistoryTable (
+          user_id,
+          division,
+          area,
+          todo_fingerprint,
+          last_reminded_at,
+          clock_ins_since_reminder,
+          reminder_count,
+          updated_at
+        )
+        SELECT
+          user_id,
+          division,
+          area,
+          todo_fingerprint,
+          $_legacyLastShownColumn,
+          $_legacyClockInsSinceShownColumn,
+          $_legacyShownCountColumn,
+          updated_at
+        FROM $_legacyRuleTodoHistoryTable;
+      ''');
+      await db.execute('DROP TABLE IF EXISTS $_legacyRuleTodoHistoryTable;');
+    }
+    _record('single_mode_db_schema_migrated', <String, Object?>{
+      'version': 8,
+      'legacyHistoryMigrated': hasLegacyTable,
     });
   }
 
@@ -268,7 +323,8 @@ class AttBrkModeDb {
   Future<void> _createSingleTables(DatabaseExecutor db) async {
     await _createWorkAttendanceTable(db);
     await _createBreakAttendanceTable(db);
-    await _createRuleTodoPromptHistoryTable(db);
+    await _createAttendanceSessionTable(db);
+    await _createRuleTodoReminderHistoryTable(db);
   }
 
   Future<void> _createWorkAttendanceTable(DatabaseExecutor db) async {
@@ -295,18 +351,37 @@ class AttBrkModeDb {
     ''');
   }
 
-  Future<void> _createRuleTodoPromptHistoryTable(
+
+  Future<void> _createAttendanceSessionTable(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $attendanceSessionTable (
+        date TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        user_name TEXT NOT NULL,
+        area TEXT NOT NULL,
+        division TEXT NOT NULL,
+        context_key TEXT NOT NULL,
+        mode_key TEXT NOT NULL,
+        is_headquarter INTEGER NOT NULL,
+        clock_in_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    ''');
+  }
+
+  Future<void> _createRuleTodoReminderHistoryTable(
     DatabaseExecutor db,
   ) async {
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS $ruleTodoPromptHistoryTable (
+      CREATE TABLE IF NOT EXISTS $ruleTodoReminderHistoryTable (
         user_id TEXT NOT NULL,
         division TEXT NOT NULL,
         area TEXT NOT NULL,
         todo_fingerprint TEXT NOT NULL,
-        last_prompted_at TEXT,
-        clock_ins_since_prompt INTEGER NOT NULL DEFAULT 0,
-        prompt_count INTEGER NOT NULL DEFAULT 0,
+        last_reminded_at TEXT,
+        clock_ins_since_reminder INTEGER NOT NULL DEFAULT 0,
+        reminder_count INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL,
         PRIMARY KEY (user_id, division, area)
       );

@@ -8,6 +8,8 @@ import '../../../app/command/presentation/terminal_launcher_button.dart';
 import '../../../app/init/app_exit_service.dart';
 import '../../../app/init/db_connection_status_section.dart';
 import '../../../app/init/logout_helper.dart';
+import '../../../app/init/work_status_notification.dart';
+import '../../../app/theme/theme_settings_dialog.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../shared/area_remote_settings/application/local_area_capability_refresh.dart';
@@ -137,7 +139,8 @@ class SingleInsideScreen extends StatefulWidget {
   State<SingleInsideScreen> createState() => _SingleInsideScreenState();
 }
 
-class _SingleInsideScreenState extends State<SingleInsideScreen> {
+class _SingleInsideScreenState extends State<SingleInsideScreen>
+    with WidgetsBindingObserver {
   final SingleInsideController controller = SingleInsideController();
   String _lastModeSignature = '';
   String _lastUserSignature = '';
@@ -157,7 +160,24 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
   SingleInsideWorkspaceContent _previousWorkspaceContent =
       SingleInsideWorkspaceContent.dotMap;
   int _punchCountdownRevision = 1;
+  String _punchCountdownSource = 'screen_open';
   bool _punchAutoReturnScheduled = true;
+  bool _punchCountdownEnabled = false;
+  bool _suppressWorkspaceTransition = false;
+  bool _notificationCountdownPending = false;
+  bool _notificationCountdownFrameScheduled = false;
+  String? _pendingNotificationTapId;
+  String _lastConsumedNotificationTapId = '-';
+  DateTime? _notificationVisibleFrameAt;
+  DateTime? _notificationCountdownStartedAt;
+  int _notificationTapConsumeCount = 0;
+  int _lastHandledNotificationTapRevision = 0;
+  int _notificationRevealCount = 0;
+  String _lastNotificationTapSource = '-';
+  String _lastNotificationTapEvent = '-';
+  DateTime? _lastNotificationTapAt;
+  DateTime? _lastNotificationRevealAt;
+  bool _pendingNotificationDeveloperStatus = false;
   bool _workScheduleMounted = false;
   bool _initialWorkspaceRevealCompleted = false;
   bool _initialRulesAutoOpenDelayScheduled = false;
@@ -167,8 +187,35 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
   @override
   void initState() {
     super.initState();
-    SingleInsideDiagnostics.log('screen', 'init');
+    WidgetsBinding.instance.addObserver(this);
+    final initialTapRevision =
+        WorkStatusNotificationController.notificationTapRevision.value;
+    final initialPendingTap =
+        WorkStatusNotificationController.pendingNotificationTap;
+    if (initialPendingTap != null &&
+        initialPendingTap.source == 'notification_body') {
+      _lastHandledNotificationTapRevision =
+          initialTapRevision > 0 ? initialTapRevision - 1 : 0;
+      _pendingNotificationTapId = initialPendingTap.id;
+      _punchCountdownSource = 'notification_resume';
+      _suppressWorkspaceTransition = true;
+      _lastNotificationTapSource = initialPendingTap.source;
+      _lastNotificationTapEvent = initialPendingTap.event;
+      _lastNotificationTapAt = initialPendingTap.tappedAt;
+    } else {
+      _lastHandledNotificationTapRevision = initialTapRevision;
+    }
+    WorkStatusNotificationController.notificationTapRevision.addListener(
+      _handleNotificationTapRevision,
+    );
+    SingleInsideDiagnostics.log(
+      'screen',
+      'init notificationTapRevision=$initialTapRevision pendingTapId=${initialPendingTap?.id ?? '-'} countdownEnabled=$_punchCountdownEnabled notificationCountdownPending=$_notificationCountdownPending',
+    );
     controller.initialize(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_restorePendingNotificationTapAfterMount());
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userState = context.read<UserState>();
       await userState.ensureTodayClockInStatus();
@@ -180,6 +227,215 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
       if (userState.isWorking && !userState.hasClockInToday) {
         await _resetStaleWorkingState();
       }
+    });
+  }
+
+  @override
+  void dispose() {
+    WorkStatusNotificationController.notificationTapRevision.removeListener(
+      _handleNotificationTapRevision,
+    );
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (_notificationCountdownPending) {
+      _scheduleNotificationCountdownAfterVisibleFrame(
+        source: 'app_resumed',
+      );
+      return;
+    }
+    _restoreWorkspaceTransitionAfterFrame(source: 'app_resumed');
+  }
+
+  Future<void> _restorePendingNotificationTapAfterMount() async {
+    await WorkStatusNotificationController.restorePendingNotificationTap(
+      source: 'single_screen_mount',
+    );
+    if (!mounted) return;
+    _handleNotificationTapRevision();
+    if (_notificationCountdownPending) {
+      _scheduleNotificationCountdownAfterVisibleFrame(
+        source: 'single_screen_mount',
+      );
+      return;
+    }
+    if (!_punchCountdownEnabled &&
+        _workspaceContent == SingleInsideWorkspaceContent.punchRecorder) {
+      setState(() {
+        _punchCountdownEnabled = true;
+        _punchCountdownRevision++;
+        _punchCountdownSource = 'screen_open';
+      });
+      SingleInsideDiagnostics.log(
+        'punch_content',
+        'initial_countdown_armed source=screen_open revision=$_punchCountdownRevision',
+      );
+    }
+  }
+
+  void _handleNotificationTapRevision() {
+    if (!mounted) return;
+    final revision =
+        WorkStatusNotificationController.notificationTapRevision.value;
+    final pendingTap = WorkStatusNotificationController.pendingNotificationTap;
+    if (revision <= _lastHandledNotificationTapRevision) return;
+    _lastHandledNotificationTapRevision = revision;
+    if (pendingTap == null) {
+      SingleInsideDiagnostics.log(
+        'workspace',
+        'notification_tap_revision_without_pending revision=$revision active=${_workspaceContent.name}',
+      );
+      return;
+    }
+    _lastNotificationTapSource = pendingTap.source;
+    _lastNotificationTapEvent = pendingTap.event;
+    _lastNotificationTapAt = pendingTap.tappedAt;
+    if (pendingTap.source != 'notification_body') {
+      SingleInsideDiagnostics.log(
+        'workspace',
+        'notification_tap_ignored tapId=${pendingTap.id} source=${pendingTap.source} event=${pendingTap.event} revision=$revision active=${_workspaceContent.name}',
+      );
+      return;
+    }
+    if (_notificationCountdownPending &&
+        _pendingNotificationTapId == pendingTap.id) {
+      SingleInsideDiagnostics.log(
+        'workspace',
+        'notification_tap_duplicate_ignored tapId=${pendingTap.id} revision=$revision active=${_workspaceContent.name}',
+      );
+      return;
+    }
+    _revealPunchRecorderFromNotification(
+      revision: revision,
+      tap: pendingTap,
+    );
+  }
+
+  void _revealPunchRecorderFromNotification({
+    required int revision,
+    required WorkStatusNotificationTap tap,
+  }) {
+    if (!mounted) return;
+    final current = _workspaceContent;
+    final now = DateTime.now();
+    setState(() {
+      _previousWorkspaceContent = current;
+      _workspaceContent = SingleInsideWorkspaceContent.punchRecorder;
+      _punchCountdownSource = 'notification_resume';
+      _punchAutoReturnScheduled = true;
+      _punchCountdownEnabled = false;
+      _suppressWorkspaceTransition = true;
+      _notificationCountdownPending = true;
+      _pendingNotificationTapId = tap.id;
+      _notificationVisibleFrameAt = null;
+      _notificationCountdownStartedAt = null;
+      _notificationRevealCount++;
+      _lastNotificationRevealAt = now;
+      _pendingNotificationDeveloperStatus = true;
+    });
+    SingleInsideDiagnostics.log(
+      'workspace',
+      'notification_punch_reveal tapId=${tap.id} source=${tap.source} event=${tap.event} tapRevision=$revision from=${current.name} to=${SingleInsideWorkspaceContent.punchRecorder.name} punchRevision=$_punchCountdownRevision countdownSource=$_punchCountdownSource countdownEnabled=$_punchCountdownEnabled transitionSuppressed=$_suppressWorkspaceTransition tappedAt=${tap.tappedAt.toIso8601String()} revealAt=${now.toIso8601String()}',
+    );
+    _scheduleNotificationCountdownAfterVisibleFrame(
+      source: 'notification_tap',
+    );
+  }
+
+  void _scheduleNotificationCountdownAfterVisibleFrame({
+    required String source,
+  }) {
+    if (!mounted || !_notificationCountdownPending) return;
+    if (_notificationCountdownFrameScheduled) return;
+    if (_workspaceContent != SingleInsideWorkspaceContent.punchRecorder) {
+      SingleInsideDiagnostics.log(
+        'punch_content',
+        'notification_countdown_deferred source=$source reason=workspace active=${_workspaceContent.name}',
+      );
+      return;
+    }
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle != AppLifecycleState.resumed) {
+      SingleInsideDiagnostics.log(
+        'punch_content',
+        'notification_countdown_deferred source=$source reason=lifecycle state=${lifecycle?.name ?? '-'} tapId=${_pendingNotificationTapId ?? '-'}',
+      );
+      return;
+    }
+    _notificationCountdownFrameScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _notificationCountdownFrameScheduled = false;
+      if (!mounted ||
+          !_notificationCountdownPending ||
+          _workspaceContent != SingleInsideWorkspaceContent.punchRecorder ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        return;
+      }
+      final now = DateTime.now();
+      final tapId = _pendingNotificationTapId;
+      setState(() {
+        _notificationCountdownPending = false;
+        _punchCountdownEnabled = true;
+        _punchCountdownRevision++;
+        _notificationVisibleFrameAt = now;
+        _notificationCountdownStartedAt = now;
+        _suppressWorkspaceTransition = false;
+      });
+      SingleInsideDiagnostics.log(
+        'punch_content',
+        'notification_countdown_started source=$source tapId=${tapId ?? '-'} visibleFrameAt=${now.toIso8601String()} delayMs=${_punchAutoReturnDelay.inMilliseconds} revision=$_punchCountdownRevision transitionSuppressed=$_suppressWorkspaceTransition',
+      );
+      if (tapId != null && tapId.isNotEmpty) {
+        unawaited(
+          _consumePendingNotificationTap(
+            tapId: tapId,
+            source: 'notification_visible_frame',
+          ),
+        );
+      }
+    });
+  }
+
+  Future<void> _consumePendingNotificationTap({
+    required String tapId,
+    required String source,
+  }) async {
+    await WorkStatusNotificationController.consumePendingNotificationTap(
+      tapId: tapId,
+      source: source,
+    );
+    if (!mounted) return;
+    setState(() {
+      _pendingNotificationTapId = null;
+      _lastConsumedNotificationTapId = tapId;
+      _notificationTapConsumeCount++;
+    });
+    SingleInsideDiagnostics.log(
+      'workspace',
+      'notification_tap_consumed tapId=$tapId source=$source count=$_notificationTapConsumeCount',
+    );
+  }
+
+  void _restoreWorkspaceTransitionAfterFrame({required String source}) {
+    if (!_suppressWorkspaceTransition || !mounted) return;
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      SingleInsideDiagnostics.log(
+        'workspace',
+        'workspace_transition_restore_deferred source=$source lifecycle=${WidgetsBinding.instance.lifecycleState?.name ?? '-'}',
+      );
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_suppressWorkspaceTransition) return;
+      setState(() => _suppressWorkspaceTransition = false);
+      SingleInsideDiagnostics.log(
+        'workspace',
+        'workspace_transition_restored source=$source active=${_workspaceContent.name} punchRevision=$_punchCountdownRevision',
+      );
     });
   }
 
@@ -267,23 +523,18 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
   void _switchWorkspaceContent(
     SingleInsideWorkspaceContent next, {
     required String source,
-    bool restartPunchCountdown = false,
   }) {
     if (!mounted) return;
     final current = _workspaceContent;
-    if (next == SingleInsideWorkspaceContent.punchRecorder &&
-        current == SingleInsideWorkspaceContent.punchRecorder) {
-      setState(() {
-        _punchCountdownRevision++;
-        _punchAutoReturnScheduled = true;
-      });
-      SingleInsideDiagnostics.log(
-        'workspace',
-        'punch_countdown_restarted source=$source revision=$_punchCountdownRevision delayMs=${_punchAutoReturnDelay.inMilliseconds}',
-      );
+    if (current == next) {
+      if (next == SingleInsideWorkspaceContent.punchRecorder) {
+        SingleInsideDiagnostics.log(
+          'workspace',
+          'punch_request_ignored_already_active source=$source revision=$_punchCountdownRevision countdownSource=$_punchCountdownSource',
+        );
+      }
       return;
     }
-    if (current == next && !restartPunchCountdown) return;
     setState(() {
       _previousWorkspaceContent = current;
       _workspaceContent = next;
@@ -292,14 +543,20 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
       }
       if (next == SingleInsideWorkspaceContent.punchRecorder) {
         _punchCountdownRevision++;
+        _punchCountdownSource = source;
         _punchAutoReturnScheduled = true;
+        _punchCountdownEnabled = true;
       } else {
         _punchAutoReturnScheduled = false;
+        _punchCountdownEnabled = false;
+        if (source != 'punch_auto_return') {
+          _pendingNotificationDeveloperStatus = false;
+        }
       }
     });
     SingleInsideDiagnostics.log(
       'workspace',
-      'switch from=${current.name} to=${next.name} source=$source punchRevision=$_punchCountdownRevision',
+      'switch from=${current.name} to=${next.name} source=$source punchRevision=$_punchCountdownRevision countdownSource=$_punchCountdownSource',
     );
   }
 
@@ -328,9 +585,13 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
         _workspaceContent != SingleInsideWorkspaceContent.punchRecorder) {
       return;
     }
+    final showNotificationDeveloperStatus =
+        _pendingNotificationDeveloperStatus &&
+            _punchCountdownSource == 'notification_resume';
+    _pendingNotificationDeveloperStatus = false;
     SingleInsideDiagnostics.log(
       'punch_content',
-      'auto_return_switch target=dotMap revision=$_punchCountdownRevision',
+      'auto_return_switch target=dotMap revision=$_punchCountdownRevision source=$_punchCountdownSource developerStatusPending=$showNotificationDeveloperStatus',
     );
     _switchWorkspaceContent(
       SingleInsideWorkspaceContent.dotMap,
@@ -342,6 +603,14 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
         'workspace',
         'auto_return_frame_committed active=${_workspaceContent.name} expected=dotMap revision=$_punchCountdownRevision',
       );
+      if (showNotificationDeveloperStatus) {
+        unawaited(
+          _showDeveloperStatus(
+            title: 'Single 알림 복귀 상태',
+            description: '알림 복귀 및 출퇴근 기록기 표시 상태',
+          ),
+        );
+      }
     });
   }
 
@@ -410,7 +679,10 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     }
   }
 
-  Future<void> _showDeveloperStatus() async {
+  Future<void> _showDeveloperStatus({
+    String title = 'Single 상태',
+    String description = 'Single UI 및 SQLite 공간 상태 로그',
+  }) async {
     final media = MediaQuery.maybeOf(context);
     final userState = context.read<UserState>();
     final areaState = context.read<AreaState>();
@@ -420,11 +692,12 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
             secondaryState.canAccess(Section.user);
     SingleInsideDiagnostics.log(
       'status',
-      'snapshot viewport=${media?.size.width.toStringAsFixed(1)}x${media?.size.height.toStringAsFixed(1)} role=${userState.session?.role ?? ''} normalizedRole=${secondaryState.role.name} area=${userState.currentArea} division=${userState.division} areaStateCapabilities=${LocalAreaCapabilityRefresh.keys(areaState.capabilitiesOfCurrentArea)} locationAccess=${secondaryState.canAccess(Section.location)} locationAccessReason=${secondaryState.accessDebugReason(Section.location)} operationsVisible=$operationsVisible scheduleRevision=$_scheduleRevision spatialRevision=$_spatialRefreshRevision ruleRevision=$_ruleRefreshRevision dashboardMode=compact_only railWidth=${_lastRailWidth.toStringAsFixed(1)} workspaceWidth=${_lastWorkspaceWidth.toStringAsFixed(1)} dashboardActionRunning=$_dashboardActionRunning workspaceContent=${_workspaceContent.name} workspaceContentPrevious=${_previousWorkspaceContent.name} punchContentPlacement=workspace_full workspaceBackPolicy=return_to_parking_area scheduleSaveMode=explicit punchAutoReturnScheduled=$_punchAutoReturnScheduled punchAutoReturnMs=${_punchAutoReturnDelay.inMilliseconds} punchCountdownRevision=$_punchCountdownRevision workScheduleMounted=$_workScheduleMounted initialRevealCompleted=$_initialWorkspaceRevealCompleted initialRulesAutoOpenDelayScheduled=$_initialRulesAutoOpenDelayScheduled initialRulesAutoOpenRequested=$_initialRulesAutoOpenRequested initialAutomationCancelled=$_initialAutomationCancelled initialRulesAutoOpenHoldMs=${_initialRulesAutoOpenHold.inMilliseconds}',
+      'snapshot viewport=${media?.size.width.toStringAsFixed(1)}x${media?.size.height.toStringAsFixed(1)} role=${userState.session?.role ?? ''} normalizedRole=${secondaryState.role.name} area=${userState.currentArea} division=${userState.division} areaStateCapabilities=${LocalAreaCapabilityRefresh.keys(areaState.capabilitiesOfCurrentArea)} locationAccess=${secondaryState.canAccess(Section.location)} locationAccessReason=${secondaryState.accessDebugReason(Section.location)} operationsVisible=$operationsVisible scheduleRevision=$_scheduleRevision spatialRevision=$_spatialRefreshRevision ruleRevision=$_ruleRefreshRevision dashboardMode=compact_only railWidth=${_lastRailWidth.toStringAsFixed(1)} workspaceWidth=${_lastWorkspaceWidth.toStringAsFixed(1)} dashboardActionRunning=$_dashboardActionRunning workspaceContent=${_workspaceContent.name} workspaceContentPrevious=${_previousWorkspaceContent.name} punchContentPlacement=workspace_full workspaceBackPolicy=return_to_parking_area scheduleSaveMode=explicit punchAutoReturnScheduled=$_punchAutoReturnScheduled punchAutoReturnMs=${_punchAutoReturnDelay.inMilliseconds} punchCountdownRevision=$_punchCountdownRevision punchCountdownSource=$_punchCountdownSource punchCountdownEnabled=$_punchCountdownEnabled suppressWorkspaceTransition=$_suppressWorkspaceTransition notificationCountdownPending=$_notificationCountdownPending notificationCountdownFrameScheduled=$_notificationCountdownFrameScheduled pendingNotificationTapId=${_pendingNotificationTapId ?? '-'} lastConsumedNotificationTapId=$_lastConsumedNotificationTapId notificationVisibleFrameAt=${_notificationVisibleFrameAt?.toIso8601String() ?? '-'} notificationCountdownStartedAt=${_notificationCountdownStartedAt?.toIso8601String() ?? '-'} notificationTapConsumeCount=$_notificationTapConsumeCount notificationTapRevision=${WorkStatusNotificationController.notificationTapRevision.value} workStatusLastNotificationTapId=${WorkStatusNotificationController.lastNotificationTapId} workStatusPendingNotificationTapId=${WorkStatusNotificationController.pendingNotificationTap?.id ?? '-'} workStatusPendingNotificationTapAt=${WorkStatusNotificationController.pendingNotificationTap?.tappedAt.toIso8601String() ?? '-'} lastHandledNotificationTapRevision=$_lastHandledNotificationTapRevision notificationRevealCount=$_notificationRevealCount lastNotificationTapSource=$_lastNotificationTapSource lastNotificationTapEvent=$_lastNotificationTapEvent lastNotificationTapAt=${_lastNotificationTapAt?.toIso8601String() ?? '-'} lastNotificationRevealAt=${_lastNotificationRevealAt?.toIso8601String() ?? '-'} pendingNotificationDeveloperStatus=$_pendingNotificationDeveloperStatus workScheduleMounted=$_workScheduleMounted initialRevealCompleted=$_initialWorkspaceRevealCompleted initialRulesAutoOpenDelayScheduled=$_initialRulesAutoOpenDelayScheduled initialRulesAutoOpenRequested=$_initialRulesAutoOpenRequested initialAutomationCancelled=$_initialAutomationCancelled initialRulesAutoOpenHoldMs=${_initialRulesAutoOpenHold.inMilliseconds}',
     );
     await SingleInsideDiagnostics.showStatus(
       context,
-      description: 'Single UI 및 SQLite 공간 상태 로그',
+      title: title,
+      description: description,
     );
   }
 
@@ -527,6 +800,14 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     String source,
   ) async {
     if (_dashboardActionRunning || !mounted) return;
+    if (request == SingleInsideDockRequest.punchRecorder &&
+        _workspaceContent == SingleInsideWorkspaceContent.punchRecorder) {
+      SingleInsideDiagnostics.log(
+        'dashboard',
+        'action_ignored_already_active request=${request.name} source=$source revision=$_punchCountdownRevision countdownSource=$_punchCountdownSource',
+      );
+      return;
+    }
     _cancelInitialAutomation('dashboard_action_${request.name}');
     setState(() => _dashboardActionRunning = true);
     try {
@@ -540,6 +821,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
           MediaQuery.maybeOf(context)?.disableAnimations ?? false;
       if (request != SingleInsideDockRequest.workSchedule &&
           request != SingleInsideDockRequest.punchRecorder &&
+          request != SingleInsideDockRequest.theme &&
           _workspaceContent != SingleInsideWorkspaceContent.dotMap) {
         _switchWorkspaceContent(
           SingleInsideWorkspaceContent.dotMap,
@@ -579,7 +861,6 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
         _switchWorkspaceContent(
           SingleInsideWorkspaceContent.punchRecorder,
           source: source,
-          restartPunchCountdown: true,
         );
         break;
       case SingleInsideDockRequest.workStartReport:
@@ -617,6 +898,20 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
         break;
       case SingleInsideDockRequest.operationalSync:
         await _runSingleOperationalSync();
+        break;
+      case SingleInsideDockRequest.theme:
+        SingleInsideDiagnostics.log(
+          'theme',
+          'settings_open source=$source',
+        );
+        await showCommonThemeSettingsDialog(
+          context: context,
+          source: 'single_mini_side_dock',
+        );
+        SingleInsideDiagnostics.log(
+          'theme',
+          'settings_closed source=$source',
+        );
         break;
       case SingleInsideDockRequest.logout:
         await _handleLogout(context);
@@ -786,7 +1081,8 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                           Expanded(
                             child: _SingleInsideWorkspaceSwitcher(
                               active: _workspaceContent,
-                              duration: reduceMotion
+                              duration: reduceMotion ||
+                                      _suppressWorkspaceTransition
                                   ? Duration.zero
                                   : _workspaceTransitionDuration,
                               dotMap: SingleInsideSpatialDotMap(
@@ -797,7 +1093,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                                   ? SingleInsideWorkScheduleContentSurface(
                                       scheduleRevision: _scheduleRevision,
                                       onChanged: _handleScheduleChanged,
-                                      onDeveloperStatus: _showDeveloperStatus,
+                                      onDeveloperStatus: () => _showDeveloperStatus(),
                                     )
                                   : const SizedBox.shrink(),
                               punchRecorder: SingleInsidePunchRecorderContentSurface(
@@ -807,6 +1103,8 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                                 active: _workspaceContent ==
                                     SingleInsideWorkspaceContent.punchRecorder,
                                 countdownRevision: _punchCountdownRevision,
+                                countdownSource: _punchCountdownSource,
+                                countdownEnabled: _punchCountdownEnabled,
                                 autoReturnDuration: _punchAutoReturnDelay,
                                 userId: session.id,
                                 userName: session.displayName,
@@ -814,7 +1112,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                                 division: currentDivision,
                                 scheduleRevision: _scheduleRevision,
                                 onAutoReturn: _handlePunchAutoReturn,
-                                onDeveloperStatus: _showDeveloperStatus,
+                                onDeveloperStatus: () => _showDeveloperStatus(),
                               ),
                             ),
                           ),
@@ -844,7 +1142,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                           showReport: mode == SingleInsideMode.leader,
                           showOperations: showOperations,
                           enabled: !_dashboardActionRunning,
-                          onDeveloperStatus: _showDeveloperStatus,
+                          onDeveloperStatus: () => _showDeveloperStatus(),
                           onManualInteraction: _cancelInitialAutomation,
                           onRequest: _dispatchDashboardRequest,
                           workScheduleSelected: _workspaceContent ==

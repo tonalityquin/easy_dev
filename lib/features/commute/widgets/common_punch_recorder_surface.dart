@@ -199,14 +199,44 @@ class CommonPunchRecorderSurface extends StatelessWidget {
             ),
           );
 
-    if (onDeveloperStatus == null) return surface;
+    final stateKey = <String>[
+      'loading=$loading',
+      for (final slot in slots)
+        '${slot.label}:${slot.state.name}:${slot.time ?? ''}:${slot.statusLabel ?? ''}',
+    ].join('|');
+    final animatedSurface = AnimatedSwitcher(
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+      switchInCurve: CommonUiMotion.enter,
+      switchOutCurve: CommonUiMotion.exit,
+      transitionBuilder: (child, animation) {
+        if (reduceMotion) return child;
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: .985, end: 1).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: CommonUiMotion.enter,
+              ),
+            ),
+            child: child,
+          ),
+        );
+      },
+      child: KeyedSubtree(
+        key: ValueKey<String>(stateKey),
+        child: surface,
+      ),
+    );
+
+    if (onDeveloperStatus == null) return animatedSurface;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
       onLongPress: () async {
         HapticFeedback.mediumImpact();
         await onDeveloperStatus?.call();
       },
-      child: surface,
+      child: animatedSurface,
     );
   }
 }

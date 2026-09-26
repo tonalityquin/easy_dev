@@ -10,6 +10,8 @@ class SingleInsidePunchRecorderContentSurface extends StatefulWidget {
     super.key,
     required this.active,
     required this.countdownRevision,
+    required this.countdownSource,
+    required this.countdownEnabled,
     required this.autoReturnDuration,
     required this.userId,
     required this.userName,
@@ -22,6 +24,8 @@ class SingleInsidePunchRecorderContentSurface extends StatefulWidget {
 
   final bool active;
   final int countdownRevision;
+  final String countdownSource;
+  final bool countdownEnabled;
   final Duration autoReturnDuration;
   final String userId;
   final String userName;
@@ -50,13 +54,17 @@ class _SingleInsidePunchRecorderContentSurfaceState
       duration: widget.autoReturnDuration,
     )..addStatusListener(_handleCountdownStatus);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !widget.active) return;
-      _restartCountdown(source: 'screen_open');
+      if (!mounted || !widget.active || !widget.countdownEnabled) return;
+      _restartCountdown(source: widget.countdownSource);
     });
   }
 
   void _handleCountdownStatus(AnimationStatus status) {
-    if (status != AnimationStatus.completed || !widget.active) return;
+    if (status != AnimationStatus.completed ||
+        !widget.active ||
+        !widget.countdownEnabled) {
+      return;
+    }
     if (_completedRevision == widget.countdownRevision) return;
     _completedRevision = widget.countdownRevision;
     SingleInsideDiagnostics.log(
@@ -67,7 +75,7 @@ class _SingleInsidePunchRecorderContentSurfaceState
   }
 
   void _restartCountdown({required String source}) {
-    if (!widget.active) return;
+    if (!widget.active || !widget.countdownEnabled) return;
     _completedRevision = -1;
     _countdownController
       ..stop()
@@ -84,16 +92,17 @@ class _SingleInsidePunchRecorderContentSurfaceState
     covariant SingleInsidePunchRecorderContentSurface oldWidget,
   ) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.active) {
-      _countdownController.stop();
+    if (!widget.active || !widget.countdownEnabled) {
+      _countdownController
+        ..stop()
+        ..value = 0;
       return;
     }
     if (!oldWidget.active ||
+        !oldWidget.countdownEnabled ||
         oldWidget.countdownRevision != widget.countdownRevision ||
         oldWidget.autoReturnDuration != widget.autoReturnDuration) {
-      _restartCountdown(
-        source: oldWidget.active ? 'compact_rail' : 'workspace_enter',
-      );
+      _restartCountdown(source: widget.countdownSource);
     }
   }
 

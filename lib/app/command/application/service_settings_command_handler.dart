@@ -3,12 +3,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/config/email_config.dart';
 import '../../../app/theme/brand_theme.dart';
 import '../../../app/theme/theme_prefs_controller.dart';
 import '../../../app/utils/status_dialog.dart';
+import '../../../features/account/applications/user_state.dart';
 import '../../../features/dev/application/area_state.dart';
 import '../../../features/dev/application/debug_session_controller.dart';
 import '../../../features/selector/application/dev_auth.dart';
@@ -35,13 +35,6 @@ class ServiceSettingsCommandResult {
 class ServiceSettingsCommandHandler {
   ServiceSettingsCommandHandler._();
 
-  static const String _kbPresetId = 'kb';
-  static const String _defaultIndependentPresetId = 'soft_linen';
-  static const Set<String> _kbThemeAllowedAreas = <String>{
-    'KB라이프타워',
-    'KB라이프역삼',
-  };
-
   static Future<ServiceSettingsCommandResult> execute(
     BuildContext context,
     String rawCommand, {
@@ -49,8 +42,7 @@ class ServiceSettingsCommandHandler {
   }) async {
     final normalized = _normalize(rawCommand);
     final args = normalized.isEmpty ? <String>[] : normalized.split(' ');
-    final prefs = await SharedPreferences.getInstance();
-    final selectedArea = (prefs.getString('selectedArea') ?? '').trim();
+    final selectedArea = context.read<UserState>().selectedArea.trim();
     final debugEnabled = await DevAuth.isDevModeEnabled();
     if (!context.mounted) {
       return const ServiceSettingsCommandResult.failure(<String>[
@@ -61,9 +53,9 @@ class ServiceSettingsCommandHandler {
     if (!themeController.loaded) {
       await themeController.load();
     }
-    await _ensurePresetAllowed(
-      themeController,
-      selectedArea: selectedArea,
+    await themeController.syncSelectedArea(
+      selectedArea,
+      source: 'service_settings_command',
     );
 
     DebugSessionController.record(
@@ -79,7 +71,6 @@ class ServiceSettingsCommandHandler {
       context,
       args,
       themeController: themeController,
-      selectedArea: selectedArea,
       debugEnabled: debugEnabled,
     );
 
@@ -101,14 +92,12 @@ class ServiceSettingsCommandHandler {
     BuildContext context,
     List<String> args, {
     required ThemePrefsController themeController,
-    required String selectedArea,
     required bool debugEnabled,
   }) async {
     if (args.isEmpty) {
       return _help(
         const <String>[],
         themeController: themeController,
-        selectedArea: selectedArea,
         debugEnabled: debugEnabled,
       );
     }
@@ -118,13 +107,12 @@ class ServiceSettingsCommandHandler {
         return _help(
           args.skip(1).toList(),
           themeController: themeController,
-          selectedArea: selectedArea,
           debugEnabled: debugEnabled,
         );
       case 'theme':
-        return _theme(args.skip(1).toList(), themeController, selectedArea);
+        return _theme(args.skip(1).toList(), themeController);
       case 'color':
-        return _color(args.skip(1).toList(), themeController, selectedArea);
+        return _color(args.skip(1).toList(), themeController);
       case 'email':
         return _email(args.skip(1).toList());
       case 'edit':
@@ -149,7 +137,6 @@ class ServiceSettingsCommandHandler {
   static Future<ServiceSettingsCommandResult> _help(
     List<String> args, {
     required ThemePrefsController themeController,
-    required String selectedArea,
     required bool debugEnabled,
   }) async {
     if (args.length > 1) {
@@ -167,10 +154,7 @@ class ServiceSettingsCommandHandler {
           );
         case 'color':
           return ServiceSettingsCommandResult.success(
-            _colorHelpLines(
-              themeController,
-              selectedArea: selectedArea,
-            ),
+            _colorHelpLines(themeController),
           );
         case 'email':
           return ServiceSettingsCommandResult.success(
@@ -197,21 +181,14 @@ class ServiceSettingsCommandHandler {
 
     final lines = <String>[
       'CURRENT',
-      'theme       ${themeController.themeModeId}',
-      'color       ${themeController.presetId}',
-    ];
-    lines.addAll(<String>[
+      'selectedArea ${themeController.selectedArea.isEmpty ? '-' : themeController.selectedArea}',
+      'theme       ${themeController.presetId}',
+      'source      ${themeController.isAutomatic ? 'auto' : 'override'}',
       '',
       ..._themeHelpLines(themeController, includeCurrent: false),
       '',
-      ..._colorHelpLines(
-        themeController,
-        selectedArea: selectedArea,
-        includeCurrent: false,
-      ),
-      '',
       ...await _emailHelpLines(includeCurrent: false),
-    ]);
+    ];
     if (debugEnabled) {
       lines.addAll(<String>[
         '',
@@ -243,37 +220,38 @@ class ServiceSettingsCommandHandler {
     ThemePrefsController themeController, {
     bool includeCurrent = true,
   }) {
-    final specs = themeModeSpecs();
+    final presets = brandPresets();
     return <String>[
       'THEME',
-      if (includeCurrent) 'current     ${themeController.themeModeId}',
-      for (final spec in specs) '${spec.id.padRight(12)}${spec.label}',
+      if (includeCurrent)
+        'current     ${themeController.presetId} (${themeController.isAutomatic ? 'auto' : 'override'})',
+      if (includeCurrent) 'default     ${themeController.areaDefaultPresetId}',
+      for (final preset in presets) '${preset.id.padRight(16)}${preset.label}',
       '',
       'COMMAND',
       'theme',
-      for (final spec in specs) 'theme ${spec.id}',
+      'theme list',
+      'theme auto',
+      for (final preset in presets) 'theme ${preset.id}',
     ];
   }
 
   static List<String> _colorHelpLines(
     ThemePrefsController themeController, {
-    required String selectedArea,
     bool includeCurrent = true,
   }) {
-    final available = _allowedPresets(
-      themeController.themeModeId,
-      selectedArea: selectedArea,
-    );
+    final presets = brandPresets();
     return <String>[
       'COLOR',
-      if (includeCurrent) 'current     ${themeController.presetId}',
-      'theme       ${themeController.themeModeId}',
-      for (final preset in available) '${preset.id.padRight(16)}${preset.label}',
+      if (includeCurrent)
+        'current     ${themeController.presetId} (${themeController.isAutomatic ? 'auto' : 'override'})',
+      for (final preset in presets) '${preset.id.padRight(16)}${preset.label}',
       '',
       'COMMAND',
       'color',
       'color list',
-      for (final preset in available) 'color ${preset.id}',
+      'color auto',
+      for (final preset in presets) 'color ${preset.id}',
     ];
   }
 
@@ -623,10 +601,9 @@ class ServiceSettingsCommandHandler {
   static Future<ServiceSettingsCommandResult> _theme(
     List<String> args,
     ThemePrefsController themeController,
-    String selectedArea,
   ) async {
-    final specs = themeModeSpecs();
-    if (args.isEmpty) {
+    final presets = brandPresets();
+    if (args.isEmpty || (args.length == 1 && args.first == 'list')) {
       return ServiceSettingsCommandResult.success(
         _themeHelpLines(themeController),
       );
@@ -634,72 +611,46 @@ class ServiceSettingsCommandHandler {
     if (args.length != 1) {
       return ServiceSettingsCommandResult.failure(<String>[
         '[error] theme',
-        for (final spec in specs) 'theme ${spec.id}',
+        'theme auto',
+        for (final preset in presets) 'theme ${preset.id}',
       ]);
     }
     final value = args.first;
-    if (!specs.any((spec) => spec.id == value)) {
-      return ServiceSettingsCommandResult.failure(<String>[
-        '[error] theme $value',
-        for (final spec in specs) 'theme ${spec.id}',
+    final before = themeController.presetId;
+    if (value == 'auto') {
+      await themeController.clearPresetOverride(source: 'service_terminal');
+      return ServiceSettingsCommandResult.success(<String>[
+        'theme: $before -> ${themeController.presetId}',
+        'source: auto',
       ]);
     }
-    final beforeTheme = themeController.themeModeId;
-    final beforePreset = themeController.presetId;
-    await themeController.setThemeModeId(value);
-    await _ensurePresetAllowed(themeController, selectedArea: selectedArea);
+    if (!isKnownBrandPresetId(value)) {
+      return ServiceSettingsCommandResult.failure(<String>[
+        '[error] theme $value',
+        'theme auto',
+        for (final preset in presets) 'theme ${preset.id}',
+      ]);
+    }
+    await themeController.setPresetId(
+      value,
+      source: 'service_terminal',
+    );
     return ServiceSettingsCommandResult.success(<String>[
-      'theme: $beforeTheme -> ${themeController.themeModeId}',
-      if (beforePreset != themeController.presetId)
-        'color: $beforePreset -> ${themeController.presetId}',
+      'theme: $before -> ${themeController.presetId}',
+      'source: ${themeController.isAutomatic ? 'auto' : 'override'}',
     ]);
   }
 
   static Future<ServiceSettingsCommandResult> _color(
     List<String> args,
     ThemePrefsController themeController,
-    String selectedArea,
   ) async {
-    final available = _allowedPresets(
-      themeController.themeModeId,
-      selectedArea: selectedArea,
-    );
-    if (args.isEmpty) {
+    if (args.isEmpty || (args.length == 1 && args.first == 'list')) {
       return ServiceSettingsCommandResult.success(
-        _colorHelpLines(
-          themeController,
-          selectedArea: selectedArea,
-        ),
+        _colorHelpLines(themeController),
       );
     }
-    if (args.length == 1 && args.first == 'list') {
-      return ServiceSettingsCommandResult.success(<String>[
-        'COLOR',
-        'current     ${themeController.presetId}',
-        'theme       ${themeController.themeModeId}',
-        for (final preset in available)
-          '${preset.id.padRight(16)}${preset.label}',
-      ]);
-    }
-    if (args.length != 1) {
-      return ServiceSettingsCommandResult.failure(<String>[
-        '[error] color',
-        for (final preset in available) 'color ${preset.id}',
-      ]);
-    }
-    final value = args.first;
-    final match = available.where((preset) => preset.id == value).toList();
-    if (match.isEmpty) {
-      return ServiceSettingsCommandResult.failure(<String>[
-        '[error] color $value',
-        for (final preset in available) 'color ${preset.id}',
-      ]);
-    }
-    final before = themeController.presetId;
-    await themeController.setPresetId(value);
-    return ServiceSettingsCommandResult.success(<String>[
-      'color: $before -> ${themeController.presetId}',
-    ]);
+    return _theme(args, themeController);
   }
 
   static Future<ServiceSettingsCommandResult> _recipient(
@@ -738,61 +689,6 @@ class ServiceSettingsCommandHandler {
       'debug',
       'setting',
     ]);
-  }
-
-  static Future<void> _ensurePresetAllowed(
-    ThemePrefsController themeController, {
-    required String selectedArea,
-  }) async {
-    final current = brandPresets()
-        .where((preset) => preset.id == themeController.presetId)
-        .toList();
-    final allowed = _allowedPresets(
-      themeController.themeModeId,
-      selectedArea: selectedArea,
-    );
-    if (current.isNotEmpty &&
-        allowed.any((preset) => preset.id == current.first.id)) {
-      return;
-    }
-    final fallback = _fallbackPreset(
-      themeController.themeModeId,
-      selectedArea: selectedArea,
-    );
-    await themeController.setPresetId(fallback.id);
-  }
-
-  static List<BrandPresetSpec> _allowedPresets(
-    String themeModeId, {
-    required String selectedArea,
-  }) {
-    return brandPresetsForThemeMode(themeModeId)
-        .where(
-          (preset) =>
-              preset.id != _kbPresetId ||
-              _kbThemeAllowedAreas.contains(selectedArea),
-        )
-        .toList(growable: false);
-  }
-
-  static BrandPresetSpec _fallbackPreset(
-    String themeModeId, {
-    required String selectedArea,
-  }) {
-    final candidates = _allowedPresets(
-      themeModeId,
-      selectedArea: selectedArea,
-    );
-    if (candidates.isEmpty) return presetById('system');
-    if (themeModeId == 'independent') {
-      final preferred = candidates
-          .where((preset) => preset.id == _defaultIndependentPresetId)
-          .toList();
-      if (preferred.isNotEmpty) return preferred.first;
-    }
-    final system = candidates.where((preset) => preset.id == 'system').toList();
-    if (system.isNotEmpty) return system.first;
-    return candidates.first;
   }
 
   static String _normalize(String value) {

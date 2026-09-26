@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/init/app_exit_service.dart';
 import '../../../app/init/work_schedule_prefs.dart';
+import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../attendance/application/common_attendance_service.dart';
 import '../../attendance/widgets/common_attendance_punch_feedback.dart';
 import '../../commute/widgets/common_punch_recorder_surface.dart';
@@ -229,14 +230,39 @@ class _HeadquarterQuickWorkContextState
       'clock_out_repunch_write_start context=headquarter date=${_dateKey(recordedAt)} previous=$previousWorkOut target=${DateFormat('HH:mm').format(recordedAt)} at=${recordedAt.toIso8601String()}',
     );
 
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '근태 처리 상태',
+      initialMessage: '본사 퇴근 시간 변경을 시작합니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: debugPrint 코드를 복사할 수 있습니다.',
+      standardModeMessage: '근태 처리를 진행합니다.',
+      showDialogImmediately: false,
+    );
+    trace.log(
+      'source=headquarter_quick_work_context_repunch action=clock_out_replace at=${recordedAt.toIso8601String()}',
+      progress: .12,
+    );
     final result = await CommonAttendanceService.replaceClockOut(
       context,
       source: 'headquarter_quick_work_context_repunch',
-      isHeadquarter: true,
       recordedAt: recordedAt,
+      trace: trace,
     );
     if (!result.success) {
+      await trace.fail(result.message);
+      if (trace.developerMode && mounted) {
+        await trace.showStatusDialog(context);
+      }
       throw StateError(result.message);
+    }
+    trace.log(
+      'attendance_result success=true message=${result.message}',
+      progress: .82,
+    );
+    await trace.succeed(result.message);
+    if (trace.developerMode && mounted) {
+      await trace.showStatusDialog(context);
     }
 
     _debug(
