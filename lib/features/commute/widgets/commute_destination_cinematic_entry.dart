@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../launcher/application/launcher_diagnostics.dart';
 
@@ -26,6 +25,7 @@ class _CommuteDestinationCinematicEntryState
     extends State<CommuteDestinationCinematicEntry>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  Animation<double>? _routeAnimation;
   bool _started = false;
 
   @override
@@ -41,6 +41,35 @@ class _CommuteDestinationCinematicEntryState
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_started) return;
+    final routeAnimation = ModalRoute.of(context)?.animation;
+    if (routeAnimation == null ||
+        routeAnimation.status == AnimationStatus.completed) {
+      _detachRouteAnimation();
+      _startWorkspacePresentation();
+      return;
+    }
+    if (identical(_routeAnimation, routeAnimation)) return;
+    _detachRouteAnimation();
+    _routeAnimation = routeAnimation;
+    _routeAnimation!.addStatusListener(_handleRouteAnimationStatus);
+    LauncherDiagnostics.record(
+      'commute_workspace_wait_route_transition',
+      scope: 'commute_workspace',
+      meta: <String, Object?>{
+        'route': widget.routeName,
+        'routeStatus': routeAnimation.status.name,
+      },
+    );
+  }
+
+  void _handleRouteAnimationStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed || _started || !mounted) return;
+    _detachRouteAnimation();
+    _startWorkspacePresentation();
+  }
+
+  void _startWorkspacePresentation() {
+    if (_started || !mounted) return;
     _started = true;
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     LauncherDiagnostics.record(
@@ -75,8 +104,14 @@ class _CommuteDestinationCinematicEntryState
     );
   }
 
+  void _detachRouteAnimation() {
+    _routeAnimation?.removeStatusListener(_handleRouteAnimationStatus);
+    _routeAnimation = null;
+  }
+
   @override
   void dispose() {
+    _detachRouteAnimation();
     _controller.dispose();
     super.dispose();
   }

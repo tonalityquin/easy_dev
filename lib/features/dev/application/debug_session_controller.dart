@@ -6,10 +6,14 @@ import '../../selector/application/dev_auth.dart';
 class DebugSessionController {
   DebugSessionController._();
 
+  static bool _initialized = false;
+
   static ValueNotifier<bool> get enabled => DevAuth.devModeEnabled;
 
   static Future<void> initialize() async {
+    if (_initialized) return;
     final prefs = await DevAuth.restorePrefs();
+    _initialized = true;
     record(
       'debug_session_restore',
       source: 'app_start',

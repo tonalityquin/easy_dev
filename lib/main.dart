@@ -16,12 +16,15 @@ import 'app/init/app_exit_flag.dart';
 import 'app/init/app_mode_migration.dart';
 import 'app/init/app_navigator.dart';
 import 'app/init/work_status_notification.dart';
+import 'app/theme/brand_theme_route_policy.dart';
+import 'app/theme/theme_debug_trace.dart';
 import 'app/theme/theme_prefs_controller.dart';
 import 'features/account/applications/user_state.dart';
 import 'features/chat/presentation/work_chat_alert_host.dart';
 import 'features/community/application/game/game_quick_actions.dart';
 import 'features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import 'features/dashboard/widgets/productivity_sheet.dart';
+import 'features/dev/application/debug_session_controller.dart';
 import 'features/dev/page/sheets/dev_quick_actions.dart';
 import 'features/dev/presentation/debug_session_visual_overlay.dart';
 import 'features/headquarter/application/headquarter_side_dock_launcher_controller.dart';
@@ -62,10 +65,52 @@ void main() async {
   }
   PlateTtsEventHub.ensureStarted();
 
+  await DebugSessionController.initialize();
+  final themeController = ThemePrefsController(
+    debugModeListenable: DebugSessionController.enabled,
+  );
+  await themeController.load();
+
+  AppNavigator.observer.onRouteChanged = (routeName) {
+    final phase = BrandThemeRoutePolicy.resolve(routeName);
+    ThemeDebugTrace.record(
+      'brand_theme_route_changed',
+      source: 'app_navigator',
+      details: <String, Object?>{
+        ...themeController.debugDetails,
+        'route': routeName ?? '-',
+        'phase': phase.name,
+      },
+    );
+    if (phase == BrandThemeRoutePhase.preWork) {
+      themeController.suspendBrandTheme(
+        source: 'route_changed:${routeName ?? '-'}',
+      );
+    }
+  };
+
+  AppNavigator.observer.onRouteSettled = (routeName) {
+    final phase = BrandThemeRoutePolicy.resolve(routeName);
+    ThemeDebugTrace.record(
+      'brand_theme_route_settled',
+      source: 'app_navigator',
+      details: <String, Object?>{
+        ...themeController.debugDetails,
+        'route': routeName ?? '-',
+        'phase': phase.name,
+      },
+    );
+    if (phase == BrandThemeRoutePhase.workspace) {
+      themeController.activateBrandTheme(
+        source: 'route_settled:${routeName ?? '-'}',
+      );
+    }
+  };
+
   debugPrint('[MAIN][${_ts()}] runApp(AppBootstrapper + ThemePrefsController)');
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemePrefsController()..load(),
+    ChangeNotifierProvider.value(
+      value: themeController,
       child: const AppBootstrapper(),
     ),
   );

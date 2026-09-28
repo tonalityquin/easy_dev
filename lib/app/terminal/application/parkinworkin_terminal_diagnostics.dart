@@ -12,6 +12,7 @@ import '../../command/application/app_command_diagnostics.dart';
 import '../../init/app_start_debug_trace.dart';
 import '../../init/startup_tasks.dart';
 import '../../init/work_status_notification.dart';
+import '../../theme/theme_debug_trace.dart';
 import '../../utils/status_dialog.dart';
 
 class ParkinWorkinTerminalDiagnostics {
@@ -53,6 +54,7 @@ class ParkinWorkinTerminalDiagnostics {
       ...AppCommandDiagnostics.lines,
       ...GmailSenderDiagnostics.lines,
       ...AreaSnapshotPersistence.debugLines,
+      ...ThemeDebugTrace.lines,
       ..._lines,
     ];
     if (merged.isEmpty) {
@@ -80,6 +82,7 @@ class ParkinWorkinTerminalDiagnostics {
         'commandLines': AppCommandDiagnostics.lines.length,
         'gmailSenderLines': GmailSenderDiagnostics.lines.length,
         'areaSnapshotLines': AreaSnapshotPersistence.debugLines.length,
+        'themeLines': ThemeDebugTrace.lines.length,
         'startupLines': StartupTasks.debugLines.length,
         'workStatusNotificationLines':
             WorkStatusNotificationController.debugLines.length,

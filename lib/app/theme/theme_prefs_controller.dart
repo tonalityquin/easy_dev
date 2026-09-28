@@ -1,5 +1,4 @@
-import 'dart:convert';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -8,53 +7,109 @@ import 'brand_theme.dart';
 import 'theme_debug_trace.dart';
 
 class ThemePrefsController extends ChangeNotifier {
-  ThemePrefsController();
-
-  static const int _schemaVersion = 2;
-  static const String _schemaVersionKey = 'selector_theme_schema_version';
-  static const String _areaOverridesKey = 'selector_area_theme_overrides_v1';
-  static const String _legacyThemeModeKey = 'selector_theme_mode_v1';
-
-  bool _loaded = false;
-  String _selectedArea = '';
-  Map<String, String> _areaOverrides = <String, String>{};
-
-  bool get loaded => _loaded;
-  String get selectedArea => _selectedArea;
-  String get areaDefaultPresetId =>
-      AreaThemeRegistry.defaultPresetIdFor(_selectedArea);
-  String? get userOverridePresetId {
-    if (_selectedArea.isEmpty) return null;
-    final value = _areaOverrides[_selectedArea];
-    if (value == null || !isKnownBrandPresetId(value)) return null;
-    return value;
+  ThemePrefsController({ValueListenable<bool>? debugModeListenable})
+      : _debugModeListenable = debugModeListenable {
+    _debugModeListenable?.addListener(_handleDebugModeChanged);
   }
 
-  bool get isAutomatic => userOverridePresetId == null;
-  String get presetId => userOverridePresetId ?? areaDefaultPresetId;
+  static const int _schemaVersion = 4;
+  static const String _schemaVersionKey = 'selector_theme_schema_version';
+  static const String _areaOverridesKey = 'selector_area_theme_overrides_v1';
+  static const String _debugPresetKey = 'selector_debug_brand_preset_v1';
+  static const String _legacyThemeModeKey = 'selector_theme_mode_v1';
+
+  final ValueListenable<bool>? _debugModeListenable;
+
+  bool _loaded = false;
+  bool _brandThemeEnabled = false;
+  String _selectedArea = '';
+  String? _debugPresetId;
+
+  bool get loaded => _loaded;
+  bool get brandThemeEnabled => _brandThemeEnabled;
+  String get selectedArea => _selectedArea;
+  bool get debugModeEnabled => _debugModeListenable?.value ?? false;
+  String? get debugPresetId => _debugPresetId;
+  bool get debugPresetStored => _debugPresetId != null;
+  bool get debugOverrideAvailable => debugModeEnabled && debugPresetStored;
+  bool get debugOverrideApplied =>
+      _brandThemeEnabled && debugOverrideAvailable;
+  bool get hasDebugOverride => debugOverrideAvailable;
+  bool get isDebugOverrideActive => debugOverrideApplied;
+
+  String get areaDefaultPresetId =>
+      AreaThemeRegistry.defaultPresetIdFor(_selectedArea);
+
+  String? get userOverridePresetId => null;
+  bool get isAutomatic => true;
+  String get normalPresetId => areaDefaultPresetId;
+  BrandPresetSpec get normalEffectivePreset => presetById(normalPresetId);
+  String get requestedPresetId =>
+      hasDebugOverride ? _debugPresetId! : normalPresetId;
+  BrandPresetSpec get requestedPreset => presetById(requestedPresetId);
+  String get presetId =>
+      _brandThemeEnabled ? requestedPresetId : kDefaultBrandPresetId;
   BrandPresetSpec get effectivePreset => presetById(presetId);
   BrandPresetSpec get areaDefaultPreset => presetById(areaDefaultPresetId);
 
   Future<void> load() async {
+    _brandThemeEnabled = false;
     final prefs = await SharedPreferences.getInstance();
     final storedVersion = prefs.getInt(_schemaVersionKey) ?? 0;
-    if (storedVersion != _schemaVersion) {
-      _areaOverrides = <String, String>{};
-      await prefs.setInt(_schemaVersionKey, _schemaVersion);
-      await prefs.setString(_areaOverridesKey, jsonEncode(_areaOverrides));
-      await prefs.setString(kBrandPresetKey, kDefaultBrandPresetId);
-      await prefs.remove(_legacyThemeModeKey);
+    final hadAreaOverrides = prefs.containsKey(_areaOverridesKey);
+    final hadLegacyThemeMode = prefs.containsKey(_legacyThemeModeKey);
+
+    var storedDebugPreset = prefs.getString(_debugPresetKey)?.trim();
+    final debugPresetMigrated =
+        storedVersion < 4 && storedDebugPreset == kSamsungBonprimeBrandPresetId;
+    if (debugPresetMigrated) {
+      storedDebugPreset = kNamyangjuPrimeBrandPresetId;
+      await prefs.setString(
+        _debugPresetKey,
+        kNamyangjuPrimeBrandPresetId,
+      );
+    }
+
+    await prefs.setInt(_schemaVersionKey, _schemaVersion);
+    await prefs.remove(_areaOverridesKey);
+    await prefs.remove(_legacyThemeModeKey);
+
+    if (storedVersion != _schemaVersion ||
+        hadAreaOverrides ||
+        hadLegacyThemeMode ||
+        debugPresetMigrated) {
       ThemeDebugTrace.record(
         'theme_schema_migrated',
         source: 'theme_prefs_controller',
-        details: const <String, Object?>{
-          'effective': kDefaultBrandPresetId,
+        details: <String, Object?>{
+          'fromVersion': storedVersion,
+          'toVersion': _schemaVersion,
+          'areaOverridesRemoved': hadAreaOverrides,
+          'legacyThemeModeRemoved': hadLegacyThemeMode,
+          'debugPresetMigrated': debugPresetMigrated,
+          'debugPresetMigrationFrom': debugPresetMigrated
+              ? kSamsungBonprimeBrandPresetId
+              : '-',
+          'debugPresetMigrationTo': debugPresetMigrated
+              ? kNamyangjuPrimeBrandPresetId
+              : '-',
+          'debugPreset': storedDebugPreset ?? '-',
+          'normalEffective': normalPresetId,
         },
       );
-    } else {
-      _areaOverrides = _decodeOverrides(prefs.getString(_areaOverridesKey));
-      await _persistOverrides(prefs);
     }
+
+    if (storedDebugPreset != null &&
+        storedDebugPreset.isNotEmpty &&
+        isKnownBrandPresetId(storedDebugPreset)) {
+      _debugPresetId = storedDebugPreset;
+    } else {
+      _debugPresetId = null;
+      if (prefs.containsKey(_debugPresetKey)) {
+        await prefs.remove(_debugPresetKey);
+      }
+    }
+
     _loaded = true;
     await _persistLegacyEffectivePreset(prefs);
     ThemeDebugTrace.record(
@@ -71,9 +126,11 @@ class ThemePrefsController extends ChangeNotifier {
   }) async {
     final normalized = selectedArea.trim();
     if (_selectedArea == normalized) return;
-    final before = presetId;
+    final beforeEffective = presetId;
+    final beforeNormal = normalPresetId;
     _selectedArea = normalized;
-    final after = presetId;
+    final afterEffective = presetId;
+    final afterNormal = normalPresetId;
     final prefs = await SharedPreferences.getInstance();
     await _persistLegacyEffectivePreset(prefs);
     ThemeDebugTrace.record(
@@ -81,8 +138,10 @@ class ThemePrefsController extends ChangeNotifier {
       source: source,
       details: <String, Object?>{
         ...debugDetails,
-        'beforeEffective': before,
-        'afterEffective': after,
+        'beforeNormal': beforeNormal,
+        'afterNormal': afterNormal,
+        'beforeEffective': beforeEffective,
+        'afterEffective': afterEffective,
       },
     );
     notifyListeners();
@@ -93,63 +152,151 @@ class ThemePrefsController extends ChangeNotifier {
     String source = 'user',
   }) async {
     final normalized = id.trim();
+    if (!debugModeEnabled) {
+      ThemeDebugTrace.record(
+        'manual_preset_rejected',
+        source: source,
+        details: <String, Object?>{
+          ...debugDetails,
+          'requested': normalized,
+          'reason': 'debug_mode_required',
+        },
+      );
+      return;
+    }
+    await setDebugPresetId(normalized, source: source);
+  }
+
+  Future<void> clearPresetOverride({
+    String source = 'user',
+  }) async {
+    if (!debugModeEnabled) {
+      ThemeDebugTrace.record(
+        'manual_preset_clear_rejected',
+        source: source,
+        details: <String, Object?>{
+          ...debugDetails,
+          'reason': 'debug_mode_required',
+        },
+      );
+      return;
+    }
+    await clearDebugPreset(source: source);
+  }
+
+  Future<void> setDebugPresetId(
+    String id, {
+    String source = 'debug',
+  }) async {
+    final normalized = id.trim();
+    if (!debugModeEnabled) {
+      ThemeDebugTrace.record(
+        'debug_override_rejected',
+        source: source,
+        details: <String, Object?>{
+          ...debugDetails,
+          'requested': normalized,
+          'reason': 'debug_mode_disabled',
+        },
+      );
+      return;
+    }
     if (!isKnownBrandPresetId(normalized)) {
       ThemeDebugTrace.record(
-        'user_override_rejected',
+        'debug_override_rejected',
         source: source,
         details: <String, Object?>{
           ...debugDetails,
           'requested': normalized,
+          'reason': 'unknown_preset',
         },
       );
       return;
     }
-    if (_selectedArea.isEmpty) {
-      ThemeDebugTrace.record(
-        'user_override_rejected',
-        source: source,
-        details: <String, Object?>{
-          ...debugDetails,
-          'requested': normalized,
-          'reason': 'selected_area_empty',
-        },
-      );
-      return;
-    }
-    final before = presetId;
-    if (_areaOverrides[_selectedArea] == normalized) return;
-    _areaOverrides[_selectedArea] = normalized;
+    if (_debugPresetId == normalized) return;
+    final beforeEffective = presetId;
+    final beforeRequested = requestedPresetId;
+    _debugPresetId = normalized;
     final prefs = await SharedPreferences.getInstance();
-    await _persistOverrides(prefs);
-    await _persistLegacyEffectivePreset(prefs);
+    await prefs.setString(_debugPresetKey, normalized);
     ThemeDebugTrace.record(
-      'user_override_changed',
+      'debug_override_changed',
       source: source,
       details: <String, Object?>{
         ...debugDetails,
-        'beforeEffective': before,
+        'beforeRequested': beforeRequested,
+        'afterRequested': requestedPresetId,
+        'beforeEffective': beforeEffective,
         'afterEffective': presetId,
       },
     );
     notifyListeners();
   }
 
-  Future<void> clearPresetOverride({
-    String source = 'user',
+  Future<void> clearDebugPreset({
+    String source = 'debug',
   }) async {
-    if (_selectedArea.isEmpty) return;
-    if (!_areaOverrides.containsKey(_selectedArea)) return;
-    final before = presetId;
-    _areaOverrides.remove(_selectedArea);
+    if (!debugModeEnabled) {
+      ThemeDebugTrace.record(
+        'debug_override_clear_rejected',
+        source: source,
+        details: <String, Object?>{
+          ...debugDetails,
+          'reason': 'debug_mode_disabled',
+        },
+      );
+      return;
+    }
+    if (_debugPresetId == null) return;
+    final beforeEffective = presetId;
+    final beforeRequested = requestedPresetId;
+    _debugPresetId = null;
     final prefs = await SharedPreferences.getInstance();
-    await _persistOverrides(prefs);
-    await _persistLegacyEffectivePreset(prefs);
+    await prefs.remove(_debugPresetKey);
     ThemeDebugTrace.record(
-      'user_override_cleared',
+      'debug_override_cleared',
       source: source,
       details: <String, Object?>{
         ...debugDetails,
-        'beforeEffective': before,
+        'beforeRequested': beforeRequested,
+        'afterRequested': requestedPresetId,
+        'beforeEffective': beforeEffective,
+        'afterEffective': presetId,
+      },
+    );
+    notifyListeners();
+  }
+
+  void activateBrandTheme({
+    required String source,
+  }) {
+    if (_brandThemeEnabled) return;
+    final beforeEffective = presetId;
+    _brandThemeEnabled = true;
+    ThemeDebugTrace.record(
+      'brand_theme_activated',
+      source: source,
+      details: <String, Object?>{
+        ...debugDetails,
+        'beforeEffective': beforeEffective,
+        'afterEffective': presetId,
+      },
+    );
+    notifyListeners();
+  }
+
+  void suspendBrandTheme({
+    required String source,
+  }) {
+    if (!_brandThemeEnabled) return;
+    final beforeEffective = presetId;
+    _brandThemeEnabled = false;
+    ThemeDebugTrace.record(
+      'brand_theme_suspended',
+      source: source,
+      details: <String, Object?>{
+        ...debugDetails,
+        'beforeEffective': beforeEffective,
         'afterEffective': presetId,
       },
     );
@@ -161,48 +308,50 @@ class ThemePrefsController extends ChangeNotifier {
   }
 
   Map<String, Object?> get debugDetails {
+    final requested = requestedPreset;
     final preset = effectivePreset;
     return <String, Object?>{
       'selectedArea': _selectedArea.isEmpty ? '-' : _selectedArea,
       'areaDefault': areaDefaultPresetId,
-      'override': userOverridePresetId ?? '-',
+      'areaOverride': '-',
+      'normalEffective': normalPresetId,
+      'brandThemeEnabled': _brandThemeEnabled,
+      'debugMode': debugModeEnabled,
+      'debugOverride': _debugPresetId ?? '-',
+      'debugStored': debugPresetStored,
+      'debugAvailable': debugOverrideAvailable,
+      'debugActive': debugOverrideApplied,
+      'requested': requested.id,
+      'requestedBase': colorHex(requested.colors.base),
+      'requestedBrand': colorHex(requested.colors.brand),
+      'requestedAccent': colorHex(requested.colors.resolvedAccent),
+      'requestedContent': colorHex(requested.colors.content),
       'effective': preset.id,
       'base': colorHex(preset.colors.base),
       'brand': colorHex(preset.colors.brand),
+      'accent': colorHex(preset.colors.resolvedAccent),
       'content': colorHex(preset.colors.content),
-      'automatic': isAutomatic,
+      'normalAutomatic': true,
     };
-  }
-
-  Map<String, String> _decodeOverrides(String? raw) {
-    if (raw == null || raw.trim().isEmpty) return <String, String>{};
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) return <String, String>{};
-      final result = <String, String>{};
-      for (final entry in decoded.entries) {
-        final area = entry.key.toString().trim();
-        final preset = entry.value.toString().trim();
-        if (area.isEmpty || !isKnownBrandPresetId(preset)) continue;
-        result[area] = preset;
-      }
-      return result;
-    } catch (_) {
-      return <String, String>{};
-    }
-  }
-
-  Future<void> _persistOverrides(SharedPreferences prefs) async {
-    final sortedKeys = _areaOverrides.keys.toList(growable: false)..sort();
-    final normalized = <String, String>{
-      for (final key in sortedKeys) key: _areaOverrides[key]!,
-    };
-    _areaOverrides = normalized;
-    await prefs.setString(_areaOverridesKey, jsonEncode(normalized));
   }
 
   Future<void> _persistLegacyEffectivePreset(SharedPreferences prefs) async {
-    await prefs.setString(kBrandPresetKey, presetId);
+    await prefs.setString(kBrandPresetKey, normalPresetId);
     await prefs.remove(_legacyThemeModeKey);
+  }
+
+  void _handleDebugModeChanged() {
+    ThemeDebugTrace.record(
+      'debug_mode_changed',
+      source: 'theme_prefs_controller',
+      details: debugDetails,
+    );
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _debugModeListenable?.removeListener(_handleDebugModeChanged);
+    super.dispose();
   }
 }

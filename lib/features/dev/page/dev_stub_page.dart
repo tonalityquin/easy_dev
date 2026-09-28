@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
+import '../../../app/init/app_navigator.dart';
+import '../../../app/theme/brand_theme_route_policy.dart';
 
 import '../../../app/di/routes.dart';
+import '../../../app/theme/theme_prefs_controller.dart';
 import '../application/debug_session_controller.dart';
 import '../presentation/debug_tool_shell.dart';
+import 'sheets/debug_brand_theme_dialog.dart';
 import 'sheets/dev_quick_actions.dart';
 
 const Color _debugAccent = Color(0xFF6D5DFB);
@@ -42,14 +48,22 @@ class _DebugHub extends StatelessWidget {
   final bool reduceMotion;
 
   Future<void> _showStatus(BuildContext context) async {
+    final themeController = context.read<ThemePrefsController>();
+    final themeDetails = themeController.debugDetails;
+    final route = AppNavigator.currentRoute;
+    final phase = BrandThemeRoutePolicy.resolve(route);
     await DebugSessionController.showStatus(
       context,
       source: 'developer_hub',
-      description: const <String>[
+      description: <String>[
         'DEBUG session: ACTIVE',
-        'Route: Developer Hub',
+        'Route: ${route ?? '-'}',
+        'Route phase: ${phase.name}',
         'SharedPreferences: available',
         'SQLite Explorer: available',
+        'Brand Theme: available',
+        for (final entry in themeDetails.entries)
+          'theme.${entry.key}=${entry.value}',
       ].join('\n'),
     );
   }
@@ -184,6 +198,17 @@ class _DebugHub extends StatelessWidget {
                       _DebugHubAction(
                         index: 2,
                         reduceMotion: reduceMotion,
+                        icon: Icons.palette_outlined,
+                        title: 'Brand Theme',
+                        description: '브랜드 색상 프리셋을 전환합니다.',
+                        onTap: () => showDebugBrandThemeDialog(
+                          context: context,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _DebugHubAction(
+                        index: 3,
+                        reduceMotion: reduceMotion,
                         icon: Icons.monitor_heart_outlined,
                         title: 'Status',
                         description: 'debugPrint 로그를 확인하고 코드를 복사합니다.',
@@ -222,6 +247,19 @@ class _DebugHub extends StatelessWidget {
                           Expanded(
                             child: _DebugHubAction(
                               index: 2,
+                              reduceMotion: reduceMotion,
+                              icon: Icons.palette_outlined,
+                              title: 'Brand Theme',
+                              description: '브랜드 색상 프리셋을 전환합니다.',
+                              onTap: () => showDebugBrandThemeDialog(
+                                context: context,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _DebugHubAction(
+                              index: 3,
                               reduceMotion: reduceMotion,
                               icon: Icons.monitor_heart_outlined,
                               title: 'Status',

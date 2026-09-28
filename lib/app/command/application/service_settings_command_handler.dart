@@ -110,8 +110,10 @@ class ServiceSettingsCommandHandler {
           debugEnabled: debugEnabled,
         );
       case 'theme':
+        if (!debugEnabled) return _debugRequired('theme');
         return _theme(args.skip(1).toList(), themeController);
       case 'color':
+        if (!debugEnabled) return _debugRequired('color');
         return _color(args.skip(1).toList(), themeController);
       case 'email':
         return _email(args.skip(1).toList());
@@ -149,10 +151,12 @@ class ServiceSettingsCommandHandler {
     if (args.isNotEmpty) {
       switch (args.first) {
         case 'theme':
+          if (!debugEnabled) return _debugRequired('theme');
           return ServiceSettingsCommandResult.success(
             _themeHelpLines(themeController),
           );
         case 'color':
+          if (!debugEnabled) return _debugRequired('color');
           return ServiceSettingsCommandResult.success(
             _colorHelpLines(themeController),
           );
@@ -183,9 +187,10 @@ class ServiceSettingsCommandHandler {
       'CURRENT',
       'selectedArea ${themeController.selectedArea.isEmpty ? '-' : themeController.selectedArea}',
       'theme       ${themeController.presetId}',
-      'source      ${themeController.isAutomatic ? 'auto' : 'override'}',
-      '',
-      ..._themeHelpLines(themeController, includeCurrent: false),
+      'source      ${themeController.debugOverrideAvailable ? 'debug' : 'automatic'}',
+      if (debugEnabled) '',
+      if (debugEnabled)
+        ..._themeHelpLines(themeController, includeCurrent: false),
       '',
       ...await _emailHelpLines(includeCurrent: false),
     ];
@@ -205,8 +210,8 @@ class ServiceSettingsCommandHandler {
       '',
       'HELP',
       'help',
-      'help theme',
-      'help color',
+      if (debugEnabled) 'help theme',
+      if (debugEnabled) 'help color',
       'help email',
       if (debugEnabled) 'help recipient',
       '',
@@ -222,10 +227,11 @@ class ServiceSettingsCommandHandler {
   }) {
     final presets = brandPresets();
     return <String>[
-      'THEME',
+      'THEME DEBUG',
       if (includeCurrent)
-        'current     ${themeController.presetId} (${themeController.isAutomatic ? 'auto' : 'override'})',
-      if (includeCurrent) 'default     ${themeController.areaDefaultPresetId}',
+        'selected    ${themeController.debugPresetId ?? 'actual'}',
+      if (includeCurrent) 'requested   ${themeController.requestedPresetId}',
+      if (includeCurrent) 'effective   ${themeController.presetId}',
       for (final preset in presets) '${preset.id.padRight(16)}${preset.label}',
       '',
       'COMMAND',
@@ -242,9 +248,11 @@ class ServiceSettingsCommandHandler {
   }) {
     final presets = brandPresets();
     return <String>[
-      'COLOR',
+      'COLOR DEBUG',
       if (includeCurrent)
-        'current     ${themeController.presetId} (${themeController.isAutomatic ? 'auto' : 'override'})',
+        'selected    ${themeController.debugPresetId ?? 'actual'}',
+      if (includeCurrent) 'requested   ${themeController.requestedPresetId}',
+      if (includeCurrent) 'effective   ${themeController.presetId}',
       for (final preset in presets) '${preset.id.padRight(16)}${preset.label}',
       '',
       'COMMAND',
@@ -591,8 +599,8 @@ class ServiceSettingsCommandHandler {
 
   static List<String> _helpTopicLines({required bool debugEnabled}) {
     return <String>[
-      'help theme',
-      'help color',
+      if (debugEnabled) 'help theme',
+      if (debugEnabled) 'help color',
       'help email',
       if (debugEnabled) 'help recipient',
     ];
@@ -616,12 +624,14 @@ class ServiceSettingsCommandHandler {
       ]);
     }
     final value = args.first;
-    final before = themeController.presetId;
+    final beforeRequested = themeController.requestedPresetId;
+    final beforeEffective = themeController.presetId;
     if (value == 'auto') {
-      await themeController.clearPresetOverride(source: 'service_terminal');
+      await themeController.clearDebugPreset(source: 'service_terminal');
       return ServiceSettingsCommandResult.success(<String>[
-        'theme: $before -> ${themeController.presetId}',
-        'source: auto',
+        'theme requested: $beforeRequested -> ${themeController.requestedPresetId}',
+        'theme effective: $beforeEffective -> ${themeController.presetId}',
+        'source: actual',
       ]);
     }
     if (!isKnownBrandPresetId(value)) {
@@ -631,13 +641,14 @@ class ServiceSettingsCommandHandler {
         for (final preset in presets) 'theme ${preset.id}',
       ]);
     }
-    await themeController.setPresetId(
+    await themeController.setDebugPresetId(
       value,
       source: 'service_terminal',
     );
     return ServiceSettingsCommandResult.success(<String>[
-      'theme: $before -> ${themeController.presetId}',
-      'source: ${themeController.isAutomatic ? 'auto' : 'override'}',
+      'theme requested: $beforeRequested -> ${themeController.requestedPresetId}',
+      'theme effective: $beforeEffective -> ${themeController.presetId}',
+      'source: debug',
     ]);
   }
 

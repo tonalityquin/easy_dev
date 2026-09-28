@@ -3,6 +3,13 @@ import 'package:flutter/material.dart';
 const String kBrandPresetKey = 'selector_brand_preset_v1';
 const String kDefaultBrandPresetId = 'soft_linen';
 const String kKbBrandPresetId = 'kb';
+const String kBelieversScBrandPresetId = 'believers_sc';
+const String kNamyangjuPrimeBrandPresetId = 'namyangju_prime';
+const String kSamsungBonprimeBrandPresetId = 'samsung_bonprime';
+const String kHaneulHospitalBrandPresetId = 'haneul_hospital';
+const String kSesotneunOrthopedicBrandPresetId = 'sesotneun_orthopedic';
+const String kBukhangangMakguksuDakgalbiBrandPresetId =
+    'bukhangang_makguksu_dakgalbi';
 
 @immutable
 class BrandThemeColors {
@@ -10,15 +17,19 @@ class BrandThemeColors {
     required this.base,
     required this.brand,
     required this.content,
+    this.accent,
   });
 
   final Color base;
   final Color brand;
   final Color content;
+  final Color? accent;
+
+  Color get resolvedAccent => accent ?? content;
 
   Brightness get brightness => ThemeData.estimateBrightnessForColor(base);
 
-  List<Color> get preview => <Color>[base, brand, content];
+  List<Color> get preview => <Color>[base, brand, resolvedAccent];
 }
 
 @immutable
@@ -56,10 +67,82 @@ const BrandPresetSpec kKbBrandPreset = BrandPresetSpec(
   ),
 );
 
+const BrandPresetSpec kBelieversScBrandPreset = BrandPresetSpec(
+  id: kBelieversScBrandPresetId,
+  label: '빌리버스에스앤씨',
+  colors: BrandThemeColors(
+    base: Color(0xFFF4F8FB),
+    brand: Color(0xFF56A4DB),
+    content: Color(0xFF4E4D4D),
+  ),
+);
+
+const BrandPresetSpec kNamyangjuPrimeBrandPreset = BrandPresetSpec(
+  id: kNamyangjuPrimeBrandPresetId,
+  label: '남양주프라임',
+  colors: BrandThemeColors(
+    base: Color(0xFFF0F7FA),
+    brand: Color(0xFF10639F),
+    content: Color(0xFF10639F),
+    accent: Color(0xFF74BBCE),
+  ),
+);
+
+const BrandPresetSpec kSamsungBonprimeBrandPreset = BrandPresetSpec(
+  id: kSamsungBonprimeBrandPresetId,
+  label: '삼성본프라임',
+  colors: BrandThemeColors(
+    base: Color(0xFFF2F6F8),
+    brand: Color(0xFF183E5B),
+    content: Color(0xFF183E5B),
+    accent: Color(0xFF4584A2),
+  ),
+);
+
+const BrandPresetSpec kHaneulHospitalBrandPreset = BrandPresetSpec(
+  id: kHaneulHospitalBrandPresetId,
+  label: '하늘병원',
+  colors: BrandThemeColors(
+    base: Color(0xFFF4F7F2),
+    brand: Color(0xFF1D2683),
+    content: Color(0xFF1D2683),
+    accent: Color(0xFF73BB2B),
+  ),
+);
+
+const BrandPresetSpec kSesotneunOrthopedicBrandPreset = BrandPresetSpec(
+  id: kSesotneunOrthopedicBrandPresetId,
+  label: '세솟는정형외과',
+  colors: BrandThemeColors(
+    base: Color(0xFFFAFAF1),
+    brand: Color(0xFFF2F363),
+    content: Color(0xFF232426),
+    accent: Color(0xFF232426),
+  ),
+);
+
+const BrandPresetSpec kBukhangangMakguksuDakgalbiBrandPreset =
+    BrandPresetSpec(
+  id: kBukhangangMakguksuDakgalbiBrandPresetId,
+  label: '북한강막국수닭갈비',
+  colors: BrandThemeColors(
+    base: Color(0xFFF7F4EA),
+    brand: Color(0xFF696F7B),
+    content: Color(0xFF696F7B),
+    accent: Color(0xFFEDDA96),
+  ),
+);
+
 List<BrandPresetSpec> brandPresets() {
   return const <BrandPresetSpec>[
     kDefaultBrandPreset,
     kKbBrandPreset,
+    kBelieversScBrandPreset,
+    kNamyangjuPrimeBrandPreset,
+    kSamsungBonprimeBrandPreset,
+    kHaneulHospitalBrandPreset,
+    kSesotneunOrthopedicBrandPreset,
+    kBukhangangMakguksuDakgalbiBrandPreset,
   ];
 }
 
@@ -92,6 +175,7 @@ ColorScheme buildBrandColorScheme(BrandThemeColors colors) {
   final base = colors.base;
   final brand = colors.brand;
   final content = colors.content;
+  final accent = colors.accent;
   final surface = dark
       ? _mix(base, Colors.black, 0.10)
       : _mix(base, Colors.white, 0.16);
@@ -107,12 +191,20 @@ ColorScheme buildBrandColorScheme(BrandThemeColors colors) {
   final outlineVariant = dark
       ? _mix(content, base, 0.74)
       : _mix(content, base, 0.82);
-  final secondary = dark
-      ? _mix(content, base, 0.18)
-      : _mix(content, base, 0.12);
-  final tertiary = dark
-      ? _mix(brand, content, 0.38)
-      : _mix(brand, content, 0.52);
+  final secondary = accent ??
+      (dark ? _mix(content, base, 0.18) : _mix(content, base, 0.12));
+  final secondaryContainer = accent == null
+      ? surfaceVariant
+      : dark
+          ? _mix(accent, base, 0.70)
+          : _mix(accent, base, 0.82);
+  final tertiary = accent == null
+      ? dark
+          ? _mix(brand, content, 0.38)
+          : _mix(brand, content, 0.52)
+      : dark
+          ? _mix(brand, accent, 0.38)
+          : _mix(brand, accent, 0.52);
   final error = const Color(0xFFB3261E);
   final errorContainer = dark
       ? const Color(0xFF5F1412)
@@ -131,7 +223,7 @@ ColorScheme buildBrandColorScheme(BrandThemeColors colors) {
     onPrimaryContainer: _onColor(primaryContainer),
     secondary: secondary,
     onSecondary: _onColor(secondary),
-    secondaryContainer: surfaceVariant,
+    secondaryContainer: secondaryContainer,
     onSecondaryContainer: content,
     tertiary: tertiary,
     onTertiary: _onColor(tertiary),
