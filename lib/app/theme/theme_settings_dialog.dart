@@ -9,6 +9,7 @@ import 'brand_theme.dart';
 import 'brand_theme_route_policy.dart';
 import 'theme_debug_trace.dart';
 import 'theme_prefs_controller.dart';
+import 'widgets/brand_theme_area_selector.dart';
 import 'widgets/brand_theme_debug_selector.dart';
 
 Future<void> showCommonThemeSettingsDialog({
@@ -45,7 +46,6 @@ Future<void> showCommonThemeSettingsDialog({
               : const Duration(milliseconds: 240);
           final currentRoute = AppNavigator.currentRoute;
           final routePhase = BrandThemeRoutePolicy.resolve(currentRoute);
-          final effectivePreset = themeCtrl.normalEffectivePreset;
 
           Future<void> selectActualTheme() async {
             await DebugSessionController.enable(
@@ -157,11 +157,13 @@ Future<void> showCommonThemeSettingsDialog({
                           onSelectActualTheme: selectActualTheme,
                           onSelectPreset: selectPreset,
                         )
-                      : _NormalThemeCard(
-                          key: const ValueKey<String>('theme_normal_card'),
+                      : BrandThemeAreaSelector(
+                          key: const ValueKey<String>(
+                            'theme_area_selector',
+                          ),
                           controller: themeCtrl,
-                          preset: effectivePreset,
-                          duration: duration,
+                          source: normalizedSource,
+                          routePhase: routePhase.name,
                         ),
                 ),
               ),
@@ -228,132 +230,4 @@ Future<void> showCommonThemeSettingsDialog({
       'routePhase': closePhase.name,
     },
   );
-}
-
-class _NormalThemeCard extends StatelessWidget {
-  const _NormalThemeCard({
-    super.key,
-    required this.controller,
-    required this.preset,
-    required this.duration,
-  });
-
-  final ThemePrefsController controller;
-  final BrandPresetSpec preset;
-  final Duration duration;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-    return AnimatedContainer(
-      duration: duration,
-      curve: Curves.easeOutCubic,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: cs.outlineVariant.withOpacity(0.75),
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              _PresetPreviewDots(colors: preset.preview),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  preset.label,
-                  style: text.bodyMedium?.copyWith(
-                    color: cs.onSurface,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              AnimatedRotation(
-                turns: controller.brandThemeEnabled ? 1 : 0,
-                duration: duration,
-                curve: Curves.easeOutCubic,
-                child: Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 18,
-                  color: cs.primary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _ThemeColorBar(
-            colors: preset.preview,
-            duration: duration,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PresetPreviewDots extends StatelessWidget {
-  const _PresetPreviewDots({required this.colors});
-
-  final List<Color> colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final dots = colors.take(3).toList(growable: false);
-    final outline =
-        Theme.of(context).colorScheme.outlineVariant.withOpacity(0.6);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List<Widget>.generate(dots.length, (index) {
-        return Container(
-          width: 10,
-          height: 10,
-          margin: EdgeInsets.only(right: index == dots.length - 1 ? 0 : 4),
-          decoration: BoxDecoration(
-            color: dots[index],
-            shape: BoxShape.circle,
-            border: Border.all(color: outline),
-          ),
-        );
-      }),
-    );
-  }
-}
-
-class _ThemeColorBar extends StatelessWidget {
-  const _ThemeColorBar({
-    required this.colors,
-    required this.duration,
-  });
-
-  final List<Color> colors;
-  final Duration duration;
-
-  @override
-  Widget build(BuildContext context) {
-    final items = colors.take(3).toList(growable: false);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: SizedBox(
-        height: 8,
-        child: Row(
-          children: <Widget>[
-            for (final color in items)
-              Expanded(
-                child: AnimatedContainer(
-                  duration: duration,
-                  curve: Curves.easeOutCubic,
-                  color: color,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 }

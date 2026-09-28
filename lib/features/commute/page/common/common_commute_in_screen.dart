@@ -20,6 +20,8 @@ import '../../application/commute_pre_clock_in_gate.dart';
 import '../../controllers/common_commute_in_controller.dart';
 import '../../utils/commute_mode_spec.dart';
 import '../../widgets/commute_destination_cinematic_entry.dart';
+import '../widgets/commute_clock_in_issue_panel.dart';
+import '../widgets/commute_end_time_setup_panel.dart';
 import '../widgets/commute_pre_clock_in_checklist.dart';
 import '../widgets/parkinworkin_windows_desktop.dart';
 
@@ -66,8 +68,24 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
   bool _routeTransitioning = false;
   bool _showClockInIssueResolution = false;
   bool _resolvingClockInIssue = false;
+  CommuteClockInIssueState? _clockInIssueState;
   String _clockInIssueFailureReason = '';
   String _clockInIssueFailureDetail = '';
+  MissingWeekdayEndTimeRequirement? _endTimeRequirement;
+  CommuteEndTimeSetupFeedback _endTimeFeedback =
+      CommuteEndTimeSetupFeedback.editing;
+  TimeOfDay _endTimeDraft = const TimeOfDay(hour: 0, minute: 0);
+  CommuteEndTimeInputSource _endTimeInputSource =
+      CommuteEndTimeInputSource.initial;
+  bool _endTimeInputValid = true;
+  String _endTimeInputText = '00:00';
+  String _endTimeHourInput = '00';
+  String _endTimeMinuteInput = '00';
+  CommuteEndTimeInputField _endTimeFocusedField =
+      CommuteEndTimeInputField.none;
+  bool _endTimeKeyboardVisible = false;
+  bool _endTimeDirectInputActive = false;
+  CommuteDestination? _pendingDestination;
   _CommuteGateView _gateView = _CommuteGateView.power;
   CommutePreClockInDecision? _preClockInDecision;
   final Set<String> _checkedPreClockInItemIds = <String>{};
@@ -292,6 +310,8 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
 
     setState(() {
       _resolvingClockInIssue = true;
+      _clockInIssueState = CommuteClockInIssueState.resolving;
+      _stateMessage = '출근 상태를 정리하고 있습니다.';
       _clockInIssueFailureReason = '';
       _clockInIssueFailureDetail = '';
     });
@@ -331,7 +351,8 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     setState(() {
       _resolvingClockInIssue = false;
       _showClockInIssueResolution = false;
-      _stateMessage = '';
+      _clockInIssueState = CommuteClockInIssueState.success;
+      _stateMessage = '출근 상태를 정리했습니다.';
       _clockInIssueFailureReason = '';
       _clockInIssueFailureDetail = '';
     });
@@ -355,12 +376,6 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     );
 
     await HapticFeedback.lightImpact();
-    if (!mounted) return;
-    await StatusDialog.showSuccess(
-      context,
-      title: '출근 이슈 해결 완료',
-      useCommonUi: true,
-    );
   }
 
   Future<void> _handleClockInIssueFailure({
@@ -383,18 +398,13 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     setState(() {
       _resolvingClockInIssue = false;
       _showClockInIssueResolution = true;
-      _stateMessage = '오늘 출근 기록이 이미 있습니다.';
+      _clockInIssueState = CommuteClockInIssueState.failure;
+      _stateMessage = '출근 상태를 정리하지 못했습니다.';
       _clockInIssueFailureReason = reason;
       _clockInIssueFailureDetail = detail;
     });
 
     await HapticFeedback.heavyImpact();
-    if (!mounted) return;
-    await StatusDialog.showFailure(
-      context,
-      title: '출근 이슈 해결 실패',
-      useCommonUi: true,
-    );
     if (!mounted) return;
 
     final developerMode = await DevAuth.isDevModeEnabled();
@@ -434,6 +444,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'Clock-in today: ${userState.hasClockInToday}',
         'Issue action visible: $_showClockInIssueResolution',
         'Issue resolving: $_resolvingClockInIssue',
+        'Clock-in issue state: ${_clockInIssueState?.name ?? 'none'}',
         'Issue failure reason: $_clockInIssueFailureReason',
         'Issue failure detail: $_clockInIssueFailureDetail',
         'State message: $_stateMessage',
@@ -455,7 +466,24 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         'Pre-clock-in force armed: $_forcePreClockInGateForAttempt',
         'More open count: $_moreOpenCount',
         'Pre-clock-in diagnostics: ${_preClockInDecision?.diagnosticsSummary ?? ''}',
-        'Application presentation: neutral_application_field',
+        'End-time console active: ${_endTimeRequirement != null}',
+        'End-time day: ${_endTimeRequirement?.day ?? ''}',
+        'End-time feedback: ${_endTimeFeedback.name}',
+        'End-time draft: ${_endTimeDraft.hour.toString().padLeft(2, '0')}:${_endTimeDraft.minute.toString().padLeft(2, '0')}',
+        'End-time input source: ${_endTimeInputSource.name}',
+        'End-time input valid: $_endTimeInputValid',
+        'End-time input text: $_endTimeInputText',
+        'End-time direct hour: $_endTimeHourInput',
+        'End-time direct minute: $_endTimeMinuteInput',
+        'End-time focused field: ${_endTimeFocusedField.name}',
+        'End-time keyboard visible: $_endTimeKeyboardVisible',
+        'End-time direct input active: $_endTimeDirectInputActive',
+        'Action attention: one_shot_console_impact',
+        'Pending destination: ${_pendingDestination?.name ?? 'none'}',
+        'Console flow: $_consoleFlow',
+        'Attendance semantic status: ${_attendanceStatus.name}',
+        'Workspace semantic status: ${_workspaceStatus.name}',
+        'Application presentation: operational_status_console',
         'Application phase: ${_desktopKey.currentState?.diagnosticPhase ?? 'unmounted'}',
         'ParkinWorkin focused: ${_desktopKey.currentState?.applicationFocused ?? false}',
         'Start message visible: ${_desktopKey.currentState?.startMessageVisible ?? false}',
@@ -522,8 +550,12 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
           ? '업무 확인 항목을 확인하고 있습니다.'
           : '출근 정보를 확인하고 있습니다.';
       _showClockInIssueResolution = false;
+      _clockInIssueState = null;
       _clockInIssueFailureReason = '';
       _clockInIssueFailureDetail = '';
+      _endTimeRequirement = null;
+      _endTimeFeedback = CommuteEndTimeSetupFeedback.editing;
+      _pendingDestination = null;
     });
     if (issueWasVisible) {
       LauncherDiagnostics.record(
@@ -728,14 +760,236 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     await _performClockIn();
   }
 
+  void _handleEndTimeDraftChanged(CommuteEndTimeDraftSnapshot snapshot) {
+    final changed = snapshot.value.hour != _endTimeDraft.hour ||
+        snapshot.value.minute != _endTimeDraft.minute ||
+        snapshot.source != _endTimeInputSource ||
+        snapshot.inputValid != _endTimeInputValid ||
+        snapshot.inputText != _endTimeInputText ||
+        snapshot.hourInput != _endTimeHourInput ||
+        snapshot.minuteInput != _endTimeMinuteInput ||
+        snapshot.focusedField != _endTimeFocusedField ||
+        snapshot.keyboardVisible != _endTimeKeyboardVisible ||
+        snapshot.directInputActive != _endTimeDirectInputActive;
+    _endTimeDraft = snapshot.value;
+    _endTimeInputSource = snapshot.source;
+    _endTimeInputValid = snapshot.inputValid;
+    _endTimeInputText = snapshot.inputText;
+    _endTimeHourInput = snapshot.hourInput;
+    _endTimeMinuteInput = snapshot.minuteInput;
+    _endTimeFocusedField = snapshot.focusedField;
+    _endTimeKeyboardVisible = snapshot.keyboardVisible;
+    _endTimeDirectInputActive = snapshot.directInputActive;
+    if (!changed) return;
+    LauncherDiagnostics.record(
+      'commute_end_time_draft_changed',
+      scope: 'commute_power',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'time': '${snapshot.value.hour.toString().padLeft(2, '0')}:${snapshot.value.minute.toString().padLeft(2, '0')}',
+        'source': snapshot.source.name,
+        'inputValid': snapshot.inputValid,
+        'inputText': snapshot.inputText,
+        'hourInput': snapshot.hourInput,
+        'minuteInput': snapshot.minuteInput,
+        'focusedField': snapshot.focusedField.name,
+        'keyboardVisible': snapshot.keyboardVisible,
+        'directInputActive': snapshot.directInputActive,
+      },
+    );
+  }
+
+  Future<void> _prepareEndTimeOrContinue(
+    CommuteDestination destination,
+  ) async {
+    final requirement = await resolveMissingWeekdayEndTimeRequirement(
+      context,
+      clockInAt: DateTime.now(),
+    );
+    if (!mounted) return;
+
+    if (requirement == null) {
+      await _continueAfterClockIn(destination);
+      return;
+    }
+
+    setState(() {
+      _endTimeRequirement = requirement;
+      _endTimeFeedback = CommuteEndTimeSetupFeedback.editing;
+      _endTimeDraft = const TimeOfDay(hour: 0, minute: 0);
+      _endTimeInputSource = CommuteEndTimeInputSource.initial;
+      _endTimeInputValid = true;
+      _endTimeInputText = '00:00';
+      _endTimeHourInput = '00';
+      _endTimeMinuteInput = '00';
+      _endTimeFocusedField = CommuteEndTimeInputField.none;
+      _endTimeKeyboardVisible = false;
+      _endTimeDirectInputActive = false;
+      _pendingDestination = destination;
+      _stateMessage = '퇴근 시간을 확인해 주세요.';
+    });
+    LauncherDiagnostics.record(
+      'commute_end_time_inline_presented',
+      scope: 'commute_power',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'day': requirement.day,
+        'destination': destination.name,
+        'presentation': 'operational_status_console',
+      },
+    );
+  }
+
+  Future<void> _skipEndTimeSetup() async {
+    final destination = _pendingDestination;
+    final requirement = _endTimeRequirement;
+    if (destination == null || requirement == null) return;
+    LauncherDiagnostics.record(
+      'commute_end_time_inline_skipped',
+      scope: 'commute_power',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'day': requirement.day,
+        'destination': destination.name,
+      },
+    );
+    await _continueAfterClockIn(destination);
+  }
+
+  Future<void> _saveEndTimeSetup(TimeOfDay value) async {
+    final destination = _pendingDestination;
+    final requirement = _endTimeRequirement;
+    if (destination == null || requirement == null) return;
+    if (_endTimeFeedback == CommuteEndTimeSetupFeedback.saving) return;
+
+    setState(() {
+      _endTimeFeedback = CommuteEndTimeSetupFeedback.saving;
+      _stateMessage = '퇴근 시간을 저장하고 있습니다.';
+    });
+    LauncherDiagnostics.record(
+      'commute_end_time_inline_save_start',
+      scope: 'commute_power',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'day': requirement.day,
+        'time': '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}',
+      },
+    );
+
+    final saved = await saveMissingWeekdayEndTime(
+      context,
+      day: requirement.day,
+      endTime: value,
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _endTimeFeedback = saved
+          ? CommuteEndTimeSetupFeedback.success
+          : CommuteEndTimeSetupFeedback.failure;
+      _stateMessage = saved
+          ? '퇴근 시간을 저장했습니다.'
+          : '퇴근 시간을 저장하지 못했습니다.';
+    });
+    LauncherDiagnostics.record(
+      'commute_end_time_inline_save_complete',
+      scope: 'commute_power',
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'day': requirement.day,
+        'saved': saved,
+        'destination': destination.name,
+      },
+    );
+
+    await Future<void>.delayed(
+      _reduceMotion ? Duration.zero : const Duration(milliseconds: 650),
+    );
+    if (!mounted) return;
+    await _continueAfterClockIn(destination);
+  }
+
+  Future<void> _continueAfterClockIn(
+    CommuteDestination destination,
+  ) async {
+    switch (destination) {
+      case CommuteDestination.headquarter:
+        LauncherDiagnostics.record(
+          'commute_power_navigate',
+          scope: 'commute_power',
+          meta: <String, Object?>{
+            'mode': widget.spec.diagnosticKey,
+            'destination': 'headquarter',
+            'route': widget.spec.headquarterRoute,
+          },
+        );
+        _trace(
+          '출근 라우팅',
+          meta: <String, dynamic>{
+            'screen': _screenId,
+            'action': 'navigate',
+            'to': widget.spec.headquarterRoute,
+            'dest': 'headquarter',
+          },
+        );
+        await _navigateWithCinematic(
+          route: widget.spec.headquarterRoute,
+          destination: 'headquarter',
+        );
+        break;
+      case CommuteDestination.type:
+        LauncherDiagnostics.record(
+          'commute_power_navigate',
+          scope: 'commute_power',
+          meta: <String, Object?>{
+            'mode': widget.spec.diagnosticKey,
+            'destination': 'type',
+            'route': widget.spec.typeRoute,
+          },
+        );
+        _trace(
+          '출근 라우팅',
+          meta: <String, dynamic>{
+            'screen': _screenId,
+            'action': 'navigate',
+            'to': widget.spec.typeRoute,
+            'dest': 'type',
+          },
+        );
+        await _navigateWithCinematic(
+          route: widget.spec.typeRoute,
+          destination: 'type',
+        );
+        break;
+      case CommuteDestination.none:
+        if (!mounted) return;
+        setState(() {
+          _stage = _CommutePowerGateStage.ready;
+          _stateMessage = '';
+          _showClockInIssueResolution = false;
+          _clockInIssueState = null;
+          _clockInIssueFailureReason = '';
+          _clockInIssueFailureDetail = '';
+          _endTimeRequirement = null;
+          _endTimeFeedback = CommuteEndTimeSetupFeedback.editing;
+          _pendingDestination = null;
+        });
+        break;
+    }
+  }
+
   Future<void> _performClockIn() async {
     if (!mounted) return;
     setState(() {
       _stage = _CommutePowerGateStage.processing;
       _stateMessage = '출근 정보를 확인하고 있습니다.';
       _showClockInIssueResolution = false;
+      _clockInIssueState = null;
       _clockInIssueFailureReason = '';
       _clockInIssueFailureDetail = '';
+      _endTimeRequirement = null;
+      _endTimeFeedback = CommuteEndTimeSetupFeedback.editing;
+      _pendingDestination = null;
     });
 
     try {
@@ -787,6 +1041,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
           _stage = _CommutePowerGateStage.ready;
           _stateMessage = '오늘 출근 기록이 이미 있습니다.';
           _showClockInIssueResolution = true;
+          _clockInIssueState = CommuteClockInIssueState.available;
           _clockInIssueFailureReason = '';
           _clockInIssueFailureDetail = '';
         });
@@ -836,6 +1091,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         _stage = _CommutePowerGateStage.success;
         _stateMessage = '업무를 시작합니다.';
         _showClockInIssueResolution = false;
+        _clockInIssueState = null;
         _clockInIssueFailureReason = '';
         _clockInIssueFailureDetail = '';
       });
@@ -845,72 +1101,8 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       );
       if (!mounted) return;
 
-      await showMissingWeekdayEndTimeDialogIfNeeded(
-        context,
-        clockInAt: DateTime.now(),
-        useCommonUi: true,
-      );
-      if (!mounted) return;
+      await _prepareEndTimeOrContinue(result.destination);
 
-      switch (result.destination) {
-        case CommuteDestination.headquarter:
-          LauncherDiagnostics.record(
-            'commute_power_navigate',
-            scope: 'commute_power',
-            meta: <String, Object?>{
-              'mode': widget.spec.diagnosticKey,
-              'destination': 'headquarter',
-              'route': widget.spec.headquarterRoute,
-            },
-          );
-          _trace(
-            '출근 라우팅',
-            meta: <String, dynamic>{
-              'screen': _screenId,
-              'action': 'navigate',
-              'to': widget.spec.headquarterRoute,
-              'dest': 'headquarter',
-            },
-          );
-          await _navigateWithCinematic(
-            route: widget.spec.headquarterRoute,
-            destination: 'headquarter',
-          );
-          break;
-        case CommuteDestination.type:
-          LauncherDiagnostics.record(
-            'commute_power_navigate',
-            scope: 'commute_power',
-            meta: <String, Object?>{
-              'mode': widget.spec.diagnosticKey,
-              'destination': 'type',
-              'route': widget.spec.typeRoute,
-            },
-          );
-          _trace(
-            '출근 라우팅',
-            meta: <String, dynamic>{
-              'screen': _screenId,
-              'action': 'navigate',
-              'to': widget.spec.typeRoute,
-              'dest': 'type',
-            },
-          );
-          await _navigateWithCinematic(
-            route: widget.spec.typeRoute,
-            destination: 'type',
-          );
-          break;
-        case CommuteDestination.none:
-          setState(() {
-            _stage = _CommutePowerGateStage.ready;
-            _stateMessage = '';
-            _showClockInIssueResolution = false;
-            _clockInIssueFailureReason = '';
-            _clockInIssueFailureDetail = '';
-          });
-          break;
-      }
     } catch (error, stackTrace) {
       LauncherDiagnostics.record(
         'commute_power_exception',
@@ -926,8 +1118,12 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         _stage = _CommutePowerGateStage.failure;
         _stateMessage = '출근을 시작하지 못했습니다.';
         _showClockInIssueResolution = false;
+        _clockInIssueState = null;
         _clockInIssueFailureReason = '';
         _clockInIssueFailureDetail = '';
+        _endTimeRequirement = null;
+        _endTimeFeedback = CommuteEndTimeSetupFeedback.editing;
+        _pendingDestination = null;
       });
       await StatusDialog.showFailure(
         context,
@@ -1033,6 +1229,8 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     final disabled = _routeTransitioning ||
         _stage == _CommutePowerGateStage.processing ||
         _stage == _CommutePowerGateStage.success ||
+        _resolvingClockInIssue ||
+        _endTimeFeedback == CommuteEndTimeSetupFeedback.saving ||
         _preClockInConfirming;
     final duration = _reduceMotion ? Duration.zero : _menuMotionDuration;
     final menuKey = ValueKey<String>(
@@ -1148,6 +1346,54 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     };
   }
 
+  ParkinWorkinStepStatus get _attendanceStatus {
+    final issueState = _clockInIssueState;
+    if (issueState != null) {
+      return switch (issueState) {
+        CommuteClockInIssueState.available => ParkinWorkinStepStatus.issue,
+        CommuteClockInIssueState.resolving =>
+          ParkinWorkinStepStatus.checking,
+        CommuteClockInIssueState.success => ParkinWorkinStepStatus.reset,
+        CommuteClockInIssueState.failure => ParkinWorkinStepStatus.failure,
+      };
+    }
+    return switch (_stage) {
+      _CommutePowerGateStage.checking => ParkinWorkinStepStatus.checking,
+      _CommutePowerGateStage.ready => ParkinWorkinStepStatus.waiting,
+      _CommutePowerGateStage.processing => ParkinWorkinStepStatus.checking,
+      _CommutePowerGateStage.success => ParkinWorkinStepStatus.ready,
+      _CommutePowerGateStage.failure => ParkinWorkinStepStatus.failure,
+    };
+  }
+
+  ParkinWorkinStepStatus get _workspaceStatus {
+    if (_endTimeRequirement != null) {
+      return switch (_endTimeFeedback) {
+        CommuteEndTimeSetupFeedback.editing => ParkinWorkinStepStatus.pending,
+        CommuteEndTimeSetupFeedback.saving => ParkinWorkinStepStatus.checking,
+        CommuteEndTimeSetupFeedback.success => ParkinWorkinStepStatus.ready,
+        CommuteEndTimeSetupFeedback.failure => ParkinWorkinStepStatus.pending,
+      };
+    }
+    return _stage == _CommutePowerGateStage.success
+        ? ParkinWorkinStepStatus.ready
+        : ParkinWorkinStepStatus.waiting;
+  }
+
+  String get _consoleFlow {
+    if (_gateView == _CommuteGateView.checklist &&
+        _preClockInDecision != null) {
+      return 'pre_clock_in_checklist';
+    }
+    if (_clockInIssueState != null) {
+      return 'clock_in_issue_${_clockInIssueState!.name}';
+    }
+    if (_endTimeRequirement != null) {
+      return 'end_time_${_endTimeFeedback.name}';
+    }
+    return 'status';
+  }
+
   Widget _buildDesktopGate(UserState userState) {
     final name = userState.name.trim().isEmpty ? '사용자' : userState.name.trim();
     final reveal = CurvedAnimation(
@@ -1158,36 +1404,59 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         (_stage == _CommutePowerGateStage.ready ||
             _stage == _CommutePowerGateStage.failure);
     final decision = _preClockInDecision;
-    final checklist = _gateView == _CommuteGateView.checklist && decision != null
-        ? TweenAnimationBuilder<double>(
-            key: const ValueKey<String>('pre_clock_in_checklist_motion'),
-            tween: Tween<double>(begin: 0, end: 1),
-            duration: _reduceMotion
-                ? Duration.zero
-                : _preClockInChecklistMotionDuration,
-            curve: Curves.easeOutCubic,
-            child: CommutePreClockInChecklist(
-              key: const ValueKey<String>('pre_clock_in_checklist'),
-              contextLabel: decision.contextLabel,
-              items: decision.items,
-              checkedIds: _checkedPreClockInItemIds,
-              onToggle: _togglePreClockInItem,
-              onCheckAll: _checkAllPreClockInItems,
-              onConfirm: _confirmPreClockInChecklist,
-              confirming: _preClockInConfirming,
-              embedded: true,
+    Widget? embeddedPanel;
+    Widget? consoleExtension;
+
+    if (_gateView == _CommuteGateView.checklist && decision != null) {
+      embeddedPanel = TweenAnimationBuilder<double>(
+        key: const ValueKey<String>('pre_clock_in_checklist_motion'),
+        tween: Tween<double>(begin: 0, end: 1),
+        duration: _reduceMotion
+            ? Duration.zero
+            : _preClockInChecklistMotionDuration,
+        curve: Curves.easeOutCubic,
+        child: CommutePreClockInChecklist(
+          key: const ValueKey<String>('pre_clock_in_checklist'),
+          contextLabel: decision.contextLabel,
+          items: decision.items,
+          checkedIds: _checkedPreClockInItemIds,
+          onToggle: _togglePreClockInItem,
+          onCheckAll: _checkAllPreClockInItems,
+          onConfirm: _confirmPreClockInChecklist,
+          confirming: _preClockInConfirming,
+          embedded: true,
+        ),
+        builder: (context, value, child) {
+          return Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, (1 - value) * 18),
+              child: child,
             ),
-            builder: (context, value, child) {
-              return Opacity(
-                opacity: value,
-                child: Transform.translate(
-                  offset: Offset(0, (1 - value) * 18),
-                  child: child,
-                ),
-              );
-            },
-          )
-        : null;
+          );
+        },
+      );
+    } else if (_clockInIssueState != null) {
+      consoleExtension = CommuteClockInIssueConsoleSection(
+        key: ValueKey<String>(
+          'clock_in_issue_${_clockInIssueState!.name}',
+        ),
+        state: _clockInIssueState!,
+        reduceMotion: _reduceMotion,
+        onRetry: _resolveClockInIssue,
+        onClockInAgain: _startClockIn,
+      );
+    } else if (_endTimeRequirement != null) {
+      consoleExtension = CommuteEndTimeConsoleSection(
+        key: ValueKey<String>('end_time_${_endTimeRequirement!.day}'),
+        day: _endTimeRequirement!.day,
+        reduceMotion: _reduceMotion,
+        feedback: _endTimeFeedback,
+        onSkip: _skipEndTimeSetup,
+        onSave: _saveEndTimeSetup,
+        onDraftChanged: _handleEndTimeDraftChanged,
+      );
+    }
 
     return AppStartCinematicReveal(
       animation: reveal,
@@ -1202,7 +1471,10 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         reduceMotion: _reduceMotion,
         exiting: _routeTransitioning,
         modeKey: widget.spec.diagnosticKey,
-        checklist: checklist,
+        attendanceStatus: _attendanceStatus,
+        workspaceStatus: _workspaceStatus,
+        embeddedPanel: embeddedPanel,
+        consoleExtension: consoleExtension,
         onLaunch: _startClockIn,
       ),
     );
@@ -1212,96 +1484,10 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
     CommonUiTokens tokens,
     bool developerMode,
   ) {
-    final disabled = _stage == _CommutePowerGateStage.processing ||
-        _stage == _CommutePowerGateStage.success ||
-        _resolvingClockInIssue ||
-        _preClockInConfirming;
-    final duration = _reduceMotion ? Duration.zero : CommonUiMotion.component;
-
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 12, 12),
       child: Row(
         children: [
-          AnimatedSwitcher(
-            duration: duration,
-            reverseDuration: duration,
-            switchInCurve: CommonUiMotion.enter,
-            switchOutCurve: CommonUiMotion.exit,
-            transitionBuilder: (child, animation) {
-              final curved = CurvedAnimation(
-                parent: animation,
-                curve: CommonUiMotion.enter,
-                reverseCurve: CommonUiMotion.exit,
-              );
-              final slide = Tween<Offset>(
-                begin: const Offset(-0.08, 0.16),
-                end: Offset.zero,
-              ).animate(curved);
-              final scale = Tween<double>(
-                begin: 0.96,
-                end: 1,
-              ).animate(curved);
-
-              return FadeTransition(
-                opacity: curved,
-                child: SlideTransition(
-                  position: slide,
-                  child: ScaleTransition(
-                    scale: scale,
-                    child: child,
-                  ),
-                ),
-              );
-            },
-            child: _showClockInIssueResolution
-                ? Semantics(
-                    key: const ValueKey<String>(
-                      'clock_in_issue_resolution_visible',
-                    ),
-                    button: true,
-                    enabled: !disabled,
-                    label: '출근 이슈 해결',
-                    child: AnimatedScale(
-                      scale: _resolvingClockInIssue ? 0.97 : 1,
-                      duration: _reduceMotion
-                          ? Duration.zero
-                          : CommonUiMotion.press,
-                      curve: CommonUiMotion.standard,
-                      child: AnimatedOpacity(
-                        opacity: _resolvingClockInIssue ? 0.56 : 1,
-                        duration: _reduceMotion
-                            ? Duration.zero
-                            : CommonUiMotion.selection,
-                        curve: CommonUiMotion.standard,
-                        child: TextButton.icon(
-                          onPressed: disabled ? null : _resolveClockInIssue,
-                          icon: _resolvingClockInIssue
-                              ? SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 1.8,
-                                    color: tokens.textSecondary,
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.build_circle_outlined,
-                                  size: 18,
-                                ),
-                          label: const Text('출근 이슈 해결'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: tokens.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                : const SizedBox.shrink(
-                    key: ValueKey<String>(
-                      'clock_in_issue_resolution_hidden',
-                    ),
-                  ),
-          ),
           const Spacer(),
           _buildMenu(tokens, developerMode),
         ],
@@ -1326,6 +1512,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
             child: PopScope(
               canPop: false,
               child: Scaffold(
+                resizeToAvoidBottomInset: true,
                 backgroundColor: tokens.canvas,
                 body: SafeArea(
                   child: Consumer<UserState>(

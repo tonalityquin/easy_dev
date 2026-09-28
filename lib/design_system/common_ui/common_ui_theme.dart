@@ -35,6 +35,7 @@ class CommonUiTokens {
     required this.surfaceRaised,
     required this.surfaceOverlay,
     required this.surfaceSelected,
+    required this.surfaceSelectedSecondary,
     required this.surfaceDisabled,
     required this.borderSubtle,
     required this.borderStrong,
@@ -50,6 +51,12 @@ class CommonUiTokens {
     required this.accentContainer,
     required this.onAccent,
     required this.onAccentContainer,
+    required this.brandSecondary,
+    required this.brandSecondaryHover,
+    required this.brandSecondaryPressed,
+    required this.brandSecondaryContainer,
+    required this.onBrandSecondary,
+    required this.onBrandSecondaryContainer,
     required this.success,
     required this.onSuccess,
     required this.successContainer,
@@ -99,6 +106,7 @@ class CommonUiTokens {
   final Color surfaceRaised;
   final Color surfaceOverlay;
   final Color surfaceSelected;
+  final Color surfaceSelectedSecondary;
   final Color surfaceDisabled;
   final Color borderSubtle;
   final Color borderStrong;
@@ -114,6 +122,12 @@ class CommonUiTokens {
   final Color accentContainer;
   final Color onAccent;
   final Color onAccentContainer;
+  final Color brandSecondary;
+  final Color brandSecondaryHover;
+  final Color brandSecondaryPressed;
+  final Color brandSecondaryContainer;
+  final Color onBrandSecondary;
+  final Color onBrandSecondaryContainer;
   final Color success;
   final Color onSuccess;
   final Color successContainer;
@@ -158,6 +172,13 @@ class CommonUiTokens {
 
   bool get isDark => brightness == Brightness.dark;
 
+  Color get brandPrimary => accent;
+  Color get brandPrimaryHover => accentHover;
+  Color get brandPrimaryPressed => accentPressed;
+  Color get brandPrimaryContainer => accentContainer;
+  Color get onBrandPrimary => onAccent;
+  Color get onBrandPrimaryContainer => onAccentContainer;
+
   Color get statusParkingRequested => danger;
   Color get statusParkingRequestedContainer => dangerContainer;
   Color get onStatusParkingRequestedContainer => onDangerContainer;
@@ -176,6 +197,7 @@ class CommonUiTokens {
         : mix(surface, Colors.white, 0.22);
     final surfaceOverlay = scheme.surfaceVariant;
     final surfaceSelected = scheme.primaryContainer;
+    final surfaceSelectedSecondary = scheme.secondaryContainer;
     final surfaceDisabled = mix(surface, scheme.onSurface, isDark ? 0.12 : 0.08);
     final textPrimary = scheme.onSurface;
     final textSecondary = mix(textPrimary, canvas, isDark ? 0.34 : 0.42);
@@ -186,6 +208,12 @@ class CommonUiTokens {
     final accentPressed =
         mix(accent, isDark ? Colors.white : Colors.black, 0.16);
     final accentContainer = scheme.primaryContainer;
+    final brandSecondary = scheme.secondary;
+    final brandSecondaryHover =
+        mix(brandSecondary, isDark ? Colors.white : Colors.black, 0.08);
+    final brandSecondaryPressed =
+        mix(brandSecondary, isDark ? Colors.white : Colors.black, 0.16);
+    final brandSecondaryContainer = scheme.secondaryContainer;
 
     return CommonUiTokens(
       brightness: scheme.brightness,
@@ -194,6 +222,7 @@ class CommonUiTokens {
       surfaceRaised: surfaceRaised,
       surfaceOverlay: surfaceOverlay,
       surfaceSelected: surfaceSelected,
+      surfaceSelectedSecondary: surfaceSelectedSecondary,
       surfaceDisabled: surfaceDisabled,
       borderSubtle: scheme.outlineVariant,
       borderStrong: scheme.outline,
@@ -209,6 +238,12 @@ class CommonUiTokens {
       accentContainer: accentContainer,
       onAccent: scheme.onPrimary,
       onAccentContainer: scheme.onPrimaryContainer,
+      brandSecondary: brandSecondary,
+      brandSecondaryHover: brandSecondaryHover,
+      brandSecondaryPressed: brandSecondaryPressed,
+      brandSecondaryContainer: brandSecondaryContainer,
+      onBrandSecondary: scheme.onSecondary,
+      onBrandSecondaryContainer: scheme.onSecondaryContainer,
       success: semantic.success,
       onSuccess: semantic.onSuccess,
       successContainer: semantic.successContainer,
@@ -265,6 +300,7 @@ class CommonUiTokens {
         surfaceRaised = const Color(0xFFFFFFFF),
         surfaceOverlay = const Color(0xFFE8F1EF),
         surfaceSelected = const Color(0xFFD7ECE8),
+        surfaceSelectedSecondary = const Color(0xFFE1E8E6),
         surfaceDisabled = const Color(0xFFE4EBE9),
         borderSubtle = const Color(0xFFC8D7D3),
         borderStrong = const Color(0xFF8FA9A3),
@@ -280,6 +316,12 @@ class CommonUiTokens {
         accentContainer = const Color(0xFFD4EAE7),
         onAccent = const Color(0xFFFFFFFF),
         onAccentContainer = const Color(0xFF124B48),
+        brandSecondary = const Color(0xFF5D6B68),
+        brandSecondaryHover = const Color(0xFF53615E),
+        brandSecondaryPressed = const Color(0xFF46524F),
+        brandSecondaryContainer = const Color(0xFFE1E8E6),
+        onBrandSecondary = const Color(0xFFFFFFFF),
+        onBrandSecondaryContainer = const Color(0xFF34413E),
         success = const Color(0xFF0F7A46),
         onSuccess = const Color(0xFFFFFFFF),
         successContainer = const Color(0xFFDDF5E8),
@@ -329,6 +371,7 @@ class CommonUiTokens {
         surfaceRaised = const Color(0xFF182522),
         surfaceOverlay = const Color(0xFF21312E),
         surfaceSelected = const Color(0xFF1B4540),
+        surfaceSelectedSecondary = const Color(0xFF293936),
         surfaceDisabled = const Color(0xFF25312F),
         borderSubtle = const Color(0xFF304842),
         borderStrong = const Color(0xFF5A756E),
@@ -344,6 +387,12 @@ class CommonUiTokens {
         accentContainer = const Color(0xFF18443F),
         onAccent = const Color(0xFF05211F),
         onAccentContainer = const Color(0xFFD2F4F0),
+        brandSecondary = const Color(0xFFB6C5C1),
+        brandSecondaryHover = const Color(0xFFC5D2CF),
+        brandSecondaryPressed = const Color(0xFF95A9A4),
+        brandSecondaryContainer = const Color(0xFF293936),
+        onBrandSecondary = const Color(0xFF14211F),
+        onBrandSecondaryContainer = const Color(0xFFE2ECE9),
         success = const Color(0xFF54D18B),
         onSuccess = const Color(0xFF062818),
         successContainer = const Color(0xFF153D2A),
@@ -418,9 +467,9 @@ class CommonUiTheme {
       disabledColor: tokens.textDisabled,
       dividerColor: tokens.borderSubtle,
       shadowColor: tokens.shadow,
-      splashColor: tokens.accent.withOpacity(tokens.isDark ? 0.18 : 0.12),
-      highlightColor: tokens.accent.withOpacity(tokens.isDark ? 0.12 : 0.08),
-      hoverColor: tokens.accent.withOpacity(tokens.isDark ? 0.12 : 0.07),
+      splashColor: tokens.brandPrimary.withOpacity(tokens.isDark ? 0.18 : 0.12),
+      highlightColor: tokens.brandPrimary.withOpacity(tokens.isDark ? 0.12 : 0.08),
+      hoverColor: tokens.brandPrimary.withOpacity(tokens.isDark ? 0.12 : 0.07),
       focusColor: tokens.focusRing.withOpacity(tokens.isDark ? 0.22 : 0.14),
       appBarTheme: base.appBarTheme.copyWith(
         backgroundColor: tokens.surface,
@@ -479,7 +528,7 @@ class CommonUiTheme {
       ),
       chipTheme: base.chipTheme.copyWith(
         backgroundColor: tokens.surface,
-        selectedColor: tokens.accentContainer,
+        selectedColor: tokens.brandSecondaryContainer,
         disabledColor: tokens.surfaceDisabled,
         surfaceTintColor: tokens.transparent,
         shadowColor: tokens.shadow,
@@ -493,10 +542,10 @@ class CommonUiTheme {
           fontWeight: FontWeight.w600,
         ),
         secondaryLabelStyle: textTheme.labelMedium?.copyWith(
-          color: tokens.onAccentContainer,
+          color: tokens.onBrandSecondaryContainer,
           fontWeight: FontWeight.w700,
         ),
-        checkmarkColor: tokens.accentPressed,
+        checkmarkColor: tokens.brandSecondaryPressed,
         iconTheme: IconThemeData(color: tokens.iconSecondary),
       ),
       inputDecorationTheme: base.inputDecorationTheme.copyWith(
@@ -507,7 +556,7 @@ class CommonUiTheme {
           fontWeight: FontWeight.w500,
         ),
         floatingLabelStyle: textTheme.bodyMedium?.copyWith(
-          color: tokens.accentPressed,
+          color: tokens.brandPrimaryPressed,
           fontWeight: FontWeight.w600,
         ),
         prefixIconColor: tokens.iconSecondary,
@@ -534,12 +583,12 @@ class CommonUiTheme {
         ),
       ),
       textSelectionTheme: TextSelectionThemeData(
-        cursorColor: tokens.accent,
-        selectionColor: tokens.accent.withOpacity(tokens.isDark ? 0.34 : 0.24),
-        selectionHandleColor: tokens.accent,
+        cursorColor: tokens.brandPrimary,
+        selectionColor: tokens.brandPrimary.withOpacity(tokens.isDark ? 0.34 : 0.24),
+        selectionHandleColor: tokens.brandPrimary,
       ),
       progressIndicatorTheme: base.progressIndicatorTheme.copyWith(
-        color: tokens.accent,
+        color: tokens.brandPrimary,
         linearTrackColor: tokens.surfaceDisabled,
         circularTrackColor: tokens.surfaceDisabled,
       ),
@@ -560,7 +609,7 @@ class CommonUiTheme {
           color: tokens.textPrimary,
           fontWeight: FontWeight.w500,
         ),
-        actionTextColor: tokens.accent,
+        actionTextColor: tokens.brandPrimary,
         disabledActionTextColor: tokens.textDisabled,
         elevation: 0,
         behavior: SnackBarBehavior.floating,
@@ -575,7 +624,7 @@ class CommonUiTheme {
             return tokens.iconDisabled;
           }
           if (states.contains(WidgetState.selected)) {
-            return tokens.onAccent;
+            return tokens.onBrandPrimary;
           }
           return tokens.iconSecondary;
         }),
@@ -584,13 +633,13 @@ class CommonUiTheme {
             return tokens.surfaceDisabled;
           }
           if (states.contains(WidgetState.selected)) {
-            return tokens.accent;
+            return tokens.brandPrimary;
           }
           return tokens.surfaceOverlay;
         }),
         trackOutlineColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return tokens.accentPressed;
+            return tokens.brandPrimaryPressed;
           }
           return tokens.borderStrong;
         }),
@@ -601,11 +650,11 @@ class CommonUiTheme {
             return tokens.surfaceDisabled;
           }
           if (states.contains(WidgetState.selected)) {
-            return tokens.accent;
+            return tokens.brandPrimary;
           }
           return tokens.surface;
         }),
-        checkColor: WidgetStatePropertyAll(tokens.onAccent),
+        checkColor: WidgetStatePropertyAll(tokens.onBrandPrimary),
         side: BorderSide(color: tokens.borderStrong),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(4),
@@ -617,16 +666,16 @@ class CommonUiTheme {
             return tokens.iconDisabled;
           }
           if (states.contains(WidgetState.selected)) {
-            return tokens.accent;
+            return tokens.brandPrimary;
           }
           return tokens.iconSecondary;
         }),
       ),
       sliderTheme: base.sliderTheme.copyWith(
-        activeTrackColor: tokens.accent,
+        activeTrackColor: tokens.brandPrimary,
         inactiveTrackColor: tokens.surfaceDisabled,
-        thumbColor: tokens.accent,
-        overlayColor: tokens.accent.withOpacity(tokens.isDark ? 0.22 : 0.14),
+        thumbColor: tokens.brandPrimary,
+        overlayColor: tokens.brandPrimary.withOpacity(tokens.isDark ? 0.22 : 0.14),
         valueIndicatorColor: tokens.textPrimary,
         valueIndicatorTextStyle: textTheme.labelMedium?.copyWith(
           color: tokens.surfaceRaised,
@@ -635,7 +684,7 @@ class CommonUiTheme {
       listTileTheme: base.listTileTheme.copyWith(
         iconColor: tokens.iconSecondary,
         textColor: tokens.textPrimary,
-        selectedColor: tokens.accentPressed,
+        selectedColor: tokens.brandPrimaryPressed,
         selectedTileColor: tokens.surfaceSelected,
         tileColor: tokens.transparent,
         shape: RoundedRectangleBorder(
@@ -649,21 +698,21 @@ class CommonUiTheme {
               return tokens.surfaceDisabled;
             }
             if (states.contains(WidgetState.pressed)) {
-              return tokens.accentPressed;
+              return tokens.brandPrimaryPressed;
             }
             if (states.contains(WidgetState.hovered)) {
-              return tokens.accentHover;
+              return tokens.brandPrimaryHover;
             }
-            return tokens.accent;
+            return tokens.brandPrimary;
           }),
           foregroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.disabled)) {
               return tokens.textDisabled;
             }
-            return tokens.onAccent;
+            return tokens.onBrandPrimary;
           }),
           overlayColor: WidgetStatePropertyAll(
-            tokens.onAccent.withOpacity(tokens.isDark ? 0.12 : 0.08),
+            tokens.onBrandPrimary.withOpacity(tokens.isDark ? 0.12 : 0.08),
           ),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(
@@ -681,23 +730,29 @@ class CommonUiTheme {
             if (states.contains(WidgetState.disabled)) {
               return tokens.surfaceDisabled;
             }
-            if (states.contains(WidgetState.pressed) ||
-                states.contains(WidgetState.hovered)) {
-              return tokens.surfaceSelected;
+            if (states.contains(WidgetState.pressed)) {
+              return tokens.brandSecondaryPressed;
             }
-            return tokens.accentContainer;
+            if (states.contains(WidgetState.hovered)) {
+              return tokens.brandSecondaryHover;
+            }
+            return tokens.brandSecondaryContainer;
           }),
           foregroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.disabled)) {
               return tokens.textDisabled;
             }
-            return tokens.onAccentContainer;
+            if (states.contains(WidgetState.pressed) ||
+                states.contains(WidgetState.hovered)) {
+              return tokens.onBrandSecondary;
+            }
+            return tokens.onBrandSecondaryContainer;
           }),
           side: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.disabled)) {
               return BorderSide(color: tokens.borderSubtle);
             }
-            return BorderSide(color: tokens.accent);
+            return BorderSide(color: tokens.brandSecondary);
           }),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(
@@ -716,12 +771,12 @@ class CommonUiTheme {
               return tokens.textDisabled;
             }
             if (states.contains(WidgetState.pressed)) {
-              return tokens.accentPressed;
+              return tokens.brandPrimaryPressed;
             }
-            return tokens.accent;
+            return tokens.brandPrimary;
           }),
           overlayColor: WidgetStatePropertyAll(
-            tokens.accent.withOpacity(tokens.isDark ? 0.14 : 0.08),
+            tokens.brandPrimary.withOpacity(tokens.isDark ? 0.14 : 0.08),
           ),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(
@@ -741,14 +796,14 @@ class CommonUiTheme {
     CommonUiTokens tokens,
   ) {
     return base.copyWith(
-      primary: tokens.accent,
-      onPrimary: tokens.onAccent,
-      primaryContainer: tokens.accentContainer,
-      onPrimaryContainer: tokens.onAccentContainer,
-      secondary: tokens.accent,
-      onSecondary: tokens.onAccent,
-      secondaryContainer: tokens.accentContainer,
-      onSecondaryContainer: tokens.onAccentContainer,
+      primary: tokens.brandPrimary,
+      onPrimary: tokens.onBrandPrimary,
+      primaryContainer: tokens.brandPrimaryContainer,
+      onPrimaryContainer: tokens.onBrandPrimaryContainer,
+      secondary: tokens.brandSecondary,
+      onSecondary: tokens.onBrandSecondary,
+      secondaryContainer: tokens.brandSecondaryContainer,
+      onSecondaryContainer: tokens.onBrandSecondaryContainer,
       tertiary: tokens.info,
       onTertiary: tokens.onInfo,
       tertiaryContainer: tokens.infoContainer,
@@ -773,7 +828,7 @@ class CommonUiTheme {
       scrim: tokens.scrim,
       inverseSurface: tokens.textPrimary,
       onInverseSurface: tokens.surfaceRaised,
-      inversePrimary: tokens.accentHover,
+      inversePrimary: tokens.brandPrimaryHover,
       surfaceTint: tokens.transparent,
     );
   }

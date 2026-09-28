@@ -303,24 +303,26 @@ class _CommonButtonState extends State<CommonButton> {
       case CommonButtonVariant.primary:
         return _CommonButtonColors(
           background: _pressed
-              ? tokens.accentPressed
+              ? tokens.brandPrimaryPressed
               : _hovered
-                  ? tokens.accentHover
-                  : tokens.accent,
-          foreground: tokens.onAccent,
+                  ? tokens.brandPrimaryHover
+                  : tokens.brandPrimary,
+          foreground: tokens.onBrandPrimary,
           border: tokens.transparent,
         );
       case CommonButtonVariant.secondary:
         return _CommonButtonColors(
-          background: widget.selected || _pressed || _hovered
-              ? tokens.surfaceSelected
-              : tokens.accentContainer,
-          foreground: widget.selected || _pressed
-              ? tokens.accentPressed
-              : tokens.onAccentContainer,
-          border: widget.selected
-              ? tokens.accent
-              : tokens.accent.withOpacity(tokens.isDark ? 0.62 : 0.46),
+          background: _pressed
+              ? tokens.brandSecondaryPressed
+              : _hovered
+                  ? tokens.brandSecondaryHover
+                  : widget.selected
+                      ? tokens.surfaceSelectedSecondary
+                      : tokens.brandSecondaryContainer,
+          foreground: _pressed || _hovered
+              ? tokens.onBrandSecondary
+              : tokens.onBrandSecondaryContainer,
+          border: tokens.brandSecondary,
         );
       case CommonButtonVariant.tertiary:
         return _CommonButtonColors(
@@ -328,8 +330,8 @@ class _CommonButtonState extends State<CommonButton> {
               ? tokens.surfaceSelected
               : tokens.transparent,
           foreground: _pressed || widget.selected
-              ? tokens.accentPressed
-              : tokens.accent,
+              ? tokens.brandPrimaryPressed
+              : tokens.brandPrimary,
           border: tokens.transparent,
         );
       case CommonButtonVariant.destructive:
@@ -457,7 +459,7 @@ class _CommonIconButtonState extends State<CommonIconButton> {
     final background = !_enabled && !widget.loading && !_invoking
         ? tokens.transparent
         : widget.selected
-            ? tokens.accentContainer
+            ? tokens.brandPrimaryContainer
             : _pressed || _hovered
                 ? tokens.surfaceSelected
                 : tokens.surface;
@@ -466,10 +468,10 @@ class _CommonIconButtonState extends State<CommonIconButton> {
         : widget.destructive
             ? tokens.danger
             : widget.selected || _pressed
-                ? tokens.accentPressed
+                ? tokens.brandPrimaryPressed
                 : tokens.iconPrimary;
     final border = widget.selected
-        ? tokens.accent
+        ? tokens.brandPrimary
         : background == tokens.transparent
             ? tokens.transparent
             : tokens.borderSubtle;
@@ -730,11 +732,11 @@ class _CommonSheetScaffoldState extends State<CommonSheetScaffold>
                         width: 38,
                         height: 38,
                         decoration: BoxDecoration(
-                          color: tokens.accentContainer,
+                          color: tokens.brandPrimaryContainer,
                           borderRadius:
                               BorderRadius.circular(CommonUiShapes.control),
                           border: Border.all(
-                            color: tokens.accent.withOpacity(
+                            color: tokens.brandPrimary.withOpacity(
                               tokens.isDark ? 0.54 : 0.36,
                             ),
                           ),
@@ -742,7 +744,7 @@ class _CommonSheetScaffoldState extends State<CommonSheetScaffold>
                         child: Icon(
                           widget.icon,
                           size: 20,
-                          color: tokens.onAccentContainer,
+                          color: tokens.onBrandPrimaryContainer,
                         ),
                       ),
                       const SizedBox(width: 10),

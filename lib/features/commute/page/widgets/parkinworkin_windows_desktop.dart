@@ -16,6 +16,16 @@ enum ParkinWorkinDesktopStage {
   failure,
 }
 
+enum ParkinWorkinStepStatus {
+  waiting,
+  checking,
+  issue,
+  reset,
+  pending,
+  ready,
+  failure,
+}
+
 class ParkinWorkinApplicationField extends StatefulWidget {
   const ParkinWorkinApplicationField({
     super.key,
@@ -27,7 +37,10 @@ class ParkinWorkinApplicationField extends StatefulWidget {
     required this.exiting,
     required this.modeKey,
     required this.onLaunch,
-    this.checklist,
+    required this.attendanceStatus,
+    required this.workspaceStatus,
+    this.embeddedPanel,
+    this.consoleExtension,
   });
 
   static const Duration desktopRevealDuration = Duration(milliseconds: 560);
@@ -48,7 +61,10 @@ class ParkinWorkinApplicationField extends StatefulWidget {
   final bool exiting;
   final String modeKey;
   final Future<void> Function() onLaunch;
-  final Widget? checklist;
+  final ParkinWorkinStepStatus attendanceStatus;
+  final ParkinWorkinStepStatus workspaceStatus;
+  final Widget? embeddedPanel;
+  final Widget? consoleExtension;
 
   @override
   State<ParkinWorkinApplicationField> createState() =>
@@ -146,7 +162,11 @@ class ParkinWorkinApplicationFieldState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.stage != widget.stage ||
         oldWidget.enabled != widget.enabled ||
-        (oldWidget.checklist == null) != (widget.checklist == null)) {
+        oldWidget.attendanceStatus != widget.attendanceStatus ||
+        oldWidget.workspaceStatus != widget.workspaceStatus ||
+        (oldWidget.embeddedPanel == null) != (widget.embeddedPanel == null) ||
+        (oldWidget.consoleExtension == null) !=
+            (widget.consoleExtension == null)) {
       LauncherDiagnostics.record(
         'commute_application_field_state',
         scope: 'commute_application_field',
@@ -154,7 +174,10 @@ class ParkinWorkinApplicationFieldState
           'mode': widget.modeKey,
           'stage': widget.stage.name,
           'enabled': widget.enabled,
-          'checklist': widget.checklist != null,
+          'embeddedPanel': widget.embeddedPanel != null,
+          'consoleExtension': widget.consoleExtension != null,
+          'attendanceStatus': widget.attendanceStatus.name,
+          'workspaceStatus': widget.workspaceStatus.name,
           'focused': applicationFocused,
           'launched': _launched,
         },
@@ -164,7 +187,8 @@ class ParkinWorkinApplicationFieldState
     if (!_launched &&
         (widget.stage == ParkinWorkinDesktopStage.processing ||
             widget.stage == ParkinWorkinDesktopStage.success ||
-            widget.checklist != null)) {
+            widget.embeddedPanel != null ||
+            widget.consoleExtension != null)) {
       _launched = true;
       _startMessageController.value = 0;
       _selectionController.value = 1;
@@ -484,7 +508,10 @@ class ParkinWorkinApplicationFieldState
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final height = constraints.maxHeight;
-        final sceneHeight = math.max(220.0, height - 72).toDouble();
+        final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+        final sceneHeight = keyboardVisible
+            ? math.max(120.0, height - 12).toDouble()
+            : math.max(220.0, height - 72).toDouble();
         final horizontalPadding = width < 390 ? 14.0 : 22.0;
         final columnCount =
             (_applications.length / _rowsPerColumn).ceil().clamp(1, 8);
@@ -523,14 +550,20 @@ class ParkinWorkinApplicationFieldState
         );
         final applicationWidth =
             math.min(600.0, math.max(286.0, width - 34)).toDouble();
-        final maxApplicationHeight =
-            math.max(280.0, sceneHeight - 20).toDouble();
+        final maxApplicationHeight = keyboardVisible
+            ? math.max(120.0, sceneHeight - 6).toDouble()
+            : math.max(280.0, sceneHeight - 20).toDouble();
         final applicationHeight = math
-            .min(widget.checklist == null ? 500.0 : 560.0, maxApplicationHeight)
+            .min(560.0, maxApplicationHeight)
             .toDouble();
         final applicationRect = Rect.fromLTWH(
           (width - applicationWidth) / 2,
-          math.max(10.0, (sceneHeight - applicationHeight) / 2).toDouble(),
+          math
+              .max(
+                keyboardVisible ? 3.0 : 10.0,
+                (sceneHeight - applicationHeight) / 2,
+              )
+              .toDouble(),
           applicationWidth,
           applicationHeight,
         );
@@ -662,7 +695,11 @@ class ParkinWorkinApplicationFieldState
                               stage: widget.stage,
                               stateMessage: widget.stateMessage,
                               enabled: widget.enabled,
-                              checklist: widget.checklist,
+                              reduceMotion: widget.reduceMotion,
+                              embeddedPanel: widget.embeddedPanel,
+                              consoleExtension: widget.consoleExtension,
+                              attendanceStatus: widget.attendanceStatus,
+                              workspaceStatus: widget.workspaceStatus,
                               contentOpacity: applicationContentOpacity,
                               borderRadius: borderRadius,
                               onRetry: _handleLaunch,
@@ -1177,7 +1214,11 @@ class _BrandedApplicationSurface extends StatelessWidget {
     required this.stage,
     required this.stateMessage,
     required this.enabled,
-    required this.checklist,
+    required this.reduceMotion,
+    required this.embeddedPanel,
+    required this.consoleExtension,
+    required this.attendanceStatus,
+    required this.workspaceStatus,
     required this.contentOpacity,
     required this.borderRadius,
     required this.onRetry,
@@ -1187,20 +1228,23 @@ class _BrandedApplicationSurface extends StatelessWidget {
   final ParkinWorkinDesktopStage stage;
   final String stateMessage;
   final bool enabled;
-  final Widget? checklist;
+  final bool reduceMotion;
+  final Widget? embeddedPanel;
+  final Widget? consoleExtension;
+  final ParkinWorkinStepStatus attendanceStatus;
+  final ParkinWorkinStepStatus workspaceStatus;
   final double contentOpacity;
   final double borderRadius;
   final Future<void> Function() onRetry;
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = switch (stage) {
-      ParkinWorkinDesktopStage.success => tokens.success,
-      ParkinWorkinDesktopStage.failure => tokens.danger,
-      ParkinWorkinDesktopStage.processing => tokens.accent,
-      ParkinWorkinDesktopStage.checking => tokens.accent,
-      ParkinWorkinDesktopStage.ready => tokens.accent,
-    };
+    final statusColor = _applicationStatusColor(
+      tokens,
+      stage: stage,
+      attendanceStatus: attendanceStatus,
+      workspaceStatus: workspaceStatus,
+    );
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: DecoratedBox(
@@ -1225,21 +1269,49 @@ class _BrandedApplicationSurface extends StatelessWidget {
               _BrandHeader(tokens: tokens, statusColor: statusColor),
               Expanded(
                 child: AnimatedSwitcher(
-                  duration: CommonUiMotion.component,
+                  duration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.component,
+                  reverseDuration:
+                      reduceMotion ? Duration.zero : CommonUiMotion.component,
                   switchInCurve: CommonUiMotion.enter,
                   switchOutCurve: CommonUiMotion.exit,
-                  child: checklist != null
+                  transitionBuilder: (child, animation) {
+                    final curved = CurvedAnimation(
+                      parent: animation,
+                      curve: CommonUiMotion.enter,
+                      reverseCurve: CommonUiMotion.exit,
+                    );
+                    final slide = Tween<Offset>(
+                      begin: const Offset(0, 0.035),
+                      end: Offset.zero,
+                    ).animate(curved);
+                    final scale =
+                        Tween<double>(begin: 0.985, end: 1).animate(curved);
+                    return FadeTransition(
+                      opacity: curved,
+                      child: SlideTransition(
+                        position: slide,
+                        child: ScaleTransition(scale: scale, child: child),
+                      ),
+                    );
+                  },
+                  child: embeddedPanel != null
                       ? KeyedSubtree(
-                          key: const ValueKey<String>('checklist'),
-                          child: checklist!,
+                          key: embeddedPanel!.key ??
+                              ValueKey<Type>(embeddedPanel.runtimeType),
+                          child: embeddedPanel!,
                         )
                       : _ApplicationStatusBody(
-                          key: ValueKey<String>('status_${stage.name}'),
+                          key: const ValueKey<String>('application_status'),
                           tokens: tokens,
                           stage: stage,
                           stateMessage: stateMessage,
                           statusColor: statusColor,
                           enabled: enabled,
+                          reduceMotion: reduceMotion,
+                          attendanceStatus: attendanceStatus,
+                          workspaceStatus: workspaceStatus,
+                          consoleExtension: consoleExtension,
                           onRetry: onRetry,
                         ),
                 ),
@@ -1308,6 +1380,34 @@ class _BrandHeader extends StatelessWidget {
   }
 }
 
+Color _applicationStatusColor(
+  CommonUiTokens tokens, {
+  required ParkinWorkinDesktopStage stage,
+  required ParkinWorkinStepStatus attendanceStatus,
+  required ParkinWorkinStepStatus workspaceStatus,
+}) {
+  if (attendanceStatus == ParkinWorkinStepStatus.failure ||
+      stage == ParkinWorkinDesktopStage.failure) {
+    return tokens.danger;
+  }
+  if (attendanceStatus == ParkinWorkinStepStatus.issue ||
+      workspaceStatus == ParkinWorkinStepStatus.pending) {
+    return tokens.warning;
+  }
+  if (attendanceStatus == ParkinWorkinStepStatus.checking ||
+      workspaceStatus == ParkinWorkinStepStatus.checking ||
+      stage == ParkinWorkinDesktopStage.processing ||
+      stage == ParkinWorkinDesktopStage.checking) {
+    return tokens.brandPrimary;
+  }
+  if (attendanceStatus == ParkinWorkinStepStatus.reset ||
+      workspaceStatus == ParkinWorkinStepStatus.ready ||
+      stage == ParkinWorkinDesktopStage.success) {
+    return tokens.success;
+  }
+  return tokens.brandPrimary;
+}
+
 class _ApplicationStatusBody extends StatelessWidget {
   const _ApplicationStatusBody({
     super.key,
@@ -1316,6 +1416,10 @@ class _ApplicationStatusBody extends StatelessWidget {
     required this.stateMessage,
     required this.statusColor,
     required this.enabled,
+    required this.reduceMotion,
+    required this.attendanceStatus,
+    required this.workspaceStatus,
+    required this.consoleExtension,
     required this.onRetry,
   });
 
@@ -1324,39 +1428,51 @@ class _ApplicationStatusBody extends StatelessWidget {
   final String stateMessage;
   final Color statusColor;
   final bool enabled;
+  final bool reduceMotion;
+  final ParkinWorkinStepStatus attendanceStatus;
+  final ParkinWorkinStepStatus workspaceStatus;
+  final Widget? consoleExtension;
   final Future<void> Function() onRetry;
 
   @override
   Widget build(BuildContext context) {
-    final title = switch (stage) {
-      ParkinWorkinDesktopStage.checking => 'ParkinWorkin 실행 환경을 확인하고 있습니다.',
-      ParkinWorkinDesktopStage.ready => stateMessage.isEmpty
-          ? '오늘의 업무를 시작할 준비가 되었습니다.'
-          : stateMessage,
-      ParkinWorkinDesktopStage.processing => stateMessage.isEmpty
-          ? '근무 환경을 확인하고 있습니다.'
-          : stateMessage,
-      ParkinWorkinDesktopStage.success => '근무 환경 준비가 완료되었습니다.',
-      ParkinWorkinDesktopStage.failure => stateMessage.isEmpty
-          ? '근무 환경을 준비하지 못했습니다.'
-          : stateMessage,
-    };
-    final checking = stage == ParkinWorkinDesktopStage.checking;
-    final working = stage == ParkinWorkinDesktopStage.processing;
-    final success = stage == ParkinWorkinDesktopStage.success;
-    final failure = stage == ParkinWorkinDesktopStage.failure;
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.component;
+    final title = stateMessage.isNotEmpty
+        ? stateMessage
+        : switch (stage) {
+            ParkinWorkinDesktopStage.checking =>
+              'ParkinWorkin 실행 환경을 확인하고 있습니다.',
+            ParkinWorkinDesktopStage.ready => '오늘의 업무를 시작할 준비가 되었습니다.',
+            ParkinWorkinDesktopStage.processing => '근무 환경을 확인하고 있습니다.',
+            ParkinWorkinDesktopStage.success => '근무 환경 준비가 완료되었습니다.',
+            ParkinWorkinDesktopStage.failure => '근무 환경을 준비하지 못했습니다.',
+          };
+    final checking = stage == ParkinWorkinDesktopStage.checking ||
+        stage == ParkinWorkinDesktopStage.processing ||
+        attendanceStatus == ParkinWorkinStepStatus.checking ||
+        workspaceStatus == ParkinWorkinStepStatus.checking;
+    final failure = stage == ParkinWorkinDesktopStage.failure ||
+        attendanceStatus == ParkinWorkinStepStatus.failure;
+    final success = stage == ParkinWorkinDesktopStage.success &&
+        workspaceStatus == ParkinWorkinStepStatus.ready;
+    final icon = _statusIcon(
+      checking: checking,
+      failure: failure,
+      success: success,
+    );
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+      padding: const EdgeInsets.fromLTRB(24, 20, 24, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               AnimatedSwitcher(
-                duration: CommonUiMotion.selection,
-                child: working || checking
+                duration: duration,
+                child: checking
                     ? SizedBox(
-                        key: ValueKey<String>('progress_${stage.name}'),
+                        key: const ValueKey<String>('application_checking'),
                         width: 24,
                         height: 24,
                         child: CircularProgressIndicator(
@@ -1365,85 +1481,153 @@ class _ApplicationStatusBody extends StatelessWidget {
                         ),
                       )
                     : Icon(
-                        success
-                            ? Icons.check_circle_rounded
-                            : failure
-                                ? Icons.error_outline_rounded
-                                : Icons.apps_rounded,
-                        key: ValueKey<String>(stage.name),
+                        icon,
+                        key: ValueKey<String>(
+                          '${attendanceStatus.name}_${workspaceStatus.name}_${stage.name}',
+                        ),
                         color: statusColor,
                         size: 26,
                       ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: tokens.textPrimary,
-                        fontWeight: FontWeight.w700,
-                        height: 1.35,
-                      ),
+                child: AnimatedSwitcher(
+                  duration: duration,
+                  switchInCurve: CommonUiMotion.enter,
+                  switchOutCurve: CommonUiMotion.exit,
+                  transitionBuilder: (child, animation) {
+                    final curved = CurvedAnimation(
+                      parent: animation,
+                      curve: CommonUiMotion.enter,
+                      reverseCurve: CommonUiMotion.exit,
+                    );
+                    final slide = Tween<Offset>(
+                      begin: const Offset(0, 0.035),
+                      end: Offset.zero,
+                    ).animate(curved);
+                    return FadeTransition(
+                      opacity: curved,
+                      child: SlideTransition(position: slide, child: child),
+                    );
+                  },
+                  child: Text(
+                    title,
+                    key: ValueKey<String>(title),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: tokens.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          height: 1.35,
+                        ),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          _ApplicationStatusRow(
-            tokens: tokens,
-            label: 'SESSION',
-            value: 'READY',
-            complete: true,
+          const SizedBox(height: 18),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const ClampingScrollPhysics(),
+              keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _ApplicationStatusRow(
+                    tokens: tokens,
+                    label: 'SESSION',
+                    status: ParkinWorkinStepStatus.ready,
+                    reduceMotion: reduceMotion,
+                  ),
+                  const SizedBox(height: 9),
+                  _ApplicationStatusRow(
+                    tokens: tokens,
+                    label: 'WORK AREA',
+                    status: ParkinWorkinStepStatus.ready,
+                    reduceMotion: reduceMotion,
+                  ),
+                  const SizedBox(height: 9),
+                  _ApplicationStatusRow(
+                    tokens: tokens,
+                    label: 'ATTENDANCE',
+                    status: attendanceStatus,
+                    reduceMotion: reduceMotion,
+                  ),
+                  const SizedBox(height: 9),
+                  _ApplicationStatusRow(
+                    tokens: tokens,
+                    label: 'WORKSPACE',
+                    status: workspaceStatus,
+                    reduceMotion: reduceMotion,
+                  ),
+                  AnimatedSize(
+                    duration: duration,
+                    curve: CommonUiMotion.standard,
+                    alignment: Alignment.topCenter,
+                    child: AnimatedSwitcher(
+                      duration: duration,
+                      reverseDuration: duration,
+                      switchInCurve: CommonUiMotion.enter,
+                      switchOutCurve: CommonUiMotion.exit,
+                      transitionBuilder: (child, animation) {
+                        final curved = CurvedAnimation(
+                          parent: animation,
+                          curve: CommonUiMotion.enter,
+                          reverseCurve: CommonUiMotion.exit,
+                        );
+                        final slide = Tween<Offset>(
+                          begin: const Offset(0, 0.025),
+                          end: Offset.zero,
+                        ).animate(curved);
+                        return FadeTransition(
+                          opacity: curved,
+                          child: SlideTransition(position: slide, child: child),
+                        );
+                      },
+                      child: consoleExtension == null
+                          ? const SizedBox.shrink(
+                              key: ValueKey<String>('console_extension_hidden'),
+                            )
+                          : Padding(
+                              key: consoleExtension!.key ??
+                                  ValueKey<Type>(consoleExtension!.runtimeType),
+                              padding: const EdgeInsets.only(top: 14),
+                              child: consoleExtension!,
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 10),
-          _ApplicationStatusRow(
-            tokens: tokens,
-            label: 'WORK AREA',
-            value: 'READY',
-            complete: true,
-          ),
-          const SizedBox(height: 10),
-          _ApplicationStatusRow(
-            tokens: tokens,
-            label: 'ATTENDANCE',
-            value: success
-                ? 'READY'
-                : failure
-                    ? 'RETRY'
-                    : working || checking
-                        ? 'CHECKING'
-                        : 'WAITING',
-            complete: success,
-            active: working || checking,
-            failure: failure,
-          ),
-          const SizedBox(height: 10),
-          _ApplicationStatusRow(
-            tokens: tokens,
-            label: 'WORKSPACE',
-            value: success ? 'READY' : 'WAITING',
-            complete: success,
-          ),
-          const Spacer(),
+          const SizedBox(height: 14),
           AnimatedContainer(
-            duration: CommonUiMotion.component,
+            duration: duration,
+            curve: CommonUiMotion.standard,
             height: 3,
             decoration: BoxDecoration(
               color: tokens.borderSubtle,
               borderRadius: BorderRadius.circular(999),
             ),
             alignment: Alignment.centerLeft,
-            child: FractionallySizedBox(
-              heightFactor: 1,
-              widthFactor: success
-                  ? 1
-                  : failure
-                      ? 0.58
-                      : working
-                          ? 0.76
-                          : checking
-                              ? 0.22
-                              : 0.34,
+            child: TweenAnimationBuilder<double>(
+              duration: duration,
+              curve: CommonUiMotion.standard,
+              tween: Tween<double>(
+                begin: 0,
+                end: _progressFactor(
+                  stage: stage,
+                  attendanceStatus: attendanceStatus,
+                  workspaceStatus: workspaceStatus,
+                ),
+              ),
+              builder: (context, value, child) {
+                return FractionallySizedBox(
+                  heightFactor: 1,
+                  widthFactor: value,
+                  alignment: Alignment.centerLeft,
+                  child: child,
+                );
+              },
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: statusColor,
@@ -1452,8 +1636,10 @@ class _ApplicationStatusBody extends StatelessWidget {
               ),
             ),
           ),
-          if ((failure || stage == ParkinWorkinDesktopStage.ready) && enabled) ...[
-            const SizedBox(height: 18),
+          if (consoleExtension == null &&
+              (failure || stage == ParkinWorkinDesktopStage.ready) &&
+              enabled) ...[
+            const SizedBox(height: 16),
             Align(
               alignment: Alignment.centerRight,
               child: FilledButton.tonalIcon(
@@ -1474,35 +1660,83 @@ class _ApplicationStatusBody extends StatelessWidget {
       ),
     );
   }
+
+  IconData _statusIcon({
+    required bool checking,
+    required bool failure,
+    required bool success,
+  }) {
+    if (failure) return Icons.error_outline_rounded;
+    if (attendanceStatus == ParkinWorkinStepStatus.issue) {
+      return Icons.warning_amber_rounded;
+    }
+    if (attendanceStatus == ParkinWorkinStepStatus.reset) {
+      return Icons.restart_alt_rounded;
+    }
+    if (workspaceStatus == ParkinWorkinStepStatus.pending) {
+      return Icons.schedule_rounded;
+    }
+    if (success) return Icons.check_circle_rounded;
+    if (checking) return Icons.sync_rounded;
+    return Icons.apps_rounded;
+  }
 }
 
-class _ApplicationStatusRow extends StatelessWidget {
-  const _ApplicationStatusRow({
-    required this.tokens,
-    required this.label,
-    required this.value,
-    required this.complete,
-    this.active = false,
-    this.failure = false,
-  });
+double _progressFactor({
+  required ParkinWorkinDesktopStage stage,
+  required ParkinWorkinStepStatus attendanceStatus,
+  required ParkinWorkinStepStatus workspaceStatus,
+}) {
+  if (workspaceStatus == ParkinWorkinStepStatus.ready &&
+      stage == ParkinWorkinDesktopStage.success) {
+    return 1;
+  }
+  if (workspaceStatus == ParkinWorkinStepStatus.checking) return 0.94;
+  if (workspaceStatus == ParkinWorkinStepStatus.pending) return 0.90;
+  if (attendanceStatus == ParkinWorkinStepStatus.reset) return 0.42;
+  if (attendanceStatus == ParkinWorkinStepStatus.checking &&
+      stage == ParkinWorkinDesktopStage.ready) {
+    return 0.66;
+  }
+  if (attendanceStatus == ParkinWorkinStepStatus.issue) return 0.55;
+  if (attendanceStatus == ParkinWorkinStepStatus.failure ||
+      stage == ParkinWorkinDesktopStage.failure) {
+    return 0.58;
+  }
+  if (stage == ParkinWorkinDesktopStage.processing) return 0.76;
+  if (stage == ParkinWorkinDesktopStage.checking) return 0.22;
+  if (stage == ParkinWorkinDesktopStage.success) return 0.82;
+  return 0.34;
+}
 
-  final CommonUiTokens tokens;
+class ParkinWorkinConsoleRow extends StatelessWidget {
+  const ParkinWorkinConsoleRow({
+    super.key,
+    required this.label,
+    required this.reduceMotion,
+    this.value,
+    this.child,
+    this.valueColor,
+    this.valueFontWeight = FontWeight.w700,
+    this.trailing,
+  }) : assert((value == null) != (child == null));
+
   final String label;
-  final String value;
-  final bool complete;
-  final bool active;
-  final bool failure;
+  final bool reduceMotion;
+  final String? value;
+  final Widget? child;
+  final Color? valueColor;
+  final FontWeight valueFontWeight;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
-    final color = failure
-        ? tokens.danger
-        : complete
-            ? tokens.success
-            : active
-                ? tokens.accent
-                : tokens.textSecondary;
+    final tokens = CommonUiTheme.of(context);
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
+    final resolvedValueColor = valueColor ?? tokens.textPrimary;
+
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
           width: 94,
@@ -1516,16 +1750,236 @@ class _ApplicationStatusRow extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w700,
+          child: child ??
+              AnimatedSwitcher(
+                duration: duration,
+                switchInCurve: CommonUiMotion.enter,
+                switchOutCurve: CommonUiMotion.exit,
+                transitionBuilder: (child, animation) {
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: CommonUiMotion.enter,
+                    reverseCurve: CommonUiMotion.exit,
+                  );
+                  final slide = Tween<Offset>(
+                    begin: const Offset(0.025, 0),
+                    end: Offset.zero,
+                  ).animate(curved);
+                  return FadeTransition(
+                    opacity: curved,
+                    child: SlideTransition(position: slide, child: child),
+                  );
+                },
+                child: Text(
+                  value ?? '',
+                  key: ValueKey<String>(value ?? ''),
+                  textAlign: TextAlign.right,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: resolvedValueColor,
+                        fontWeight: valueFontWeight,
+                        height: 1.35,
+                      ),
                 ),
-          ),
+              ),
         ),
+        if (trailing != null) ...[
+          const SizedBox(width: 8),
+          trailing!,
+        ],
       ],
     );
   }
+}
+
+class ParkinWorkinConsoleAction extends StatefulWidget {
+  const ParkinWorkinConsoleAction({
+    super.key,
+    required this.reduceMotion,
+    required this.attentionToken,
+    required this.child,
+    this.attentionEnabled = true,
+  });
+
+  final bool reduceMotion;
+  final Object attentionToken;
+  final bool attentionEnabled;
+  final Widget child;
+
+  @override
+  State<ParkinWorkinConsoleAction> createState() =>
+      _ParkinWorkinConsoleActionState();
+}
+
+class _ParkinWorkinConsoleActionState extends State<ParkinWorkinConsoleAction>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 620),
+      value: widget.reduceMotion || !widget.attentionEnabled ? 1 : 0,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _playAttention();
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant ParkinWorkinConsoleAction oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.reduceMotion) {
+      _controller
+        ..stop()
+        ..value = 1;
+      return;
+    }
+    final shouldReplay = widget.attentionEnabled &&
+        (!oldWidget.attentionEnabled ||
+            oldWidget.attentionToken != widget.attentionToken ||
+            oldWidget.reduceMotion != widget.reduceMotion);
+    if (shouldReplay) _playAttention();
+  }
+
+  void _playAttention() {
+    LauncherDiagnostics.record(
+      'commute_console_action_attention',
+      scope: 'commute_application_field',
+      meta: <String, Object?>{
+        'token': widget.attentionToken.toString(),
+        'enabled': widget.attentionEnabled,
+        'reduceMotion': widget.reduceMotion,
+        'durationMs': widget.reduceMotion || !widget.attentionEnabled
+            ? 0
+            : _controller.duration?.inMilliseconds ?? 0,
+      },
+    );
+    if (widget.reduceMotion || !widget.attentionEnabled) {
+      _controller.value = 1;
+      return;
+    }
+    _controller
+      ..stop()
+      ..forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+
+    return ParkinWorkinConsoleRow(
+      label: 'ACTION',
+      reduceMotion: widget.reduceMotion,
+      child: AnimatedBuilder(
+        animation: _controller,
+        child: widget.child,
+        builder: (context, child) {
+          if (widget.reduceMotion || !widget.attentionEnabled) return child!;
+          final value = _controller.value;
+          final enter = Curves.easeOutCubic.transform(
+            (value / 0.34).clamp(0.0, 1.0).toDouble(),
+          );
+          final lineGrow = Curves.easeOutCubic.transform(
+            (value / 0.70).clamp(0.0, 1.0).toDouble(),
+          );
+          final lineOpacity = value <= 0.70
+              ? (0.24 + value * 0.76).clamp(0.0, 1.0).toDouble()
+              : ((1 - value) / 0.30).clamp(0.0, 1.0).toDouble();
+          final emphasis = math.sin(math.pi * value).clamp(0.0, 1.0).toDouble();
+
+          return Opacity(
+            opacity: 0.58 + (0.42 * enter),
+            child: Transform.translate(
+              offset: Offset((1 - enter) * 8, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  child!,
+                  SizedBox(
+                    height: 2,
+                    child: Opacity(
+                      opacity: lineOpacity,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: FractionallySizedBox(
+                          widthFactor: lineGrow,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: tokens.brandPrimary.withOpacity(
+                                0.45 + (0.45 * emphasis),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ApplicationStatusRow extends StatelessWidget {
+  const _ApplicationStatusRow({
+    required this.tokens,
+    required this.label,
+    required this.status,
+    required this.reduceMotion,
+  });
+
+  final CommonUiTokens tokens;
+  final String label;
+  final ParkinWorkinStepStatus status;
+  final bool reduceMotion;
+
+  @override
+  Widget build(BuildContext context) {
+    return ParkinWorkinConsoleRow(
+      label: label,
+      value: _statusLabel(status),
+      reduceMotion: reduceMotion,
+      valueColor: _statusColor(tokens, status),
+    );
+  }
+}
+
+Color _statusColor(
+  CommonUiTokens tokens,
+  ParkinWorkinStepStatus status,
+) {
+  return switch (status) {
+    ParkinWorkinStepStatus.waiting => tokens.textSecondary,
+    ParkinWorkinStepStatus.checking => tokens.brandPrimary,
+    ParkinWorkinStepStatus.issue => tokens.warning,
+    ParkinWorkinStepStatus.reset => tokens.success,
+    ParkinWorkinStepStatus.pending => tokens.warning,
+    ParkinWorkinStepStatus.ready => tokens.success,
+    ParkinWorkinStepStatus.failure => tokens.danger,
+  };
+}
+
+String _statusLabel(ParkinWorkinStepStatus status) {
+  return switch (status) {
+    ParkinWorkinStepStatus.waiting => 'WAITING',
+    ParkinWorkinStepStatus.checking => 'CHECKING',
+    ParkinWorkinStepStatus.issue => 'ISSUE',
+    ParkinWorkinStepStatus.reset => 'RESET',
+    ParkinWorkinStepStatus.pending => 'PENDING',
+    ParkinWorkinStepStatus.ready => 'READY',
+    ParkinWorkinStepStatus.failure => 'RETRY',
+  };
 }

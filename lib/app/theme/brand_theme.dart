@@ -7,29 +7,39 @@ const String kBelieversScBrandPresetId = 'believers_sc';
 const String kNamyangjuPrimeBrandPresetId = 'namyangju_prime';
 const String kSamsungBonprimeBrandPresetId = 'samsung_bonprime';
 const String kHaneulHospitalBrandPresetId = 'haneul_hospital';
+const String kYonseiBaroChukHospitalBrandPresetId =
+    'yonsei_baro_chuk_hospital';
 const String kSesotneunOrthopedicBrandPresetId = 'sesotneun_orthopedic';
 const String kBukhangangMakguksuDakgalbiBrandPresetId =
     'bukhangang_makguksu_dakgalbi';
+
+enum BrandContentRole {
+  brand,
+  accent,
+}
 
 @immutable
 class BrandThemeColors {
   const BrandThemeColors({
     required this.base,
     required this.brand,
-    required this.content,
-    this.accent,
+    required this.accent,
+    required this.contentRole,
   });
 
   final Color base;
   final Color brand;
-  final Color content;
-  final Color? accent;
+  final Color accent;
+  final BrandContentRole contentRole;
 
-  Color get resolvedAccent => accent ?? content;
+  Color get content =>
+      contentRole == BrandContentRole.brand ? brand : accent;
+
+  Color get resolvedAccent => accent;
 
   Brightness get brightness => ThemeData.estimateBrightnessForColor(base);
 
-  List<Color> get preview => <Color>[base, brand, resolvedAccent];
+  List<Color> get preview => <Color>[base, brand, accent];
 }
 
 @immutable
@@ -53,7 +63,8 @@ const BrandPresetSpec kDefaultBrandPreset = BrandPresetSpec(
   colors: BrandThemeColors(
     base: Color(0xFFF2EDE3),
     brand: Color(0xFF2F6F6D),
-    content: Color(0xFF2C2A26),
+    accent: Color(0xFF2C2A26),
+    contentRole: BrandContentRole.accent,
   ),
 );
 
@@ -63,7 +74,8 @@ const BrandPresetSpec kKbBrandPreset = BrandPresetSpec(
   colors: BrandThemeColors(
     base: Color(0xFF60594E),
     brand: Color(0xFFFFBC00),
-    content: Color(0xFFFFFFFF),
+    accent: Color(0xFFFFFFFF),
+    contentRole: BrandContentRole.accent,
   ),
 );
 
@@ -73,7 +85,8 @@ const BrandPresetSpec kBelieversScBrandPreset = BrandPresetSpec(
   colors: BrandThemeColors(
     base: Color(0xFFF4F8FB),
     brand: Color(0xFF56A4DB),
-    content: Color(0xFF4E4D4D),
+    accent: Color(0xFF4E4D4D),
+    contentRole: BrandContentRole.accent,
   ),
 );
 
@@ -83,8 +96,8 @@ const BrandPresetSpec kNamyangjuPrimeBrandPreset = BrandPresetSpec(
   colors: BrandThemeColors(
     base: Color(0xFFF0F7FA),
     brand: Color(0xFF10639F),
-    content: Color(0xFF10639F),
     accent: Color(0xFF74BBCE),
+    contentRole: BrandContentRole.brand,
   ),
 );
 
@@ -94,8 +107,8 @@ const BrandPresetSpec kSamsungBonprimeBrandPreset = BrandPresetSpec(
   colors: BrandThemeColors(
     base: Color(0xFFF2F6F8),
     brand: Color(0xFF183E5B),
-    content: Color(0xFF183E5B),
     accent: Color(0xFF4584A2),
+    contentRole: BrandContentRole.brand,
   ),
 );
 
@@ -105,8 +118,20 @@ const BrandPresetSpec kHaneulHospitalBrandPreset = BrandPresetSpec(
   colors: BrandThemeColors(
     base: Color(0xFFF4F7F2),
     brand: Color(0xFF1D2683),
-    content: Color(0xFF1D2683),
     accent: Color(0xFF73BB2B),
+    contentRole: BrandContentRole.brand,
+  ),
+);
+
+
+const BrandPresetSpec kYonseiBaroChukHospitalBrandPreset = BrandPresetSpec(
+  id: kYonseiBaroChukHospitalBrandPresetId,
+  label: '연세바로척병원',
+  colors: BrandThemeColors(
+    base: Color(0xFFE5F1F6),
+    brand: Color(0xFF69A4C2),
+    accent: Color(0xFF315F78),
+    contentRole: BrandContentRole.accent,
   ),
 );
 
@@ -114,10 +139,10 @@ const BrandPresetSpec kSesotneunOrthopedicBrandPreset = BrandPresetSpec(
   id: kSesotneunOrthopedicBrandPresetId,
   label: '세솟는정형외과',
   colors: BrandThemeColors(
-    base: Color(0xFFFAFAF1),
+    base: Color(0xFF232426),
     brand: Color(0xFFF2F363),
-    content: Color(0xFF232426),
-    accent: Color(0xFF232426),
+    accent: Color(0xFFFAFAF1),
+    contentRole: BrandContentRole.accent,
   ),
 );
 
@@ -128,8 +153,8 @@ const BrandPresetSpec kBukhangangMakguksuDakgalbiBrandPreset =
   colors: BrandThemeColors(
     base: Color(0xFFF7F4EA),
     brand: Color(0xFF696F7B),
-    content: Color(0xFF696F7B),
     accent: Color(0xFFEDDA96),
+    contentRole: BrandContentRole.brand,
   ),
 );
 
@@ -141,6 +166,7 @@ List<BrandPresetSpec> brandPresets() {
     kNamyangjuPrimeBrandPreset,
     kSamsungBonprimeBrandPreset,
     kHaneulHospitalBrandPreset,
+    kYonseiBaroChukHospitalBrandPreset,
     kSesotneunOrthopedicBrandPreset,
     kBukhangangMakguksuDakgalbiBrandPreset,
   ];
@@ -191,20 +217,13 @@ ColorScheme buildBrandColorScheme(BrandThemeColors colors) {
   final outlineVariant = dark
       ? _mix(content, base, 0.74)
       : _mix(content, base, 0.82);
-  final secondary = accent ??
-      (dark ? _mix(content, base, 0.18) : _mix(content, base, 0.12));
-  final secondaryContainer = accent == null
-      ? surfaceVariant
-      : dark
-          ? _mix(accent, base, 0.70)
-          : _mix(accent, base, 0.82);
-  final tertiary = accent == null
-      ? dark
-          ? _mix(brand, content, 0.38)
-          : _mix(brand, content, 0.52)
-      : dark
-          ? _mix(brand, accent, 0.38)
-          : _mix(brand, accent, 0.52);
+  final secondary = accent;
+  final secondaryContainer = dark
+      ? _mix(accent, base, 0.70)
+      : _mix(accent, base, 0.82);
+  final tertiary = dark
+      ? _mix(brand, accent, 0.38)
+      : _mix(brand, accent, 0.52);
   final error = const Color(0xFFB3261E);
   final errorContainer = dark
       ? const Color(0xFF5F1412)
