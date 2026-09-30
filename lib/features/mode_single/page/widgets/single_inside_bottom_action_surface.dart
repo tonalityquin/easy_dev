@@ -6,8 +6,9 @@ import 'package:provider/provider.dart';
 
 import '../../../../design_system/common_ui/common_quick_action_surface.dart';
 import '../../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
+import '../../../rule/applications/work_rule_report_loader.dart';
 import '../../../rule/domain/models/rule_model.dart';
-import '../../application/single_area_work_rules_loader.dart';
+import '../../../rule/widgets/work_rule_report_surface.dart';
 import '../../application/single_inside_diagnostics.dart';
 
 class SingleInsideBottomActionSurface extends StatefulWidget {
@@ -91,11 +92,12 @@ class _SingleInsideBottomActionSurfaceState
     }
   }
 
-  Future<SingleAreaWorkRulesResult> _load() {
-    return SingleAreaWorkRulesLoader.load(
+  Future<WorkRuleReportResult> _load() {
+    return WorkRuleReportLoader.load(
       localRepository: context.read<OperationalLocalRepository>(),
       division: widget.division,
       area: widget.area,
+      onDebug: (message) => SingleInsideDiagnostics.log('rules', message),
     );
   }
 
@@ -110,7 +112,7 @@ class _SingleInsideBottomActionSurfaceState
       });
       SingleInsideDiagnostics.log(
         'rules',
-        'expanded_refresh_complete identity=$requestedIdentity found=${result.rule != null} contentLength=${result.rule?.content.length ?? 0}',
+        'expanded_refresh_complete identity=$requestedIdentity found=${result.rule != null} todoCount=${result.rule?.todoItems.length ?? 0} contentLength=${result.rule?.content.length ?? 0}',
       );
     } catch (error, stackTrace) {
       SingleInsideDiagnostics.log(
@@ -195,7 +197,7 @@ class _SingleInsideBottomActionSurfaceState
       }
       SingleInsideDiagnostics.log(
         'rules',
-        'open source=$source expanded=true division=${result.division} area=${result.area} found=${result.rule != null} contentLength=${result.rule?.content.length ?? 0} notifyInitialCompletion=$notifyInitialCompletion animationDurationMs=$animationDurationMs',
+        'open source=$source expanded=true division=${result.division} area=${result.area} found=${result.rule != null} todoCount=${result.rule?.todoItems.length ?? 0} contentLength=${result.rule?.content.length ?? 0} notifyInitialCompletion=$notifyInitialCompletion animationDurationMs=$animationDurationMs',
       );
       _completeInitialAutoOpenIfReduceMotion();
     } catch (error, stackTrace) {
@@ -291,66 +293,34 @@ class _SingleInsideBottomActionSurfaceState
   }
 
   Widget _buildRuleContent(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     if (_loadFailed) {
-      return Text(
-        '업무 규칙을 불러오지 못했습니다.',
-        key: const ValueKey<String>('failed'),
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: cs.error,
-          fontWeight: FontWeight.w700,
-        ),
+      return const WorkRuleReportMessageSurface(
+        key: ValueKey<String>('failed'),
+        icon: Icons.error_outline_rounded,
+        title: '업무 규칙을 불러오지 못했습니다.',
       );
     }
     final rule = _rule;
     if (rule == null) {
-      return Text(
-        '등록된 업무 규칙이 없습니다.',
-        key: const ValueKey<String>('empty'),
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: cs.onSurfaceVariant,
-          fontWeight: FontWeight.w600,
-        ),
+      return const WorkRuleReportMessageSurface(
+        key: ValueKey<String>('empty'),
+        icon: Icons.description_outlined,
+        title: '등록된 업무 규칙이 없습니다.',
       );
     }
-    final content = rule.content.trim();
-    if (content.isEmpty) {
-      return Text(
-        '등록된 업무 안내문이 없습니다.',
-        key: ValueKey<String>('content_empty_${rule.id}'),
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: cs.onSurfaceVariant,
-          fontWeight: FontWeight.w600,
-        ),
-      );
-    }
-    final maxHeight = math.max(120.0, MediaQuery.sizeOf(context).height * .28);
+    final maxHeight = math.max(150.0, MediaQuery.sizeOf(context).height * .34);
     return ConstrainedBox(
-      key: ValueKey<String>('rule_${rule.id}_${rule.updatedAt?.millisecondsSinceEpoch ?? 0}'),
+      key: ValueKey<String>(
+        'rule_${rule.id}_${rule.updatedAt?.millisecondsSinceEpoch ?? 0}',
+      ),
       constraints: BoxConstraints(maxHeight: maxHeight),
       child: SingleChildScrollView(
         physics: const ClampingScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '업무 안내문',
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: cs.onSurface,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 7),
-            Text(
-              content,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.onSurface,
-                height: 1.55,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+        child: WorkRuleReportSurface(
+          area: widget.area,
+          rule: rule,
+          showDocumentHeader: false,
+          dense: true,
         ),
       ),
     );

@@ -14,6 +14,7 @@ import '../../../../features/sector/domain/models/sector_model.dart';
 import '../../../plate/domain/models/plate_status_draft.dart';
 import '../../../plate/domain/models/plate_status_lookup_result.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
+import '../../../plate/editor/application/plate_camera_helper.dart';
 import '../../../plate/widgets/action_trace_dialog.dart';
 import '../application/input_plate_service.dart';
 import '../domain/repositories/ocr_learning_repository.dart';
@@ -372,6 +373,9 @@ class InputPlateController {
   void resetForm() {
     clearInput();
     clearLocation();
+    for (final image in capturedImages) {
+      PlateCameraHelper.forgetCaptureMetadata(image);
+    }
     capturedImages.clear();
     selectedBill = null;
     selectedBasicStandard = 0;
@@ -460,6 +464,9 @@ class InputPlateController {
   }
 
   void dispose() {
+    for (final image in capturedImages) {
+      PlateCameraHelper.forgetCaptureMetadata(image);
+    }
     _removeInputListeners();
     controllerFrontDigit.dispose();
     controllerMidDigit.dispose();
@@ -905,6 +912,7 @@ class InputPlateController {
       );
       final failedPaths = await InputPlateService.cleanupUploadedImages(
         result.uploadedObjectPaths,
+        onDebug: onDebug,
       );
       emitDebug(
         'image_cleanup=complete reason=$reason requested=${result.uploadedObjectPaths.length} failed=${failedPaths.length}',
@@ -923,6 +931,7 @@ class InputPlateController {
         area,
         userName,
         division,
+        onDebug: onDebug,
       );
       uploadResult = currentUploadResult;
       trace?.add(
@@ -1004,6 +1013,9 @@ class InputPlateController {
       }
 
       registrationCommitted = true;
+    for (final image in capturedImages) {
+      PlateCameraHelper.forgetCaptureMetadata(image);
+    }
 
       if (!context.mounted) {
         trace?.add('완료: context unmounted after committed register');

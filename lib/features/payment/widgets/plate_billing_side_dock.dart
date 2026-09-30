@@ -145,6 +145,7 @@ class _PlateBillingSideDockState extends State<PlateBillingSideDock> {
   final DateFormat _date = DateFormat('yyyy-MM-dd HH시 mm분');
 
   late final DateTime _feeSnapshotAt;
+  late final PlateBillingSnapshotQuote _billingQuote;
   int? _selectedPaymentIndex;
   FeeMode _feeMode = FeeMode.normal;
   int _adjustment = 0;
@@ -164,32 +165,12 @@ class _PlateBillingSideDockState extends State<PlateBillingSideDock> {
 
   String get _selectedPaymentDebug => _selectedPayment ?? 'unselected';
 
-  BillType get _billType {
-    final explicitPlan = (_plate.billingPlanType ?? '').trim();
-    if (explicitPlan.isNotEmpty) {
-      return billTypeFromString(explicitPlan);
-    }
-    if ((_plate.regularAmount ?? 0) > 0) {
-      return BillType.regular;
-    }
-    final legacyBillingType = (_plate.billingType ?? '').trim();
-    if (legacyBillingType.contains('정기')) {
-      return BillType.regular;
-    }
-    return BillType.general;
-  }
+  BillType get _billType =>
+      _billingQuote.regular ? BillType.regular : BillType.general;
 
-  String get _billTypeResolutionSource {
-    final explicitPlan = (_plate.billingPlanType ?? '').trim();
-    if (explicitPlan.isNotEmpty) return 'billingPlanType';
-    if ((_plate.regularAmount ?? 0) > 0) return 'legacy_regularAmount';
-    if ((_plate.billingType ?? '').trim().contains('정기')) {
-      return 'legacy_billingType_text';
-    }
-    return 'legacy_general_fallback';
-  }
+  String get _billTypeResolutionSource => _billingQuote.source;
 
-  bool get _isRegular => _billType == BillType.regular;
+  bool get _isRegular => _billingQuote.regular;
 
   int get _snapshotSeconds =>
       _feeSnapshotAt.toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -197,17 +178,7 @@ class _PlateBillingSideDockState extends State<PlateBillingSideDock> {
   int get _entrySeconds =>
       _plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
 
-  int get _baseFee {
-    if (_isRegular) return _plate.regularAmount ?? 0;
-    return calculateFee(
-      entryTimeInSeconds: _entrySeconds,
-      currentTimeInSeconds: _snapshotSeconds,
-      basicStandard: _plate.basicStandard ?? 0,
-      basicAmount: _plate.basicAmount ?? 0,
-      addStandard: _plate.addStandard ?? 0,
-      addAmount: _plate.addAmount ?? 0,
-    );
-  }
+  int get _baseFee => _billingQuote.amount;
 
   int get _finalFee => applyFeeAdjustment(
         baseFee: _baseFee,
@@ -226,6 +197,10 @@ class _PlateBillingSideDockState extends State<PlateBillingSideDock> {
   void initState() {
     super.initState();
     _feeSnapshotAt = DateTime.now();
+    _billingQuote = calculatePlateBillingSnapshotQuote(
+      plate: _plate,
+      snapshotAt: _feeSnapshotAt,
+    );
     _amountFocus.addListener(_handleAmountFocus);
     _reasonFocus.addListener(_handleReasonFocus);
     WidgetsBinding.instance.addPostFrameCallback((_) {

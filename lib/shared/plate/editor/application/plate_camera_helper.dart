@@ -1,55 +1,94 @@
-
 import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart' show compute;
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show ValueChanged, compute, debugPrint;
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 
-
-
-
-
-
 class PlateCameraHelper {
   PlateCameraHelper({
-    this.jpegQuality = 75,
+    this.jpegQuality = 82,
     this.maxLongSide,
+    this.thumbnailJpegQuality = 65,
+    this.thumbnailLongSide = 400,
     this.keepOriginalAlso = false,
-    this.resolution = ResolutionPreset.medium,
+    this.resolution = ResolutionPreset.high,
+    this.onDebug,
   });
 
-
   final int jpegQuality;
-
-
   final int? maxLongSide;
-
-
+  final int thumbnailJpegQuality;
+  final int thumbnailLongSide;
   final bool keepOriginalAlso;
-
-
   final ResolutionPreset resolution;
+  final ValueChanged<String>? onDebug;
 
   CameraController? _controller;
   CameraController? get cameraController => _controller;
-
   bool get isCameraInitialized => _controller?.value.isInitialized == true;
 
-  final List<XFile> capturedImages = [];
+  static final Map<String, DateTime> _capturedAtUtcByPath = <String, DateTime>{};
+
+  final List<XFile> capturedImages = <XFile>[];
 
   bool _isInitializing = false;
   Future<void>? _initFuture;
   bool _isDisposing = false;
   bool _captureInProgress = false;
+  bool _disposeInProgress = false;
+  String? _lastDisplayPath;
+  String? _lastThumbnailPath;
+  int _lastDisplayBytes = 0;
+  int _lastThumbnailBytes = 0;
+  DateTime? _lastCapturedAtUtc;
+
+  String? get lastDisplayPath => _lastDisplayPath;
+  String? get lastThumbnailPath => _lastThumbnailPath;
+  int get lastDisplayBytes => _lastDisplayBytes;
+  int get lastThumbnailBytes => _lastThumbnailBytes;
+  DateTime? get lastCapturedAtUtc => _lastCapturedAtUtc;
+  bool get _hasController => _controller != null;
+
+  static DateTime? capturedAtUtcFor(XFile image) {
+    return _capturedAtUtcByPath[image.path];
+  }
+
+  static DateTime? capturedAtUtcForPath(String path) {
+    return _capturedAtUtcByPath[path];
+  }
+
+  static void forgetCaptureMetadata(XFile image) {
+    _capturedAtUtcByPath.remove(image.path);
+  }
+
+  static String thumbnailPathFor(String displayPath) {
+    return '$displayPath.thumb.jpg';
+  }
+
+  static File thumbnailFileFor(XFile displayImage) {
+    return File(thumbnailPathFor(displayImage.path));
+  }
+
+  void _debug(String message) {
+    final normalized = message.trim();
+    if (normalized.isEmpty) return;
+    final callback = onDebug;
+    if (callback != null) {
+      callback(normalized);
+      return;
+    }
+    debugPrint('[PlateCameraHelper] $normalized');
+  }
 
   Future<void> initializeCamera() async {
     if (isCameraInitialized && _controller != null) {
-      debugPrint('📸 PlateCameraHelper: 이미 초기화됨(재사용)');
+      _debug('camera_initialize=reuse');
       return;
     }
     if (_isInitializing && _initFuture != null) {
-      debugPrint('📸 PlateCameraHelper: 초기화 진행 중(Future 공유)');
+      _debug('camera_initialize=join_existing');
       await _initFuture!;
       return;
     }
@@ -58,7 +97,7 @@ class PlateCameraHelper {
     _initFuture = _doInitialize();
     try {
       await _initFuture;
-      debugPrint('✅ PlateCameraHelper: 카메라 초기화 완료');
+      _debug('camera_initialize=success resolution=${resolution.name}');
     } finally {
       _isInitializing = false;
     }
@@ -71,10 +110,9 @@ class PlateCameraHelper {
     }
 
     final back = cameras.firstWhere(
-          (c) => c.lensDirection == CameraLensDirection.back,
+      (camera) => camera.lensDirection == CameraLensDirection.back,
       orElse: () => cameras.first,
     );
-
 
     try {
       _controller = CameraController(
@@ -84,8 +122,8 @@ class PlateCameraHelper {
         imageFormatGroup: ImageFormatGroup.jpeg,
       );
       await _controller!.initialize();
-    } on CameraException catch (e) {
-      debugPrint('⚠️ JPEG 포맷 초기화 실패 → 포맷 미지정으로 재시도: $e');
+    } on CameraException catch (error) {
+      _debug('camera_initialize=jpeg_retry error=$error');
       _controller = CameraController(
         back,
         resolution,
@@ -95,83 +133,115 @@ class PlateCameraHelper {
     }
   }
 
-
   Future<void> lockPortrait() async {
-    final c = _controller;
-    if (c == null || !c.value.isInitialized) return;
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
     try {
-      await c.lockCaptureOrientation(DeviceOrientation.portraitUp);
-    } catch (_) {}
+      await controller.lockCaptureOrientation(DeviceOrientation.portraitUp);
+    } catch (error) {
+      _debug('camera_orientation=lock_failed error=$error');
+    }
   }
-
 
   Future<void> unlockOrientation() async {
-    final c = _controller;
-    if (c == null || !c.value.isInitialized) return;
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
     try {
-      await c.unlockCaptureOrientation();
-    } catch (_) {}
+      await controller.unlockCaptureOrientation();
+    } catch (error) {
+      _debug('camera_orientation=unlock_failed error=$error');
+    }
   }
 
-
   Future<XFile?> captureImage() async {
-
     if (_isDisposing) {
-      debugPrint('⚠️ dispose 중: 촬영 불가');
+      _debug('capture=blocked reason=disposing');
       return null;
     }
-    final c = _controller;
-    if (c == null || !c.value.isInitialized) {
-      debugPrint('⚠️ 카메라가 초기화되지 않음');
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      _debug('capture=blocked reason=not_initialized');
       return null;
     }
-    if (c.value.isTakingPicture) {
-      debugPrint('⏳ 이미 촬영 중');
+    if (controller.value.isTakingPicture) {
+      _debug('capture=blocked reason=camera_busy');
       return null;
     }
-
     if (_captureInProgress) {
-      debugPrint('⏳ captureInProgress=true (중복 방지)');
+      _debug('capture=blocked reason=processing_busy');
       return null;
     }
 
     _captureInProgress = true;
+    final stopwatch = Stopwatch()..start();
+    XFile? capturedImage;
     try {
-      final XFile image = await c.takePicture();
-      debugPrint('✅ 촬영 성공 - ${image.path}');
-
-
+      final capturedAtUtc = DateTime.now().toUtc();
+      _debug('capture=requested capturedAtUtc=${capturedAtUtc.toIso8601String()}');
+      final image = await controller.takePicture();
+      capturedImage = image;
+      _capturedAtUtcByPath[image.path] = capturedAtUtc;
+      _lastCapturedAtUtc = capturedAtUtc;
       final file = File(image.path);
-      final bytes = await file.readAsBytes();
+      final sourceBytes = await file.readAsBytes();
+      _debug(
+        'capture=source path=${image.path} capturedAtUtc=${capturedAtUtc.toIso8601String()} bytes=${sourceBytes.length} displayQuality=$jpegQuality displayMaxLong=${maxLongSide ?? 0} thumbnailQuality=$thumbnailJpegQuality thumbnailLong=$thumbnailLongSide',
+      );
 
-
-      final compressed = await compute<_CompressPayload, List<int>>(
-        _compressJpegOnIsolate,
-        _CompressPayload(
-          bytes,
-          quality: jpegQuality,
-          maxLongSide: maxLongSide,
+      final processed = await compute<_ProcessPayload, Map<String, List<int>>>(
+        _processJpegOnIsolate,
+        _ProcessPayload(
+          sourceBytes,
+          displayQuality: jpegQuality,
+          displayMaxLongSide: maxLongSide,
+          thumbnailQuality: thumbnailJpegQuality,
+          thumbnailLongSide: thumbnailLongSide,
         ),
       );
 
       if (keepOriginalAlso) {
         try {
-          final origPath = '${image.path}.orig.jpg';
-          await File(origPath).writeAsBytes(bytes, flush: true);
-          debugPrint('📦 원본 보존: $origPath');
-        } catch (e) {
-          debugPrint('⚠️ 원본 보존 실패: $e');
+          final originalPath = '${image.path}.orig.jpg';
+          await File(originalPath).writeAsBytes(sourceBytes, flush: true);
+          _debug('capture=original_saved path=$originalPath bytes=${sourceBytes.length}');
+        } catch (error) {
+          _debug('capture=original_save_failed error=$error');
         }
       }
 
+      final displayBytes = processed['display'] ?? sourceBytes;
+      await file.writeAsBytes(displayBytes, flush: true);
 
-      await file.writeAsBytes(compressed, flush: true);
-      debugPrint('✅ 압축 완료 - ${compressed.length ~/ 1024}KB');
+      final thumbnailPath = thumbnailPathFor(image.path);
+      final thumbnailBytes = processed['thumbnail'] ?? const <int>[];
+      var thumbnailWritten = false;
+      if (thumbnailBytes.isNotEmpty) {
+        try {
+          await File(thumbnailPath).writeAsBytes(thumbnailBytes, flush: true);
+          thumbnailWritten = true;
+        } catch (error) {
+          _debug('thumbnail=write_failed path=$thumbnailPath error=$error');
+        }
+      }
 
+      _lastDisplayPath = image.path;
+      _lastThumbnailPath = thumbnailWritten ? thumbnailPath : null;
+      _lastDisplayBytes = displayBytes.length;
+      _lastThumbnailBytes = thumbnailWritten ? thumbnailBytes.length : 0;
       capturedImages.add(image);
+      stopwatch.stop();
+      _debug(
+        'capture=success path=${image.path} capturedAtUtc=${capturedAtUtc.toIso8601String()} displayBytes=$_lastDisplayBytes thumbnailPath=${_lastThumbnailPath ?? '-'} thumbnailBytes=$_lastThumbnailBytes elapsedMs=${stopwatch.elapsedMilliseconds}',
+      );
       return image;
-    } catch (e) {
-      debugPrint('❌ 촬영/압축 오류: $e');
+    } catch (error, stackTrace) {
+      final failedImage = capturedImage;
+      if (failedImage != null) {
+        _capturedAtUtcByPath.remove(failedImage.path);
+      }
+      stopwatch.stop();
+      _debug('capture=failed elapsedMs=${stopwatch.elapsedMilliseconds} error=$error');
+      _debug('capture=stack_trace\n$stackTrace');
       return null;
     } finally {
       _captureInProgress = false;
@@ -179,31 +249,31 @@ class PlateCameraHelper {
   }
 
   Future<void> pausePreview() async {
-    final c = _controller;
-    if (c == null || !c.value.isInitialized) return;
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
     try {
-      await c.pausePreview();
-    } catch (_) {}
+      await controller.pausePreview();
+      _debug('preview=pause_success');
+    } catch (error) {
+      _debug('preview=pause_failed error=$error');
+    }
   }
 
   Future<void> resumePreview() async {
-    final c = _controller;
-    if (c == null || !c.value.isInitialized) return;
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
     try {
-      await c.resumePreview();
-    } catch (_) {}
+      await controller.resumePreview();
+      _debug('preview=resume_success');
+    } catch (error) {
+      _debug('preview=resume_failed error=$error');
+    }
   }
 
-  bool get _hasController => _controller != null;
-
-  bool _disposeInProgress = false;
-
   Future<void> dispose() async {
-    debugPrint('🧹 PlateCameraHelper: dispose() 호출');
-
-
+    _debug('camera_dispose=start');
     if (_isDisposing || _disposeInProgress) {
-      debugPrint('⚠️ 이미 dispose 중');
+      _debug('camera_dispose=skip reason=already_disposing');
       return;
     }
     _isDisposing = true;
@@ -215,26 +285,23 @@ class PlateCameraHelper {
       } catch (_) {}
 
       if (!_hasController) {
-        debugPrint('⚠️ CameraController=null');
+        _debug('camera_dispose=skip reason=no_controller');
         return;
       }
-      final c = _controller!;
+      final controller = _controller!;
       try {
-        if (c.value.isInitialized) {
-          debugPrint('🧹 Controller dispose 시작');
-        }
-        await c.dispose();
-        debugPrint('✅ Controller dispose 완료');
-      } on PlatformException catch (e) {
-        final msg = e.message ?? '';
-        if (e.code == 'IllegalStateException' &&
-            msg.contains('releaseFlutterSurfaceTexture')) {
-          debugPrint('! dispose 예외(무시 가능): $e');
+        await controller.dispose();
+        _debug('camera_dispose=success');
+      } on PlatformException catch (error) {
+        final message = error.message ?? '';
+        if (error.code == 'IllegalStateException' &&
+            message.contains('releaseFlutterSurfaceTexture')) {
+          _debug('camera_dispose=platform_ignored error=$error');
         } else {
-          debugPrint('! dispose PlatformException(로그만): $e');
+          _debug('camera_dispose=platform_failed error=$error');
         }
-      } catch (e) {
-        debugPrint('! dispose 기타 예외(로그만): $e');
+      } catch (error) {
+        _debug('camera_dispose=failed error=$error');
       } finally {
         _controller = null;
         capturedImages.clear();
@@ -246,42 +313,66 @@ class PlateCameraHelper {
   }
 }
 
+class _ProcessPayload {
+  const _ProcessPayload(
+    this.bytes, {
+    required this.displayQuality,
+    required this.displayMaxLongSide,
+    required this.thumbnailQuality,
+    required this.thumbnailLongSide,
+  });
 
-class _CompressPayload {
   final Uint8List bytes;
-  final int quality;
-  final int? maxLongSide;
-  const _CompressPayload(
-      this.bytes, {
-        this.quality = 75,
-        this.maxLongSide,
-      });
+  final int displayQuality;
+  final int? displayMaxLongSide;
+  final int thumbnailQuality;
+  final int thumbnailLongSide;
 }
 
-
-List<int> _compressJpegOnIsolate(_CompressPayload payload) {
+Map<String, List<int>> _processJpegOnIsolate(_ProcessPayload payload) {
   final decoded = img.decodeImage(payload.bytes);
-  if (decoded == null) return payload.bytes;
+  if (decoded == null) {
+    return <String, List<int>>{
+      'display': payload.bytes,
+      'thumbnail': const <int>[],
+    };
+  }
 
-  img.Image baked = img.bakeOrientation(decoded);
+  final baked = img.bakeOrientation(decoded);
+  final display = _resizeLongSide(baked, payload.displayMaxLongSide);
+  final displayBytes = img.encodeJpg(
+    display,
+    quality: payload.displayQuality.clamp(1, 100).toInt(),
+  );
 
-
-  if (payload.maxLongSide != null) {
-    final maxSide = payload.maxLongSide!;
-    final longer = baked.width >= baked.height ? baked.width : baked.height;
-    if (longer > maxSide) {
-      final scale = maxSide / longer;
-      final targetW = (baked.width * scale).round();
-      final targetH = (baked.height * scale).round();
-      baked = img.copyResize(
-        baked,
-        width: targetW,
-        height: targetH,
-        interpolation: img.Interpolation.linear,
+  List<int> thumbnailBytes = const <int>[];
+  if (payload.thumbnailLongSide > 0) {
+    try {
+      final thumbnail = _resizeLongSide(baked, payload.thumbnailLongSide);
+      thumbnailBytes = img.encodeJpg(
+        thumbnail,
+        quality: payload.thumbnailQuality.clamp(1, 100).toInt(),
       );
+    } catch (_) {
+      thumbnailBytes = const <int>[];
     }
   }
 
+  return <String, List<int>>{
+    'display': displayBytes,
+    'thumbnail': thumbnailBytes,
+  };
+}
 
-  return img.encodeJpg(baked, quality: payload.quality);
+img.Image _resizeLongSide(img.Image source, int? maxLongSide) {
+  if (maxLongSide == null || maxLongSide <= 0) return source;
+  final longer = source.width >= source.height ? source.width : source.height;
+  if (longer <= maxLongSide) return source;
+  final scale = maxLongSide / longer;
+  return img.copyResize(
+    source,
+    width: (source.width * scale).round(),
+    height: (source.height * scale).round(),
+    interpolation: img.Interpolation.linear,
+  );
 }

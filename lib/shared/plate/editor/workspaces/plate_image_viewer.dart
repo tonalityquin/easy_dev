@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 
 class PlateEmbeddedImageViewerContent extends StatefulWidget {
@@ -29,7 +28,7 @@ class PlateEmbeddedImageViewerContent extends StatefulWidget {
 
 class _PlateEmbeddedImageViewerContentState
     extends State<PlateEmbeddedImageViewerContent> {
-  late PageController _pageController;
+  late final PageController _pageController;
   late int _currentIndex;
 
   int _safeIndex(int value) {
@@ -59,33 +58,34 @@ class _PlateEmbeddedImageViewerContentState
   }
 
   bool _isNetwork(dynamic image) {
-    if (image is! String) return false;
+    if (image == null || image is! String) return false;
     final uri = Uri.tryParse(image);
     return uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
   }
 
   String _pathOf(dynamic image) {
     if (image is XFile) return image.path;
-    return image.toString();
-  }
-
-  String _metadataOf(dynamic image) {
-    if (_isNetwork(image)) {
-      final segments = Uri.tryParse(image.toString())?.pathSegments;
-      return _parseMetadataFromFileName(
-        segments == null || segments.isEmpty ? '' : segments.last,
-      );
-    }
-    final path = _pathOf(image);
-    return _parseMetadataFromFileName(File(path).uri.pathSegments.last);
+    if (image is String) return image;
+    return '';
   }
 
   Widget _buildImage(BuildContext context, dynamic image) {
     final tokens = CommonUiTheme.of(context);
+    if (image == null) {
+      return Center(
+        child: Icon(
+          Icons.image_outlined,
+          color: tokens.iconSecondary,
+          size: 44,
+        ),
+      );
+    }
+
     if (_isNetwork(image)) {
       return Image.network(
         image.toString(),
         fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
         loadingBuilder: (context, child, progress) {
           if (progress == null) return child;
           return Center(
@@ -103,6 +103,15 @@ class _PlateEmbeddedImageViewerContentState
     }
 
     final path = _pathOf(image);
+    if (path.trim().isEmpty) {
+      return Center(
+        child: Icon(
+          Icons.image_outlined,
+          color: tokens.iconSecondary,
+          size: 44,
+        ),
+      );
+    }
     return FutureBuilder<bool>(
       future: File(path).exists(),
       builder: (context, snapshot) {
@@ -120,7 +129,11 @@ class _PlateEmbeddedImageViewerContentState
             ),
           );
         }
-        return Image.file(File(path), fit: BoxFit.contain);
+        return Image.file(
+          File(path),
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+        );
       },
     );
   }
@@ -128,9 +141,6 @@ class _PlateEmbeddedImageViewerContentState
   @override
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-
     if (widget.images.isEmpty) {
       return Center(
         child: Text(
@@ -156,57 +166,14 @@ class _PlateEmbeddedImageViewerContentState
             );
           },
           itemBuilder: (context, index) {
-            final image = widget.images[index];
-            final metadata = _metadataOf(image);
             return Padding(
               padding: const EdgeInsets.fromLTRB(8, 46, 8, 8),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Center(
-                    child: InteractiveViewer(
-                      minScale: .8,
-                      maxScale: 4,
-                      child: _buildImage(context, image),
-                    ),
-                  ),
-                  if (metadata.isNotEmpty)
-                    Positioned(
-                      left: 10,
-                      right: 10,
-                      bottom: 10,
-                      child: AnimatedOpacity(
-                        duration: reduceMotion
-                            ? Duration.zero
-                            : const Duration(milliseconds: 190),
-                        opacity: 1,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 9,
-                          ),
-                          decoration: BoxDecoration(
-                            color: tokens.surfaceRaised.withOpacity(.94),
-                            borderRadius:
-                                BorderRadius.circular(CommonUiShapes.control),
-                            border: Border.all(color: tokens.borderSubtle),
-                          ),
-                          child: Text(
-                            metadata,
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                  color: tokens.textPrimary,
-                                  height: 1.35,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              child: Center(
+                child: InteractiveViewer(
+                  minScale: .8,
+                  maxScale: 4,
+                  child: _buildImage(context, widget.images[index]),
+                ),
               ),
             );
           },
@@ -214,25 +181,20 @@ class _PlateEmbeddedImageViewerContentState
         Positioned(
           top: 8,
           left: 8,
+          right: 8,
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              if (widget.onBack != null) ...[
-                CommonIconButton(
-                  icon: Icons.arrow_back_rounded,
-                  tooltip: '이전',
-                  size: 36,
-                  iconSize: 18,
-                  haptic: CommonHaptic.selection,
+              if (widget.onBack != null)
+                IconButton(
                   onPressed: widget.onBack,
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  color: tokens.iconPrimary,
+                  style: IconButton.styleFrom(
+                    backgroundColor: tokens.surfaceRaised.withOpacity(.94),
+                  ),
                 ),
-                const SizedBox(width: 6),
-              ],
-              AnimatedContainer(
-                duration: reduceMotion
-                    ? Duration.zero
-                    : const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
+              const Spacer(),
+              Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: tokens.surfaceRaised.withOpacity(.94),
@@ -252,29 +214,5 @@ class _PlateEmbeddedImageViewerContentState
         ),
       ],
     );
-  }
-}
-
-String _parseMetadataFromFileName(String fileName) {
-  try {
-    final name = fileName.replaceAll('.jpg', '');
-    final parts = name.split('_');
-    if (parts.length < 4) return '';
-    final date = parts[0];
-    final timeValue = parts[1];
-    final plate = parts[2];
-    final user = parts.sublist(3).join('_');
-    final timeText = timeValue.length == 6
-        ? '${timeValue.substring(0, 2)}:${timeValue.substring(2, 4)}:${timeValue.substring(4, 6)}'
-        : (() {
-            final millis = int.tryParse(timeValue);
-            if (millis == null) return '';
-            final dateTime = DateTime.fromMillisecondsSinceEpoch(millis);
-            return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')}';
-          })();
-    if (timeText.isEmpty) return '';
-    return '촬영일: $date $timeText\n차량번호: $plate\n촬영자: $user';
-  } catch (_) {
-    return '';
   }
 }

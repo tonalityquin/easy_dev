@@ -928,7 +928,8 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
             PlateEditorWorkspace.camera,
             reason: 'camera_exit',
           ),
-          onImageCaptured: (image) {
+          onImageCaptured: (image) async {
+            if (!mounted) return;
             if (_controller.capturedImages
                 .any((item) => item.path == image.path)) {
               return;
@@ -936,6 +937,11 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
             setState(() => _controller.capturedImages.add(image));
             _log(
               'camera=captured path=${image.path} count=${_controller.capturedImages.length}',
+            );
+            await WidgetsBinding.instance.endOfFrame;
+            if (!mounted) return;
+            _log(
+              'recent_photo=parent_frame_ready path=${image.path} count=${_controller.capturedImages.length}',
             );
           },
           onImageDeleted: (image) {
@@ -948,14 +954,16 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
               'camera=deleted path=${image.path} count=${_controller.capturedImages.length}',
             );
           },
+          trace: widget.trace,
           savedPhotosBuilder: (context, onBack) => PlateSavedPhotosContent(
             plateNumber: widget.plate.plateNumber,
             diagnosticSource: 'modify',
             loadImages: (loadContext, yearMonth) {
-              return ModifyPlateService.listPlateImages(
+              return ModifyPlateService.listStoredPlateImages(
                 context: loadContext,
                 plateNumber: widget.plate.plateNumber,
                 yearMonth: yearMonth,
+                onDebug: _log,
               );
             },
             onBack: onBack,

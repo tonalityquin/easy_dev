@@ -111,12 +111,14 @@ class CommonSideRailSurface extends StatelessWidget {
     required this.metrics,
     required this.child,
     this.semanticsLabel,
+    this.headerAction,
   });
 
   final String title;
   final String? semanticsLabel;
   final CommonSideRailMetrics metrics;
   final Widget child;
+  final Widget? headerAction;
 
   @override
   Widget build(BuildContext context) {
@@ -173,6 +175,32 @@ class CommonSideRailSurface extends StatelessWidget {
                 ],
               ),
             ),
+            if (headerAction != null) ...[
+              SizedBox(height: metrics.headerGap),
+              AnimatedSwitcher(
+                duration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, -.04),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  );
+                },
+                child: KeyedSubtree(
+                  key: ValueKey<String>('header-action-${headerAction.runtimeType}'),
+                  child: headerAction!,
+                ),
+              ),
+            ],
             SizedBox(height: metrics.headerGap),
             Expanded(
               child: ClipRRect(

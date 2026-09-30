@@ -11,6 +11,7 @@ import '../../../app/init/logout_helper.dart';
 import '../../../app/init/work_status_notification.dart';
 import '../../../app/theme/theme_settings_dialog.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
+import '../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../shared/area_remote_settings/application/local_area_capability_refresh.dart';
 import '../../../shared/secondary/application/secondary_info.dart';
@@ -18,7 +19,10 @@ import '../../../shared/secondary/application/secondary_state.dart';
 import '../../../shared/document/work_start_report/dashboard_start_report_form_page.dart';
 import '../../../shared/secondary/side_docks/secondary_side_dock.dart';
 import '../../account/applications/user_state.dart';
+import '../../community/page/faq_side_dock.dart';
 import '../../dev/application/area_state.dart';
+import '../../headquarter/application/headquarter_support_actions.dart';
+import '../../selector/dialogs/update_dialog.dart';
 import '../../attendance/application/common_attendance_service.dart';
 import '../../dev/debug/debug_api_logger.dart';
 import '../application/single_inside_diagnostics.dart';
@@ -795,6 +799,30 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
     );
   }
 
+  bool _dashboardRequestPreservesWorkspace(SingleInsideDockRequest request) {
+    switch (request) {
+      case SingleInsideDockRequest.workSchedule:
+      case SingleInsideDockRequest.punchRecorder:
+      case SingleInsideDockRequest.faq:
+      case SingleInsideDockRequest.update:
+      case SingleInsideDockRequest.terms:
+      case SingleInsideDockRequest.privacy:
+      case SingleInsideDockRequest.theme:
+        return true;
+      case SingleInsideDockRequest.workStartReport:
+      case SingleInsideDockRequest.workEndReport:
+      case SingleInsideDockRequest.commuteSubmit:
+      case SingleInsideDockRequest.restTimeSubmit:
+      case SingleInsideDockRequest.statementForm:
+      case SingleInsideDockRequest.leaveApplication:
+      case SingleInsideDockRequest.operations:
+      case SingleInsideDockRequest.operationalSync:
+      case SingleInsideDockRequest.logout:
+      case SingleInsideDockRequest.exitApp:
+        return false;
+    }
+  }
+
   Future<void> _dispatchDashboardRequest(
     SingleInsideDockRequest request,
     String source,
@@ -819,9 +847,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
       );
       final reduceMotion =
           MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-      if (request != SingleInsideDockRequest.workSchedule &&
-          request != SingleInsideDockRequest.punchRecorder &&
-          request != SingleInsideDockRequest.theme &&
+      if (!_dashboardRequestPreservesWorkspace(request) &&
           _workspaceContent != SingleInsideWorkspaceContent.dotMap) {
         _switchWorkspaceContent(
           SingleInsideWorkspaceContent.dotMap,
@@ -891,6 +917,51 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
         await _runDocumentAction(
           context,
           SingleInsideDocumentAction.leaveApplication,
+        );
+        break;
+      case SingleInsideDockRequest.faq:
+        SingleInsideDiagnostics.log(
+          'support',
+          'faq_open source=$source side=right',
+        );
+        await showFaqSideDock<void>(
+          context: context,
+          side: CommonSideDockSide.right,
+          source: 'single_mini_side_dock',
+        );
+        SingleInsideDiagnostics.log(
+          'support',
+          'faq_closed source=$source side=right',
+        );
+        break;
+      case SingleInsideDockRequest.update:
+        SingleInsideDiagnostics.log(
+          'support',
+          'update_dialog_open source=$source',
+        );
+        await showUpdateDialog(
+          context,
+          source: 'single_mini_side_dock',
+        );
+        SingleInsideDiagnostics.log(
+          'support',
+          'update_dialog_closed source=$source',
+        );
+        break;
+      case SingleInsideDockRequest.terms:
+        final termsOpened =
+            await HeadquarterSupportActions.openTermsOfService(context);
+        SingleInsideDiagnostics.log(
+          'support',
+          'external_result id=terms opened=$termsOpened source=$source',
+        );
+        break;
+      case SingleInsideDockRequest.privacy:
+        final privacyOpened =
+            await HeadquarterSupportActions.openPrivacyPolicy(context);
+        SingleInsideDiagnostics.log(
+          'support',
+          'external_result id=privacy opened=$privacyOpened source=$source',
         );
         break;
       case SingleInsideDockRequest.operations:

@@ -106,19 +106,9 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
   }
 
   void _openPhotoDialog(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: "사진 보기",
-      barrierColor: cs.scrim.withOpacity(0.45),
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) {
-        return TripleDepartureCompletedPlateImageDialog(
-          plateNumber: widget.plateNumber,
-        );
-      },
+    showTripleDepartureCompletedPlateImageDialog<void>(
+      context,
+      plateNumber: widget.plateNumber,
     );
   }
 

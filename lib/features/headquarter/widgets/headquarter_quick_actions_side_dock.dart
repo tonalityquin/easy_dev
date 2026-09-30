@@ -4,9 +4,11 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/di/routes.dart';
+import '../../../app/models/capability.dart';
 import '../../../app/theme/theme_settings_dialog.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
@@ -14,7 +16,10 @@ import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../community/application/discord/discord_config.dart';
 import '../../community/page/faq_side_dock.dart';
 import '../../community/page/side_docks/discord_side_dock.dart';
+import '../../rule/widgets/work_rule_report_surface.dart';
 import '../../selector/application/dev_auth.dart';
+import '../../selector/dialogs/update_dialog.dart';
+import '../../dev/application/area_state.dart';
 import '../application/actions/headquarter_common_actions.dart';
 import '../application/download/headquarter_area_master_download_workflow.dart';
 import '../application/headquarter_dashboard_context.dart';
@@ -160,13 +165,17 @@ class _HeadquarterQuickActionsPanel extends StatefulWidget {
       _HeadquarterQuickActionsPanelState();
 }
 
+enum _HeadquarterQuickView { actions, workRuleReport }
+
 class _HeadquarterQuickActionsPanelState
     extends State<_HeadquarterQuickActionsPanel> {
   static const double _dockRadius = 18;
 
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _dockScrollController = ScrollController();
   final FocusNode _searchFocus = FocusNode();
   String _lastSearchValue = '';
+  _HeadquarterQuickView _view = _HeadquarterQuickView.actions;
 
   @override
   void initState() {
@@ -181,6 +190,7 @@ class _HeadquarterQuickActionsPanelState
   void dispose() {
     _searchController.removeListener(_handleSearchChanged);
     _searchController.dispose();
+    _dockScrollController.dispose();
     _searchFocus.dispose();
     HeadquarterSideDockLauncherController.recordDebug(
       'quick_actions_panel_disposed source=${widget.source}',
@@ -210,6 +220,36 @@ class _HeadquarterQuickActionsPanelState
   void _close([_DockAction? action]) {
     _searchFocus.unfocus();
     Navigator.of(context).pop<_DockAction>(action);
+  }
+
+  void _openWorkRuleReport() {
+    if (_view == _HeadquarterQuickView.workRuleReport) return;
+    _searchFocus.unfocus();
+    HapticFeedback.selectionClick();
+    final areaState = context.read<AreaState>();
+    HeadquarterSideDockLauncherController.recordDebug(
+      'quick_actions_work_rule_report_open_requested source=${widget.source} division=${areaState.currentDivision.trim()} area=${areaState.currentArea.trim()} side=left',
+    );
+    setState(() => _view = _HeadquarterQuickView.workRuleReport);
+  }
+
+  void _closeWorkRuleReport({required String source}) {
+    if (_view != _HeadquarterQuickView.workRuleReport) return;
+    HeadquarterSideDockLauncherController.recordDebug(
+      'quick_actions_work_rule_report_close_requested source=$source',
+    );
+    setState(() => _view = _HeadquarterQuickView.actions);
+  }
+
+  void _handleScrimTap() {
+    if (_view == _HeadquarterQuickView.workRuleReport) {
+      _closeWorkRuleReport(source: 'scrim');
+      return;
+    }
+    HeadquarterSideDockLauncherController.recordDebug(
+      'quick_actions_close source=scrim',
+    );
+    _close();
   }
 
   Future<bool> _launchExternal(String value) async {
@@ -300,6 +340,16 @@ class _HeadquarterQuickActionsPanelState
         color: tokens.accentContainer,
         foreground: tokens.onAccentContainer,
         onTap: _openThirdPartyChannel,
+      ),
+      _DockAction(
+        id: 'work_rules',
+        category: _QuickActionCategory.work,
+        icon: Icons.rule_rounded,
+        label: '업무 규칙',
+        description: '현재 지역의 업무 규칙 보고서를 확인합니다.',
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
+        onTap: (_) async {},
       ),
       _DockAction(
         id: 'headquarter_navigation',
@@ -484,6 +534,27 @@ class _HeadquarterQuickActionsPanelState
         },
       ),
       _DockAction(
+        id: 'update',
+        category: _QuickActionCategory.support,
+        icon: Icons.system_update_alt_rounded,
+        label: '업데이트',
+        description: null,
+        color: tokens.accentContainer,
+        foreground: tokens.onAccentContainer,
+        onTap: (rootContext) async {
+          HeadquarterSideDockLauncherController.recordDebug(
+            'quick_actions_update_dialog_open source=${widget.source}',
+          );
+          await showUpdateDialog(
+            rootContext,
+            source: 'headquarter_quick_actions_side_dock',
+          );
+          HeadquarterSideDockLauncherController.recordDebug(
+            'quick_actions_update_dialog_closed source=${widget.source}',
+          );
+        },
+      ),
+      _DockAction(
         id: 'terms',
         category: _QuickActionCategory.support,
         icon: Icons.description_rounded,
@@ -552,16 +623,21 @@ class _HeadquarterQuickActionsPanelState
       if (widget.developerMode)
         _DockAction(
           id: 'notensystem',
-          category: _QuickActionCategory.developer,
+          category: _QuickActionCategory.thirdParty,
           icon: Icons.auto_stories_rounded,
           label: 'notensystem',
           description: '소설 설계 및 집필 스튜디오',
           color: tokens.infoContainer,
           foreground: tokens.onInfoContainer,
-          hiddenUntilExactQuery: true,
           onTap: (rootContext) async {
+            HeadquarterSideDockLauncherController.recordDebug(
+              'quick_actions_notensystem_open source=${widget.source}',
+            );
             await Navigator.of(rootContext, rootNavigator: true)
                 .pushNamed(AppRoutes.noteSystem);
+            HeadquarterSideDockLauncherController.recordDebug(
+              'quick_actions_notensystem_closed source=${widget.source}',
+            );
           },
         ),
     ];
@@ -575,7 +651,9 @@ class _HeadquarterQuickActionsPanelState
         final media = MediaQuery.maybeOf(context);
         final screen = media?.size ?? Size.zero;
         final keyboardInset = media?.viewInsets.bottom ?? 0;
+        final reduceMotion = media?.disableAnimations ?? false;
         final tokens = CommonUiTheme.of(context);
+        final areaState = context.watch<AreaState>();
         final progress = widget.animation.value.clamp(0.0, 1.0).toDouble();
         final maxDockWidth =
             (screen.width * 0.92).clamp(240.0, double.infinity).toDouble();
@@ -584,60 +662,111 @@ class _HeadquarterQuickActionsPanelState
         final slideX = -slideDistance * (1 - progress);
         final dockScale = 0.985 + (0.015 * progress);
         final actions = _buildActions(tokens);
+        final reportVisible = _view == _HeadquarterQuickView.workRuleReport;
+        final content = AnimatedSwitcher(
+          duration: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 200),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            if (reduceMotion) return child;
+            final reportChild =
+                child.key == const ValueKey<String>('hq_work_rule_report');
+            final begin = reportChild
+                ? const Offset(-.025, 0)
+                : const Offset(.025, 0);
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: begin,
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            );
+          },
+          child: reportVisible
+              ? WorkRuleReportWorkspace(
+                  key: const ValueKey<String>('hq_work_rule_report'),
+                  division: areaState.currentDivision,
+                  area: areaState.currentArea,
+                  capabilityEnabled: areaState.capabilitiesOfCurrentArea
+                      .contains(Capability.rule),
+                  source: 'headquarter_quick_actions',
+                  side: WorkRuleReportSide.left,
+                  developerMode: widget.developerMode,
+                  onBack: () =>
+                      _closeWorkRuleReport(source: 'report_back_button'),
+                  onDebug: (message) =>
+                      HeadquarterSideDockLauncherController.recordDebug(
+                    'quick_actions_$message',
+                  ),
+                )
+              : _CommandPaletteDock(
+                  key: const ValueKey<String>('hq_quick_actions'),
+                  actions: actions,
+                  controller: _searchController,
+                  scrollController: _dockScrollController,
+                  focusNode: _searchFocus,
+                  developerMode: widget.developerMode,
+                  onDeveloperStatus: _showDeveloperStatus,
+                  onDebug: (message) =>
+                      HeadquarterSideDockLauncherController.recordDebug(
+                    'quick_actions_$message',
+                  ),
+                  onSelect: (action) async {
+                    HeadquarterSideDockLauncherController.recordDebug(
+                      'quick_actions_selection id=${action.id} category=${action.category.name}',
+                    );
+                    if (action.id == 'work_rules') {
+                      _openWorkRuleReport();
+                      return;
+                    }
+                    _close(action);
+                  },
+                ),
+        );
 
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: () {
-                  HeadquarterSideDockLauncherController.recordDebug(
-                    'quick_actions_close source=scrim',
-                  );
-                  _close();
-                },
-                behavior: HitTestBehavior.opaque,
-                child: ColoredBox(
-                  color: tokens.scrim.withOpacity(0.22 * progress),
+        return PopScope(
+          canPop: !reportVisible,
+          onPopInvoked: (didPop) {
+            if (didPop || !reportVisible) return;
+            _closeWorkRuleReport(source: 'system_back');
+          },
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _handleScrimTap,
+                  behavior: HitTestBehavior.opaque,
+                  child: ColoredBox(
+                    color: tokens.scrim.withOpacity(0.22 * progress),
+                  ),
                 ),
               ),
-            ),
-            Positioned(
-              top: 0,
-              bottom: 0,
-              left: 0,
-              child: Transform.translate(
-                offset: Offset(slideX, 0),
-                child: Transform.scale(
-                  alignment: Alignment.centerLeft,
-                  scale: dockScale,
-                  child: Opacity(
-                    opacity: progress,
-                    child: _GlassDock(
-                      width: dockWidth,
-                      borderRadius: const BorderRadius.only(
-                        topRight: Radius.circular(_dockRadius),
-                        bottomRight: Radius.circular(_dockRadius),
-                      ),
-                      child: SafeArea(
-                        child: Padding(
-                          padding: EdgeInsets.only(bottom: keyboardInset),
-                          child: _CommandPaletteDock(
-                            actions: actions,
-                            controller: _searchController,
-                            focusNode: _searchFocus,
-                            developerMode: widget.developerMode,
-                            onDeveloperStatus: _showDeveloperStatus,
-                            onDebug: (message) =>
-                                HeadquarterSideDockLauncherController
-                                    .recordDebug(
-                              'quick_actions_$message',
-                            ),
-                            onSelect: (action) async {
-                              HeadquarterSideDockLauncherController.recordDebug(
-                                'quick_actions_selection id=${action.id} category=${action.category.name}',
-                              );
-                              _close(action);
-                            },
+              Positioned(
+                top: 0,
+                bottom: 0,
+                left: 0,
+                child: Transform.translate(
+                  offset: Offset(slideX, 0),
+                  child: Transform.scale(
+                    alignment: Alignment.centerLeft,
+                    scale: dockScale,
+                    child: Opacity(
+                      opacity: progress,
+                      child: _GlassDock(
+                        width: dockWidth,
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(_dockRadius),
+                          bottomRight: Radius.circular(_dockRadius),
+                        ),
+                        child: SafeArea(
+                          child: Padding(
+                            padding: EdgeInsets.only(bottom: keyboardInset),
+                            child: content,
                           ),
                         ),
                       ),
@@ -645,12 +774,13 @@ class _HeadquarterQuickActionsPanelState
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
   }
+
 }
 
 enum _QuickActionCategory {
@@ -692,8 +822,10 @@ extension _QuickActionCategoryUi on _QuickActionCategory {
 
 class _CommandPaletteDock extends StatelessWidget {
   const _CommandPaletteDock({
+    super.key,
     required this.actions,
     required this.controller,
+    required this.scrollController,
     required this.focusNode,
     required this.developerMode,
     required this.onDeveloperStatus,
@@ -703,6 +835,7 @@ class _CommandPaletteDock extends StatelessWidget {
 
   final List<_DockAction> actions;
   final TextEditingController controller;
+  final ScrollController scrollController;
   final FocusNode focusNode;
   final bool developerMode;
   final Future<void> Function() onDeveloperStatus;
@@ -715,18 +848,13 @@ class _CommandPaletteDock extends StatelessWidget {
     final query = _normalize(queryRaw);
     final searching = query.isNotEmpty;
     final filtered = searching
-        ? actions.where((action) {
-            if (action.hiddenUntilExactQuery) {
-              return query == _normalize(action.id) ||
-                  query == _normalize(action.label);
-            }
-            return _normalize(action.searchText).contains(query);
-          }).toList(growable: false)
-        : actions
-            .where((action) => !action.hiddenUntilExactQuery)
-            .toList(growable: false);
+        ? actions
+            .where((action) => _normalize(action.searchText).contains(query))
+            .toList(growable: false)
+        : actions;
 
     return SingleChildScrollView(
+      controller: scrollController,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       physics: const ClampingScrollPhysics(),
       padding: EdgeInsets.zero,
@@ -1279,7 +1407,6 @@ class _DockAction {
     required this.description,
     required this.color,
     required this.foreground,
-    this.hiddenUntilExactQuery = false,
     required this.onTap,
   });
 
@@ -1290,7 +1417,6 @@ class _DockAction {
   final String? description;
   final Color color;
   final Color foreground;
-  final bool hiddenUntilExactQuery;
   final Future<void> Function(BuildContext context) onTap;
 
   String get searchText =>

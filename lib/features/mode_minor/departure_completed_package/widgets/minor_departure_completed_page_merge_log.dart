@@ -675,13 +675,9 @@ class _MinorMergedLogSectionState extends State<MinorMergedLogSection> {
 
   void _openPlateImageDialog(String plateNumber) {
     try {
-      showGeneralDialog(
-        context: context,
-        barrierDismissible: true,
-        barrierLabel: "사진 보기",
-        transitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (_, __, ___) =>
-            MinorDepartureCompletedPlateImageDialog(plateNumber: plateNumber),
+      showMinorDepartureCompletedPlateImageDialog<void>(
+        context,
+        plateNumber: plateNumber,
       );
     } catch (e) {
       _logApiErrorFF(

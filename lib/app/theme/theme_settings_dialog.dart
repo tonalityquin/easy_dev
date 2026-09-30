@@ -12,12 +12,63 @@ import 'theme_prefs_controller.dart';
 import 'widgets/brand_theme_area_selector.dart';
 import 'widgets/brand_theme_debug_selector.dart';
 
+class _ThemeDialogMetrics {
+  const _ThemeDialogMetrics({
+    required this.viewport,
+    required this.tabletLayout,
+    required this.reduceMotion,
+    required this.maxWidth,
+    required this.insetPadding,
+  });
+
+  final Size viewport;
+  final bool tabletLayout;
+  final bool reduceMotion;
+  final double maxWidth;
+  final EdgeInsets insetPadding;
+
+  factory _ThemeDialogMetrics.of(BuildContext context) {
+    final media = MediaQuery.maybeOf(context);
+    final viewport = media?.size ?? Size.zero;
+    final tabletLayout = viewport.shortestSide >= 600;
+    final horizontalInset = tabletLayout ? 48.0 : 16.0;
+    final verticalInset = tabletLayout ? 32.0 : 24.0;
+    final widthCap = tabletLayout ? 720.0 : 560.0;
+    final availableWidth = viewport.width > 0
+        ? viewport.width - horizontalInset * 2 - 40
+        : widthCap;
+    final maxWidth = availableWidth > 0
+        ? (availableWidth < widthCap ? availableWidth : widthCap)
+        : widthCap;
+    return _ThemeDialogMetrics(
+      viewport: viewport,
+      tabletLayout: tabletLayout,
+      reduceMotion: media?.disableAnimations ?? false,
+      maxWidth: maxWidth,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: horizontalInset,
+        vertical: verticalInset,
+      ),
+    );
+  }
+
+  Map<String, Object?> get debugDetails => <String, Object?>{
+        'layoutClass': tabletLayout ? 'tablet' : 'phone',
+        'viewportWidth': viewport.width.round(),
+        'viewportHeight': viewport.height.round(),
+        'shortestSide': viewport.shortestSide.round(),
+        'dialogMaxWidth': maxWidth.round(),
+        'reduceMotion': reduceMotion,
+      };
+}
+
 Future<void> showCommonThemeSettingsDialog({
   required BuildContext context,
   required String source,
 }) async {
   final normalizedSource = source.trim().isEmpty ? 'unknown' : source.trim();
   final themeController = context.read<ThemePrefsController>();
+  final openMetrics = _ThemeDialogMetrics.of(context);
   final openRoute = AppNavigator.currentRoute;
   final openPhase = BrandThemeRoutePolicy.resolve(openRoute);
   ThemeDebugTrace.record(
@@ -25,6 +76,7 @@ Future<void> showCommonThemeSettingsDialog({
     source: normalizedSource,
     details: <String, Object?>{
       ...themeController.debugDetails,
+      ...openMetrics.debugDetails,
       'route': openRoute ?? '-',
       'routePhase': openPhase.name,
     },
@@ -39,8 +91,8 @@ Future<void> showCommonThemeSettingsDialog({
         builder: (ctx, themeCtrl, _) {
           final cs = Theme.of(ctx).colorScheme;
           final text = Theme.of(ctx).textTheme;
-          final reduceMotion =
-              MediaQuery.maybeOf(ctx)?.disableAnimations ?? false;
+          final metrics = _ThemeDialogMetrics.of(ctx);
+          final reduceMotion = metrics.reduceMotion;
           final duration = reduceMotion
               ? Duration.zero
               : const Duration(milliseconds: 240);
@@ -91,10 +143,7 @@ Future<void> showCommonThemeSettingsDialog({
           }
 
           return AlertDialog(
-            insetPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 24,
-            ),
+            insetPadding: metrics.insetPadding,
             titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
             contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
             actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
@@ -125,8 +174,11 @@ Future<void> showCommonThemeSettingsDialog({
                 ),
               ],
             ),
-            content: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
+            content: AnimatedContainer(
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              width: metrics.maxWidth,
+              constraints: BoxConstraints(maxWidth: metrics.maxWidth),
               child: SingleChildScrollView(
                 child: AnimatedSwitcher(
                   duration: duration,
@@ -197,6 +249,7 @@ Future<void> showCommonThemeSettingsDialog({
                           source: normalizedSource,
                           details: <String, Object?>{
                             ...themeCtrl.debugDetails,
+                            ...metrics.debugDetails,
                             'route': currentRoute ?? '-',
                             'routePhase': routePhase.name,
                           },
@@ -226,6 +279,7 @@ Future<void> showCommonThemeSettingsDialog({
     source: normalizedSource,
     details: <String, Object?>{
       ...themeController.debugDetails,
+      ...openMetrics.debugDetails,
       'route': closeRoute ?? '-',
       'routePhase': closePhase.name,
     },

@@ -44,25 +44,9 @@ class _MinorDepartureCompletedBottomSheetState
   }
 
   Future<void> _openImage(BuildContext context, String plateNumber) async {
-    final tokens = Theme.of(context).colorScheme;
-    await showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '사진 보기',
-      barrierColor: tokens.scrim.withOpacity(.35),
-      transitionDuration:
-          MediaQuery.maybeOf(context)?.disableAnimations == true
-              ? Duration.zero
-              : const Duration(milliseconds: 220),
-      pageBuilder: (_, __, ___) =>
-          MinorDepartureCompletedPlateImageDialog(plateNumber: plateNumber),
-      transitionBuilder: (_, animation, __, child) => FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: .97, end: 1).animate(animation),
-          child: child,
-        ),
-      ),
+    await showMinorDepartureCompletedPlateImageDialog<void>(
+      context,
+      plateNumber: plateNumber,
     );
   }
 

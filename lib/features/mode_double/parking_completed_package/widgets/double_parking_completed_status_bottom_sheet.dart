@@ -9,6 +9,7 @@ import '../../../account/applications/user_state.dart';
 import '../../../dev/application/area_state.dart';
 import '../../../payment/widgets/billing_bottom_sheet.dart';
 import '../../../payment/widgets/confirm_cancel_fee_dialog.dart';
+import '../../../../shared/page/modify/application/modify_plate_service.dart';
 import '../../../../shared/page/modify/pages/modify_plate_screen.dart';
 import '../../../../shared/plate/application/common/movement_plate.dart';
 import '../../../../shared/plate/application/common/parking_completed_status_helpers.dart';
@@ -20,6 +21,7 @@ import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../shared/plate/widgets/plate_log_side_dock.dart';
 import '../../../../shared/plate/widgets/parking_completed_common_dialog.dart';
 import '../../../../shared/plate/widgets/parking_completed_status_widgets.dart';
+import '../../../../shared/plate/widgets/stored_plate_photo_list_screen.dart';
 import '../../../../shared/real_time_table/real_time_table_spec.dart';
 
 Future<bool> _showDeleteDialog(BuildContext context, PlateModel plate) async {
@@ -823,6 +825,39 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
       onClose: () => Navigator.of(context).pop(),
       leadingRail: ParkingStatusManagementRail(
         debugTarget: 'departure_completed',
+        photoAction: ParkingStatusManagementAction(
+          icon: Icons.photo_library_outlined,
+          label: '저장 사진',
+          displayLabel: '사진',
+          debugAction: 'photos',
+          enabled: !_primaryBusy,
+          onPressed: () async {
+            parkingStatusTraceLog(
+              context,
+              'vehicle_management=photos_open_requested plate=${_plate.plateNumber} source=double_parking_status',
+            );
+            await showStoredPlatePhotoDialog<void>(
+              context: context,
+              child: StoredPlatePhotoListScreen(
+                plateNumber: _plate.plateNumber,
+                diagnosticSource: 'double_parking_status',
+                loadPhotos: (loadContext, yearMonth, onDebug) {
+                  return ModifyPlateService.listStoredPlateImages(
+                    context: loadContext,
+                    plateNumber: _plate.plateNumber,
+                    yearMonth: yearMonth,
+                    onDebug: onDebug,
+                  );
+                },
+              ),
+            );
+            if (!mounted) return;
+            parkingStatusTraceLog(
+              context,
+              'vehicle_management=photos_closed plate=${_plate.plateNumber} source=double_parking_status',
+            );
+          },
+        ),
         actions: [
           ParkingStatusManagementAction(
             icon: Icons.history,

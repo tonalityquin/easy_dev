@@ -18,6 +18,7 @@ import '../../../plate/domain/models/plate_status_lookup_result.dart';
 import '../../../plate/domain/models/plate_status_scope.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 import '../../../plate/domain/services/plate_status_record.dart';
+import '../../../plate/editor/application/plate_camera_helper.dart';
 import '../application/modify_plate_service.dart';
 
 class ModifyPlateController {
@@ -776,6 +777,9 @@ class ModifyPlateController {
       }
 
       firestoreCommitted = true;
+      for (final image in capturedImages) {
+        PlateCameraHelper.forgetCaptureMetadata(image);
+      }
       trace?.log(
         statusChanged
             ? '차량 문서와 상태 문서 transaction 저장 완료'
@@ -863,6 +867,9 @@ class ModifyPlateController {
   }
 
   void dispose() {
+    for (final image in capturedImages) {
+      PlateCameraHelper.forgetCaptureMetadata(image);
+    }
     controllerFrontdigit.dispose();
     controllerMidDigit.dispose();
     controllerBackDigit.dispose();

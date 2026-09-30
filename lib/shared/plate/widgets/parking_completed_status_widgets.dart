@@ -14,6 +14,7 @@ import '../../../features/location/domain/models/location_model.dart';
 import '../../../features/location/domain/models/parking_grid_model.dart';
 import '../../operational_cache/domain/repositories/operational_local_repository.dart';
 import '../domain/models/plate_model.dart';
+import '../domain/services/plate_billing_calculator.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../design_system/common_ui/common_ui_side_dock_frame.dart';
@@ -88,6 +89,30 @@ DeveloperOperationTrace? parkingStatusTraceOf(BuildContext context) {
   return _ParkingStatusTraceScope.maybeOf(context);
 }
 
+class _ParkingStatusSessionScope extends InheritedWidget {
+  const _ParkingStatusSessionScope({
+    required this.openedAt,
+    required super.child,
+  });
+
+  final DateTime openedAt;
+
+  static DateTime? maybeOpenedAt(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<_ParkingStatusSessionScope>()
+        ?.openedAt;
+  }
+
+  @override
+  bool updateShouldNotify(_ParkingStatusSessionScope oldWidget) {
+    return openedAt != oldWidget.openedAt;
+  }
+}
+
+DateTime? parkingStatusOpenedAtOf(BuildContext context) {
+  return _ParkingStatusSessionScope.maybeOpenedAt(context);
+}
+
 void parkingStatusTraceLog(
   BuildContext context,
   String message, {
@@ -160,12 +185,14 @@ class ParkingStatusVehicleLocationCard extends StatefulWidget {
     super.key,
     required this.plate,
     required this.area,
+    this.billingSnapshotAt,
     this.attention = 0,
     this.expandToFill = false,
   });
 
   final PlateModel plate;
   final String area;
+  final DateTime? billingSnapshotAt;
   final double attention;
   final bool expandToFill;
 
@@ -178,12 +205,14 @@ class _ParkingStatusVehicleLocationCardState
     extends State<ParkingStatusVehicleLocationCard>
     with SingleTickerProviderStateMixin {
   late final AnimationController _markerController;
+  late final DateTime _fallbackBillingSnapshotAt;
   Future<_ParkingStatusLocationResolution>? _future;
   String _signature = '';
 
   @override
   void initState() {
     super.initState();
+    _fallbackBillingSnapshotAt = DateTime.now();
     _markerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 820),
@@ -202,6 +231,9 @@ class _ParkingStatusVehicleLocationCardState
     _markerController.dispose();
     super.dispose();
   }
+
+  DateTime get _effectiveBillingSnapshotAt =>
+      widget.billingSnapshotAt ?? _fallbackBillingSnapshotAt;
 
   String get _resolvedArea {
     final plateArea = widget.plate.area.trim();
@@ -284,7 +316,7 @@ class _ParkingStatusVehicleLocationCardState
         context,
         'vehicle_location_metadata=compact sector_scope=summary_header sector_chip=removed '
         'location_row=${resolution.grid == null ? "embedded" : "visible"} '
-        'billing_summary=single_row billing_detail=${billingState == ParkingCompletedBillingState.settled ? "visible" : "hidden"} '
+        'billing_summary=snapshot billing_detail=${calculatePlateBillingSnapshotQuote(plate: widget.plate, snapshotAt: _effectiveBillingSnapshotAt).applicable ? "calculated" : "hidden"} '
         'memo=${(widget.plate.customStatus ?? '').trim().isEmpty ? "hidden" : "visible"} '
         'parking_guidance_map=${resolution.grid == null ? "unavailable" : "active"}',
       );
@@ -314,12 +346,19 @@ class _ParkingStatusVehicleLocationCardState
                   key: const ValueKey<String>('location-loading'),
                   tokens: tokens,
                   expandToFill: widget.expandToFill,
-                  showBillingDetail: resolveParkingCompletedBillingState(
-                        billingType: widget.plate.billingType,
-                        billingPlanType: widget.plate.billingPlanType,
-                        isLocked: widget.plate.isLockedFee == true,
-                      ) ==
-                      ParkingCompletedBillingState.settled,
+                  billingDetailLines: () {
+                    final preview = calculatePlateBillingSnapshotQuote(
+                      plate: widget.plate,
+                      snapshotAt: _effectiveBillingSnapshotAt,
+                    );
+                    final settled = resolveParkingCompletedBillingState(
+                          billingType: widget.plate.billingType,
+                          billingPlanType: widget.plate.billingPlanType,
+                          isLocked: widget.plate.isLockedFee == true,
+                        ) ==
+                        ParkingCompletedBillingState.settled;
+                    return (preview.applicable ? 1 : 0) + (settled ? 1 : 0);
+                  }(),
                   showMemo:
                       (widget.plate.customStatus ?? '').trim().isNotEmpty,
                 )
@@ -329,6 +368,7 @@ class _ParkingStatusVehicleLocationCardState
                   ),
                   resolution: resolution,
                   plate: widget.plate,
+                  billingSnapshotAt: _effectiveBillingSnapshotAt,
                   attention: widget.attention,
                   markerAnimation: _markerController,
                   reduceMotion: reduceMotion,
@@ -386,13 +426,13 @@ class _ParkingStatusLocationLoading extends StatelessWidget {
     super.key,
     required this.tokens,
     required this.expandToFill,
-    required this.showBillingDetail,
+    required this.billingDetailLines,
     required this.showMemo,
   });
 
   final CommonUiTokens tokens;
   final bool expandToFill;
-  final bool showBillingDetail;
+  final int billingDetailLines;
   final bool showMemo;
 
   @override
@@ -428,9 +468,12 @@ class _ParkingStatusLocationLoading extends StatelessWidget {
         _ParkingStatusMetadataSkeleton(tokens: tokens, widthFactor: .72),
         SizedBox(height: metadataGap),
         _ParkingStatusMetadataSkeleton(tokens: tokens, widthFactor: .9),
-        if (showBillingDetail) ...[
+        for (var index = 0; index < billingDetailLines; index++) ...[
           SizedBox(height: metadataGap),
-          _ParkingStatusMetadataSkeleton(tokens: tokens, widthFactor: .48),
+          _ParkingStatusMetadataSkeleton(
+            tokens: tokens,
+            widthFactor: index == 0 ? .56 : .48,
+          ),
         ],
         if (showMemo) ...[
           SizedBox(height: metadataGap),
@@ -503,6 +546,7 @@ class _ParkingStatusLocationContent extends StatelessWidget {
     super.key,
     required this.resolution,
     required this.plate,
+    required this.billingSnapshotAt,
     required this.attention,
     required this.markerAnimation,
     required this.reduceMotion,
@@ -513,6 +557,7 @@ class _ParkingStatusLocationContent extends StatelessWidget {
 
   final _ParkingStatusLocationResolution resolution;
   final PlateModel plate;
+  final DateTime billingSnapshotAt;
   final double attention;
   final Animation<double> markerAnimation;
   final bool reduceMotion;
@@ -544,13 +589,20 @@ class _ParkingStatusLocationContent extends StatelessWidget {
       billingPlanType: plate.billingPlanType,
       isLocked: plate.isLockedFee == true,
     );
-    final billingType = billingState == ParkingCompletedBillingState.notApplicable
-        ? '정산 없음'
-        : (plate.billingType ?? '').trim();
+    final billingPreview = calculatePlateBillingSnapshotQuote(
+      plate: plate,
+      snapshotAt: billingSnapshotAt,
+    );
+    final billingType = billingPreview.applicable
+        ? billingPreview.typeLabel
+        : '정산 없음';
+    final billingCalculatedDetail = billingPreview.applicable
+        ? '계산 비용 ${_parkingStatusFormatWon(billingPreview.amount)}'
+        : '';
     final paymentMethod = (plate.paymentMethod ?? '').trim();
-    final billingDetail = billingState != ParkingCompletedBillingState.settled
+    final billingLockedDetail = billingState != ParkingCompletedBillingState.settled
         ? ''
-        : '₩${plate.lockedFeeAmount ?? 0}${paymentMethod.isEmpty ? '' : ' · $paymentMethod'}';
+        : '확정 비용 ${_parkingStatusFormatWon(plate.lockedFeeAmount ?? 0)}${paymentMethod.isEmpty ? '' : ' · $paymentMethod'}';
     final memo = (plate.customStatus ?? '').trim();
     final safeAttention =
         reduceMotion ? 0.0 : attention.clamp(0.0, 1.0).toDouble();
@@ -594,7 +646,8 @@ class _ParkingStatusLocationContent extends StatelessWidget {
       locationMaxLines: locationMaxLines,
       billingType: billingType,
       billingState: billingState,
-      billingDetail: billingDetail,
+      billingCalculatedDetail: billingCalculatedDetail,
+      billingLockedDetail: billingLockedDetail,
       memo: memo,
       memoMaxLines: memoMaxLines,
       attention: safeAttention,
@@ -709,7 +762,8 @@ class _ParkingStatusCompactMetadata extends StatelessWidget {
     required this.locationMaxLines,
     required this.billingType,
     required this.billingState,
-    required this.billingDetail,
+    required this.billingCalculatedDetail,
+    required this.billingLockedDetail,
     required this.memo,
     required this.memoMaxLines,
     required this.attention,
@@ -721,7 +775,8 @@ class _ParkingStatusCompactMetadata extends StatelessWidget {
   final int locationMaxLines;
   final String billingType;
   final ParkingCompletedBillingState billingState;
-  final String billingDetail;
+  final String billingCalculatedDetail;
+  final String billingLockedDetail;
   final String memo;
   final int memoMaxLines;
   final double attention;
@@ -749,7 +804,8 @@ class _ParkingStatusCompactMetadata extends StatelessWidget {
       _ParkingStatusBillingSummary(
         billingType: billingType,
         billingState: billingState,
-        billingDetail: billingDetail,
+        calculatedDetail: billingCalculatedDetail,
+        lockedDetail: billingLockedDetail,
         attention: attention,
       ),
       if (memo.trim().isNotEmpty)
@@ -792,7 +848,7 @@ class _ParkingStatusCompactMetadata extends StatelessWidget {
         },
         child: Column(
           key: ValueKey<String>(
-            '${showLocation ? location : "embedded"}|${billingState.name}|$billingType|$billingDetail|${memo.trim()}',
+            '${showLocation ? location : "embedded"}|${billingState.name}|$billingType|$billingCalculatedDetail|$billingLockedDetail|${memo.trim()}',
           ),
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -841,17 +897,32 @@ class _ParkingStatusCompactMetadataRow extends StatelessWidget {
   }
 }
 
+String _parkingStatusFormatWon(int amount) {
+  final negative = amount < 0;
+  final digits = amount.abs().toString();
+  final buffer = StringBuffer();
+  for (var index = 0; index < digits.length; index++) {
+    if (index > 0 && (digits.length - index) % 3 == 0) {
+      buffer.write(',');
+    }
+    buffer.write(digits[index]);
+  }
+  return '${negative ? '-' : ''}₩$buffer';
+}
+
 class _ParkingStatusBillingSummary extends StatelessWidget {
   const _ParkingStatusBillingSummary({
     required this.billingType,
     required this.billingState,
-    required this.billingDetail,
+    required this.calculatedDetail,
+    required this.lockedDetail,
     required this.attention,
   });
 
   final String billingType;
   final ParkingCompletedBillingState billingState;
-  final String billingDetail;
+  final String calculatedDetail;
+  final String lockedDetail;
   final double attention;
 
   String get _statusLabel {
@@ -863,7 +934,7 @@ class _ParkingStatusBillingSummary extends StatelessWidget {
   String get _semanticStatus {
     if (billingState == ParkingCompletedBillingState.unsettled) return '미정산';
     if (billingState == ParkingCompletedBillingState.settled) return '정산 완료';
-    return '정산 대상 아님';
+    return '정산 상태 없음';
   }
 
   @override
@@ -871,16 +942,15 @@ class _ParkingStatusBillingSummary extends StatelessWidget {
     final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final type = billingState == ParkingCompletedBillingState.notApplicable
-        ? '정산 없음'
-        : billingType.trim().isEmpty
-            ? '정산 없음'
-            : billingType.trim();
-    final semantic = billingState == ParkingCompletedBillingState.notApplicable
-        ? '정산 없음'
-        : billingDetail.trim().isEmpty
-            ? '정산 방식 $type, 정산 상태 $_semanticStatus'
-            : '정산 방식 $type, 정산 상태 $_semanticStatus, $billingDetail';
+    final type = billingType.trim().isEmpty ? '정산 없음' : billingType.trim();
+    final typeText = type == '정산 없음' ? type : '정산 유형  $type';
+    final detailParts = <String>[
+      if (calculatedDetail.trim().isNotEmpty) calculatedDetail.trim(),
+      if (lockedDetail.trim().isNotEmpty) lockedDetail.trim(),
+    ];
+    final semantic = detailParts.isEmpty
+        ? '정산 유형 $type, 정산 상태 $_semanticStatus'
+        : '정산 유형 $type, 정산 상태 $_semanticStatus, ${detailParts.join(', ')}';
     final unsettled = billingState == ParkingCompletedBillingState.unsettled;
     final settled = billingState == ParkingCompletedBillingState.settled;
     final statusColor = unsettled
@@ -889,12 +959,20 @@ class _ParkingStatusBillingSummary extends StatelessWidget {
             ? tokens.success
             : tokens.textSecondary;
     final statusBackground = unsettled
-        ? Color.lerp(tokens.surfaceOverlay, tokens.dangerContainer, .38 + attention * .32)!
+        ? Color.lerp(
+            tokens.surfaceOverlay,
+            tokens.dangerContainer,
+            .38 + attention * .32,
+          )!
         : settled
             ? tokens.successContainer.withOpacity(.58)
             : tokens.surfaceOverlay.withOpacity(.5);
     final statusBorder = unsettled
-        ? Color.lerp(tokens.borderSubtle, tokens.danger, .35 + attention * .45)!
+        ? Color.lerp(
+            tokens.borderSubtle,
+            tokens.danger,
+            .35 + attention * .45,
+          )!
         : settled
             ? tokens.success.withOpacity(.34)
             : tokens.borderSubtle;
@@ -933,11 +1011,13 @@ class _ParkingStatusBillingSummary extends StatelessWidget {
                 );
               },
               child: Column(
-                key: ValueKey<String>('$type|$billingDetail'),
+                key: ValueKey<String>(
+                  '$type|$calculatedDetail|$lockedDetail',
+                ),
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    type,
+                    typeText,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.bodySmall?.copyWith(
@@ -946,10 +1026,23 @@ class _ParkingStatusBillingSummary extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  if (billingDetail.trim().isNotEmpty) ...[
+                  if (calculatedDetail.trim().isNotEmpty) ...[
                     const SizedBox(height: 1),
                     Text(
-                      billingDetail,
+                      calculatedDetail.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.labelSmall?.copyWith(
+                        color: tokens.textSecondary,
+                        height: 1.15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                  if (lockedDetail.trim().isNotEmpty) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      lockedDetail.trim(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: textTheme.labelSmall?.copyWith(
@@ -981,8 +1074,8 @@ class _ParkingStatusBillingSummary extends StatelessWidget {
                   key: ValueKey<String>(_statusLabel),
                   style: textTheme.labelSmall?.copyWith(
                     color: statusColor,
-                    fontWeight: FontWeight.w900,
                     height: 1.05,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ),
@@ -1834,8 +1927,9 @@ Future<T?> showParkingStatusSideDock<T>({
   String barrierLabel = '상태 처리',
   bool finalizeTrace = true,
 }) async {
+  final openedAt = DateTime.now();
   trace?.log(
-    'status_side_dock=open direction=right_to_left maxWidth=360 widthFactor=0.92',
+    'status_side_dock=open openedAt=${openedAt.toIso8601String()} direction=right_to_left maxWidth=360 widthFactor=0.92',
     progress: .18,
   );
 
@@ -1847,7 +1941,10 @@ Future<T?> showParkingStatusSideDock<T>({
       widthFactor: .92,
       barrierDismissible: barrierDismissible,
       builder: (dockContext) {
-        final child = builder(dockContext);
+        final child = _ParkingStatusSessionScope(
+          openedAt: openedAt,
+          child: builder(dockContext),
+        );
         if (trace == null) return child;
         return _ParkingStatusTraceScope(trace: trace, child: child);
       },
@@ -2087,6 +2184,42 @@ class ParkingStatusAdaptiveRequestBody extends StatefulWidget {
 class _ParkingStatusAdaptiveRequestBodyState
     extends State<ParkingStatusAdaptiveRequestBody> {
   String _lastLayoutSignature = '';
+  late DateTime _billingSnapshotAt;
+  late String _billingSnapshotSource;
+  bool _billingSnapshotInitialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_billingSnapshotInitialized) return;
+    final openedAt = parkingStatusOpenedAtOf(context);
+    _billingSnapshotAt = openedAt ?? DateTime.now();
+    _billingSnapshotSource =
+        openedAt == null ? 'adaptive_body_fallback' : 'side_dock_open';
+    _billingSnapshotInitialized = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _traceBillingSnapshot();
+    });
+  }
+
+  void _traceBillingSnapshot() {
+    final quote = calculatePlateBillingSnapshotQuote(
+      plate: widget.plate,
+      snapshotAt: _billingSnapshotAt,
+    );
+    parkingStatusTraceLog(
+      context,
+      'billing_preview=snapshot target=${widget.debugTarget} plate=${widget.plate.plateNumber} '
+      'snapshotAt=${_billingSnapshotAt.toIso8601String()} snapshotSource=$_billingSnapshotSource requestAt=${widget.plate.requestTime.toIso8601String()} '
+      'applicable=${quote.applicable} planType=${quote.planType.isEmpty ? "none" : quote.planType} '
+      'billingType=${quote.countType.isEmpty ? "none" : quote.countType} source=${quote.source} '
+      'basicStandard=${widget.plate.basicStandard ?? 0} basicAmount=${widget.plate.basicAmount ?? 0} '
+      'addStandard=${widget.plate.addStandard ?? 0} addAmount=${widget.plate.addAmount ?? 0} '
+      'regularAmount=${widget.plate.regularAmount ?? 0} calculatedFee=${quote.amount} '
+      'locked=${widget.plate.isLockedFee} lockedFee=${widget.plate.lockedFeeAmount ?? 0}',
+    );
+  }
 
   double _measureTextHeight({
     required BuildContext context,
@@ -2150,11 +2283,13 @@ class _ParkingStatusAdaptiveRequestBodyState
       billingPlanType: widget.plate.billingPlanType,
       isLocked: widget.plate.isLockedFee == true,
     );
-    final billingType = billingState == ParkingCompletedBillingState.notApplicable
-        ? '정산 없음'
-        : (widget.plate.billingType ?? '').trim().isEmpty
-            ? '정산 없음'
-            : (widget.plate.billingType ?? '').trim();
+    final billingPreview = calculatePlateBillingSnapshotQuote(
+      plate: widget.plate,
+      snapshotAt: _billingSnapshotAt,
+    );
+    final billingType = billingPreview.applicable
+        ? billingPreview.typeLabel
+        : '정산 없음';
     final statusText = billingState == ParkingCompletedBillingState.unsettled
         ? '미정산'
         : billingState == ParkingCompletedBillingState.settled
@@ -2172,22 +2307,34 @@ class _ParkingStatusAdaptiveRequestBodyState
       maxWidth: billingTextWidth,
       maxLines: 1,
     );
+    final calculatedDetail = billingPreview.applicable
+        ? '계산 비용 ${_parkingStatusFormatWon(billingPreview.amount)}'
+        : '';
     final paymentMethod = (widget.plate.paymentMethod ?? '').trim();
-    final billingDetail = billingState != ParkingCompletedBillingState.settled
+    final lockedDetail = billingState != ParkingCompletedBillingState.settled
         ? ''
-        : paymentMethod.isEmpty
-            ? '₩${widget.plate.lockedFeeAmount ?? 0}'
-            : '₩${widget.plate.lockedFeeAmount ?? 0} · $paymentMethod';
-    final billingDetailMinHeight = billingDetail.isEmpty
-        ? 0.0
-        : 1.0 +
-            _measureTextHeight(
-              context: context,
-              text: billingDetail,
-              style: textTheme.labelSmall?.copyWith(height: 1.15),
-              maxWidth: billingTextWidth,
-              maxLines: 1,
-            );
+        : '확정 비용 ${_parkingStatusFormatWon(widget.plate.lockedFeeAmount ?? 0)}${paymentMethod.isEmpty ? '' : ' · $paymentMethod'}';
+    var billingDetailMinHeight = 0.0;
+    if (calculatedDetail.isNotEmpty) {
+      billingDetailMinHeight += 1.0 +
+          _measureTextHeight(
+            context: context,
+            text: calculatedDetail,
+            style: textTheme.labelSmall?.copyWith(height: 1.15),
+            maxWidth: billingTextWidth,
+            maxLines: 1,
+          );
+    }
+    if (lockedDetail.isNotEmpty) {
+      billingDetailMinHeight += 1.0 +
+          _measureTextHeight(
+            context: context,
+            text: lockedDetail,
+            style: textTheme.labelSmall?.copyWith(height: 1.15),
+            maxWidth: billingTextWidth,
+            maxLines: 1,
+          );
+    }
     final statusPillMinHeight = statusText.isEmpty
         ? 0.0
         : 6.0 +
@@ -2349,6 +2496,7 @@ class _ParkingStatusAdaptiveRequestBodyState
                   ParkingStatusVehicleLocationCard(
                     plate: widget.plate,
                     area: widget.area,
+                    billingSnapshotAt: _billingSnapshotAt,
                     attention: widget.attention,
                   ),
                 ],
@@ -2367,6 +2515,7 @@ class _ParkingStatusAdaptiveRequestBodyState
                       child: ParkingStatusVehicleLocationCard(
                         plate: widget.plate,
                         area: widget.area,
+                        billingSnapshotAt: _billingSnapshotAt,
                         attention: widget.attention,
                         expandToFill: true,
                       ),
@@ -2490,11 +2639,13 @@ class ParkingStatusManagementRail extends StatefulWidget {
   const ParkingStatusManagementRail({
     super.key,
     required this.actions,
+    this.photoAction,
     this.title = '차량 관리',
     this.debugTarget = '',
   });
 
   final List<ParkingStatusManagementAction> actions;
+  final ParkingStatusManagementAction? photoAction;
   final String title;
   final String debugTarget;
 
@@ -2530,12 +2681,18 @@ class _ParkingStatusManagementRailState
           textScale: textScale,
         );
         final gap = metrics.ultra ? 4.0 : 6.0;
-        final actionCount = widget.actions.length;
-        final enabledCount =
-            widget.actions.where((action) => action.enabled).length;
-        final visualLabels =
-            widget.actions.map((action) => action.visualLabel).join('/');
-        final actionStateSignature = widget.actions
+        final photoAction = widget.photoAction;
+        final actionCount = widget.actions.length + (photoAction == null ? 0 : 1);
+        final enabledCount = widget.actions.where((action) => action.enabled).length +
+            (photoAction?.enabled == true ? 1 : 0);
+        final visualLabels = <String>[
+          if (photoAction != null) 'header:${photoAction.visualLabel}',
+          ...widget.actions.map((action) => action.visualLabel),
+        ].join('/');
+        final actionStateSignature = <ParkingStatusManagementAction>[
+          if (photoAction != null) photoAction,
+          ...widget.actions,
+        ]
             .map(
               (action) =>
                   '${action.debugAction}:${action.visualLabel}:${action.enabled}:${action.linkedGroup}:${action.linkedReverse}',
@@ -2583,9 +2740,26 @@ class _ParkingStatusManagementRailState
           );
         }
 
+        final headerAction = photoAction == null
+            ? null
+            : Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: metrics.actionInsetHorizontal,
+                ),
+                child: _ParkingStatusManagementRailButton(
+                  key: ValueKey<String>('header-${photoAction.stableSlotKey}'),
+                  action: photoAction,
+                  debugTarget: _debugTarget,
+                  compact: metrics.compact,
+                  extent: metrics.minimumButtonExtent,
+                  tooltipEnabled: false,
+                ),
+              );
+
         return CommonSideRailSurface(
           title: widget.title,
           metrics: metrics,
+          headerAction: headerAction,
           child: ListView(
             physics: const ClampingScrollPhysics(),
             padding: EdgeInsets.symmetric(
@@ -3791,12 +3965,14 @@ class _ParkingStatusManagementRailButton extends StatefulWidget {
     required this.debugTarget,
     required this.compact,
     required this.extent,
+    this.tooltipEnabled = true,
   });
 
   final ParkingStatusManagementAction action;
   final String debugTarget;
   final bool compact;
   final double extent;
+  final bool tooltipEnabled;
 
   @override
   State<_ParkingStatusManagementRailButton> createState() =>
@@ -3870,7 +4046,7 @@ class _ParkingStatusManagementRailButtonState
         onTap: () {
           unawaited(_invoke());
         },
-        tooltip: widget.action.label,
+        tooltip: widget.tooltipEnabled ? widget.action.label : '',
       ),
     );
   }

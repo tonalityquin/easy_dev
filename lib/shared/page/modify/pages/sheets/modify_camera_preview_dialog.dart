@@ -6,10 +6,10 @@ import 'package:flutter/material.dart';
 import '../../../../../app/utils/status_dialog.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../application/modify_camera_fullscreen_viewer.dart';
 import '../../application/modify_camera_helper.dart';
 import '../../application/modify_plate_service.dart';
 import '../../../../plate/editor/workspaces/plate_saved_photos_content.dart';
+import '../../../../plate/editor/workspaces/plate_image_viewer.dart';
 import '../widgets/modify_workspace_switcher.dart';
 
 enum _CameraWorkspaceMode {
@@ -112,7 +112,7 @@ class _ModifyCameraWorkspaceState extends State<ModifyCameraWorkspace> {
       _debug('camera=initialize_success');
     } catch (error, stackTrace) {
       _debug('camera=initialize_failed error=$error');
-      debugPrint('[ModifyCameraWorkspace] error=$error\n$stackTrace');
+      _debug('camera=initialize_stack_trace\n$stackTrace');
       if (!mounted) return;
       setState(() {
         _isCameraReady = false;
@@ -612,10 +612,11 @@ class _ModifyCameraWorkspaceState extends State<ModifyCameraWorkspace> {
       plateNumber: widget.plateNumber,
       diagnosticSource: 'modify_legacy_camera',
       loadImages: (loadContext, yearMonth) {
-        return ModifyPlateService.listPlateImages(
+        return ModifyPlateService.listStoredPlateImages(
           context: loadContext,
           plateNumber: widget.plateNumber,
           yearMonth: yearMonth,
+          onDebug: widget.onDebug,
         );
       },
       onBack: () => _setMode(_CameraWorkspaceMode.camera),
@@ -641,30 +642,14 @@ class _ModifyCameraWorkspaceState extends State<ModifyCameraWorkspace> {
       child: Column(
         children: [
           Expanded(
-            child: TweenAnimationBuilder<double>(
-              tween: Tween<double>(begin: .93, end: 1),
-              duration: const Duration(milliseconds: 230),
-              curve: Curves.easeInOutCubic,
-              builder: (context, value, child) {
-                final reduceMotion =
-                    MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-                return Opacity(
-                  opacity: reduceMotion ? 1 : value,
-                  child: Transform.scale(
-                    scale: reduceMotion ? 1 : value,
-                    child: child,
-                  ),
-                );
-              },
-              child: ModifyEmbeddedImageViewerContent(
-                images: _previewImages,
-                initialIndex: _previewIndex,
-                onBack: widget.startInPreview
-                    ? widget.onExit
-                    : () => _setMode(_previewBackMode),
-                onPageChanged: (index) => setState(() => _previewIndex = index),
-                onDebug: widget.onDebug,
-              ),
+            child: PlateEmbeddedImageViewerContent(
+              images: _previewImages,
+              initialIndex: _previewIndex,
+              onBack: widget.startInPreview
+                  ? widget.onExit
+                  : () => _setMode(_previewBackMode),
+              onPageChanged: (index) => setState(() => _previewIndex = index),
+              onDebug: widget.onDebug,
             ),
           ),
           if (canDelete)

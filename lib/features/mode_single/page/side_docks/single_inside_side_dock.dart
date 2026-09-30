@@ -16,6 +16,10 @@ enum SingleInsideDockRequest {
   restTimeSubmit,
   statementForm,
   leaveApplication,
+  faq,
+  update,
+  terms,
+  privacy,
   operations,
   operationalSync,
   theme,
@@ -28,6 +32,7 @@ enum SingleInsideDashboardActionSection {
   report,
   submit,
   form,
+  support,
   settings,
 }
 
@@ -99,6 +104,30 @@ List<SingleInsideDashboardActionSpec> singleInsideDashboardActionSpecs({
       section: SingleInsideDashboardActionSection.form,
       icon: SideDockActionCatalog.leaveApplicationIcon,
       label: SideDockActionCatalog.leaveApplicationLabel,
+    ),
+    const SingleInsideDashboardActionSpec(
+      request: SingleInsideDockRequest.faq,
+      section: SingleInsideDashboardActionSection.support,
+      icon: SideDockActionCatalog.faqIcon,
+      label: SideDockActionCatalog.faqLabel,
+    ),
+    const SingleInsideDashboardActionSpec(
+      request: SingleInsideDockRequest.update,
+      section: SingleInsideDashboardActionSection.support,
+      icon: SideDockActionCatalog.updateIcon,
+      label: SideDockActionCatalog.updateLabel,
+    ),
+    const SingleInsideDashboardActionSpec(
+      request: SingleInsideDockRequest.terms,
+      section: SingleInsideDashboardActionSection.support,
+      icon: SideDockActionCatalog.termsIcon,
+      label: SideDockActionCatalog.termsLabel,
+    ),
+    const SingleInsideDashboardActionSpec(
+      request: SingleInsideDockRequest.privacy,
+      section: SingleInsideDashboardActionSection.support,
+      icon: SideDockActionCatalog.privacyIcon,
+      label: SideDockActionCatalog.privacyLabel,
     ),
     if (showOperations)
       const SingleInsideDashboardActionSpec(
@@ -180,9 +209,14 @@ class SingleInsideDashboardRail extends StatelessWidget {
       case SingleInsideDockRequest.workStartReport:
       case SingleInsideDockRequest.commuteSubmit:
       case SingleInsideDockRequest.operationalSync:
+      case SingleInsideDockRequest.faq:
+      case SingleInsideDockRequest.privacy:
         return tokens.info;
+      case SingleInsideDockRequest.update:
       case SingleInsideDockRequest.theme:
         return tokens.accent;
+      case SingleInsideDockRequest.terms:
+        return tokens.textSecondary;
       case SingleInsideDockRequest.workEndReport:
       case SingleInsideDockRequest.restTimeSubmit:
       case SingleInsideDockRequest.leaveApplication:
@@ -206,6 +240,8 @@ class SingleInsideDashboardRail extends StatelessWidget {
         return SideDockActionCatalog.sectionSubmit;
       case SingleInsideDashboardActionSection.form:
         return SideDockActionCatalog.sectionForm;
+      case SingleInsideDashboardActionSection.support:
+        return SideDockActionCatalog.sectionSupport;
       case SingleInsideDashboardActionSection.settings:
         return SideDockActionCatalog.sectionSettings;
     }
@@ -228,6 +264,7 @@ class SingleInsideDashboardRail extends StatelessWidget {
       if (showReport) SingleInsideDashboardActionSection.report,
       SingleInsideDashboardActionSection.submit,
       SingleInsideDashboardActionSection.form,
+      SingleInsideDashboardActionSection.support,
       SingleInsideDashboardActionSection.settings,
     ];
     final children = <Widget>[];

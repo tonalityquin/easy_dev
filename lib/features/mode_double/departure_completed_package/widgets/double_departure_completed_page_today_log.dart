@@ -146,14 +146,9 @@ class _DoubleTodayLogSectionState extends State<DoubleTodayLogSection> {
               const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: () {
-                  showGeneralDialog(
-                    context: context,
-                    barrierDismissible: true,
-                    barrierLabel: '사진 보기',
-                    barrierColor: cs.scrim.withOpacity(0.35),
-                    transitionDuration: const Duration(milliseconds: 300),
-                    pageBuilder: (_, __, ___) =>
-                        DoubleDepartureCompletedPlateImageDialog(plateNumber: widget.plateNumber),
+                  showDoubleDepartureCompletedPlateImageDialog<void>(
+                    context,
+                    plateNumber: widget.plateNumber,
                   );
                 },
                 style: ElevatedButton.styleFrom(

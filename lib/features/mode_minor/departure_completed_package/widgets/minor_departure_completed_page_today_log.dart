@@ -153,13 +153,9 @@ class _MinorTodayLogSectionState extends State<MinorTodayLogSection> {
               const SizedBox(width: 8),
               OutlinedButton.icon(
                 onPressed: () {
-                  showGeneralDialog(
-                    context: context,
-                    barrierDismissible: true,
-                    barrierLabel: "사진 보기",
-                    transitionDuration: const Duration(milliseconds: 300),
-                    pageBuilder: (_, __, ___) =>
-                        MinorDepartureCompletedPlateImageDialog(plateNumber: widget.plateNumber),
+                  showMinorDepartureCompletedPlateImageDialog<void>(
+                    context,
+                    plateNumber: widget.plateNumber,
                   );
                 },
                 style: OutlinedButton.styleFrom(

@@ -33,6 +33,7 @@ class _TabletModeRailState extends State<TabletModeRail>
   late final AnimationController _refreshController;
   late final ScrollController _actionScrollController;
   bool _refreshing = false;
+  bool _themeSettingsActive = false;
 
   @override
   void initState() {
@@ -113,13 +114,53 @@ class _TabletModeRailState extends State<TabletModeRail>
   }
 
   Future<void> _openThemeSettings() async {
+    if (_themeSettingsActive) return;
+    final media = MediaQuery.maybeOf(context);
+    final size = media?.size ?? Size.zero;
+    final layoutClass = size.shortestSide >= 600 ? 'tablet' : 'phone';
+    final reduceMotion = media?.disableAnimations ?? false;
     HapticFeedback.selectionClick();
-    TabletDebugTrace.record('TabletRail', 'theme_settings_open_requested');
-    await showCommonThemeSettingsDialog(
-      context: context,
-      source: 'tablet_side_dock',
+    if (mounted) {
+      setState(() => _themeSettingsActive = true);
+    }
+    TabletDebugTrace.record(
+      'TabletRail',
+      'theme_settings_open_requested',
+      <String, Object?>{
+        'layoutClass': layoutClass,
+        'viewportWidth': size.width.round(),
+        'viewportHeight': size.height.round(),
+        'shortestSide': size.shortestSide.round(),
+        'reduceMotion': reduceMotion,
+      },
     );
-    TabletDebugTrace.record('TabletRail', 'theme_settings_closed');
+    try {
+      await showCommonThemeSettingsDialog(
+        context: context,
+        source: 'tablet_side_dock',
+      );
+      TabletDebugTrace.record(
+        'TabletRail',
+        'theme_settings_closed',
+        <String, Object?>{
+          'layoutClass': layoutClass,
+        },
+      );
+    } catch (error) {
+      TabletDebugTrace.record(
+        'TabletRail',
+        'theme_settings_failed',
+        <String, Object?>{
+          'error': error,
+          'layoutClass': layoutClass,
+        },
+      );
+      rethrow;
+    } finally {
+      if (mounted) {
+        setState(() => _themeSettingsActive = false);
+      }
+    }
   }
 
   Future<void> _refreshData() async {
@@ -235,6 +276,9 @@ class _TabletModeRailState extends State<TabletModeRail>
     HapticFeedback.selectionClick();
     final dockState = context.read<TabletSideDockState>();
     final mode = context.read<TabletPadModeState>().mode;
+    final media = MediaQuery.maybeOf(context);
+    final size = media?.size ?? Size.zero;
+    final layoutClass = size.shortestSide >= 600 ? 'tablet' : 'phone';
     TabletDebugTrace.record(
       'TabletRail',
       'developer_status_requested',
@@ -242,6 +286,12 @@ class _TabletModeRailState extends State<TabletModeRail>
         'mode': mode.name,
         'dockReady': dockState.isReady,
         'sideDockOpen': dockState.isOpen,
+        'themeSettingsActive': _themeSettingsActive,
+        'layoutClass': layoutClass,
+        'viewportWidth': size.width.round(),
+        'viewportHeight': size.height.round(),
+        'shortestSide': size.shortestSide.round(),
+        'reduceMotion': media?.disableAnimations ?? false,
       },
     );
     await TabletDebugTrace.showStatusDialog(
@@ -356,6 +406,7 @@ class _TabletModeRailState extends State<TabletModeRail>
                                   color: tokens.borderSubtle,
                                 ),
                                 const SizedBox(height: 4),
+                                const _RailSectionLabel(label: '운영'),
                                 _ActionButton(
                                   icon: parkingCompleted
                                       ? Icons.visibility_rounded
@@ -365,12 +416,6 @@ class _TabletModeRailState extends State<TabletModeRail>
                                       : '입차 OFF',
                                   selected: parkingCompleted,
                                   onPressed: _toggleParkingCompleted,
-                                ),
-                                _ActionButton(
-                                  icon: Icons.palette_outlined,
-                                  label: '테마',
-                                  onPressed: () =>
-                                      unawaited(_openThemeSettings()),
                                 ),
                                 _ActionButton(
                                   iconWidget: RotationTransition(
@@ -406,6 +451,15 @@ class _TabletModeRailState extends State<TabletModeRail>
                                   label: '터미널',
                                   onPressed: () => unawaited(_openTerminal()),
                                 ),
+                                const _RailSectionLabel(label: '설정'),
+                                _ActionButton(
+                                  icon: Icons.palette_outlined,
+                                  label: '테마',
+                                  selected: _themeSettingsActive,
+                                  enabled: !_themeSettingsActive,
+                                  onPressed: () =>
+                                      unawaited(_openThemeSettings()),
+                                ),
                                 ValueListenableBuilder<bool>(
                                   valueListenable: DevAuth.devModeEnabled,
                                   builder: (context, enabled, _) {
@@ -421,6 +475,7 @@ class _TabletModeRailState extends State<TabletModeRail>
                                     );
                                   },
                                 ),
+                                const _RailSectionLabel(label: '계정'),
                                 _ActionButton(
                                   icon: Icons.logout_rounded,
                                   label: '로그아웃',
@@ -493,6 +548,36 @@ class _ModeButton extends StatelessWidget {
       selected: selected,
       height: 48,
       onPressed: onPressed,
+    );
+  }
+}
+
+class _RailSectionLabel extends StatelessWidget {
+  const _RailSectionLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 7, 8, 3),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.fade,
+          softWrap: false,
+          style: (text.labelSmall ?? const TextStyle()).copyWith(
+            color: tokens.textDisabled,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -606,7 +691,9 @@ class _RailButtonState extends State<_RailButton> {
                   ? (value) => setState(() => _pressed = value)
                   : null,
               onTap: widget.enabled ? widget.onPressed : null,
-              child: Opacity(
+              child: AnimatedOpacity(
+                duration: duration,
+                curve: CommonUiMotion.standard,
                 opacity: widget.enabled ? 1 : 0.45,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),

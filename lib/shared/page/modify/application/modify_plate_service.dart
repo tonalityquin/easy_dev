@@ -17,6 +17,8 @@ import '../../../plate/domain/models/plate_log_model.dart';
 import '../../../plate/domain/models/plate_model.dart';
 import '../../../plate/domain/models/plate_status_draft.dart';
 import '../../../plate/domain/models/plate_status_scope.dart';
+import '../../../plate/editor/application/plate_camera_helper.dart';
+import '../../../plate/editor/domain/stored_plate_photo.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 
 class ModifyPhotoUploadResult {
@@ -186,32 +188,61 @@ class ModifyPlateService {
 
   static String _twoDigits(int v) => v.toString().padLeft(2, '0');
 
-  static String _buildDateStrUtc(DateTime nowUtc) {
-    return '${nowUtc.year.toString().padLeft(4, '0')}-${_twoDigits(nowUtc.month)}-${_twoDigits(nowUtc.day)}';
+  static String _buildMonthStrLocal(DateTime capturedAtUtc) {
+    final local = capturedAtUtc.toLocal();
+    return '${local.year.toString().padLeft(4, '0')}-${_twoDigits(local.month)}';
   }
 
-  static String _buildMonthStrUtc(DateTime nowUtc) {
-    return '${nowUtc.year.toString().padLeft(4, '0')}-${_twoDigits(nowUtc.month)}';
-  }
-
-  static String _buildFileNameUtc({
-    required DateTime nowUtc,
+  static String _buildCapturedFileName({
+    required DateTime capturedAtUtc,
     required String plateNumber,
     required String performedBy,
   }) {
-    final dateStr = _buildDateStrUtc(nowUtc);
-    final timeStr = nowUtc.millisecondsSinceEpoch.toString();
-    return '${dateStr}_${timeStr}_${plateNumber}_$performedBy.jpg';
+    return StoredPlatePhotoFileNameCodec.build(
+      capturedAtUtc: capturedAtUtc,
+      plateNumber: plateNumber,
+      capturedBy: performedBy,
+    );
   }
 
-  static String _buildGcsPathUtc({
+  static String _buildCapturedGcsPath({
     required String division,
     required String area,
-    required DateTime nowUtc,
+    required DateTime capturedAtUtc,
+    required String plateNumber,
     required String fileName,
   }) {
-    final monthStr = _buildMonthStrUtc(nowUtc);
-    return '$division/$area/images/$monthStr/$fileName';
+    final monthStr = _buildMonthStrLocal(capturedAtUtc);
+    return StoredPlatePhotoCatalog.displayObjectPath(
+      division: division,
+      area: area,
+      yearMonth: monthStr,
+      plateNumber: plateNumber,
+      fileName: fileName,
+    );
+  }
+
+  DateTime _capturedAtUtcFor(XFile image, File displayFile) {
+    final capturedAt = PlateCameraHelper.capturedAtUtcFor(image);
+    if (capturedAt != null) {
+      _debug(
+        'photo_time=resolved source=camera capturedAtUtc=${capturedAt.toIso8601String()} capturedAtLocal=${capturedAt.toLocal().toIso8601String()} path=${image.path}',
+      );
+      return capturedAt;
+    }
+    try {
+      final fallback = displayFile.lastModifiedSync().toUtc();
+      _debug(
+        'photo_time=resolved source=file_last_modified capturedAtUtc=${fallback.toIso8601String()} capturedAtLocal=${fallback.toLocal().toIso8601String()} path=${image.path}',
+      );
+      return fallback;
+    } catch (error) {
+      final fallback = DateTime.now().toUtc();
+      _debug(
+        'photo_time=resolved source=upload_fallback capturedAtUtc=${fallback.toIso8601String()} capturedAtLocal=${fallback.toLocal().toIso8601String()} path=${image.path} error=$error',
+      );
+      return fallback;
+    }
   }
 
   static bool _sameStringList(List<String>? left, List<String> right) {
@@ -227,6 +258,89 @@ class ModifyPlateService {
     return '${controllerFrontdigit.text}-${controllerMidDigit.text}-${controllerBackDigit.text}';
   }
 
+  Future<String?> _uploadImageWithRetry({
+    required GcsImageUploader uploader,
+    required File file,
+    required String gcsPath,
+    required bool thumbnail,
+    required String plateNumber,
+    required String area,
+    required String division,
+    required String performedBy,
+    required int index,
+    required int total,
+  }) async {
+    String? gcsUrl;
+    for (int attempt = 0; attempt < _uploadMaxAttempts; attempt++) {
+      try {
+        _debug(
+          'photo_upload=attempt type=${thumbnail ? 'thumbnail' : 'display'} index=$index total=$total attempt=${attempt + 1} path=$gcsPath bytes=${await file.length()}',
+        );
+        gcsUrl = await uploader.modifyUploadImage(file, gcsPath);
+        if (gcsUrl != null) {
+          _debug(
+            'photo_upload=success type=${thumbnail ? 'thumbnail' : 'display'} index=$index total=$total path=$gcsPath',
+          );
+          break;
+        }
+        await _logApiError(
+          tag: 'DoubleModifyPlateService.uploadAndMergeImages',
+          message: thumbnail ? 'GCS 썸네일 업로드 결과가 null' : 'GCS 업로드 결과가 null',
+          error: Exception('upload_returned_null'),
+          extra: _ctxBasic(
+            plateNumber: plateNumber,
+            area: area,
+            division: division,
+            performedBy: performedBy,
+            filePath: file.path,
+            gcsPath: gcsPath,
+            index: index,
+            total: total,
+            attempt: attempt + 1,
+          ),
+          tags: const <String>[
+            _tPlate,
+            _tPlateDouble,
+            _tPlateModify,
+            _tPlateUpload,
+            _tGcs,
+          ],
+        );
+      } catch (error) {
+        _debug(
+          'photo_upload=attempt_failed type=${thumbnail ? 'thumbnail' : 'display'} index=$index total=$total attempt=${attempt + 1} path=$gcsPath error=$error',
+        );
+        await _logApiError(
+          tag: 'DoubleModifyPlateService.uploadAndMergeImages',
+          message: thumbnail ? 'GCS 썸네일 업로드 예외' : 'GCS 업로드 예외',
+          error: error,
+          extra: _ctxBasic(
+            plateNumber: plateNumber,
+            area: area,
+            division: division,
+            performedBy: performedBy,
+            filePath: file.path,
+            gcsPath: gcsPath,
+            index: index,
+            total: total,
+            attempt: attempt + 1,
+          ),
+          tags: const <String>[
+            _tPlate,
+            _tPlateDouble,
+            _tPlateModify,
+            _tPlateUpload,
+            _tGcs,
+          ],
+        );
+        if (attempt + 1 < _uploadMaxAttempts) {
+          await Future<void>.delayed(_uploadRetryDelay);
+        }
+      }
+    }
+    return gcsUrl;
+  }
+
   Future<ModifyPhotoUploadResult> uploadAndMergeImages(
     String plateNumber,
   ) async {
@@ -238,19 +352,24 @@ class ModifyPlateService {
     final area = context.read<AreaState>().currentArea;
     final division = context.read<AreaState>().currentDivision;
     final session = context.read<UserState>().session;
-    final performedBy = session?.displayName ?? 'Unknown';
+    final performedBy = StoredPlatePhotoFileNameCodec.resolveCapturedBy(
+      session?.displayName ?? '',
+    );
 
     _debug(
-      'photo_upload=start plate=$plateNumber captured=${capturedImages.length} existing=${existingImageUrls.length}',
+      'photo_upload=start plate=$plateNumber captured=${capturedImages.length} existing=${existingImageUrls.length} capturedBy=$performedBy',
     );
 
     for (int i = 0; i < capturedImages.length; i++) {
       final image = capturedImages[i];
-      final file = File(image.path);
-      if (!file.existsSync()) {
-        failedFiles.add(file.path);
+      final displayFile = File(image.path);
+      final thumbnailFile = PlateCameraHelper.thumbnailFileFor(image);
+      final itemIndex = i + 1;
+
+      if (!displayFile.existsSync()) {
+        failedFiles.add(displayFile.path);
         _debug(
-          'photo_upload=file_missing index=${i + 1} total=${capturedImages.length} path=${file.path}',
+          'photo_upload=file_missing type=display index=$itemIndex total=${capturedImages.length} path=${displayFile.path}',
         );
         await _logApiError(
           tag: 'DoubleModifyPlateService.uploadAndMergeImages',
@@ -261,8 +380,8 @@ class ModifyPlateService {
             area: area,
             division: division,
             performedBy: performedBy,
-            filePath: file.path,
-            index: i + 1,
+            filePath: displayFile.path,
+            index: itemIndex,
             total: capturedImages.length,
           ),
           tags: const <String>[
@@ -275,91 +394,52 @@ class ModifyPlateService {
         continue;
       }
 
-      final nowUtc = DateTime.now().toUtc();
-      final fileName = _buildFileNameUtc(
-        nowUtc: nowUtc,
+      final capturedAtUtc = _capturedAtUtcFor(image, displayFile);
+      final capturedAtLocal = capturedAtUtc.toLocal();
+      final storageYearMonth = _buildMonthStrLocal(capturedAtUtc);
+      final uploadStartedAtUtc = DateTime.now().toUtc();
+      final fileName = _buildCapturedFileName(
+        capturedAtUtc: capturedAtUtc,
         plateNumber: plateNumber,
         performedBy: performedBy,
       );
-      final gcsPath = _buildGcsPathUtc(
+      final preparedMetadata = StoredPlatePhotoMetadata.fromFileName(
+        fileName,
+        fallbackPlateNumber: plateNumber,
+      );
+      _debug(
+        'photo_metadata=prepared index=$itemIndex total=${capturedImages.length} fileName=$fileName capturedDate=${preparedMetadata.capturedDate} capturedTime=${preparedMetadata.capturedTime} plate=${preparedMetadata.plateNumber} capturedBy=${preparedMetadata.capturedBy}',
+      );
+      final displayPath = _buildCapturedGcsPath(
         division: division,
         area: area,
-        nowUtc: nowUtc,
+        capturedAtUtc: capturedAtUtc,
+        plateNumber: plateNumber,
         fileName: fileName,
       );
+      _debug(
+        'photo_upload=timing index=$itemIndex total=${capturedImages.length} capturedAtUtc=${capturedAtUtc.toIso8601String()} capturedAtLocal=${capturedAtLocal.toIso8601String()} storageYearMonth=$storageYearMonth uploadStartedAtUtc=${uploadStartedAtUtc.toIso8601String()} lagMs=${uploadStartedAtUtc.difference(capturedAtUtc).inMilliseconds}',
+      );
+      final thumbnailPath =
+          StoredPlatePhotoCatalog.thumbnailObjectPathForDisplay(displayPath);
 
-      String? gcsUrl;
-      for (int attempt = 0; attempt < _uploadMaxAttempts; attempt++) {
-        try {
-          _debug(
-            'photo_upload=attempt index=${i + 1} total=${capturedImages.length} attempt=${attempt + 1} path=$gcsPath',
-          );
-          gcsUrl = await uploader.modifyUploadImage(file, gcsPath);
-          if (gcsUrl != null) break;
-          await _logApiError(
-            tag: 'DoubleModifyPlateService.uploadAndMergeImages',
-            message: 'GCS 업로드 결과가 null',
-            error: Exception('upload_returned_null'),
-            extra: _ctxBasic(
-              plateNumber: plateNumber,
-              area: area,
-              division: division,
-              performedBy: performedBy,
-              filePath: file.path,
-              gcsPath: gcsPath,
-              index: i + 1,
-              total: capturedImages.length,
-              attempt: attempt + 1,
-            ),
-            tags: const <String>[
-              _tPlate,
-              _tPlateDouble,
-              _tPlateModify,
-              _tPlateUpload,
-              _tGcs,
-            ],
-          );
-        } catch (e) {
-          _debug(
-            'photo_upload=attempt_failed index=${i + 1} attempt=${attempt + 1} error=$e',
-          );
-          await _logApiError(
-            tag: 'DoubleModifyPlateService.uploadAndMergeImages',
-            message: 'GCS 업로드 예외',
-            error: e,
-            extra: _ctxBasic(
-              plateNumber: plateNumber,
-              area: area,
-              division: division,
-              performedBy: performedBy,
-              filePath: file.path,
-              gcsPath: gcsPath,
-              index: i + 1,
-              total: capturedImages.length,
-              attempt: attempt + 1,
-            ),
-            tags: const <String>[
-              _tPlate,
-              _tPlateDouble,
-              _tPlateModify,
-              _tPlateUpload,
-              _tGcs,
-            ],
-          );
-          await Future.delayed(_uploadRetryDelay);
-        }
-      }
+      final displayUrl = await _uploadImageWithRetry(
+        uploader: uploader,
+        file: displayFile,
+        gcsPath: displayPath,
+        thumbnail: false,
+        plateNumber: plateNumber,
+        area: area,
+        division: division,
+        performedBy: performedBy,
+        index: itemIndex,
+        total: capturedImages.length,
+      );
 
-      if (gcsUrl != null) {
-        uploadedImageUrls.add(gcsUrl);
-        uploadedObjectPaths.add(gcsPath);
+      if (displayUrl == null) {
+        failedFiles.add(displayFile.path);
         _debug(
-          'photo_upload=success index=${i + 1} path=$gcsPath',
-        );
-      } else {
-        failedFiles.add(file.path);
-        _debug(
-          'photo_upload=failed index=${i + 1} path=$gcsPath',
+          'photo_upload=failed type=display index=$itemIndex total=${capturedImages.length} path=$displayPath',
         );
         await _logApiError(
           tag: 'DoubleModifyPlateService.uploadAndMergeImages',
@@ -370,9 +450,9 @@ class ModifyPlateService {
             area: area,
             division: division,
             performedBy: performedBy,
-            filePath: file.path,
-            gcsPath: gcsPath,
-            index: i + 1,
+            filePath: displayFile.path,
+            gcsPath: displayPath,
+            index: itemIndex,
             total: capturedImages.length,
           ),
           tags: const <String>[
@@ -383,9 +463,39 @@ class ModifyPlateService {
             _tGcs,
           ],
         );
+        continue;
       }
 
-      await Future.delayed(const Duration(milliseconds: 100));
+      uploadedImageUrls.add(displayUrl);
+      uploadedObjectPaths.add(displayPath);
+
+      if (thumbnailFile.existsSync()) {
+        final thumbnailUrl = await _uploadImageWithRetry(
+          uploader: uploader,
+          file: thumbnailFile,
+          gcsPath: thumbnailPath,
+          thumbnail: true,
+          plateNumber: plateNumber,
+          area: area,
+          division: division,
+          performedBy: performedBy,
+          index: itemIndex,
+          total: capturedImages.length,
+        );
+        if (thumbnailUrl != null) {
+          uploadedObjectPaths.add(thumbnailPath);
+        } else {
+          _debug(
+            'photo_upload=thumbnail_nonfatal_failure index=$itemIndex total=${capturedImages.length} displayPath=$displayPath thumbnailPath=$thumbnailPath',
+          );
+        }
+      } else {
+        _debug(
+          'photo_upload=thumbnail_missing_nonfatal index=$itemIndex total=${capturedImages.length} displayPath=$displayPath localPath=${thumbnailFile.path}',
+        );
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     }
 
     if (failedFiles.isNotEmpty) {
@@ -415,7 +525,7 @@ class ModifyPlateService {
       ...uploadedImageUrls,
     ];
     _debug(
-      'photo_upload=complete merged=${mergedUrls.length} uploaded=${uploadedObjectPaths.length} failed=${failedFiles.length}',
+      'photo_upload=complete merged=${mergedUrls.length} displayUploaded=${uploadedImageUrls.length} objectUploaded=${uploadedObjectPaths.length} thumbnailUploaded=${uploadedObjectPaths.length - uploadedImageUrls.length} failed=${failedFiles.length}',
     );
     return ModifyPhotoUploadResult(
       mergedUrls: List<String>.unmodifiable(mergedUrls),
@@ -796,30 +906,37 @@ class ModifyPlateService {
     return ym;
   }
 
-  static Future<List<String>> listPlateImages({
+  static Future<List<StoredPlatePhoto>> listStoredPlateImages({
     required BuildContext context,
     required String plateNumber,
-    String? yearMonth,
+    required String yearMonth,
+    ValueChanged<String>? onDebug,
   }) async {
+    void emit(String message) {
+      final line = '[ModifyPlateService] ${message.trim()}';
+      if (onDebug != null) {
+        onDebug(line);
+        return;
+      }
+      debugPrint(line);
+    }
+
     const bucketName = AuthConfig.gcsBucketName;
     final area = context.read<AreaState>().currentArea;
     final division = context.read<AreaState>().currentDivision;
-
     final storage = await _storage();
 
-    final String prefix;
+    late final String ym;
     try {
-      if (yearMonth != null && yearMonth.trim().isNotEmpty) {
-        final ym = _sanitizeYearMonth(yearMonth);
-        prefix = '$division/$area/images/$ym/';
-      } else {
-        prefix = '$division/$area/images/';
-      }
-    } catch (e) {
+      ym = _sanitizeYearMonth(yearMonth);
+    } catch (error) {
+      emit(
+        'photo_list=invalid_year_month plate=$plateNumber yearMonth=$yearMonth error=$error',
+      );
       await _logApiError(
-        tag: 'DoubleModifyPlateService.listPlateImages',
+        tag: 'DoubleModifyPlateService.listStoredPlateImages',
         message: 'yearMonth 파라미터 검증 실패',
-        error: e,
+        error: error,
         extra: _ctxBasic(
           plateNumber: plateNumber,
           area: area,
@@ -831,40 +948,167 @@ class ModifyPlateService {
       rethrow;
     }
 
-    final urls = <String>[];
+    final displayPrefix = StoredPlatePhotoCatalog.displayPrefix(
+      division: division,
+      area: area,
+      yearMonth: ym,
+      plateNumber: plateNumber,
+    );
+    final thumbnailPrefix = StoredPlatePhotoCatalog.thumbnailPrefix(
+      division: division,
+      area: area,
+      yearMonth: ym,
+      plateNumber: plateNumber,
+    );
+    final legacyDisplayPrefix = StoredPlatePhotoCatalog.legacyDisplayPrefix(
+      division: division,
+      area: area,
+      yearMonth: ym,
+    );
+    final legacyThumbnailPrefix = StoredPlatePhotoCatalog.legacyThumbnailPrefix(
+      division: division,
+      area: area,
+      yearMonth: ym,
+    );
+    final legacyRootPrefix = StoredPlatePhotoCatalog.legacyRootPrefix(
+      division: division,
+      area: area,
+      yearMonth: ym,
+    );
+    final readMode = StoredPlatePhotoCatalog.readModeForYearMonth(ym);
 
-    String? pageToken;
-    try {
+    final objectPaths = <String>{};
+    var pageCount = 0;
+    final stopwatch = Stopwatch()..start();
+
+    Future<int> collect({
+      required String asset,
+      required String prefix,
+      required bool legacy,
+      bool directChildrenOnly = false,
+    }) async {
+      var matched = 0;
+      var queryPages = 0;
+      String? pageToken;
+      emit(
+        'photo_list=query_start asset=$asset plate=$plateNumber yearMonth=$ym readMode=${readMode.name} prefix=$prefix legacy=$legacy',
+      );
       do {
         final res = await storage.objects.list(
           bucketName,
           prefix: prefix,
+          delimiter: directChildrenOnly ? '/' : null,
           pageToken: pageToken,
         );
-
+        queryPages++;
+        pageCount++;
         final items = res.items ?? const <gcs.Object>[];
         for (final obj in items) {
-          final name = obj.name;
-          if (name != null &&
-              name.endsWith('.jpg') &&
-              name.contains(plateNumber)) {
-            urls.add('https://storage.googleapis.com/$bucketName/$name');
+          final name = obj.name?.trim();
+          if (name == null ||
+              name.isEmpty ||
+              !name.toLowerCase().endsWith('.jpg')) {
+            continue;
           }
+          if (directChildrenOnly &&
+              !StoredPlatePhotoCatalog.isDirectChildOfPrefix(name, prefix)) {
+            continue;
+          }
+          if (legacy && !name.contains(plateNumber)) {
+            continue;
+          }
+          if (objectPaths.add(name)) matched++;
         }
         pageToken = res.nextPageToken;
       } while (pageToken != null && pageToken.isNotEmpty);
+      emit(
+        'photo_list=query_success asset=$asset plate=$plateNumber yearMonth=$ym readMode=${readMode.name} prefix=$prefix pages=$queryPages matched=$matched legacy=$legacy',
+      );
+      return matched;
+    }
 
-      return urls;
-    } catch (e) {
+    emit(
+      'photo_list=start plate=$plateNumber yearMonth=$ym readMode=${readMode.name} displayPrefix=$displayPrefix thumbnailPrefix=$thumbnailPrefix',
+    );
+
+    try {
+      if (readMode != StoredPlatePhotoReadMode.legacyOnly) {
+        await collect(
+          asset: 'display',
+          prefix: displayPrefix,
+          legacy: false,
+        );
+        await collect(
+          asset: 'thumbnail',
+          prefix: thumbnailPrefix,
+          legacy: false,
+        );
+      }
+      if (readMode != StoredPlatePhotoReadMode.prefixedOnly) {
+        final legacyDisplayCount = await collect(
+          asset: 'legacy_display',
+          prefix: legacyDisplayPrefix,
+          legacy: true,
+          directChildrenOnly: true,
+        );
+        final legacyRootDisplayCount = await collect(
+          asset: 'legacy_root_display',
+          prefix: legacyRootPrefix,
+          legacy: true,
+          directChildrenOnly: true,
+        );
+        if (legacyDisplayCount + legacyRootDisplayCount > 0) {
+          await collect(
+            asset: 'legacy_thumbnail',
+            prefix: legacyThumbnailPrefix,
+            legacy: true,
+            directChildrenOnly: true,
+          );
+        }
+      }
+
+      final photos = StoredPlatePhotoCatalog.pairObjectPaths(
+        bucketName: bucketName,
+        objectPaths: objectPaths,
+        plateNumber: plateNumber,
+      );
+      final thumbnailCount =
+          photos.where((photo) => photo.hasThumbnail).length;
+      final missingThumbnailCount = photos.length - thumbnailCount;
+      final displayObjectCount = objectPaths
+          .where(StoredPlatePhotoCatalog.isDisplayObjectPath)
+          .length;
+      final thumbnailObjectCount = objectPaths
+          .where(StoredPlatePhotoCatalog.isThumbnailObjectPath)
+          .length;
+      final legacyDisplayObjectCount = objectPaths
+          .where(StoredPlatePhotoCatalog.isLegacyDisplayObjectPath)
+          .length;
+      stopwatch.stop();
+      emit(
+        'photo_list=success plate=$plateNumber yearMonth=$ym readMode=${readMode.name} pages=$pageCount matchedObjects=${objectPaths.length} displayObjects=$displayObjectCount thumbnailObjects=$thumbnailObjectCount legacyDisplayObjects=$legacyDisplayObjectCount photos=${photos.length} thumbnails=$thumbnailCount missingThumbnails=$missingThumbnailCount elapsedMs=${stopwatch.elapsedMilliseconds}',
+      );
+      return photos;
+    } catch (error, stackTrace) {
+      stopwatch.stop();
+      emit(
+        'photo_list=failed plate=$plateNumber yearMonth=$ym readMode=${readMode.name} pages=$pageCount matchedObjects=${objectPaths.length} elapsedMs=${stopwatch.elapsedMilliseconds} error=$error',
+      );
+      emit('photo_list=stack_trace\n$stackTrace');
       await _logApiError(
-        tag: 'DoubleModifyPlateService.listPlateImages',
+        tag: 'DoubleModifyPlateService.listStoredPlateImages',
         message: 'GCS objects.list 실패',
-        error: e,
+        error: error,
         extra: <String, dynamic>{
           'bucket': bucketName,
-          'prefix': prefix,
+          'displayPrefix': displayPrefix,
+          'thumbnailPrefix': thumbnailPrefix,
+          'legacyDisplayPrefix': legacyDisplayPrefix,
+          'legacyThumbnailPrefix': legacyThumbnailPrefix,
+          'legacyRootPrefix': legacyRootPrefix,
           'plateNumber': plateNumber,
-          'found': urls.length,
+          'yearMonth': ym,
+          'found': objectPaths.length,
         },
         tags: const <String>[_tPlate, _tPlateDouble, _tGcs, _tGcsList],
       );

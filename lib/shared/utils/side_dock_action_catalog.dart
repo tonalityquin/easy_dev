@@ -4,7 +4,21 @@ class SideDockActionCatalog {
   static const String sectionReport = '보고';
   static const String sectionSubmit = '제출';
   static const String sectionForm = '양식';
+  static const String sectionSupport = '지원';
   static const String sectionSettings = '설정';
+
+
+  static const String faqLabel = 'FAQ';
+  static const IconData faqIcon = Icons.help_center_rounded;
+
+  static const String updateLabel = '업데이트';
+  static const IconData updateIcon = Icons.system_update_alt_rounded;
+
+  static const String termsLabel = '이용약관';
+  static const IconData termsIcon = Icons.description_rounded;
+
+  static const String privacyLabel = '개인정보보호처리방침';
+  static const IconData privacyIcon = Icons.privacy_tip_rounded;
 
   static const String workStartReportLabel = '업무 시작 보고';
   static const String workStartReportDescription =

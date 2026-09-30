@@ -26,7 +26,9 @@ import '../../../community/page/faq_side_dock.dart';
 import '../../../community/page/side_docks/discord_side_dock.dart';
 import '../../../dev/application/area_state.dart';
 import '../../../headquarter/application/headquarter_support_actions.dart';
+import '../../../rule/widgets/work_rule_report_surface.dart';
 import '../../../selector/application/dev_auth.dart';
+import '../../../selector/dialogs/update_dialog.dart';
 import 'dashboard_dock_request.dart';
 import '../../widgets/widgets/schedule/dashboard_work_schedule_surface.dart';
 
@@ -51,6 +53,8 @@ class OpsDashboardSideDock extends StatefulWidget {
       _OpsDashboardSideDockState();
 }
 
+enum _OpsDashboardView { dashboard, workRuleReport }
+
 class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
   final ScrollController _dockScrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
@@ -59,6 +63,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
   String _lastBusinessDebugSignature = '';
   bool _developerMode = false;
   bool _developerModeResolved = false;
+  _OpsDashboardView _view = _OpsDashboardView.dashboard;
 
   bool _isFieldCommon(UserState userState) {
     final dynamic rawRole = userState.session?.role;
@@ -358,6 +363,18 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     });
   }
 
+  Future<void> _openUpdate(BuildContext context) async {
+    await _closeCurrentDockAndRun(context, (rootContext) async {
+      debugPrint(
+        '[OpsDashboardSideDock] update_dialog_open source=dashboard',
+      );
+      await showUpdateDialog(rootContext, source: 'dashboard_side_dock');
+      debugPrint(
+        '[OpsDashboardSideDock] update_dialog_closed source=dashboard',
+      );
+    });
+  }
+
   Future<void> _openTermsOfService(BuildContext context) async {
     await _closeCurrentDockAndRun(context, (rootContext) async {
       final opened = await HeadquarterSupportActions.openTermsOfService(rootContext);
@@ -549,6 +566,16 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         onPressed: () => _openFaq(context),
       ),
       _DashboardAction(
+        id: 'update',
+        category: _DashboardActionCategory.support,
+        label: SideDockActionCatalog.updateLabel,
+        description: '',
+        icon: SideDockActionCatalog.updateIcon,
+        color: tokens.accentContainer,
+        foreground: tokens.onAccentContainer,
+        onPressed: () => _openUpdate(context),
+      ),
+      _DashboardAction(
         id: 'terms',
         category: _DashboardActionCategory.support,
         label: '이용약관',
@@ -694,6 +721,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         )
         .length;
     trace.log('component=ops_dashboard_side_dock', progress: 0.03);
+    trace.log('activeView=${_view.name}', progress: 0.04);
     trace.log('presentation=right_side_dock', progress: 0.045);
     trace.log('container=right_side_dock', progress: 0.06);
     trace.log('direction=right_to_left', progress: 0.12);
@@ -734,7 +762,8 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     trace.log('monthlyCapability=$hasMonthlyCapability', progress: 0.76);
     trace.log('monthlyVisible=$monthlyVisible', progress: 0.765);
     trace.log('businessUi=common_side_dock_action_tile', progress: 0.768);
-    trace.log('businessTileCount=${monthlyVisible ? 2 : 1}', progress: 0.769);
+    trace.log('businessTileCount=${monthlyVisible ? 3 : 2}', progress: 0.769);
+    trace.log('workRuleVisible=true activeView=${_view.name}', progress: 0.77);
     trace.log('developerMode=$developerMode', progress: 0.77);
     trace.log('developerModeResolved=$_developerModeResolved', progress: 0.79);
     trace.log('terminalSettingsOnly=true', progress: 0.81);
@@ -748,7 +777,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     trace.log('searchQueryLength=$queryLength', progress: 0.95);
     trace.log('searchResultCount=${filteredActions.length}', progress: 0.97);
     trace.log('searchVisibleSectionCount=$searchSectionCount', progress: 0.98);
-    trace.log('backPolicy=close_side_dock', progress: 0.99);
+    trace.log('backPolicy=${_view == _OpsDashboardView.workRuleReport ? 'report_then_dashboard' : 'close_side_dock'}', progress: 0.99);
     await trace.succeed('대시보드 Side Dock 상태 확인을 완료했습니다.');
   }
 
@@ -774,6 +803,24 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         child: widget.punchRecorderBuilder(context, userState, areaState),
       ),
     );
+  }
+
+  void _openWorkRuleReport() {
+    if (_view == _OpsDashboardView.workRuleReport) return;
+    _searchFocusNode.unfocus();
+    final areaState = context.read<AreaState>();
+    debugPrint(
+      '[OpsDashboardSideDock] work_rule_report_open_requested mode=${widget.modeLabel} division=${areaState.currentDivision.trim()} area=${areaState.currentArea.trim()} side=right',
+    );
+    setState(() => _view = _OpsDashboardView.workRuleReport);
+  }
+
+  void _closeWorkRuleReport({required String source}) {
+    if (_view != _OpsDashboardView.workRuleReport) return;
+    debugPrint(
+      '[OpsDashboardSideDock] work_rule_report_close_requested source=$source mode=${widget.modeLabel}',
+    );
+    setState(() => _view = _OpsDashboardView.dashboard);
   }
 
   void _requestBusinessAction(
@@ -820,6 +867,18 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     );
 
     final actions = <_DashboardAction>[
+      _DashboardAction(
+        id: 'work_rules',
+        category: _DashboardActionCategory.business,
+        label: '업무 규칙',
+        description: '',
+        icon: Icons.rule_rounded,
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
+        onPressed: () async {
+          _openWorkRuleReport();
+        },
+      ),
       if (canUseMonthly)
         _DashboardAction(
           id: 'monthly_parking',
@@ -855,7 +914,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
 
     final tiles = Column(
       key: ValueKey<String>(
-        canUseMonthly ? 'business:monthly_departure' : 'business:departure',
+        canUseMonthly ? 'business:rules_monthly_departure' : 'business:rules_departure',
       ),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1134,13 +1193,15 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
   Widget build(BuildContext context) {
     return Consumer2<UserState, AreaState>(
       builder: (context, userState, areaState, _) {
+        final reduceMotion =
+            MediaQuery.maybeOf(context)?.disableAnimations ?? false;
         final isFieldCommon = _isFieldCommon(userState);
         final actions = _actions(
           context,
           isFieldCommon,
           developerMode: _developerMode,
         );
-        final children = <Widget>[
+        final dashboardChildren = <Widget>[
           CommonSideDockSection(
             key: const ValueKey<String>('work'),
             title: '근무',
@@ -1180,20 +1241,70 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
           _buildActionArea(context, actions),
           const SizedBox(height: 4),
         ];
-
-        return SingleChildScrollView(
+        final reportVisible = _view == _OpsDashboardView.workRuleReport;
+        final dashboard = SingleChildScrollView(
+          key: const ValueKey<String>('ops_dashboard'),
           controller: _dockScrollController,
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           physics: const ClampingScrollPhysics(),
           padding: EdgeInsets.zero,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: children,
+            children: dashboardChildren,
+          ),
+        );
+        final report = WorkRuleReportWorkspace(
+          key: const ValueKey<String>('ops_work_rule_report'),
+          division: areaState.currentDivision,
+          area: areaState.currentArea,
+          capabilityEnabled:
+              areaState.capabilitiesOfCurrentArea.contains(Capability.rule),
+          source: 'ops_dashboard_${widget.modeLabel}',
+          side: WorkRuleReportSide.right,
+          developerMode: _developerMode,
+          onBack: () => _closeWorkRuleReport(source: 'report_back_button'),
+          onDebug: (message) => debugPrint(
+            '[OpsDashboardSideDock] $message',
+          ),
+        );
+
+        return PopScope(
+          canPop: !reportVisible,
+          onPopInvoked: (didPop) {
+            if (didPop || !reportVisible) return;
+            _closeWorkRuleReport(source: 'system_back');
+          },
+          child: AnimatedSwitcher(
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 200),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              if (reduceMotion) return child;
+              final reportChild = child.key ==
+                  const ValueKey<String>('ops_work_rule_report');
+              final begin = reportChild
+                  ? const Offset(.025, 0)
+                  : const Offset(-.025, 0);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: begin,
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: reportVisible ? report : dashboard,
           ),
         );
       },
     );
   }
+
 }
 
 enum _DashboardActionCategory {
@@ -1220,7 +1331,7 @@ extension _DashboardActionCategoryUi on _DashboardActionCategory {
       case _DashboardActionCategory.form:
         return SideDockActionCatalog.sectionForm;
       case _DashboardActionCategory.support:
-        return '지원';
+        return SideDockActionCatalog.sectionSupport;
       case _DashboardActionCategory.settings:
         return SideDockActionCatalog.sectionSettings;
     }

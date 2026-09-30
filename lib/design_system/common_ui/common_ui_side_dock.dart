@@ -134,6 +134,7 @@ class _CommonSideDockRoute<T> extends PopupRoute<T> {
       : 'CommonRightSideDock';
   bool _layoutLogged = false;
   bool _closeRequested = false;
+  bool _scrimPopPending = false;
   String? _closeSource;
 
   @override
@@ -157,19 +158,27 @@ class _CommonSideDockRoute<T> extends PopupRoute<T> {
       reduceMotion ? Duration.zero : const Duration(milliseconds: 240);
 
   void _dismissFromScrim(BuildContext context) {
-    if (!scrimDismissible || _closeRequested) {
+    if (!scrimDismissible || _closeRequested || _scrimPopPending) {
       debugPrint(
-        '[$_logTag] close_ignored source=scrim label=$barrierLabelText requested=$_closeRequested dismissible=$scrimDismissible side=${side.name}',
+        '[$_logTag] close_ignored source=scrim label=$barrierLabelText requested=$_closeRequested pending=$_scrimPopPending dismissible=$scrimDismissible side=${side.name}',
       );
       return;
     }
-    _closeRequested = true;
+    _scrimPopPending = true;
     _closeSource = 'scrim';
     HapticFeedback.lightImpact();
     debugPrint(
-      '[$_logTag] close source=scrim label=$barrierLabelText policy=exactly_once side=${side.name}',
+      '[$_logTag] close_requested source=scrim label=$barrierLabelText policy=exactly_once side=${side.name}',
     );
     Navigator.of(context).pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_closeRequested) return;
+      _scrimPopPending = false;
+      _closeSource = null;
+      debugPrint(
+        '[$_logTag] close_blocked source=scrim label=$barrierLabelText reason=pop_scope side=${side.name}',
+      );
+    });
   }
 
   @override
@@ -177,6 +186,7 @@ class _CommonSideDockRoute<T> extends PopupRoute<T> {
     final popped = super.didPop(result);
     if (popped) {
       _closeRequested = true;
+      _scrimPopPending = false;
       debugPrint(
         '[$_logTag] pop label=$barrierLabelText source=${_closeSource ?? 'route'} policy=exactly_once side=${side.name}',
       );
@@ -470,6 +480,7 @@ class _OperationsSideDockRoute<T> extends PopupRoute<T> {
   final double scrimOpacity;
   final CommonSideDockSide side;
   bool _closeRequested = false;
+  bool _scrimPopPending = false;
   String? _closeSource;
   bool _layoutLogged = false;
 
@@ -498,19 +509,27 @@ class _OperationsSideDockRoute<T> extends PopupRoute<T> {
       reduceMotion ? Duration.zero : const Duration(milliseconds: 190);
 
   void _dismissFromScrim(BuildContext context) {
-    if (!scrimDismissible || _closeRequested) {
+    if (!scrimDismissible || _closeRequested || _scrimPopPending) {
       debugPrint(
-        '[$_logTag] close_ignored source=scrim label=$barrierLabelText requested=$_closeRequested dismissible=$scrimDismissible side=${side.name}',
+        '[$_logTag] close_ignored source=scrim label=$barrierLabelText requested=$_closeRequested pending=$_scrimPopPending dismissible=$scrimDismissible side=${side.name}',
       );
       return;
     }
-    _closeRequested = true;
+    _scrimPopPending = true;
     _closeSource = 'scrim';
     HapticFeedback.lightImpact();
     debugPrint(
-      '[$_logTag] close source=scrim label=$barrierLabelText policy=exactly_once side=${side.name}',
+      '[$_logTag] close_requested source=scrim label=$barrierLabelText policy=exactly_once side=${side.name}',
     );
     Navigator.of(context).pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_closeRequested) return;
+      _scrimPopPending = false;
+      _closeSource = null;
+      debugPrint(
+        '[$_logTag] close_blocked source=scrim label=$barrierLabelText reason=pop_scope side=${side.name}',
+      );
+    });
   }
 
   @override
@@ -518,6 +537,7 @@ class _OperationsSideDockRoute<T> extends PopupRoute<T> {
     final popped = super.didPop(result);
     if (popped) {
       _closeRequested = true;
+      _scrimPopPending = false;
       debugPrint(
         '[$_logTag] pop label=$barrierLabelText source=${_closeSource ?? 'route'} policy=exactly_once side=${side.name}',
       );

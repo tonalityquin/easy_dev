@@ -2044,13 +2044,19 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             PlateEditorWorkspace.camera,
             reason: 'camera_exit',
           ),
-          onImageCaptured: (image) {
+          onImageCaptured: (image) async {
+            if (!mounted) return;
             if (controller.capturedImages.any((item) => item.path == image.path)) {
               return;
             }
             setState(() => controller.capturedImages.add(image));
             _log(
               'camera=captured path=${image.path} count=${controller.capturedImages.length}',
+            );
+            await WidgetsBinding.instance.endOfFrame;
+            if (!mounted) return;
+            _log(
+              'recent_photo=parent_frame_ready path=${image.path} count=${controller.capturedImages.length}',
             );
           },
           onImageDeleted: (image) {
@@ -2063,16 +2069,18 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               'camera=deleted path=${image.path} count=${controller.capturedImages.length}',
             );
           },
+          trace: _editorTrace,
           savedPhotosBuilder: photoLookupPlateNumber == null
               ? null
               : (context, onBack) => PlateSavedPhotosContent(
                     plateNumber: photoLookupPlateNumber,
                     diagnosticSource: 'input',
                     loadImages: (loadContext, yearMonth) {
-                      return InputPlateService.listPlateImages(
+                      return InputPlateService.listStoredPlateImages(
                         context: loadContext,
                         plateNumber: photoLookupPlateNumber,
                         yearMonth: yearMonth,
+                        onDebug: _log,
                       );
                     },
                     onBack: onBack,

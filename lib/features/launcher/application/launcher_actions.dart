@@ -4,10 +4,9 @@ import 'package:url_launcher/url_launcher_string.dart';
 import '../../../app/di/routes.dart';
 import '../../../app/init/app_exit_service.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
-import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../login/controllers/personal/personal_login_controller.dart';
 import '../../login/pages/personal/personal_sign_up_dialog.dart';
-import '../../selector/sheets/update_bottom_sheet.dart';
+import '../../selector/dialogs/update_dialog.dart';
 import 'launcher_diagnostics.dart';
 
 class LauncherActions {
@@ -22,22 +21,9 @@ class LauncherActions {
 
   static Future<void> openUpdate(BuildContext context) async {
     LauncherDiagnostics.record('open_update');
-    final tokens = CommonUiTheme.of(context);
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: tokens.transparent,
-      barrierColor: tokens.scrim,
-      builder: (sheetContext) {
-        return const CommonUiScope(
-          child: FractionallySizedBox(
-            heightFactor: 1,
-            child: UpdateBottomSheet(),
-          ),
-        );
-      },
-    );
+    debugPrint('[LauncherActions] update_dialog_open source=launcher');
+    await showUpdateDialog(context, source: 'launcher');
+    debugPrint('[LauncherActions] update_dialog_closed source=launcher');
   }
 
   static Future<bool> openSupport() async {
