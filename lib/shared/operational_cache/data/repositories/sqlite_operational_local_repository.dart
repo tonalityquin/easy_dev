@@ -479,7 +479,7 @@ class SqliteOperationalLocalRepository implements OperationalLocalRepository {
     final result = RuleModel.fromCacheMap(
       _decodePayload(rows.first['payload_json'], '업무 규칙'),
     );
-    debugPrint('[OperationalSQLite] readRule division=$normalizedDivision area=$normalizedArea found=true todos=${result.todoItems.length}');
+    debugPrint('[OperationalSQLite] readRule division=$normalizedDivision area=$normalizedArea found=true todos=${result.todoItems.length} contentLength=${result.content.length} responseManualLength=${result.responseManual.length} responseManualPageCount=${result.responseManualPages.length}');
     return result;
   }
 
@@ -537,6 +537,8 @@ class SqliteOperationalLocalRepository implements OperationalLocalRepository {
             saved.division != rule.division ||
             saved.area != rule.area ||
             saved.content != rule.content ||
+            saved.responseManual != rule.responseManual ||
+            !sameRuleManualPages(saved.responseManualPages, rule.responseManualPages) ||
             saved.todoItems.length != rule.todoItems.length) {
           throw StateError('업무 규칙 SQLite 저장 검증에 실패했습니다.');
         }
@@ -551,7 +553,7 @@ class SqliteOperationalLocalRepository implements OperationalLocalRepository {
         }
       }
     });
-    debugPrint('[OperationalSQLite] replaceRule division=$normalizedDivision area=$normalizedArea found=${rule != null} todos=${rule?.todoItems.length ?? 0}');
+    debugPrint('[OperationalSQLite] replaceRule division=$normalizedDivision area=$normalizedArea found=${rule != null} todos=${rule?.todoItems.length ?? 0} contentLength=${rule?.content.length ?? 0} responseManualLength=${rule?.responseManual.length ?? 0} responseManualPageCount=${rule?.responseManualPages.length ?? 0}');
   }
 
   @override

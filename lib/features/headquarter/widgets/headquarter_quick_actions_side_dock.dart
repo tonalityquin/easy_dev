@@ -165,7 +165,7 @@ class _HeadquarterQuickActionsPanel extends StatefulWidget {
       _HeadquarterQuickActionsPanelState();
 }
 
-enum _HeadquarterQuickView { actions, workRuleReport }
+enum _HeadquarterQuickView { actions, workRuleReport, workManual }
 
 class _HeadquarterQuickActionsPanelState
     extends State<_HeadquarterQuickActionsPanel> {
@@ -233,17 +233,28 @@ class _HeadquarterQuickActionsPanelState
     setState(() => _view = _HeadquarterQuickView.workRuleReport);
   }
 
-  void _closeWorkRuleReport({required String source}) {
-    if (_view != _HeadquarterQuickView.workRuleReport) return;
+  void _openWorkManual() {
+    if (_view == _HeadquarterQuickView.workManual) return;
+    _searchFocus.unfocus();
+    HapticFeedback.selectionClick();
+    final areaState = context.read<AreaState>();
     HeadquarterSideDockLauncherController.recordDebug(
-      'quick_actions_work_rule_report_close_requested source=$source',
+      'quick_actions_work_manual_open_requested source=${widget.source} division=${areaState.currentDivision.trim()} area=${areaState.currentArea.trim()} side=left',
+    );
+    setState(() => _view = _HeadquarterQuickView.workManual);
+  }
+
+  void _closeWorkDetail({required String source}) {
+    if (_view == _HeadquarterQuickView.actions) return;
+    HeadquarterSideDockLauncherController.recordDebug(
+      'quick_actions_work_detail_close_requested source=$source view=${_view.name}',
     );
     setState(() => _view = _HeadquarterQuickView.actions);
   }
 
   void _handleScrimTap() {
-    if (_view == _HeadquarterQuickView.workRuleReport) {
-      _closeWorkRuleReport(source: 'scrim');
+    if (_view != _HeadquarterQuickView.actions) {
+      _closeWorkDetail(source: 'scrim');
       return;
     }
     HeadquarterSideDockLauncherController.recordDebug(
@@ -347,6 +358,16 @@ class _HeadquarterQuickActionsPanelState
         icon: Icons.rule_rounded,
         label: '업무 규칙',
         description: '현재 지역의 업무 규칙 보고서를 확인합니다.',
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
+        onTap: (_) async {},
+      ),
+      _DockAction(
+        id: 'work_manual',
+        category: _QuickActionCategory.work,
+        icon: Icons.menu_book_rounded,
+        label: '업무 메뉴얼',
+        description: '현재 지역의 업무 메뉴얼을 확인합니다.',
         color: tokens.infoContainer,
         foreground: tokens.onInfoContainer,
         onTap: (_) async {},
@@ -662,7 +683,70 @@ class _HeadquarterQuickActionsPanelState
         final slideX = -slideDistance * (1 - progress);
         final dockScale = 0.985 + (0.015 * progress);
         final actions = _buildActions(tokens);
-        final reportVisible = _view == _HeadquarterQuickView.workRuleReport;
+        final detailVisible = _view != _HeadquarterQuickView.actions;
+        final Widget activeContent;
+        if (_view == _HeadquarterQuickView.workRuleReport) {
+          activeContent = WorkRuleReportWorkspace(
+            key: const ValueKey<String>('hq_work_rule_report'),
+            division: areaState.currentDivision,
+            area: areaState.currentArea,
+            capabilityEnabled:
+                areaState.capabilitiesOfCurrentArea.contains(Capability.rule),
+            source: 'headquarter_quick_actions',
+            side: WorkRuleReportSide.left,
+            developerMode: widget.developerMode,
+            onBack: () => _closeWorkDetail(source: 'report_back_button'),
+            onDebug: (message) =>
+                HeadquarterSideDockLauncherController.recordDebug(
+              'quick_actions_$message',
+            ),
+          );
+        } else if (_view == _HeadquarterQuickView.workManual) {
+          activeContent = WorkRuleReportWorkspace(
+            key: const ValueKey<String>('hq_work_manual'),
+            division: areaState.currentDivision,
+            area: areaState.currentArea,
+            capabilityEnabled:
+                areaState.capabilitiesOfCurrentArea.contains(Capability.rule),
+            source: 'headquarter_quick_actions_manual',
+            side: WorkRuleReportSide.left,
+            contentMode: WorkRuleReportContentMode.responseManual,
+            developerMode: widget.developerMode,
+            onBack: () => _closeWorkDetail(source: 'manual_back_button'),
+            onDebug: (message) =>
+                HeadquarterSideDockLauncherController.recordDebug(
+              'quick_actions_$message',
+            ),
+          );
+        } else {
+          activeContent = _CommandPaletteDock(
+            key: const ValueKey<String>('hq_quick_actions'),
+            actions: actions,
+            controller: _searchController,
+            scrollController: _dockScrollController,
+            focusNode: _searchFocus,
+            developerMode: widget.developerMode,
+            onDeveloperStatus: _showDeveloperStatus,
+            onDebug: (message) =>
+                HeadquarterSideDockLauncherController.recordDebug(
+              'quick_actions_$message',
+            ),
+            onSelect: (action) async {
+              HeadquarterSideDockLauncherController.recordDebug(
+                'quick_actions_selection id=${action.id} category=${action.category.name}',
+              );
+              if (action.id == 'work_rules') {
+                _openWorkRuleReport();
+                return;
+              }
+              if (action.id == 'work_manual') {
+                _openWorkManual();
+                return;
+              }
+              _close(action);
+            },
+          );
+        }
         final content = AnimatedSwitcher(
           duration: reduceMotion
               ? Duration.zero
@@ -671,69 +755,39 @@ class _HeadquarterQuickActionsPanelState
           switchOutCurve: Curves.easeInCubic,
           transitionBuilder: (child, animation) {
             if (reduceMotion) return child;
-            final reportChild =
-                child.key == const ValueKey<String>('hq_work_rule_report');
-            final begin = reportChild
+            final detailChild = child.key ==
+                    const ValueKey<String>('hq_work_rule_report') ||
+                child.key == const ValueKey<String>('hq_work_manual');
+            final begin = detailChild
                 ? const Offset(-.025, 0)
                 : const Offset(.025, 0);
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
             return FadeTransition(
-              opacity: animation,
+              opacity: curved,
               child: SlideTransition(
                 position: Tween<Offset>(
                   begin: begin,
                   end: Offset.zero,
-                ).animate(animation),
-                child: child,
+                ).animate(curved),
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.992, end: 1).animate(curved),
+                  child: child,
+                ),
               ),
             );
           },
-          child: reportVisible
-              ? WorkRuleReportWorkspace(
-                  key: const ValueKey<String>('hq_work_rule_report'),
-                  division: areaState.currentDivision,
-                  area: areaState.currentArea,
-                  capabilityEnabled: areaState.capabilitiesOfCurrentArea
-                      .contains(Capability.rule),
-                  source: 'headquarter_quick_actions',
-                  side: WorkRuleReportSide.left,
-                  developerMode: widget.developerMode,
-                  onBack: () =>
-                      _closeWorkRuleReport(source: 'report_back_button'),
-                  onDebug: (message) =>
-                      HeadquarterSideDockLauncherController.recordDebug(
-                    'quick_actions_$message',
-                  ),
-                )
-              : _CommandPaletteDock(
-                  key: const ValueKey<String>('hq_quick_actions'),
-                  actions: actions,
-                  controller: _searchController,
-                  scrollController: _dockScrollController,
-                  focusNode: _searchFocus,
-                  developerMode: widget.developerMode,
-                  onDeveloperStatus: _showDeveloperStatus,
-                  onDebug: (message) =>
-                      HeadquarterSideDockLauncherController.recordDebug(
-                    'quick_actions_$message',
-                  ),
-                  onSelect: (action) async {
-                    HeadquarterSideDockLauncherController.recordDebug(
-                      'quick_actions_selection id=${action.id} category=${action.category.name}',
-                    );
-                    if (action.id == 'work_rules') {
-                      _openWorkRuleReport();
-                      return;
-                    }
-                    _close(action);
-                  },
-                ),
+          child: activeContent,
         );
 
         return PopScope(
-          canPop: !reportVisible,
+          canPop: !detailVisible,
           onPopInvoked: (didPop) {
-            if (didPop || !reportVisible) return;
-            _closeWorkRuleReport(source: 'system_back');
+            if (didPop || !detailVisible) return;
+            _closeWorkDetail(source: 'system_back');
           },
           child: Stack(
             children: [

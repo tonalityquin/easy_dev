@@ -57,6 +57,18 @@ class UpdateDialog extends StatefulWidget {
 
   static final List<UpdateEntry> defaultEntries = <UpdateEntry>[
     const UpdateEntry(
+      version: 'v0.2.2',
+      highlights: <String>[
+        '알림 패널 추가 및 휴게 기록 삽입 기능 제공',
+        '런처 터미널 중 로그인 화면 개선',
+        '출근 화면 개선',
+        '차량 촬영 사진 로직 개선',
+        '안정화 작업을 위해 비활성화됐던 브랜드 테마 재적용',
+        '각 지사 별 업무 메뉴얼, 업무 규칙, 출근 뒤 간헐적으로 열리는 투두리스트 기능 추가',
+      ],
+      footerNote: "기존 플로팅 버튼 사용에 있어 쿼티 자판 연동 문제로 인해 휴대폰 상단 설정 알림 패널로 기능 위치를 옮겼습니다",
+    ),
+    const UpdateEntry(
       version: 'v0.2.1',
       highlights: <String>[
         '로컬 저장소를 개편하여 전반적인 앱 메모리 사용량 개선',

@@ -72,7 +72,7 @@ class RuleState extends ChangeNotifier {
       if (token != _dataToken || _identity != identity) return;
       _rule = stored;
       debugPrint(
-        '[RuleState] SQLite 로드 완료: division=$division area=$area found=${stored != null} todos=${stored?.todoItems.length ?? 0}',
+        '[RuleState] SQLite 로드 완료: division=$division area=$area found=${stored != null} todos=${stored?.todoItems.length ?? 0} contentLength=${stored?.content.length ?? 0} responseManualLength=${stored?.responseManual.length ?? 0} responseManualPageCount=${stored?.responseManualPages.length ?? 0}',
       );
     } catch (error, stackTrace) {
       debugPrint('[RuleState] SQLite 로드 실패: identity=$identity error=$error');
@@ -126,7 +126,7 @@ class RuleState extends ChangeNotifier {
       notifyListeners();
     }
     debugPrint(
-      '[RuleState] strict refresh 완료: division=$normalizedDivision area=$normalizedArea found=${stored != null} todos=${stored?.todoItems.length ?? 0}',
+      '[RuleState] strict refresh 완료: division=$normalizedDivision area=$normalizedArea found=${stored != null} todos=${stored?.todoItems.length ?? 0} contentLength=${stored?.content.length ?? 0} responseManualLength=${stored?.responseManual.length ?? 0} responseManualPageCount=${stored?.responseManualPages.length ?? 0}',
     );
     return stored != null;
   }
@@ -187,6 +187,7 @@ class RuleState extends ChangeNotifier {
   Future<RuleModel> createRule({
     required List<RuleTodoItem> todoItems,
     required String content,
+    required List<RuleManualPage> responseManualPages,
   }) async {
     if (_isSaving || _isRefreshing || _isLoading) {
       throw StateError('다른 업무 규칙 작업이 진행 중입니다.');
@@ -206,6 +207,7 @@ class RuleState extends ChangeNotifier {
         area: area,
         todoItems: todoItems,
         content: content,
+        responseManualPages: responseManualPages,
       );
       _ensureAreaUnchanged(division, area);
       await _localRepository.replaceRule(
@@ -230,6 +232,7 @@ class RuleState extends ChangeNotifier {
   Future<RuleModel> updateRule({
     required List<RuleTodoItem> todoItems,
     required String content,
+    required List<RuleManualPage> responseManualPages,
   }) async {
     if (_isSaving || _isRefreshing || _isLoading) {
       throw StateError('다른 업무 규칙 작업이 진행 중입니다.');
@@ -249,6 +252,7 @@ class RuleState extends ChangeNotifier {
         area: area,
         todoItems: todoItems,
         content: content,
+        responseManualPages: responseManualPages,
       );
       _ensureAreaUnchanged(division, area);
       await _localRepository.replaceRule(
@@ -353,7 +357,9 @@ class RuleState extends ChangeNotifier {
         rule.area != area) {
       throw const RuleAreaMismatchException();
     }
-    if (rule.todoItems.isEmpty && rule.content.trim().isEmpty) {
+    if (rule.todoItems.isEmpty &&
+        rule.content.trim().isEmpty &&
+        rule.responseManualPages.isEmpty) {
       throw StateError('업무 규칙 내용이 없습니다.');
     }
     final ids = <String>{};
@@ -363,6 +369,21 @@ class RuleState extends ChangeNotifier {
         throw StateError('업무 규칙 Todo 데이터가 올바르지 않습니다.');
       }
       if (!ids.add(item.id)) throw StateError('업무 규칙 Todo ID가 중복됩니다.');
+    }
+    final pageIds = <String>{};
+    for (var index = 0; index < rule.responseManualPages.length; index += 1) {
+      final page = rule.responseManualPages[index];
+      if (page.id.trim().isEmpty ||
+          page.content.trim().isEmpty ||
+          page.order != index) {
+        throw StateError('업무 메뉴얼 페이지 데이터가 올바르지 않습니다.');
+      }
+      if (!pageIds.add(page.id)) {
+        throw StateError('업무 메뉴얼 페이지 ID가 중복됩니다.');
+      }
+    }
+    if (flattenRuleManualPages(rule.responseManualPages) != rule.responseManual) {
+      throw StateError('업무 메뉴얼 호환 문자열과 페이지 데이터가 일치하지 않습니다.');
     }
   }
 
@@ -384,6 +405,8 @@ class RuleState extends ChangeNotifier {
         stored.division != expected.division ||
         stored.area != expected.area ||
         stored.content != expected.content ||
+        stored.responseManual != expected.responseManual ||
+        !sameRuleManualPages(stored.responseManualPages, expected.responseManualPages) ||
         stored.todoItems.length != expected.todoItems.length) {
       throw StateError('업무 규칙 SQLite 저장 값이 Firestore 값과 다릅니다.');
     }

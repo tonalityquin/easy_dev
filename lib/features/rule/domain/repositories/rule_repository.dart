@@ -11,6 +11,7 @@ abstract class RuleRepository {
     required String area,
     required List<RuleTodoItem> todoItems,
     required String content,
+    required List<RuleManualPage> responseManualPages,
   });
 
   Future<RuleModel> updateRule({
@@ -18,6 +19,7 @@ abstract class RuleRepository {
     required String area,
     required List<RuleTodoItem> todoItems,
     required String content,
+    required List<RuleManualPage> responseManualPages,
   });
 
   Future<void> deleteRule({

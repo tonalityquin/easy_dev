@@ -4312,7 +4312,7 @@ class _RuleSettingsTableOfContentsRail extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             _RuleSettingsTocButton(
-              label: '본문',
+              label: '안내',
               icon: Icons.article_rounded,
               state: sectionStates[RuleSettingsSection.content] ??
                   RuleSettingsSectionState.unused,
@@ -4321,6 +4321,18 @@ class _RuleSettingsTableOfContentsRail extends StatelessWidget {
               compact: metrics.compact,
               extent: metrics.minimumButtonExtent,
               onTap: () => onSelect(RuleSettingsSection.content),
+            ),
+            const SizedBox(height: 6),
+            _RuleSettingsTocButton(
+              label: '메뉴얼',
+              icon: Icons.menu_book_rounded,
+              state: sectionStates[RuleSettingsSection.responseManual] ??
+                  RuleSettingsSectionState.unused,
+              selected: selectedSection == RuleSettingsSection.responseManual,
+              enabled: !saving,
+              compact: metrics.compact,
+              extent: metrics.minimumButtonExtent,
+              onTap: () => onSelect(RuleSettingsSection.responseManual),
             ),
           ],
         ),

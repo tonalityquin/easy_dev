@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../design_system/common_ui/common_ui_operational_report.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../application/commute_pre_clock_in_gate.dart';
 
@@ -64,7 +65,7 @@ class CommutePreClockInChecklist extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               if (normalizedContext.isNotEmpty) ...[
-                _ReportMetadataRow(
+                CommonOperationalReportMetadataRow(
                   label: '근무 위치',
                   value: Text(
                     normalizedContext,
@@ -78,7 +79,7 @@ class CommutePreClockInChecklist extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
               ],
-              _ReportMetadataRow(
+              CommonOperationalReportMetadataRow(
                 label: '확인 항목',
                 value: Text(
                   '${items.length}건',
@@ -91,7 +92,7 @@ class CommutePreClockInChecklist extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              _ReportMetadataRow(
+              CommonOperationalReportMetadataRow(
                 label: '상태',
                 value: AnimatedSwitcher(
                   duration: reduceMotion
@@ -126,13 +127,17 @@ class CommutePreClockInChecklist extends StatelessWidget {
                       Divider(height: 1, color: tokens.borderSubtle),
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    return _ChecklistItem(
+                    final checked = checkedIds.contains(item.id);
+                    return CommonOperationalReportNumberedRow(
                       index: index,
-                      item: item,
-                      checked: checkedIds.contains(item.id),
+                      text: item.label,
+                      interactive: true,
+                      selected: checked,
+                      enabled: !confirming,
                       onPressed: confirming
                           ? null
                           : () => onToggle(item.id),
+                      trailing: _ChecklistIndicator(checked: checked),
                     );
                   },
                 ),
@@ -140,7 +145,7 @@ class CommutePreClockInChecklist extends StatelessWidget {
               const SizedBox(height: 4),
               Divider(height: 1, color: tokens.borderStrong),
               const SizedBox(height: 14),
-              _ReportMetadataRow(
+              CommonOperationalReportMetadataRow(
                 label: '확인 현황',
                 value: AnimatedSwitcher(
                   duration: reduceMotion
@@ -204,39 +209,6 @@ class CommutePreClockInChecklist extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class _ReportMetadataRow extends StatelessWidget {
-  const _ReportMetadataRow({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final Widget value;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = CommonUiTheme.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 82,
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: tokens.textSecondary,
-                  fontWeight: FontWeight.w600,
-                  height: 1.4,
-                ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(child: value),
-      ],
     );
   }
 }
@@ -418,18 +390,10 @@ class _ReportApprovalSection extends StatelessWidget {
   }
 }
 
-class _ChecklistItem extends StatelessWidget {
-  const _ChecklistItem({
-    required this.index,
-    required this.item,
-    required this.checked,
-    required this.onPressed,
-  });
+class _ChecklistIndicator extends StatelessWidget {
+  const _ChecklistIndicator({required this.checked});
 
-  final int index;
-  final CommutePreClockInItem item;
   final bool checked;
-  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -437,94 +401,38 @@ class _ChecklistItem extends StatelessWidget {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
-    final number = (index + 1).toString().padLeft(2, '0');
 
-    return Semantics(
-      button: true,
-      checked: checked,
-      enabled: onPressed != null,
-      label: '$number ${item.label}',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          child: AnimatedContainer(
-            duration: duration,
-            curve: CommonUiMotion.enter,
-            color: checked
-                ? tokens.accentContainer.withOpacity(0.12)
-                : Colors.transparent,
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 15),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 42,
-                  child: Text(
-                    number,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: checked
-                              ? tokens.textPrimary
-                              : tokens.textSecondary,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.6,
-                        ),
-                  ),
-                ),
-                Expanded(
-                  child: AnimatedDefaultTextStyle(
-                    duration: duration,
-                    curve: CommonUiMotion.enter,
-                    style: (Theme.of(context).textTheme.bodyLarge ??
-                            const TextStyle())
-                        .copyWith(
-                      color: checked
-                          ? tokens.textPrimary
-                          : tokens.textSecondary,
-                      fontWeight: checked ? FontWeight.w600 : FontWeight.w500,
-                      height: 1.45,
-                    ),
-                    child: Text(item.label),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                AnimatedScale(
-                  scale: checked ? 1 : 0.96,
-                  duration: duration,
-                  curve: CommonUiMotion.enter,
-                  child: AnimatedContainer(
-                    duration: duration,
-                    curve: CommonUiMotion.enter,
-                    width: 27,
-                    height: 27,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: checked ? tokens.accent : Colors.transparent,
-                      border: Border.all(
-                        color: checked ? tokens.accent : tokens.borderStrong,
-                        width: 1.4,
-                      ),
-                    ),
-                    child: AnimatedSwitcher(
-                      duration: duration,
-                      switchInCurve: CommonUiMotion.enter,
-                      switchOutCurve: CommonUiMotion.exit,
-                      child: checked
-                          ? Icon(
-                              Icons.check_rounded,
-                              key: const ValueKey<String>('checked'),
-                              size: 18,
-                              color: tokens.onAccent,
-                            )
-                          : const SizedBox.shrink(
-                              key: ValueKey<String>('unchecked'),
-                            ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+    return AnimatedScale(
+      scale: checked ? 1 : 0.96,
+      duration: duration,
+      curve: CommonUiMotion.enter,
+      child: AnimatedContainer(
+        duration: duration,
+        curve: CommonUiMotion.enter,
+        width: 27,
+        height: 27,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: checked ? tokens.accent : Colors.transparent,
+          border: Border.all(
+            color: checked ? tokens.accent : tokens.borderStrong,
+            width: 1.4,
           ),
+        ),
+        child: AnimatedSwitcher(
+          duration: duration,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
+          child: checked
+              ? Icon(
+                  Icons.check_rounded,
+                  key: const ValueKey<String>('checked'),
+                  size: 18,
+                  color: tokens.onAccent,
+                )
+              : const SizedBox.shrink(
+                  key: ValueKey<String>('unchecked'),
+                ),
         ),
       ),
     );

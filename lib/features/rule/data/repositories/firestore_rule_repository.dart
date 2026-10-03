@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../domain/models/rule_model.dart';
 import '../../domain/repositories/rule_repository.dart';
+import '../../domain/utils/work_manual_text.dart';
 
 class FirestoreRuleRepository implements RuleRepository {
   FirestoreRuleRepository({FirebaseFirestore? firestore})
@@ -34,7 +35,7 @@ class FirestoreRuleRepository implements RuleRepository {
       final rule = RuleModel.fromMap(id, snapshot.data()!);
       _ensureOwnership(rule, identity.$1, identity.$2);
       debugPrint(
-        '[RuleRepository] 조회 완료: id=$id found=true todos=${rule.todoItems.length} contentLength=${rule.content.length}',
+        '[RuleRepository] 조회 완료: id=$id found=true todos=${rule.todoItems.length} contentLength=${rule.content.length} responseManualLength=${rule.responseManual.length} responseManualPageCount=${rule.responseManualPages.length} legacyFallback=${rule.responseManualUsesLegacyFallback}',
       );
       return rule;
     } catch (error, stackTrace) {
@@ -50,11 +51,18 @@ class FirestoreRuleRepository implements RuleRepository {
     required String area,
     required List<RuleTodoItem> todoItems,
     required String content,
+    required List<RuleManualPage> responseManualPages,
   }) async {
     final identity = _identity(division: division, area: area);
     final todos = _validateTodos(todoItems);
     final normalizedContent = _validateContent(content);
-    _validateRulePayload(todos: todos, content: normalizedContent);
+    final normalizedPages = _validateResponseManualPages(responseManualPages);
+    final normalizedResponseManual = flattenRuleManualPages(normalizedPages);
+    _validateRulePayload(
+      todos: todos,
+      content: normalizedContent,
+      responseManualPages: normalizedPages,
+    );
     final id = buildRuleDocumentId(
       division: identity.$1,
       area: identity.$2,
@@ -70,6 +78,10 @@ class FirestoreRuleRepository implements RuleRepository {
           'area': identity.$2,
           'todoItems': todos.map((item) => item.toMap()).toList(growable: false),
           'content': normalizedContent,
+          'responseManual': normalizedResponseManual,
+          'responseManualPages': normalizedPages
+              .map((page) => page.toMap())
+              .toList(growable: false),
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
@@ -79,12 +91,14 @@ class FirestoreRuleRepository implements RuleRepository {
           area: identity.$2,
           todoItems: todos,
           content: normalizedContent,
+          responseManual: normalizedResponseManual,
+          responseManualPages: normalizedPages,
           createdAt: now,
           updatedAt: now,
         );
       });
       debugPrint(
-        '[RuleRepository] 생성 완료: id=$id todos=${todos.length} contentLength=${normalizedContent.length}',
+        '[RuleRepository] 생성 완료: id=$id todos=${todos.length} contentLength=${normalizedContent.length} responseManualLength=${normalizedResponseManual.length} responseManualPageCount=${normalizedPages.length}',
       );
       return result;
     } catch (error, stackTrace) {
@@ -100,11 +114,18 @@ class FirestoreRuleRepository implements RuleRepository {
     required String area,
     required List<RuleTodoItem> todoItems,
     required String content,
+    required List<RuleManualPage> responseManualPages,
   }) async {
     final identity = _identity(division: division, area: area);
     final todos = _validateTodos(todoItems);
     final normalizedContent = _validateContent(content);
-    _validateRulePayload(todos: todos, content: normalizedContent);
+    final normalizedPages = _validateResponseManualPages(responseManualPages);
+    final normalizedResponseManual = flattenRuleManualPages(normalizedPages);
+    _validateRulePayload(
+      todos: todos,
+      content: normalizedContent,
+      responseManualPages: normalizedPages,
+    );
     final id = buildRuleDocumentId(
       division: identity.$1,
       area: identity.$2,
@@ -124,6 +145,10 @@ class FirestoreRuleRepository implements RuleRepository {
           'area': identity.$2,
           'todoItems': todos.map((item) => item.toMap()).toList(growable: false),
           'content': normalizedContent,
+          'responseManual': normalizedResponseManual,
+          'responseManualPages': normalizedPages
+              .map((page) => page.toMap())
+              .toList(growable: false),
           'updatedAt': FieldValue.serverTimestamp(),
         });
         return RuleModel(
@@ -132,12 +157,14 @@ class FirestoreRuleRepository implements RuleRepository {
           area: identity.$2,
           todoItems: todos,
           content: normalizedContent,
+          responseManual: normalizedResponseManual,
+          responseManualPages: normalizedPages,
           createdAt: current.createdAt,
           updatedAt: now,
         );
       });
       debugPrint(
-        '[RuleRepository] 수정 완료: id=$id todos=${todos.length} contentLength=${normalizedContent.length}',
+        '[RuleRepository] 수정 완료: id=$id todos=${todos.length} contentLength=${normalizedContent.length} responseManualLength=${normalizedResponseManual.length} responseManualPageCount=${normalizedPages.length}',
       );
       return result;
     } catch (error, stackTrace) {
@@ -220,13 +247,50 @@ class FirestoreRuleRepository implements RuleRepository {
     return normalized;
   }
 
+  List<RuleManualPage> _validateResponseManualPages(
+    List<RuleManualPage> source,
+  ) {
+    final pages = <RuleManualPage>[];
+    final ids = <String>{};
+    for (final page in source) {
+      final content = normalizeWorkManualForStorage(page.content);
+      if (isWorkManualBlank(content)) continue;
+      var id = page.id.trim();
+      if (id.isEmpty || isLegacyRuleManualPageId(id)) {
+        id = 'manual_page_${pages.length + 1}';
+        var suffix = 1;
+        while (ids.contains(id)) {
+          id = 'manual_page_${pages.length + 1}_$suffix';
+          suffix += 1;
+        }
+      }
+      if (!ids.add(id)) {
+        throw ArgumentError('업무 메뉴얼 페이지 ID가 중복됩니다.');
+      }
+      pages.add(
+        RuleManualPage(
+          id: id,
+          content: content,
+          order: pages.length,
+        ),
+      );
+    }
+    final normalized = List<RuleManualPage>.unmodifiable(pages);
+    final flattened = flattenRuleManualPages(normalized);
+    if (flattened.length > 4000) {
+      throw ArgumentError('업무 메뉴얼은 4000자 이하로 입력해 주세요.');
+    }
+    return normalized;
+  }
+
   void _validateRulePayload({
     required List<RuleTodoItem> todos,
     required String content,
+    required List<RuleManualPage> responseManualPages,
   }) {
-    if (todos.isEmpty && content.isEmpty) {
+    if (todos.isEmpty && content.isEmpty && responseManualPages.isEmpty) {
       throw ArgumentError(
-        'Todo 체크리스트 또는 업무 안내문 중 하나 이상 입력해야 합니다.',
+        'Todo 체크리스트, 업무 안내문 또는 업무 메뉴얼 중 하나 이상 입력해야 합니다.',
       );
     }
   }

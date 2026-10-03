@@ -4,7 +4,7 @@ enum SecondaryRuleView { management, settings }
 
 enum RuleSettingsMode { create, edit }
 
-enum RuleSettingsSection { checklist, content }
+enum RuleSettingsSection { checklist, content, responseManual }
 
 enum RuleSettingsSectionState { complete, unused, incomplete, error }
 
@@ -23,6 +23,7 @@ class SecondaryRuleWorkspaceState extends ChangeNotifier {
       <RuleSettingsSection, RuleSettingsSectionState>{
     RuleSettingsSection.checklist: RuleSettingsSectionState.unused,
     RuleSettingsSection.content: RuleSettingsSectionState.unused,
+    RuleSettingsSection.responseManual: RuleSettingsSectionState.unused,
   };
 
   SecondaryRuleView get view => _view;
@@ -168,6 +169,7 @@ class SecondaryRuleWorkspaceState extends ChangeNotifier {
       ..addAll(<RuleSettingsSection, RuleSettingsSectionState>{
         RuleSettingsSection.checklist: RuleSettingsSectionState.unused,
         RuleSettingsSection.content: RuleSettingsSectionState.unused,
+        RuleSettingsSection.responseManual: RuleSettingsSectionState.unused,
       });
   }
 

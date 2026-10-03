@@ -10,6 +10,7 @@ import '../../application/single_inside_diagnostics.dart';
 enum SingleInsideDockRequest {
   workSchedule,
   punchRecorder,
+  workManual,
   workStartReport,
   workEndReport,
   commuteSubmit,
@@ -66,6 +67,12 @@ List<SingleInsideDashboardActionSpec> singleInsideDashboardActionSpecs({
       section: SingleInsideDashboardActionSection.work,
       icon: Icons.access_time_rounded,
       label: '출퇴근 기록기',
+    ),
+    const SingleInsideDashboardActionSpec(
+      request: SingleInsideDockRequest.workManual,
+      section: SingleInsideDashboardActionSection.work,
+      icon: Icons.menu_book_rounded,
+      label: '업무 메뉴얼',
     ),
     if (showReport) ...[
       const SingleInsideDashboardActionSpec(
@@ -180,6 +187,7 @@ class SingleInsideDashboardRail extends StatelessWidget {
     required this.onRequest,
     required this.workScheduleSelected,
     required this.punchRecorderSelected,
+    required this.workManualSelected,
   });
 
   final double width;
@@ -191,6 +199,7 @@ class SingleInsideDashboardRail extends StatelessWidget {
   final SingleInsideDashboardRequestHandler onRequest;
   final bool workScheduleSelected;
   final bool punchRecorderSelected;
+  final bool workManualSelected;
 
   Future<void> _request(SingleInsideDockRequest request) async {
     if (!enabled) return;
@@ -206,6 +215,8 @@ class SingleInsideDashboardRail extends StatelessWidget {
       case SingleInsideDockRequest.workSchedule:
       case SingleInsideDockRequest.punchRecorder:
         return tokens.accent;
+      case SingleInsideDockRequest.workManual:
+        return tokens.info;
       case SingleInsideDockRequest.workStartReport:
       case SingleInsideDockRequest.commuteSubmit:
       case SingleInsideDockRequest.operationalSync:
@@ -300,7 +311,9 @@ class SingleInsideDashboardRail extends StatelessWidget {
               ? workScheduleSelected
               : action.request == SingleInsideDockRequest.punchRecorder
                   ? punchRecorderSelected
-                  : false,
+                  : action.request == SingleInsideDockRequest.workManual
+                      ? workManualSelected
+                      : false,
           onTap: () => _request(action.request),
         );
         children.add(button);

@@ -53,7 +53,7 @@ class OpsDashboardSideDock extends StatefulWidget {
       _OpsDashboardSideDockState();
 }
 
-enum _OpsDashboardView { dashboard, workRuleReport }
+enum _OpsDashboardView { dashboard, workRuleReport, workManual }
 
 class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
   final ScrollController _dockScrollController = ScrollController();
@@ -762,8 +762,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     trace.log('monthlyCapability=$hasMonthlyCapability', progress: 0.76);
     trace.log('monthlyVisible=$monthlyVisible', progress: 0.765);
     trace.log('businessUi=common_side_dock_action_tile', progress: 0.768);
-    trace.log('businessTileCount=${monthlyVisible ? 3 : 2}', progress: 0.769);
+    trace.log('businessTileCount=${monthlyVisible ? 4 : 3}', progress: 0.769);
     trace.log('workRuleVisible=true activeView=${_view.name}', progress: 0.77);
+    trace.log('workManualVisible=true activeView=${_view.name}', progress: 0.775);
     trace.log('developerMode=$developerMode', progress: 0.77);
     trace.log('developerModeResolved=$_developerModeResolved', progress: 0.79);
     trace.log('terminalSettingsOnly=true', progress: 0.81);
@@ -777,7 +778,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     trace.log('searchQueryLength=$queryLength', progress: 0.95);
     trace.log('searchResultCount=${filteredActions.length}', progress: 0.97);
     trace.log('searchVisibleSectionCount=$searchSectionCount', progress: 0.98);
-    trace.log('backPolicy=${_view == _OpsDashboardView.workRuleReport ? 'report_then_dashboard' : 'close_side_dock'}', progress: 0.99);
+    trace.log('backPolicy=${_view == _OpsDashboardView.dashboard ? 'close_side_dock' : 'detail_then_dashboard'}', progress: 0.99);
     await trace.succeed('대시보드 Side Dock 상태 확인을 완료했습니다.');
   }
 
@@ -815,10 +816,20 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     setState(() => _view = _OpsDashboardView.workRuleReport);
   }
 
-  void _closeWorkRuleReport({required String source}) {
-    if (_view != _OpsDashboardView.workRuleReport) return;
+  void _openWorkManual() {
+    if (_view == _OpsDashboardView.workManual) return;
+    _searchFocusNode.unfocus();
+    final areaState = context.read<AreaState>();
     debugPrint(
-      '[OpsDashboardSideDock] work_rule_report_close_requested source=$source mode=${widget.modeLabel}',
+      '[OpsDashboardSideDock] work_manual_open_requested mode=${widget.modeLabel} division=${areaState.currentDivision.trim()} area=${areaState.currentArea.trim()} side=right',
+    );
+    setState(() => _view = _OpsDashboardView.workManual);
+  }
+
+  void _closeWorkDetail({required String source}) {
+    if (_view == _OpsDashboardView.dashboard) return;
+    debugPrint(
+      '[OpsDashboardSideDock] work_detail_close_requested source=$source mode=${widget.modeLabel} view=${_view.name}',
     );
     setState(() => _view = _OpsDashboardView.dashboard);
   }
@@ -844,7 +855,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     if (_lastBusinessDebugSignature == signature) return;
     _lastBusinessDebugSignature = signature;
     debugPrint(
-      '[OpsDashboardSideDock] business_section mode=${widget.modeLabel} monthlyVisible=$canUseMonthly monthlyCapability=$hasMonthlyCapability fieldCommon=$isFieldCommon departureVisible=true',
+      '[OpsDashboardSideDock] business_section mode=${widget.modeLabel} monthlyVisible=$canUseMonthly monthlyCapability=$hasMonthlyCapability fieldCommon=$isFieldCommon workRuleVisible=true workManualVisible=true departureVisible=true',
     );
   }
 
@@ -877,6 +888,18 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         foreground: tokens.onInfoContainer,
         onPressed: () async {
           _openWorkRuleReport();
+        },
+      ),
+      _DashboardAction(
+        id: 'work_manual',
+        category: _DashboardActionCategory.business,
+        label: '업무 메뉴얼',
+        description: '',
+        icon: Icons.menu_book_rounded,
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
+        onPressed: () async {
+          _openWorkManual();
         },
       ),
       if (canUseMonthly)
@@ -914,7 +937,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
 
     final tiles = Column(
       key: ValueKey<String>(
-        canUseMonthly ? 'business:rules_monthly_departure' : 'business:rules_departure',
+        canUseMonthly
+            ? 'business:rules_manual_monthly_departure'
+            : 'business:rules_manual_departure',
       ),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1241,7 +1266,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
           _buildActionArea(context, actions),
           const SizedBox(height: 4),
         ];
-        final reportVisible = _view == _OpsDashboardView.workRuleReport;
+        final detailVisible = _view != _OpsDashboardView.dashboard;
         final dashboard = SingleChildScrollView(
           key: const ValueKey<String>('ops_dashboard'),
           controller: _dockScrollController,
@@ -1253,26 +1278,39 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
             children: dashboardChildren,
           ),
         );
-        final report = WorkRuleReportWorkspace(
-          key: const ValueKey<String>('ops_work_rule_report'),
+        final detail = WorkRuleReportWorkspace(
+          key: ValueKey<String>(
+            _view == _OpsDashboardView.workManual
+                ? 'ops_work_manual'
+                : 'ops_work_rule_report',
+          ),
           division: areaState.currentDivision,
           area: areaState.currentArea,
           capabilityEnabled:
               areaState.capabilitiesOfCurrentArea.contains(Capability.rule),
-          source: 'ops_dashboard_${widget.modeLabel}',
+          source: _view == _OpsDashboardView.workManual
+              ? 'ops_dashboard_manual_${widget.modeLabel}'
+              : 'ops_dashboard_${widget.modeLabel}',
           side: WorkRuleReportSide.right,
+          contentMode: _view == _OpsDashboardView.workManual
+              ? WorkRuleReportContentMode.responseManual
+              : WorkRuleReportContentMode.notice,
           developerMode: _developerMode,
-          onBack: () => _closeWorkRuleReport(source: 'report_back_button'),
+          onBack: () => _closeWorkDetail(
+            source: _view == _OpsDashboardView.workManual
+                ? 'manual_back_button'
+                : 'report_back_button',
+          ),
           onDebug: (message) => debugPrint(
             '[OpsDashboardSideDock] $message',
           ),
         );
 
         return PopScope(
-          canPop: !reportVisible,
+          canPop: !detailVisible,
           onPopInvoked: (didPop) {
-            if (didPop || !reportVisible) return;
-            _closeWorkRuleReport(source: 'system_back');
+            if (didPop || !detailVisible) return;
+            _closeWorkDetail(source: 'system_back');
           },
           child: AnimatedSwitcher(
             duration: reduceMotion
@@ -1282,23 +1320,32 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
             switchOutCurve: Curves.easeInCubic,
             transitionBuilder: (child, animation) {
               if (reduceMotion) return child;
-              final reportChild = child.key ==
-                  const ValueKey<String>('ops_work_rule_report');
-              final begin = reportChild
+              final detailChild = child.key ==
+                      const ValueKey<String>('ops_work_rule_report') ||
+                  child.key == const ValueKey<String>('ops_work_manual');
+              final begin = detailChild
                   ? const Offset(.025, 0)
                   : const Offset(-.025, 0);
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
               return FadeTransition(
-                opacity: animation,
+                opacity: curved,
                 child: SlideTransition(
                   position: Tween<Offset>(
                     begin: begin,
                     end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
+                  ).animate(curved),
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.992, end: 1).animate(curved),
+                    child: child,
+                  ),
                 ),
               );
             },
-            child: reportVisible ? report : dashboard,
+            child: detailVisible ? detail : dashboard,
           ),
         );
       },

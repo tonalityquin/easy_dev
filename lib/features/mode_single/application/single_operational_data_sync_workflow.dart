@@ -331,7 +331,7 @@ class SingleOperationalDataSyncWorkflow {
             area: area,
           );
           trace.log(
-            '업무 규칙 SQLite 무결성 검증 완료: division=$division area=$area found=$ruleFound localCount=${await localRepository.countRules(division: division, area: area)} todos=${localRule?.todoItems.length ?? 0} contentLength=${localRule?.content.length ?? 0}',
+            '업무 규칙 SQLite 무결성 검증 완료: division=$division area=$area found=$ruleFound localCount=${await localRepository.countRules(division: division, area: area)} todos=${localRule?.todoItems.length ?? 0} contentLength=${localRule?.content.length ?? 0} responseManualLength=${localRule?.responseManual.length ?? 0} responseManualPageCount=${localRule?.responseManualPages.length ?? 0}',
             progress: 0.83,
           );
         } else {

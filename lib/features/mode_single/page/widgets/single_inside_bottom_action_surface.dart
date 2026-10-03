@@ -112,7 +112,7 @@ class _SingleInsideBottomActionSurfaceState
       });
       SingleInsideDiagnostics.log(
         'rules',
-        'expanded_refresh_complete identity=$requestedIdentity found=${result.rule != null} todoCount=${result.rule?.todoItems.length ?? 0} contentLength=${result.rule?.content.length ?? 0}',
+        'expanded_refresh_complete identity=$requestedIdentity ruleFound=${result.ruleFound} contentAvailable=${result.contentAvailable} contentLength=${result.content.length} noticeItemCount=${splitWorkRuleNoticeItems(result.content).length} updatedAt=${result.updatedAt?.toIso8601String() ?? '-'} visualStyle=pre_clock_in_report',
       );
     } catch (error, stackTrace) {
       SingleInsideDiagnostics.log(
@@ -197,7 +197,7 @@ class _SingleInsideBottomActionSurfaceState
       }
       SingleInsideDiagnostics.log(
         'rules',
-        'open source=$source expanded=true division=${result.division} area=${result.area} found=${result.rule != null} todoCount=${result.rule?.todoItems.length ?? 0} contentLength=${result.rule?.content.length ?? 0} notifyInitialCompletion=$notifyInitialCompletion animationDurationMs=$animationDurationMs',
+        'open source=$source expanded=true division=${result.division} area=${result.area} ruleFound=${result.ruleFound} contentAvailable=${result.contentAvailable} contentLength=${result.content.length} noticeItemCount=${splitWorkRuleNoticeItems(result.content).length} updatedAt=${result.updatedAt?.toIso8601String() ?? '-'} notifyInitialCompletion=$notifyInitialCompletion animationDurationMs=$animationDurationMs visualStyle=pre_clock_in_report',
       );
       _completeInitialAutoOpenIfReduceMotion();
     } catch (error, stackTrace) {
@@ -230,7 +230,7 @@ class _SingleInsideBottomActionSurfaceState
         await SingleInsideDiagnostics.showStatus(
           context,
           title: '업무 규칙 상태',
-          description: '현재 지역 업무 규칙을 불러오지 못했습니다.',
+          description: '현재 지역 업무 안내문을 불러오지 못했습니다.',
           failure: true,
         );
       }
@@ -294,24 +294,29 @@ class _SingleInsideBottomActionSurfaceState
 
   Widget _buildRuleContent(BuildContext context) {
     if (_loadFailed) {
-      return const WorkRuleReportMessageSurface(
-        key: ValueKey<String>('failed'),
-        icon: Icons.error_outline_rounded,
-        title: '업무 규칙을 불러오지 못했습니다.',
+      return WorkRuleReportMessageSurface(
+        key: const ValueKey<String>('failed'),
+        area: widget.area,
+        statusLabel: '불러오기 실패',
+        message: '업무 안내문을 불러오지 못했습니다.',
+        dense: true,
       );
     }
     final rule = _rule;
-    if (rule == null) {
-      return const WorkRuleReportMessageSurface(
-        key: ValueKey<String>('empty'),
-        icon: Icons.description_outlined,
-        title: '등록된 업무 규칙이 없습니다.',
+    if (rule == null || rule.content.trim().isEmpty) {
+      return WorkRuleReportMessageSurface(
+        key: const ValueKey<String>('empty'),
+        area: widget.area,
+        statusLabel: '미등록',
+        message: '등록된 업무 안내문이 없습니다.',
+        itemCount: 0,
+        dense: true,
       );
     }
     final maxHeight = math.max(150.0, MediaQuery.sizeOf(context).height * .34);
     return ConstrainedBox(
       key: ValueKey<String>(
-        'rule_${rule.id}_${rule.updatedAt?.millisecondsSinceEpoch ?? 0}',
+        'rule_${rule.id}_${rule.updatedAt?.millisecondsSinceEpoch ?? 0}_${rule.content.trim().length}',
       ),
       constraints: BoxConstraints(maxHeight: maxHeight),
       child: SingleChildScrollView(
@@ -319,7 +324,6 @@ class _SingleInsideBottomActionSurfaceState
         child: WorkRuleReportSurface(
           area: widget.area,
           rule: rule,
-          showDocumentHeader: false,
           dense: true,
         ),
       ),
@@ -381,21 +385,14 @@ class _SingleInsideBottomActionSurfaceState
                   ),
                   const SizedBox(height: 12),
                   AnimatedSwitcher(
-                    duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 190),
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 150),
                     switchInCurve: Curves.easeOutCubic,
                     switchOutCurve: Curves.easeInCubic,
                     transitionBuilder: (child, animation) {
                       if (reduceMotion) return child;
-                      return FadeTransition(
-                        opacity: animation,
-                        child: SlideTransition(
-                          position: Tween<Offset>(
-                            begin: const Offset(0, .025),
-                            end: Offset.zero,
-                          ).animate(animation),
-                          child: child,
-                        ),
-                      );
+                      return FadeTransition(opacity: animation, child: child);
                     },
                     child: _buildRuleContent(context),
                   ),

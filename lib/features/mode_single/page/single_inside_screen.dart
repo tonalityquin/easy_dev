@@ -9,6 +9,7 @@ import '../../../app/init/app_exit_service.dart';
 import '../../../app/init/db_connection_status_section.dart';
 import '../../../app/init/logout_helper.dart';
 import '../../../app/init/work_status_notification.dart';
+import '../../../app/models/capability.dart';
 import '../../../app/theme/theme_settings_dialog.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
@@ -22,6 +23,7 @@ import '../../account/applications/user_state.dart';
 import '../../community/page/faq_side_dock.dart';
 import '../../dev/application/area_state.dart';
 import '../../headquarter/application/headquarter_support_actions.dart';
+import '../../rule/widgets/work_rule_report_surface.dart';
 import '../../selector/dialogs/update_dialog.dart';
 import '../../attendance/application/common_attendance_service.dart';
 import '../../dev/debug/debug_api_logger.dart';
@@ -45,6 +47,7 @@ enum SingleInsideWorkspaceContent {
   dotMap,
   workSchedule,
   punchRecorder,
+  workManual,
 }
 
 bool _singleOperationsRoleAllowed(RoleType role) {
@@ -183,6 +186,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
   DateTime? _lastNotificationRevealAt;
   bool _pendingNotificationDeveloperStatus = false;
   bool _workScheduleMounted = false;
+  bool _workManualMounted = false;
   bool _initialWorkspaceRevealCompleted = false;
   bool _initialRulesAutoOpenDelayScheduled = false;
   bool _initialRulesAutoOpenRequested = false;
@@ -545,6 +549,9 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
       if (next == SingleInsideWorkspaceContent.workSchedule) {
         _workScheduleMounted = true;
       }
+      if (next == SingleInsideWorkspaceContent.workManual) {
+        _workManualMounted = true;
+      }
       if (next == SingleInsideWorkspaceContent.punchRecorder) {
         _punchCountdownRevision++;
         _punchCountdownSource = source;
@@ -696,7 +703,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
             secondaryState.canAccess(Section.user);
     SingleInsideDiagnostics.log(
       'status',
-      'snapshot viewport=${media?.size.width.toStringAsFixed(1)}x${media?.size.height.toStringAsFixed(1)} role=${userState.session?.role ?? ''} normalizedRole=${secondaryState.role.name} area=${userState.currentArea} division=${userState.division} areaStateCapabilities=${LocalAreaCapabilityRefresh.keys(areaState.capabilitiesOfCurrentArea)} locationAccess=${secondaryState.canAccess(Section.location)} locationAccessReason=${secondaryState.accessDebugReason(Section.location)} operationsVisible=$operationsVisible scheduleRevision=$_scheduleRevision spatialRevision=$_spatialRefreshRevision ruleRevision=$_ruleRefreshRevision dashboardMode=compact_only railWidth=${_lastRailWidth.toStringAsFixed(1)} workspaceWidth=${_lastWorkspaceWidth.toStringAsFixed(1)} dashboardActionRunning=$_dashboardActionRunning workspaceContent=${_workspaceContent.name} workspaceContentPrevious=${_previousWorkspaceContent.name} punchContentPlacement=workspace_full workspaceBackPolicy=return_to_parking_area scheduleSaveMode=explicit punchAutoReturnScheduled=$_punchAutoReturnScheduled punchAutoReturnMs=${_punchAutoReturnDelay.inMilliseconds} punchCountdownRevision=$_punchCountdownRevision punchCountdownSource=$_punchCountdownSource punchCountdownEnabled=$_punchCountdownEnabled suppressWorkspaceTransition=$_suppressWorkspaceTransition notificationCountdownPending=$_notificationCountdownPending notificationCountdownFrameScheduled=$_notificationCountdownFrameScheduled pendingNotificationTapId=${_pendingNotificationTapId ?? '-'} lastConsumedNotificationTapId=$_lastConsumedNotificationTapId notificationVisibleFrameAt=${_notificationVisibleFrameAt?.toIso8601String() ?? '-'} notificationCountdownStartedAt=${_notificationCountdownStartedAt?.toIso8601String() ?? '-'} notificationTapConsumeCount=$_notificationTapConsumeCount notificationTapRevision=${WorkStatusNotificationController.notificationTapRevision.value} workStatusLastNotificationTapId=${WorkStatusNotificationController.lastNotificationTapId} workStatusPendingNotificationTapId=${WorkStatusNotificationController.pendingNotificationTap?.id ?? '-'} workStatusPendingNotificationTapAt=${WorkStatusNotificationController.pendingNotificationTap?.tappedAt.toIso8601String() ?? '-'} lastHandledNotificationTapRevision=$_lastHandledNotificationTapRevision notificationRevealCount=$_notificationRevealCount lastNotificationTapSource=$_lastNotificationTapSource lastNotificationTapEvent=$_lastNotificationTapEvent lastNotificationTapAt=${_lastNotificationTapAt?.toIso8601String() ?? '-'} lastNotificationRevealAt=${_lastNotificationRevealAt?.toIso8601String() ?? '-'} pendingNotificationDeveloperStatus=$_pendingNotificationDeveloperStatus workScheduleMounted=$_workScheduleMounted initialRevealCompleted=$_initialWorkspaceRevealCompleted initialRulesAutoOpenDelayScheduled=$_initialRulesAutoOpenDelayScheduled initialRulesAutoOpenRequested=$_initialRulesAutoOpenRequested initialAutomationCancelled=$_initialAutomationCancelled initialRulesAutoOpenHoldMs=${_initialRulesAutoOpenHold.inMilliseconds}',
+      'snapshot viewport=${media?.size.width.toStringAsFixed(1)}x${media?.size.height.toStringAsFixed(1)} role=${userState.session?.role ?? ''} normalizedRole=${secondaryState.role.name} area=${userState.currentArea} division=${userState.division} areaStateCapabilities=${LocalAreaCapabilityRefresh.keys(areaState.capabilitiesOfCurrentArea)} locationAccess=${secondaryState.canAccess(Section.location)} locationAccessReason=${secondaryState.accessDebugReason(Section.location)} operationsVisible=$operationsVisible scheduleRevision=$_scheduleRevision spatialRevision=$_spatialRefreshRevision ruleRevision=$_ruleRefreshRevision dashboardMode=compact_only railWidth=${_lastRailWidth.toStringAsFixed(1)} workspaceWidth=${_lastWorkspaceWidth.toStringAsFixed(1)} dashboardActionRunning=$_dashboardActionRunning workspaceContent=${_workspaceContent.name} workspaceContentPrevious=${_previousWorkspaceContent.name} punchContentPlacement=workspace_full workspaceBackPolicy=return_to_parking_area scheduleSaveMode=explicit punchAutoReturnScheduled=$_punchAutoReturnScheduled punchAutoReturnMs=${_punchAutoReturnDelay.inMilliseconds} punchCountdownRevision=$_punchCountdownRevision punchCountdownSource=$_punchCountdownSource punchCountdownEnabled=$_punchCountdownEnabled suppressWorkspaceTransition=$_suppressWorkspaceTransition notificationCountdownPending=$_notificationCountdownPending notificationCountdownFrameScheduled=$_notificationCountdownFrameScheduled pendingNotificationTapId=${_pendingNotificationTapId ?? '-'} lastConsumedNotificationTapId=$_lastConsumedNotificationTapId notificationVisibleFrameAt=${_notificationVisibleFrameAt?.toIso8601String() ?? '-'} notificationCountdownStartedAt=${_notificationCountdownStartedAt?.toIso8601String() ?? '-'} notificationTapConsumeCount=$_notificationTapConsumeCount notificationTapRevision=${WorkStatusNotificationController.notificationTapRevision.value} workStatusLastNotificationTapId=${WorkStatusNotificationController.lastNotificationTapId} workStatusPendingNotificationTapId=${WorkStatusNotificationController.pendingNotificationTap?.id ?? '-'} workStatusPendingNotificationTapAt=${WorkStatusNotificationController.pendingNotificationTap?.tappedAt.toIso8601String() ?? '-'} lastHandledNotificationTapRevision=$_lastHandledNotificationTapRevision notificationRevealCount=$_notificationRevealCount lastNotificationTapSource=$_lastNotificationTapSource lastNotificationTapEvent=$_lastNotificationTapEvent lastNotificationTapAt=${_lastNotificationTapAt?.toIso8601String() ?? '-'} lastNotificationRevealAt=${_lastNotificationRevealAt?.toIso8601String() ?? '-'} pendingNotificationDeveloperStatus=$_pendingNotificationDeveloperStatus workScheduleMounted=$_workScheduleMounted workManualMounted=$_workManualMounted initialRevealCompleted=$_initialWorkspaceRevealCompleted initialRulesAutoOpenDelayScheduled=$_initialRulesAutoOpenDelayScheduled initialRulesAutoOpenRequested=$_initialRulesAutoOpenRequested initialAutomationCancelled=$_initialAutomationCancelled initialRulesAutoOpenHoldMs=${_initialRulesAutoOpenHold.inMilliseconds}',
     );
     await SingleInsideDiagnostics.showStatus(
       context,
@@ -803,6 +810,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
     switch (request) {
       case SingleInsideDockRequest.workSchedule:
       case SingleInsideDockRequest.punchRecorder:
+      case SingleInsideDockRequest.workManual:
       case SingleInsideDockRequest.faq:
       case SingleInsideDockRequest.update:
       case SingleInsideDockRequest.terms:
@@ -886,6 +894,14 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
       case SingleInsideDockRequest.punchRecorder:
         _switchWorkspaceContent(
           SingleInsideWorkspaceContent.punchRecorder,
+          source: source,
+        );
+        break;
+      case SingleInsideDockRequest.workManual:
+        _switchWorkspaceContent(
+          _workspaceContent == SingleInsideWorkspaceContent.workManual
+              ? SingleInsideWorkspaceContent.dotMap
+              : SingleInsideWorkspaceContent.workManual,
           source: source,
         );
         break;
@@ -1109,8 +1125,12 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
                   final currentDivision = areaStateDivision.isNotEmpty
                       ? areaStateDivision
                       : userState.division.trim();
+                  final areaStateArea = areaState.currentArea.trim();
+                  final currentArea = areaStateArea.isNotEmpty
+                      ? areaStateArea
+                      : userState.currentArea.trim();
                   final userSignature =
-                      'userId=${session.id} userName=${session.displayName} area=${userState.currentArea} division=$currentDivision mode=${mode.name} normalizedRole=${secondaryState.role.name} operationsVisible=$showOperations roleAllowed=$roleAllowed secondaryUserAccess=$sectionAllowed';
+                      'userId=${session.id} userName=${session.displayName} area=$currentArea division=$currentDivision mode=${mode.name} normalizedRole=${secondaryState.role.name} operationsVisible=$showOperations roleAllowed=$roleAllowed secondaryUserAccess=$sectionAllowed';
                   if (_lastUserSignature != userSignature) {
                     _lastUserSignature = userSignature;
                     SingleInsideDiagnostics.log('screen', userSignature);
@@ -1167,6 +1187,31 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
                                       onDeveloperStatus: () => _showDeveloperStatus(),
                                     )
                                   : const SizedBox.shrink(),
+                              workManual: _workManualMounted
+                                  ? WorkRuleReportWorkspace(
+                                      key: ValueKey<String>(
+                                        'single_work_manual_${session.id}_${currentArea}_$currentDivision',
+                                      ),
+                                      division: currentDivision,
+                                      area: currentArea,
+                                      capabilityEnabled: areaState
+                                          .capabilitiesOfCurrentArea
+                                          .contains(Capability.rule),
+                                      source: 'single_inside_work_manual',
+                                      side: WorkRuleReportSide.inline,
+                                      contentMode: WorkRuleReportContentMode
+                                          .responseManual,
+                                      refreshRevision: _ruleRefreshRevision,
+                                      onBack: () => _handleWorkspaceBack(
+                                        source: 'work_manual_back_button',
+                                      ),
+                                      onDebug: (message) =>
+                                          SingleInsideDiagnostics.log(
+                                        'manual',
+                                        message,
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
                               punchRecorder: SingleInsidePunchRecorderContentSurface(
                                 key: ValueKey<String>(
                                   'single_punch_content_${session.id}_${userState.currentArea}_$currentDivision',
@@ -1220,6 +1265,8 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
                               SingleInsideWorkspaceContent.workSchedule,
                           punchRecorderSelected: _workspaceContent ==
                               SingleInsideWorkspaceContent.punchRecorder,
+                          workManualSelected: _workspaceContent ==
+                              SingleInsideWorkspaceContent.workManual,
                         ),
                       );
 
@@ -1279,6 +1326,7 @@ class _SingleInsideWorkspaceSwitcher extends StatelessWidget {
     required this.dotMap,
     required this.workSchedule,
     required this.punchRecorder,
+    required this.workManual,
   });
 
   final SingleInsideWorkspaceContent active;
@@ -1286,6 +1334,7 @@ class _SingleInsideWorkspaceSwitcher extends StatelessWidget {
   final Widget dotMap;
   final Widget workSchedule;
   final Widget punchRecorder;
+  final Widget workManual;
 
   @override
   Widget build(BuildContext context) {
@@ -1309,6 +1358,12 @@ class _SingleInsideWorkspaceSwitcher extends StatelessWidget {
           duration: duration,
           offset: const Offset(0, .025),
           child: punchRecorder,
+        ),
+        _SingleInsideWorkspaceLayer(
+          active: active == SingleInsideWorkspaceContent.workManual,
+          duration: duration,
+          offset: const Offset(.018, 0),
+          child: workManual,
         ),
       ],
     );

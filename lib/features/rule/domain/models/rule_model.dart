@@ -1,5 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../utils/work_manual_text.dart';
+import 'rule_manual_page.dart';
+
+export 'rule_manual_page.dart';
+
 String buildRuleDocumentId({
   required String division,
   required String area,
@@ -80,6 +85,8 @@ class RuleModel {
     required this.area,
     required this.todoItems,
     required this.content,
+    this.responseManual = '',
+    this.responseManualPages = const <RuleManualPage>[],
     this.createdAt,
     this.updatedAt,
   });
@@ -89,8 +96,14 @@ class RuleModel {
   final String area;
   final List<RuleTodoItem> todoItems;
   final String content;
+  final String responseManual;
+  final List<RuleManualPage> responseManualPages;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  bool get responseManualUsesLegacyFallback =>
+      responseManualPages.length == 1 &&
+      isLegacyRuleManualPageId(responseManualPages.first.id);
 
   factory RuleModel.fromMap(String id, Map<String, dynamic> data) {
     final rawTodos = data['todoItems'];
@@ -108,12 +121,37 @@ class RuleModel {
       if (orderCompare != 0) return orderCompare;
       return a.id.compareTo(b.id);
     });
+
+    final legacyManual = normalizeWorkManualForStorage(
+      (data['responseManual'] ?? '').toString(),
+    );
+    final structuredPages = _readManualPages(data['responseManualPages']);
+    final structuredManual = flattenRuleManualPages(structuredPages);
+    final structuredMatchesLegacy =
+        structuredPages.isNotEmpty && structuredManual == legacyManual;
+    final effectivePages = structuredMatchesLegacy
+        ? structuredPages
+        : legacyManual.isEmpty
+            ? const <RuleManualPage>[]
+            : <RuleManualPage>[
+                RuleManualPage(
+                  id: 'manual_legacy_1',
+                  content: legacyManual,
+                  order: 0,
+                ),
+              ];
+    final effectiveManual = structuredMatchesLegacy
+        ? structuredManual
+        : legacyManual;
+
     return RuleModel(
       id: id.trim(),
       division: (data['division'] ?? '').toString().trim(),
       area: (data['area'] ?? '').toString().trim(),
       todoItems: List<RuleTodoItem>.unmodifiable(todos),
       content: (data['content'] ?? '').toString().trim(),
+      responseManual: effectiveManual,
+      responseManualPages: List<RuleManualPage>.unmodifiable(effectivePages),
       createdAt: _readDateTime(data['createdAt']),
       updatedAt: _readDateTime(data['updatedAt']),
     );
@@ -129,6 +167,8 @@ class RuleModel {
     String? area,
     List<RuleTodoItem>? todoItems,
     String? content,
+    String? responseManual,
+    List<RuleManualPage>? responseManualPages,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -138,6 +178,10 @@ class RuleModel {
       area: area ?? this.area,
       todoItems: List<RuleTodoItem>.unmodifiable(todoItems ?? this.todoItems),
       content: content ?? this.content,
+      responseManual: responseManual ?? this.responseManual,
+      responseManualPages: List<RuleManualPage>.unmodifiable(
+        responseManualPages ?? this.responseManualPages,
+      ),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -150,9 +194,37 @@ class RuleModel {
       'area': area,
       'todoItems': todoItems.map((item) => item.toMap()).toList(growable: false),
       'content': content,
+      'responseManual': responseManual,
+      'responseManualPages': responseManualPages
+          .map((page) => page.toMap())
+          .toList(growable: false),
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
     };
+  }
+
+  static List<RuleManualPage> _readManualPages(dynamic rawPages) {
+    if (rawPages is! Iterable) return const <RuleManualPage>[];
+    final pages = <RuleManualPage>[];
+    var sourceIndex = 0;
+    for (final raw in rawPages) {
+      if (raw is! Map) {
+        sourceIndex += 1;
+        continue;
+      }
+      final page = RuleManualPage.fromMap(
+        Map<String, dynamic>.from(raw),
+        fallbackOrder: sourceIndex,
+      );
+      if (!isWorkManualBlank(page.content)) pages.add(page);
+      sourceIndex += 1;
+    }
+    pages.sort((a, b) {
+      final orderCompare = a.order.compareTo(b.order);
+      if (orderCompare != 0) return orderCompare;
+      return a.id.compareTo(b.id);
+    });
+    return normalizeRuleManualPagesForStorage(pages);
   }
 
   static DateTime? _readDateTime(dynamic value) {

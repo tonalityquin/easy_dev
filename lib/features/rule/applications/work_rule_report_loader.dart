@@ -1,5 +1,6 @@
 import '../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 import '../domain/models/rule_model.dart';
+import '../domain/utils/work_manual_text.dart';
 
 class WorkRuleReportResult {
   const WorkRuleReportResult({
@@ -13,6 +14,22 @@ class WorkRuleReportResult {
   final String area;
   final RuleModel? rule;
   final String source;
+
+  bool get ruleFound => rule != null;
+
+  String get content => rule?.content.trim() ?? '';
+
+  bool get contentAvailable => content.isNotEmpty;
+
+  String get responseManual =>
+      normalizeWorkManualText(rule?.responseManual ?? '');
+
+  List<RuleManualPage> get responseManualPages =>
+      rule?.responseManualPages ?? const <RuleManualPage>[];
+
+  bool get responseManualAvailable => responseManualPages.isNotEmpty;
+
+  DateTime? get updatedAt => rule?.updatedAt;
 }
 
 class WorkRuleReportLoader {
@@ -45,14 +62,15 @@ class WorkRuleReportLoader {
       division: normalizedDivision,
       area: normalizedArea,
     );
-    onDebug?.call(
-      'work_rule_report=load_complete division=$normalizedDivision area=$normalizedArea found=${rule != null} todoCount=${rule?.todoItems.length ?? 0} contentLength=${rule?.content.length ?? 0} updatedAt=${rule?.updatedAt?.toIso8601String() ?? '-'} source=operational_sqlite remoteRead=0 remoteWrite=0',
-    );
-    return WorkRuleReportResult(
+    final result = WorkRuleReportResult(
       division: normalizedDivision,
       area: normalizedArea,
       rule: rule,
       source: 'operational_sqlite',
     );
+    onDebug?.call(
+      'work_rule_report=load_complete division=$normalizedDivision area=$normalizedArea ruleFound=${result.ruleFound} contentAvailable=${result.contentAvailable} contentLength=${result.content.length} responseManualAvailable=${result.responseManualAvailable} responseManualLength=${result.responseManual.length} responseManualPageCount=${result.responseManualPages.length} legacyFallback=${result.rule?.responseManualUsesLegacyFallback ?? false} updatedAt=${result.updatedAt?.toIso8601String() ?? '-'} source=${result.source} remoteRead=0 remoteWrite=0',
+    );
+    return result;
   }
 }

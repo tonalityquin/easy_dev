@@ -87,7 +87,7 @@ class _RuleManagementState extends State<RuleManagement> {
       if (!mounted) return;
       final rule = context.read<RuleState>().rule;
       trace.log(
-        'SQLite 업무 규칙 Snapshot 교체를 확인했습니다: found=${rule != null} todos=${rule?.todoItems.length ?? 0} contentLength=${rule?.content.length ?? 0}',
+        'SQLite 업무 규칙 Snapshot 교체를 확인했습니다: found=${rule != null} todos=${rule?.todoItems.length ?? 0} contentLength=${rule?.content.length ?? 0} responseManualLength=${rule?.responseManual.length ?? 0} responseManualPageCount=${rule?.responseManualPages.length ?? 0}',
         progress: .84,
       );
       await trace.succeed('업무 규칙 새로고침이 완료되었습니다.');
@@ -190,6 +190,9 @@ class _RuleManagementState extends State<RuleManagement> {
     if (content.isNotEmpty) {
       parts.add('본문 ${content.length}자');
     }
+    if (rule.responseManualPages.isNotEmpty) {
+      parts.add('메뉴얼 ${rule.responseManualPages.length}페이지');
+    }
     return parts.isEmpty ? '현재 지역 업무 규칙' : parts.join(' · ');
   }
 
@@ -244,7 +247,7 @@ class _RuleManagementState extends State<RuleManagement> {
                         key: const ValueKey<String>('rule-empty'),
                         icon: Icons.rule_rounded,
                         title: '등록된 업무 규칙이 없습니다',
-                        message: '현재 지역의 Todo 체크리스트 또는 업무 안내문을 등록할 수 있습니다.',
+                        message: '현재 지역의 Todo 업무 절차, 업무 안내문 또는 업무 메뉴얼을 등록할 수 있습니다.',
                         action: CommonButton(
                           label: '업무 규칙 등록',
                           icon: Icons.add_rounded,
@@ -338,6 +341,36 @@ class _RuleManagementState extends State<RuleManagement> {
                                             color: tokens.textPrimary,
                                             height: 1.5,
                                             fontWeight: FontWeight.w500,
+                                          ),
+                                    ),
+                                  ],
+                                  if ((rule.todoItems.isNotEmpty || rule.content.trim().isNotEmpty) &&
+                                      rule.responseManualPages.isNotEmpty) ...[
+                                    const SizedBox(height: 16),
+                                    Divider(height: 1, color: tokens.borderSubtle),
+                                    const SizedBox(height: 14),
+                                  ],
+                                  if (rule.responseManualPages.isNotEmpty) ...[
+                                    Row(
+                                      children: [
+                                        Icon(Icons.menu_book_rounded, size: 20, color: tokens.accent),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '업무 메뉴얼',
+                                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                                color: tokens.textPrimary,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '${rule.responseManualPages.length}페이지 · ${rule.responseManual.length}자',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            color: tokens.textSecondary,
+                                            height: 1.5,
+                                            fontWeight: FontWeight.w700,
                                           ),
                                     ),
                                   ],
