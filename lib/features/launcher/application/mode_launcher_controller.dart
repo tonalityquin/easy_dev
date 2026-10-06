@@ -10,6 +10,7 @@ import '../../../app/command/application/service_settings_command_handler.dart';
 import '../../../app/command/application/terminal_command_path.dart';
 import '../../../app/command/application/terminal_line.dart';
 import '../../../app/di/routes.dart';
+import '../../../app/init/app_device_role.dart';
 import '../../../app/init/app_start_flow_prefs.dart';
 import '../../../app/init/app_start_setup_flow_resolver.dart';
 import '../../../app/init/app_start_user_purpose.dart';
@@ -136,6 +137,7 @@ class ModeLauncherController extends ChangeNotifier {
   bool _devModeEnabled = false;
   bool _importingUnlocked = false;
   AppStartUserPurpose? _startupPurpose;
+  AppDeviceRole? _startupDeviceRole;
   TerminalAccountKind? _defaultAccountKind;
   bool _accountKindAutoSelected = false;
   bool _debugAccountKindOverride = false;
@@ -678,6 +680,11 @@ class ModeLauncherController extends ChangeNotifier {
     }
 
     _startupPurpose ??= await AppStartFlowPrefs.getUserPurpose();
+    if (_startupPurpose == AppStartUserPurpose.tabletInstallation) {
+      _startupDeviceRole ??= await AppStartFlowPrefs.getDeviceRole();
+    } else {
+      _startupDeviceRole = null;
+    }
     if (_startupPurpose == null) {
       _append(
         TerminalLineType.error,
@@ -2256,6 +2263,11 @@ class ModeLauncherController extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     _startupPurpose ??= await AppStartFlowPrefs.getUserPurpose();
+    if (_startupPurpose == AppStartUserPurpose.tabletInstallation) {
+      _startupDeviceRole ??= await AppStartFlowPrefs.getDeviceRole();
+    } else {
+      _startupDeviceRole = null;
+    }
     _defaultAccountKind =
         TerminalAuthCoordinator.accountKindForPurpose(_startupPurpose);
     LauncherDiagnostics.record(
@@ -3428,6 +3440,15 @@ class ModeLauncherController extends ChangeNotifier {
     );
   }
 
+  String _resolvePostLoginRoute(AppModeDefinition mode) {
+    if (mode.id == 'tablet' &&
+        _startupPurpose == AppStartUserPurpose.tabletInstallation &&
+        _startupDeviceRole == AppDeviceRole.sensor) {
+      return AppRoutes.sensor;
+    }
+    return mode.postLoginRoute;
+  }
+
   Future<ModeLauncherSubmitResult> _activateSelectedMode(
     BuildContext context, {
     required TerminalAuthenticatedAccount account,
@@ -3436,6 +3457,7 @@ class ModeLauncherController extends ChangeNotifier {
     bool restoredSession = false,
   }) async {
     final workArea = _selectedWorkArea;
+    final targetRoute = _resolvePostLoginRoute(mode);
     _loginStage = TerminalLoginStage.activatingMode;
     _busy = true;
     _runningCommand = restoredSession ? 'WORK_CONTEXT' : 'MODE';
@@ -3451,7 +3473,8 @@ class ModeLauncherController extends ChangeNotifier {
         'area': workArea?.areaName ?? '',
         'isHeadquarter': false,
         'mode': mode.id,
-        'postLoginRoute': mode.postLoginRoute,
+        'postLoginRoute': targetRoute,
+        'deviceRole': _startupDeviceRole?.storageValue ?? '',
         'sessionPersistence': TerminalAuthCoordinator.sessionPersistenceId(
           _sessionPersistence,
         ),
@@ -3507,7 +3530,7 @@ class ModeLauncherController extends ChangeNotifier {
         'source': restoredSession ? 'restored_mode_activation' : 'mode_activation',
         'area': workArea?.areaName ?? '',
         'mode': mode.id,
-        'targetRoute': mode.postLoginRoute,
+        'targetRoute': targetRoute,
         'restoredSession': restoredSession,
       },
     );
@@ -3516,7 +3539,7 @@ class ModeLauncherController extends ChangeNotifier {
       meta: <String, Object?>{
         'area': workArea?.areaName ?? '',
         'mode': mode.id,
-        'targetRoute': mode.postLoginRoute,
+        'targetRoute': targetRoute,
         'firebaseAreaSelectionQueries': workArea?.hasVerifiedAreaRecord == true ? 0 : 1,
         'firebaseWorkAreaListQueries': 0,
         'verifiedAreaRecordReused': workArea?.hasVerifiedAreaRecord == true,
@@ -3525,7 +3548,7 @@ class ModeLauncherController extends ChangeNotifier {
       },
     );
     notifyListeners();
-    return ModeLauncherSubmitResult(targetRoute: mode.postLoginRoute);
+    return ModeLauncherSubmitResult(targetRoute: targetRoute);
   }
 
   Future<LauncherCredentialSubmitResult> authenticateCredentials(

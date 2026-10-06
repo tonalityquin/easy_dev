@@ -17,6 +17,11 @@ import '../../features/rule/applications/rule_state.dart';
 import '../../features/rule/domain/repositories/rule_repository.dart';
 import '../../features/sector/applications/sector_state.dart';
 import '../../features/sector/domain/repositories/sector_repository.dart';
+import '../../features/sensor/applications/sensor_detection_state.dart';
+import '../../features/sensor/applications/sensor_side_dock_state.dart';
+import '../../features/sensor/applications/sensor_trigger_point_state.dart';
+import '../../features/sensor/applications/sensor_work_session_state.dart';
+import '../../features/sensor/data/sensor_trigger_point_store.dart';
 import '../../features/tablet/applications/tablet_grid_render_mode_state.dart';
 import '../../features/tablet/applications/tablet_pad_mode_state.dart';
 import '../../features/tablet/applications/tablet_parking_completed_view_toggle_state.dart';
@@ -47,6 +52,12 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(create: (_) => ViewDocRowsStore()),
   ChangeNotifierProvider(create: (_) => TabletPadModeState()),
   ChangeNotifierProvider(create: (_) => TabletSideDockState()),
+  ChangeNotifierProvider(create: (_) => SensorSideDockState()),
+  ChangeNotifierProvider(create: (_) => SensorWorkSessionState()),
+  ChangeNotifierProvider(create: (_) => SensorDetectionState()),
+  ChangeNotifierProvider(
+    create: (_) => SensorTriggerPointState(SensorTriggerPointStore()),
+  ),
   ChangeNotifierProvider(create: (_) => TabletGridRenderModeState()),
   ChangeNotifierProvider(create: (_) => TabletPlateTail4SizeState()),
   ChangeNotifierProvider(create: (_) => TabletWorkSessionState()),

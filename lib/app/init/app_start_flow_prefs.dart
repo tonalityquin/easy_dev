@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_device_role.dart';
 import 'app_start_user_purpose.dart';
 
 class AppStartFlowPrefs {
@@ -11,6 +12,7 @@ class AppStartFlowPrefs {
   static const String permissionTutorialPurposeKey =
       'app_start_permission_tutorial_purpose_v1';
   static const String userPurposeKey = 'app_start_user_purpose_v1';
+  static const String deviceRoleKey = 'app_device_role_v1';
   static const String permissionNoticeDoneKey =
       'app_start_permission_notice_done_v1';
   static const String selectorScreenTutorialDoneKey =
@@ -70,10 +72,26 @@ class AppStartFlowPrefs {
     final next = purpose.storageValue;
     await prefs.setString(userPurposeKey, next);
     if (previous != next) {
+      await prefs.remove(deviceRoleKey);
       await prefs.setBool(permissionTutorialDoneKey, false);
       await prefs.remove(permissionTutorialPurposeKey);
       await prefs.setBool(permissionNoticeDoneKey, false);
     }
+  }
+
+  static Future<AppDeviceRole?> getDeviceRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    return parseAppDeviceRole(prefs.getString(deviceRoleKey));
+  }
+
+  static Future<void> setDeviceRole(AppDeviceRole role) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(deviceRoleKey, role.storageValue);
+  }
+
+  static Future<void> clearDeviceRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(deviceRoleKey);
   }
 
   static Future<bool> getPermissionNoticeDone() async {
@@ -205,6 +223,7 @@ class AppStartFlowPrefs {
     await prefs.setBool(permissionTutorialDoneKey, false);
     await prefs.remove(permissionTutorialPurposeKey);
     await prefs.remove(userPurposeKey);
+    await prefs.remove(deviceRoleKey);
     await prefs.setBool(permissionNoticeDoneKey, false);
     await prefs.setBool(selectorScreenTutorialDoneKey, false);
     await prefs.setBool(termsOfServiceAgreedKey, false);

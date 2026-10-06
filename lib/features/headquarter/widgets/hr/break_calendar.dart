@@ -19,6 +19,8 @@ import '../../../dashboard/applications/common/calendar_selection_state.dart';
 import '../../../selector/application/dev_auth.dart';
 import 'mail_recipient_settings.dart';
 import 'utils/calendar_excel_mailer.dart';
+import 'widgets/bulk_time_editor.dart';
+import 'widgets/bulk_time_models.dart';
 import 'widgets/time_edit_sheet.dart';
 
 enum BreakCalendarPresentation {
@@ -31,6 +33,12 @@ enum _SaveVisualState {
   saving,
   success,
   failure,
+}
+
+enum _BreakDockView {
+  main,
+  userPicker,
+  bulkInput,
 }
 
 class BreakCalendar extends StatefulWidget {
@@ -92,6 +100,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
   Map<int, String> _breakTimeMap = <int, String>{};
   Map<int, String> _loadedBreakTimeMap = <int, String>{};
+  final Map<int, String> _bulkGeneratedBreakTimes = <int, String>{};
   final Set<String> _pendingDeleteBreakDates = <String>{};
   final Map<String, Map<int, String>> _breakTimeCache =
       <String, Map<int, String>>{};
@@ -103,13 +112,14 @@ class _BreakCalendarState extends State<BreakCalendar> {
   bool _isLoadingMonth = false;
   bool _editDialogOpen = false;
   bool _developerMode = false;
-  bool _showUserPicker = false;
+  _BreakDockView _dockView = _BreakDockView.main;
   int _monthDirection = 1;
   Object? _monthLoadError;
   Object? _searchError;
   String? _searchMessage;
   _SaveVisualState _saveState = _SaveVisualState.idle;
   List<UserModel> _candidateUsers = <UserModel>[];
+  BulkTimeRules _bulkRules = BulkTimeRules.breakDefaults();
 
   int _clampYear(int y) {
     if (y < 1) return 1;
@@ -171,7 +181,13 @@ class _BreakCalendarState extends State<BreakCalendar> {
   void _handleDeveloperModeChanged() {
     final enabled = DevAuth.devModeEnabled.value;
     if (!mounted || _developerMode == enabled) return;
-    setState(() => _developerMode = enabled);
+    setState(() {
+      _developerMode = enabled;
+      if (!enabled) {
+        _rollbackUnsavedBulkValues();
+        _dockView = _BreakDockView.main;
+      }
+    });
     _recordDebug('developer_mode_notifier=$enabled');
   }
 
@@ -189,7 +205,13 @@ class _BreakCalendarState extends State<BreakCalendar> {
     if (!mounted) return;
     _recordDebug('developer_mode=$enabled');
     if (_developerMode == enabled) return;
-    setState(() => _developerMode = enabled);
+    setState(() {
+      _developerMode = enabled;
+      if (!enabled) {
+        _rollbackUnsavedBulkValues();
+        _dockView = _BreakDockView.main;
+      }
+    });
   }
 
   Future<void> _showDeveloperStatus() async {
@@ -201,7 +223,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
         ? user.divisions.first
         : '';
     _recordDebug(
-      'developer_status_open presentation=${widget.presentation.name} user=${user?.name ?? '-'} area=$area division=$division month=${_monthKey(_focusedDay)} selectedDay=${_selectedDay?.day ?? -1} records=${_breakTimeMap.length} dirty=$_dirtyDayCount deletes=${_pendingDeleteBreakDates.length} cache=${_breakTimeCache.length} loading=$_isLoadingMonth monthError=${_monthLoadError != null} searching=$_isSearching searchError=${_searchError != null} candidates=${_candidateUsers.length} picker=$_showUserPicker editDialogOpen=$_editDialogOpen save=${_saveState.name} mail=$_isSendingMail reduceMotion=${media?.disableAnimations ?? false}',
+      'developer_status_open presentation=${widget.presentation.name} user=${user?.name ?? '-'} area=$area division=$division month=${_monthKey(_focusedDay)} selectedDay=${_selectedDay?.day ?? -1} records=${_breakTimeMap.length} dirty=$_dirtyDayCount deletes=${_pendingDeleteBreakDates.length} cache=${_breakTimeCache.length} loading=$_isLoadingMonth monthError=${_monthLoadError != null} searching=$_isSearching searchError=${_searchError != null} candidates=${_candidateUsers.length} view=${_dockView.name} bulkBreak=${_bulkGeneratedBreakTimes.length} editDialogOpen=$_editDialogOpen save=${_saveState.name} mail=$_isSendingMail reduceMotion=${media?.disableAnimations ?? false}',
     );
     final trace = await DeveloperOperationTrace.start(
       context: context,
@@ -221,7 +243,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
       progress: 0.36,
     );
     trace.log(
-      'loading=$_isLoadingMonth, monthError=${_monthLoadError ?? '-'}, searching=$_isSearching, searchError=${_searchError ?? '-'}, searchMessage=${_searchMessage ?? '-'}, candidates=${_candidateUsers.length}, picker=$_showUserPicker',
+      'loading=$_isLoadingMonth, monthError=${_monthLoadError ?? '-'}, searching=$_isSearching, searchError=${_searchError ?? '-'}, searchMessage=${_searchMessage ?? '-'}, candidates=${_candidateUsers.length}, view=${_dockView.name}, bulkGeneratedBreak=${_bulkGeneratedBreakTimes.length}',
       progress: 0.50,
     );
     trace.log(
@@ -267,6 +289,96 @@ class _BreakCalendarState extends State<BreakCalendar> {
     return (_breakTimeMap[day] ?? '') != (_loadedBreakTimeMap[day] ?? '');
   }
 
+  Set<int> _pendingDays(Set<String> dates) {
+    final result = <int>{};
+    for (final value in dates) {
+      final parts = value.split('-');
+      if (parts.length != 3) continue;
+      final day = int.tryParse(parts.last);
+      if (day != null) result.add(day);
+    }
+    return result;
+  }
+
+  void _clearBulkGeneratedTracking() {
+    _bulkGeneratedBreakTimes.clear();
+  }
+
+  void _rollbackUnsavedBulkValues({String reason = 'developer_mode_off'}) {
+    var removed = 0;
+    for (final entry in _bulkGeneratedBreakTimes.entries.toList()) {
+      if (_breakTimeMap[entry.key] == entry.value &&
+          (_loadedBreakTimeMap[entry.key] ?? '').isEmpty) {
+        _breakTimeMap.remove(entry.key);
+        removed++;
+      }
+    }
+    _clearBulkGeneratedTracking();
+    if (removed > 0) {
+      _saveState = _SaveVisualState.idle;
+      _recordDebug(
+        'bulk_rollback reason=$reason removed=$removed dirty=$_dirtyDayCount',
+      );
+    }
+  }
+
+  void _undoBulkInput() {
+    if (_bulkGeneratedBreakTimes.isEmpty) return;
+    setState(() => _rollbackUnsavedBulkValues(reason: 'user_undo'));
+    HapticFeedback.lightImpact();
+  }
+
+  Future<void> _openBulkInput() async {
+    final user = _selectedUser;
+    if (user == null || !_developerMode) return;
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!mounted || !enabled) {
+      _recordDebug('bulk_open_blocked reason=developer_mode_off');
+      return;
+    }
+    HapticFeedback.selectionClick();
+    setState(() => _dockView = _BreakDockView.bulkInput);
+    _recordDebug(
+      'bulk_open userId=${_userIdOf(user)} month=${_monthKey(_focusedDay)} dirty=$_dirtyDayCount',
+    );
+  }
+
+  void _closeBulkInput() {
+    if (!mounted) return;
+    setState(() => _dockView = _BreakDockView.main);
+    _recordDebug('bulk_close');
+  }
+
+  void _handleBulkRulesChanged(BulkTimeRules rules) {
+    _bulkRules = rules;
+  }
+
+  void _applyBulkResult(BulkTimeApplyResult result) {
+    if (!_developerMode || !DevAuth.devModeEnabled.value) {
+      _recordDebug('bulk_apply_blocked reason=developer_mode_off');
+      return;
+    }
+    var applied = 0;
+    setState(() {
+      for (final entry in result.breakTimes.entries) {
+        final day = entry.key;
+        if ((_breakTimeMap[day] ?? '').isNotEmpty ||
+            (_loadedBreakTimeMap[day] ?? '').isNotEmpty ||
+            _pendingDeleteBreakDates.contains(_dateStr(day))) {
+          continue;
+        }
+        _breakTimeMap[day] = entry.value;
+        _bulkGeneratedBreakTimes[day] = entry.value;
+        applied++;
+      }
+      _saveState = _SaveVisualState.idle;
+      _dockView = _BreakDockView.main;
+    });
+    _recordDebug(
+      'bulk_apply_complete target=${result.targetDates} requested=${result.generatedFields} applied=$applied existing=${result.existingFields} skipped=${result.skippedDates} dirty=$_dirtyDayCount',
+    );
+  }
+
   void _clearAll() {
     _recordDebug('screen_reset');
     setState(() {
@@ -274,13 +386,14 @@ class _BreakCalendarState extends State<BreakCalendar> {
       _userInputCtrl.clear();
       _breakTimeMap.clear();
       _loadedBreakTimeMap.clear();
+      _clearBulkGeneratedTracking();
       _pendingDeleteBreakDates.clear();
       _breakTimeCache.clear();
       _breakLoadedCache.clear();
       _selectedDay = null;
       _focusedDay = DateTime.now();
       _candidateUsers = <UserModel>[];
-      _showUserPicker = false;
+      _dockView = _BreakDockView.main;
       _searchMessage = null;
       _searchError = null;
       _monthLoadError = null;
@@ -296,10 +409,11 @@ class _BreakCalendarState extends State<BreakCalendar> {
       _userInputCtrl.clear();
       _breakTimeMap.clear();
       _loadedBreakTimeMap.clear();
+      _clearBulkGeneratedTracking();
       _pendingDeleteBreakDates.clear();
       _selectedDay = null;
       _candidateUsers = <UserModel>[];
-      _showUserPicker = false;
+      _dockView = _BreakDockView.main;
       _searchMessage = null;
       _searchError = null;
       _monthLoadError = null;
@@ -357,7 +471,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
       }
       setState(() {
         _candidateUsers = users;
-        _showUserPicker = true;
+        _dockView = _BreakDockView.userPicker;
       });
       _recordDebug('user_picker_open count=${users.length}');
       _userInputFocus.unfocus();
@@ -382,9 +496,10 @@ class _BreakCalendarState extends State<BreakCalendar> {
       _selectedUser = user;
       _breakTimeMap.clear();
       _loadedBreakTimeMap.clear();
+      _clearBulkGeneratedTracking();
       _pendingDeleteBreakDates.clear();
       _candidateUsers = <UserModel>[];
-      _showUserPicker = false;
+      _dockView = _BreakDockView.main;
       _searchMessage = null;
       _searchError = null;
       final area = user.selectedArea?.trim() ?? '';
@@ -430,6 +545,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
       setState(() {
         _breakTimeMap = map;
         _loadedBreakTimeMap = loaded;
+        _clearBulkGeneratedTracking();
         _pendingDeleteBreakDates.clear();
         _monthLoadError = null;
         _isLoadingMonth = false;
@@ -455,6 +571,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
       setState(() {
         _breakTimeMap = <int, String>{...map};
         _loadedBreakTimeMap = <int, String>{...map};
+        _clearBulkGeneratedTracking();
         _pendingDeleteBreakDates.clear();
         _breakTimeCache[cacheKey] = <int, String>{...map};
         _breakLoadedCache[cacheKey] = <int, String>{...map};
@@ -518,6 +635,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
       if (!mounted) return true;
       setState(() {
         _loadedBreakTimeMap = <int, String>{..._breakTimeMap};
+        _clearBulkGeneratedTracking();
         _pendingDeleteBreakDates.clear();
         _breakTimeCache[cacheKey] = <int, String>{..._breakTimeMap};
         _breakLoadedCache[cacheKey] = <int, String>{..._loadedBreakTimeMap};
@@ -766,14 +884,54 @@ class _BreakCalendarState extends State<BreakCalendar> {
   }
 
   Widget _buildContentSwitcher(BuildContext context) {
+    String activeKey;
+    Widget child;
+    switch (_dockView) {
+      case _BreakDockView.userPicker:
+        activeKey = 'break_user_picker';
+        child = _buildUserCandidateView(context);
+        break;
+      case _BreakDockView.bulkInput:
+        activeKey = 'break_bulk_input';
+        child = _buildBulkInputView(context);
+        break;
+      case _BreakDockView.main:
+        activeKey = 'break_main';
+        child = _buildMainContent(context);
+        break;
+    }
     return CommonSideDockContentCropSwitcher(
-      activeKey: _showUserPicker ? 'break_user_picker' : 'break_main',
+      activeKey: activeKey,
       originAlignment: Alignment.centerLeft,
       duration: const Duration(milliseconds: 220),
       reverseDuration: const Duration(milliseconds: 180),
-      child: _showUserPicker
-          ? _buildUserCandidateView(context)
-          : _buildMainContent(context),
+      child: child,
+    );
+  }
+
+  Widget _buildBulkInputView(BuildContext context) {
+    final user = _selectedUser;
+    if (!_developerMode || user == null) {
+      return _buildMainContent(context);
+    }
+    return BulkTimeEditor(
+      kind: BulkTimeEditorKind.breakTime,
+      month: _focusedDay,
+      userSeed: _userIdOf(user),
+      rules: _bulkRules,
+      currentClockIns: const <int, String>{},
+      currentClockOuts: const <int, String>{},
+      currentBreakTimes: _breakTimeMap,
+      loadedClockIns: const <int, String>{},
+      loadedClockOuts: const <int, String>{},
+      loadedBreakTimes: _loadedBreakTimeMap,
+      pendingDeleteClockInDays: const <int>{},
+      pendingDeleteClockOutDays: const <int>{},
+      pendingDeleteBreakDays: _pendingDays(_pendingDeleteBreakDates),
+      onRulesChanged: _handleBulkRulesChanged,
+      onApply: _applyBulkResult,
+      onBack: _closeBulkInput,
+      onDebugLog: (message) => _recordDebug('bulk $message'),
     );
   }
 
@@ -792,7 +950,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
                 onPressed: () {
                   HapticFeedback.selectionClick();
                   _recordDebug('user_picker_back');
-                  setState(() => _showUserPicker = false);
+                  setState(() => _dockView = _BreakDockView.main);
                 },
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
@@ -897,6 +1055,69 @@ class _BreakCalendarState extends State<BreakCalendar> {
     );
   }
 
+  Widget _buildBulkEntry(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(7, 8, 7, 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
+        onTap: _openBulkInput,
+        child: AnimatedContainer(
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.standard,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            color: tokens.warningContainer.withOpacity(.46),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
+            border: Border.all(color: tokens.warning.withOpacity(.45)),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.auto_awesome_rounded,
+                size: 19,
+                color: tokens.warning,
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  '일괄 시간 입력',
+                  style: text.bodyMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: tokens.warningContainer,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'DEBUG',
+                  style: text.labelSmall?.copyWith(
+                    color: tokens.onWarningContainer,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 5),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: tokens.iconSecondary,
+                size: 19,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMainContent(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final reduceMotion =
@@ -926,6 +1147,34 @@ class _BreakCalendarState extends State<BreakCalendar> {
               SliverToBoxAdapter(
                 child: Divider(height: 1, color: tokens.borderSubtle),
               ),
+              if (_developerMode && _selectedUser != null) ...[
+                SliverToBoxAdapter(
+                  child: CommonAnimatedReveal(
+                    delay: const Duration(milliseconds: 42),
+                    offset: const Offset(-0.02, 0),
+                    child: _buildBulkEntry(context),
+                  ),
+                ),
+                if (_bulkGeneratedBreakTimes.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+                        child: TextButton.icon(
+                          onPressed: _undoBulkInput,
+                          icon: const Icon(Icons.undo_rounded, size: 17),
+                          label: Text(
+                            '일괄 입력 ${_bulkGeneratedBreakTimes.length}필드 되돌리기',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                SliverToBoxAdapter(
+                  child: Divider(height: 1, color: tokens.borderSubtle),
+                ),
+              ],
               SliverToBoxAdapter(
                 child: CommonAnimatedReveal(
                   delay: const Duration(milliseconds: 50),
@@ -1570,9 +1819,13 @@ class _BreakCalendarState extends State<BreakCalendar> {
       setState(() {
         if (value.isEmpty || value == '00:00') {
           _breakTimeMap.remove(dayKey);
+          _bulkGeneratedBreakTimes.remove(dayKey);
           _pendingDeleteBreakDates.add(dateStr);
         } else {
           _breakTimeMap[dayKey] = value;
+          if (_bulkGeneratedBreakTimes[dayKey] != value) {
+            _bulkGeneratedBreakTimes.remove(dayKey);
+          }
           _pendingDeleteBreakDates.remove(dateStr);
         }
         _saveState = _SaveVisualState.idle;

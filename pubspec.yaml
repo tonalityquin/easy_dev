@@ -2,7 +2,7 @@ name: easydev
 description: "backend+frontend prototype project"
 publish_to: 'none'
 
-version: 1.1.1+484
+version: 1.1.1+494
 
 environment:
   sdk: ">=3.5.4 <4.0.0"
@@ -16,27 +16,22 @@ dependencies:
   image: ^4.1.3
   fl_chart: ^0.66.2
 
-  # SQLite 패키지
   sqflite: ^2.4.2
   path: ^1.9.1
 
-  # 날짜/시간 형식 변환 패키지
   intl: ^0.20.2
   timezone: ^0.10.1
 
-  # Firebase 관련 패키지
   firebase_core: ^3.13.0
   firebase_auth: ^5.5.2
   cloud_firestore: ^5.6.6
   firebase_storage: ^12.4.5
 
-  # 로컬 데이터 및 알림 관련
   shared_preferences: ^2.5.3
   flutter_local_notifications: ^19.3.0
   record: ^6.2.0
   audioplayers: ^6.4.0
 
-  # ✅ GCS 업로드 관련 추가
   http: ^1.2.0
   googleapis: ^13.0.0
   googleapis_auth: ^1.6.0
@@ -44,53 +39,43 @@ dependencies:
   extension_google_sign_in_as_googleapis_auth: ^3.0.0
   mime: ^2.0.0
 
-  # Excel 관련 추가
   excel: ^4.0.6
 
-  # Excel&GCS
   path_provider: ^2.1.5
   permission_handler: ^12.0.0+1
   collection: ^1.19.1
 
-  # Picture
   file_picker: ^10.3.8
 
-  # TTS
   flutter_tts: ^4.2.3
   flutter_foreground_task: ^9.2.2
 
   url_launcher: ^6.3.1
 
-  # File Export
   share_plus: ^11.0.0
   android_intent_plus: ^5.3.0
 
-  # Calendar&Task
   table_calendar: ^3.2.0
 
-  # QR
   qr_flutter: ^4.1.0
 
-  # git
   flutter_secure_storage: ^9.2.4
   flutter_markdown: ^0.7.7+1
 
   crypto: ^3.0.6
 
   google_mlkit_text_recognition: ^0.15.0
+  google_mlkit_object_detection: 0.15.0
 
   uuid: ^4.5.1
 
-  # video
   video_player: ^2.10.0
   chewie: ^1.13.0
   video_thumbnail: ^0.5.6
 
-  # PDF For Send Mail
   pdf: ^3.11.3
   pdfx: ^2.9.2
   
-  # 이미지 AI 모델 관련
   tflite_flutter: ^0.11.0
 
 dev_dependencies:
@@ -111,19 +96,15 @@ flutter:
     - assets/icons/app_icon.png
     - assets/icons/app_icon_ios.png
     - assets/tutorials/
-    # ⬇⬇⬇ PDF 전용 폰트 자원(디렉터리 전체 포함)
     - assets/fonts/NotoSansKR/
     - assets/00.head.pdf
     - assets/01.head.pdf
     - assets/02.simple.pdf
     - assets/03.lite.pdf
     - assets/04.service.pdf
-    # 전이학습 모델
     - assets/models/vehicle_front/
-    # 앱 소개
     - assets/description/
 
-# ↓↓↓ 최상위 레벨 설정 블록 (dev_dependencies 밖)
 flutter_launcher_icons:
   android: true
   ios: true

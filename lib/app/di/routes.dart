@@ -22,6 +22,7 @@ import '../../features/personal/pages/personal_page.dart';
 import '../terminal/presentation/parkinworkin_terminal_screen.dart';
 import '../utils/status_dialog.dart';
 import '../../features/selector/application/dev_auth.dart';
+import '../../features/sensor/pages/sensor_page.dart';
 import '../../features/launcher/page/power_boot_screen.dart';
 import '../../features/tablet/pages/tablet_page.dart';
 import '../../shared/page/pages/double/double_type_page.dart';
@@ -80,6 +81,7 @@ class AppRoutes {
   static const minorTypePage = '/minor_type_page';
 
   static const tablet = '/tablet_page';
+  static const sensor = '/sensor_page';
   static const personal = '/personal_page';
   static const sprintModeLoading = '/sprint_mode_loading';
   static const sprintModeHome = '/sprint_mode_home';
@@ -188,6 +190,7 @@ final Map<String, WidgetBuilder> appRoutes = {
         child: MinorTypePage(),
       ),
   AppRoutes.tablet: (context) => const TabletPage(),
+  AppRoutes.sensor: (context) => const SensorPage(),
   AppRoutes.personal: (context) => const PersonalPage(),
   AppRoutes.sprintModeLoading: _buildSprintModeLoadingPage,
   AppRoutes.sprintModeHome: _buildSprintModeLoadingPage,

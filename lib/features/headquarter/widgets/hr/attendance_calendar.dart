@@ -20,6 +20,8 @@ import '../../../dashboard/applications/common/calendar_selection_state.dart';
 import '../../../selector/application/dev_auth.dart';
 import 'mail_recipient_settings.dart';
 import 'utils/calendar_excel_mailer.dart';
+import 'widgets/bulk_time_editor.dart';
+import 'widgets/bulk_time_models.dart';
 import 'widgets/time_edit_sheet.dart';
 
 enum AttendanceCalendarPresentation {
@@ -32,6 +34,12 @@ enum _SaveVisualState {
   saving,
   success,
   failure,
+}
+
+enum _AttendanceDockView {
+  main,
+  userPicker,
+  bulkInput,
 }
 
 class AttendanceCalendar extends StatefulWidget {
@@ -98,18 +106,21 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   bool _isLoadingMonth = false;
   bool _editDialogOpen = false;
   bool _developerMode = false;
-  bool _showUserPicker = false;
+  _AttendanceDockView _dockView = _AttendanceDockView.main;
   int _monthDirection = 1;
   Object? _monthLoadError;
   Object? _searchError;
   String? _searchMessage;
   _SaveVisualState _saveState = _SaveVisualState.idle;
   List<UserModel> _candidateUsers = <UserModel>[];
+  BulkTimeRules _bulkRules = BulkTimeRules.attendanceDefaults();
 
   Map<int, String> _clockInMap = <int, String>{};
   Map<int, String> _clockOutMap = <int, String>{};
   Map<int, String> _loadedClockInMap = <int, String>{};
   Map<int, String> _loadedClockOutMap = <int, String>{};
+  final Map<int, String> _bulkGeneratedClockIns = <int, String>{};
+  final Map<int, String> _bulkGeneratedClockOuts = <int, String>{};
 
   final Set<String> _pendingDeleteInDates = <String>{};
   final Set<String> _pendingDeleteOutDates = <String>{};
@@ -183,7 +194,13 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   void _handleDeveloperModeChanged() {
     final enabled = DevAuth.devModeEnabled.value;
     if (!mounted || _developerMode == enabled) return;
-    setState(() => _developerMode = enabled);
+    setState(() {
+      _developerMode = enabled;
+      if (!enabled) {
+        _rollbackUnsavedBulkValues();
+        _dockView = _AttendanceDockView.main;
+      }
+    });
     _recordDebug('developer_mode_notifier=$enabled');
   }
 
@@ -201,7 +218,13 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     if (!mounted) return;
     _recordDebug('developer_mode=$enabled');
     if (_developerMode == enabled) return;
-    setState(() => _developerMode = enabled);
+    setState(() {
+      _developerMode = enabled;
+      if (!enabled) {
+        _rollbackUnsavedBulkValues();
+        _dockView = _AttendanceDockView.main;
+      }
+    });
   }
 
   Future<void> _showDeveloperStatus() async {
@@ -216,7 +239,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     final partial = _partialDayCount;
     final dirty = _dirtyDayCount;
     _recordDebug(
-      'developer_status_open presentation=${widget.presentation.name} user=${user?.name ?? '-'} area=$area division=$division month=${_monthKey(_focusedDay)} selectedDay=${_selectedDay?.day ?? -1} complete=$complete partial=$partial dirty=$dirty in=${_clockInMap.length} out=${_clockOutMap.length} deleteIn=${_pendingDeleteInDates.length} deleteOut=${_pendingDeleteOutDates.length} cacheIn=${_inCache.length} cacheOut=${_outCache.length} loading=$_isLoadingMonth monthError=${_monthLoadError != null} searching=$_isSearching searchError=${_searchError != null} candidates=${_candidateUsers.length} picker=$_showUserPicker editDialogOpen=$_editDialogOpen save=${_saveState.name} mail=$_isSendingMail reduceMotion=${media?.disableAnimations ?? false}',
+      'developer_status_open presentation=${widget.presentation.name} user=${user?.name ?? '-'} area=$area division=$division month=${_monthKey(_focusedDay)} selectedDay=${_selectedDay?.day ?? -1} complete=$complete partial=$partial dirty=$dirty in=${_clockInMap.length} out=${_clockOutMap.length} deleteIn=${_pendingDeleteInDates.length} deleteOut=${_pendingDeleteOutDates.length} cacheIn=${_inCache.length} cacheOut=${_outCache.length} loading=$_isLoadingMonth monthError=${_monthLoadError != null} searching=$_isSearching searchError=${_searchError != null} candidates=${_candidateUsers.length} view=${_dockView.name} bulkIn=${_bulkGeneratedClockIns.length} bulkOut=${_bulkGeneratedClockOuts.length} editDialogOpen=$_editDialogOpen save=${_saveState.name} mail=$_isSendingMail reduceMotion=${media?.disableAnimations ?? false}',
     );
     final trace = await DeveloperOperationTrace.start(
       context: context,
@@ -240,7 +263,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       progress: 0.46,
     );
     trace.log(
-      'searching=$_isSearching, searchError=${_searchError ?? '-'}, searchMessage=${_searchMessage ?? '-'}, candidates=${_candidateUsers.length}, picker=$_showUserPicker, editDialogOpen=$_editDialogOpen, saveState=${_saveState.name}, sendingMail=$_isSendingMail, reduceMotion=${media?.disableAnimations ?? false}',
+      'searching=$_isSearching, searchError=${_searchError ?? '-'}, searchMessage=${_searchMessage ?? '-'}, candidates=${_candidateUsers.length}, view=${_dockView.name}, bulkGeneratedIn=${_bulkGeneratedClockIns.length}, bulkGeneratedOut=${_bulkGeneratedClockOuts.length}, editDialogOpen=$_editDialogOpen, saveState=${_saveState.name}, sendingMail=$_isSendingMail, reduceMotion=${media?.disableAnimations ?? false}',
       progress: 0.58,
     );
     final snapshot = List<String>.of(_debugLines);
@@ -311,6 +334,117 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         (_clockOutMap[day] ?? '') != (_loadedClockOutMap[day] ?? '');
   }
 
+  Set<int> _pendingDays(Set<String> dates) {
+    final result = <int>{};
+    for (final value in dates) {
+      final parts = value.split('-');
+      if (parts.length != 3) continue;
+      final day = int.tryParse(parts.last);
+      if (day != null) result.add(day);
+    }
+    return result;
+  }
+
+  void _clearBulkGeneratedTracking() {
+    _bulkGeneratedClockIns.clear();
+    _bulkGeneratedClockOuts.clear();
+  }
+
+  void _rollbackUnsavedBulkValues({String reason = 'developer_mode_off'}) {
+    var removedIn = 0;
+    var removedOut = 0;
+    for (final entry in _bulkGeneratedClockIns.entries.toList()) {
+      if (_clockInMap[entry.key] == entry.value &&
+          (_loadedClockInMap[entry.key] ?? '').isEmpty) {
+        _clockInMap.remove(entry.key);
+        removedIn++;
+      }
+    }
+    for (final entry in _bulkGeneratedClockOuts.entries.toList()) {
+      if (_clockOutMap[entry.key] == entry.value &&
+          (_loadedClockOutMap[entry.key] ?? '').isEmpty) {
+        _clockOutMap.remove(entry.key);
+        removedOut++;
+      }
+    }
+    _clearBulkGeneratedTracking();
+    if (removedIn > 0 || removedOut > 0) {
+      _saveState = _SaveVisualState.idle;
+      _recordDebug(
+        'bulk_rollback reason=$reason removedIn=$removedIn removedOut=$removedOut dirty=$_dirtyDayCount',
+      );
+    }
+  }
+
+  void _undoBulkInput() {
+    if (_bulkGeneratedClockIns.isEmpty && _bulkGeneratedClockOuts.isEmpty) return;
+    setState(() => _rollbackUnsavedBulkValues(reason: 'user_undo'));
+    HapticFeedback.lightImpact();
+  }
+
+  Future<void> _openBulkInput() async {
+    final user = _selectedUser;
+    if (user == null || !_developerMode) return;
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!mounted || !enabled) {
+      _recordDebug('bulk_open_blocked reason=developer_mode_off');
+      return;
+    }
+    HapticFeedback.selectionClick();
+    setState(() => _dockView = _AttendanceDockView.bulkInput);
+    _recordDebug(
+      'bulk_open userId=${_userIdOf(user)} month=${_monthKey(_focusedDay)} dirty=$_dirtyDayCount',
+    );
+  }
+
+  void _closeBulkInput() {
+    if (!mounted) return;
+    setState(() => _dockView = _AttendanceDockView.main);
+    _recordDebug('bulk_close');
+  }
+
+  void _handleBulkRulesChanged(BulkTimeRules rules) {
+    _bulkRules = rules;
+  }
+
+  void _applyBulkResult(BulkTimeApplyResult result) {
+    if (!_developerMode || !DevAuth.devModeEnabled.value) {
+      _recordDebug('bulk_apply_blocked reason=developer_mode_off');
+      return;
+    }
+    var appliedIn = 0;
+    var appliedOut = 0;
+    setState(() {
+      for (final entry in result.clockIns.entries) {
+        final day = entry.key;
+        if ((_clockInMap[day] ?? '').isNotEmpty ||
+            (_loadedClockInMap[day] ?? '').isNotEmpty ||
+            _pendingDeleteInDates.contains(_dateStr(day))) {
+          continue;
+        }
+        _clockInMap[day] = entry.value;
+        _bulkGeneratedClockIns[day] = entry.value;
+        appliedIn++;
+      }
+      for (final entry in result.clockOuts.entries) {
+        final day = entry.key;
+        if ((_clockOutMap[day] ?? '').isNotEmpty ||
+            (_loadedClockOutMap[day] ?? '').isNotEmpty ||
+            _pendingDeleteOutDates.contains(_dateStr(day))) {
+          continue;
+        }
+        _clockOutMap[day] = entry.value;
+        _bulkGeneratedClockOuts[day] = entry.value;
+        appliedOut++;
+      }
+      _saveState = _SaveVisualState.idle;
+      _dockView = _AttendanceDockView.main;
+    });
+    _recordDebug(
+      'bulk_apply_complete target=${result.targetDates} requested=${result.generatedFields} appliedIn=$appliedIn appliedOut=$appliedOut existing=${result.existingFields} skipped=${result.skippedDates} dirty=$_dirtyDayCount',
+    );
+  }
+
   void _clearAll() {
     _recordDebug('screen_reset');
     setState(() {
@@ -320,6 +454,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       _clockOutMap.clear();
       _loadedClockInMap.clear();
       _loadedClockOutMap.clear();
+      _clearBulkGeneratedTracking();
       _pendingDeleteInDates.clear();
       _pendingDeleteOutDates.clear();
       _inCache.clear();
@@ -329,7 +464,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       _selectedDay = null;
       _focusedDay = DateTime.now();
       _candidateUsers = <UserModel>[];
-      _showUserPicker = false;
+      _dockView = _AttendanceDockView.main;
       _searchMessage = null;
       _searchError = null;
       _monthLoadError = null;
@@ -347,11 +482,12 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       _clockOutMap.clear();
       _loadedClockInMap.clear();
       _loadedClockOutMap.clear();
+      _clearBulkGeneratedTracking();
       _pendingDeleteInDates.clear();
       _pendingDeleteOutDates.clear();
       _selectedDay = null;
       _candidateUsers = <UserModel>[];
-      _showUserPicker = false;
+      _dockView = _AttendanceDockView.main;
       _searchMessage = null;
       _searchError = null;
       _monthLoadError = null;
@@ -409,7 +545,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       }
       setState(() {
         _candidateUsers = users;
-        _showUserPicker = true;
+        _dockView = _AttendanceDockView.userPicker;
       });
       _recordDebug('user_picker_open count=${users.length}');
       _userInputFocus.unfocus();
@@ -436,10 +572,11 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       _clockOutMap.clear();
       _loadedClockInMap.clear();
       _loadedClockOutMap.clear();
+      _clearBulkGeneratedTracking();
       _pendingDeleteInDates.clear();
       _pendingDeleteOutDates.clear();
       _candidateUsers = <UserModel>[];
-      _showUserPicker = false;
+      _dockView = _AttendanceDockView.main;
       _searchMessage = null;
       _searchError = null;
       final area = user.selectedArea?.trim() ?? '';
@@ -489,6 +626,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         _clockOutMap = outMap;
         _loadedClockInMap = inLoaded;
         _loadedClockOutMap = outLoaded;
+        _clearBulkGeneratedTracking();
         _pendingDeleteInDates.clear();
         _pendingDeleteOutDates.clear();
         _monthLoadError = null;
@@ -525,6 +663,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         _clockOutMap = <int, String>{...outMap};
         _loadedClockInMap = <int, String>{...inMap};
         _loadedClockOutMap = <int, String>{...outMap};
+        _clearBulkGeneratedTracking();
         _pendingDeleteInDates.clear();
         _pendingDeleteOutDates.clear();
         _inCache[cacheKey] = <int, String>{...inMap};
@@ -621,6 +760,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       setState(() {
         _loadedClockInMap = <int, String>{..._clockInMap};
         _loadedClockOutMap = <int, String>{..._clockOutMap};
+        _clearBulkGeneratedTracking();
         _pendingDeleteInDates.clear();
         _pendingDeleteOutDates.clear();
         _inCache[cacheKey] = <int, String>{..._clockInMap};
@@ -877,14 +1017,54 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   }
 
   Widget _buildContentSwitcher(BuildContext context) {
+    String activeKey;
+    Widget child;
+    switch (_dockView) {
+      case _AttendanceDockView.userPicker:
+        activeKey = 'attendance_user_picker';
+        child = _buildUserCandidateView(context);
+        break;
+      case _AttendanceDockView.bulkInput:
+        activeKey = 'attendance_bulk_input';
+        child = _buildBulkInputView(context);
+        break;
+      case _AttendanceDockView.main:
+        activeKey = 'attendance_main';
+        child = _buildMainContent(context);
+        break;
+    }
     return CommonSideDockContentCropSwitcher(
-      activeKey: _showUserPicker ? 'attendance_user_picker' : 'attendance_main',
+      activeKey: activeKey,
       originAlignment: Alignment.centerLeft,
       duration: const Duration(milliseconds: 220),
       reverseDuration: const Duration(milliseconds: 180),
-      child: _showUserPicker
-          ? _buildUserCandidateView(context)
-          : _buildMainContent(context),
+      child: child,
+    );
+  }
+
+  Widget _buildBulkInputView(BuildContext context) {
+    final user = _selectedUser;
+    if (!_developerMode || user == null) {
+      return _buildMainContent(context);
+    }
+    return BulkTimeEditor(
+      kind: BulkTimeEditorKind.attendance,
+      month: _focusedDay,
+      userSeed: _userIdOf(user),
+      rules: _bulkRules,
+      currentClockIns: _clockInMap,
+      currentClockOuts: _clockOutMap,
+      currentBreakTimes: const <int, String>{},
+      loadedClockIns: _loadedClockInMap,
+      loadedClockOuts: _loadedClockOutMap,
+      loadedBreakTimes: const <int, String>{},
+      pendingDeleteClockInDays: _pendingDays(_pendingDeleteInDates),
+      pendingDeleteClockOutDays: _pendingDays(_pendingDeleteOutDates),
+      pendingDeleteBreakDays: const <int>{},
+      onRulesChanged: _handleBulkRulesChanged,
+      onApply: _applyBulkResult,
+      onBack: _closeBulkInput,
+      onDebugLog: (message) => _recordDebug('bulk $message'),
     );
   }
 
@@ -903,7 +1083,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                 onPressed: () {
                   HapticFeedback.selectionClick();
                   _recordDebug('user_picker_back');
-                  setState(() => _showUserPicker = false);
+                  setState(() => _dockView = _AttendanceDockView.main);
                 },
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
@@ -1008,6 +1188,69 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     );
   }
 
+  Widget _buildBulkEntry(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final text = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(7, 8, 7, 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(CommonUiShapes.control),
+        onTap: _openBulkInput,
+        child: AnimatedContainer(
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.standard,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            color: tokens.warningContainer.withOpacity(.46),
+            borderRadius: BorderRadius.circular(CommonUiShapes.control),
+            border: Border.all(color: tokens.warning.withOpacity(.45)),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.auto_awesome_rounded,
+                size: 19,
+                color: tokens.warning,
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  '일괄 시간 입력',
+                  style: text.bodyMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: tokens.warningContainer,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'DEBUG',
+                  style: text.labelSmall?.copyWith(
+                    color: tokens.onWarningContainer,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 5),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: tokens.iconSecondary,
+                size: 19,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMainContent(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final reduceMotion =
@@ -1037,6 +1280,35 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
               SliverToBoxAdapter(
                 child: Divider(height: 1, color: tokens.borderSubtle),
               ),
+              if (_developerMode && _selectedUser != null) ...[
+                SliverToBoxAdapter(
+                  child: CommonAnimatedReveal(
+                    delay: const Duration(milliseconds: 42),
+                    offset: const Offset(-0.02, 0),
+                    child: _buildBulkEntry(context),
+                  ),
+                ),
+                if (_bulkGeneratedClockIns.isNotEmpty ||
+                    _bulkGeneratedClockOuts.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+                        child: TextButton.icon(
+                          onPressed: _undoBulkInput,
+                          icon: const Icon(Icons.undo_rounded, size: 17),
+                          label: Text(
+                            '일괄 입력 ${_bulkGeneratedClockIns.length + _bulkGeneratedClockOuts.length}필드 되돌리기',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                SliverToBoxAdapter(
+                  child: Divider(height: 1, color: tokens.borderSubtle),
+                ),
+              ],
               SliverToBoxAdapter(
                 child: CommonAnimatedReveal(
                   delay: const Duration(milliseconds: 50),
@@ -1711,18 +1983,26 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         final inT = res.inTime.trim();
         if (inT.isEmpty || inT == '00:00') {
           _clockInMap.remove(dayKey);
+          _bulkGeneratedClockIns.remove(dayKey);
           _pendingDeleteInDates.add(dateStr);
         } else {
           _clockInMap[dayKey] = inT;
+          if (_bulkGeneratedClockIns[dayKey] != inT) {
+            _bulkGeneratedClockIns.remove(dayKey);
+          }
           _pendingDeleteInDates.remove(dateStr);
         }
 
         final outT = res.outTime.trim();
         if (outT.isEmpty || outT == '00:00') {
           _clockOutMap.remove(dayKey);
+          _bulkGeneratedClockOuts.remove(dayKey);
           _pendingDeleteOutDates.add(dateStr);
         } else {
           _clockOutMap[dayKey] = outT;
+          if (_bulkGeneratedClockOuts[dayKey] != outT) {
+            _bulkGeneratedClockOuts.remove(dayKey);
+          }
           _pendingDeleteOutDates.remove(dateStr);
         }
         _saveState = _SaveVisualState.idle;

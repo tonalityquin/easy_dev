@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/di/routes.dart';
+import '../../../app/init/app_device_role.dart';
 import '../../../app/init/app_start_debug_trace.dart';
 import '../../../app/init/app_start_flow_prefs.dart';
 import '../../../app/init/app_start_user_purpose.dart';
@@ -23,15 +24,11 @@ enum _PowerBootStage {
   purposeCategory,
   workPurposeIntro,
   workPurpose,
+  devicePurposeIntro,
   devicePurpose,
   purposeConfirmation,
   setupNotice,
   openingTerminal,
-}
-
-enum _DevicePurposeKind {
-  sensor,
-  tablet,
 }
 
 class PowerBootScreen extends StatefulWidget {
@@ -54,6 +51,8 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       Duration(milliseconds: 2800);
   static const Duration _workPurposeIntroHoldDuration =
       Duration(milliseconds: 2200);
+  static const Duration _devicePurposeIntroHoldDuration =
+      Duration(milliseconds: 2200);
   static const Duration _setupNoticeHoldDuration =
       Duration(milliseconds: 3600);
   static const Duration _choiceRevealDuration = Duration(milliseconds: 1080);
@@ -62,12 +61,14 @@ class _PowerBootScreenState extends State<PowerBootScreen>
   _PowerBootStage _stage = _PowerBootStage.ready;
   AppStartUserPurpose? _selectedPurpose;
   AppStartUserPurpose? _pendingPurpose;
-  _DevicePurposeKind? _pendingDevicePurpose;
+  AppDeviceRole? _selectedDeviceRole;
+  AppDeviceRole? _pendingDeviceRole;
   bool _poweringOn = false;
   bool _purposeCommitting = false;
   bool _stageTransitioning = false;
   bool _cinematicExiting = false;
   bool _exiting = false;
+  bool _deviceRoleMigrationRequired = false;
   int _cinematicGeneration = 0;
   String _cinematicSequence = 'ready';
 
@@ -118,13 +119,55 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       },
     );
     final purpose = await AppStartFlowPrefs.getUserPurpose();
+    final storedDeviceRole = await AppStartFlowPrefs.getDeviceRole();
     if (!mounted) return;
+    if (purpose == AppStartUserPurpose.tabletInstallation &&
+        storedDeviceRole == null) {
+      setState(() {
+        _poweringOn = false;
+        _selectedPurpose = purpose;
+        _selectedDeviceRole = null;
+        _pendingPurpose = null;
+        _pendingDeviceRole = null;
+        _deviceRoleMigrationRequired = true;
+      });
+      AppStartDebugTrace.log(
+        'power_boot',
+        'device_role_migration_required',
+        meta: <String, Object?>{
+          'purpose': AppStartUserPurpose.tabletInstallation.storageValue,
+        },
+      );
+      LauncherDiagnostics.record(
+        'startup_device_role_migration_required',
+        scope: 'power_boot',
+        meta: <String, Object?>{
+          'purpose': AppStartUserPurpose.tabletInstallation.storageValue,
+        },
+      );
+      await _runCinematicIntroSequence(
+        introStage: _PowerBootStage.devicePurposeIntro,
+        choicesStage: _PowerBootStage.devicePurpose,
+        holdDuration: _devicePurposeIntroHoldDuration,
+        sequence: 'device_role_migration',
+        introVisibleEvent: 'device_role_migration_intro_visible',
+        choicesVisibleEvent: 'device_role_migration_choices_visible',
+      );
+      return;
+    }
     if (purpose != null) {
+      _deviceRoleMigrationRequired = false;
       _selectedPurpose = purpose;
+      _selectedDeviceRole = purpose == AppStartUserPurpose.tabletInstallation
+          ? storedDeviceRole
+          : null;
       AppStartDebugTrace.log(
         'power_boot',
         'purpose_already_committed',
-        meta: <String, Object?>{'purpose': purpose.storageValue},
+        meta: <String, Object?>{
+          'purpose': purpose.storageValue,
+          'deviceRole': _selectedDeviceRole?.storageValue ?? '',
+        },
       );
       await _openTerminal();
       return;
@@ -349,7 +392,6 @@ class _PowerBootScreenState extends State<PowerBootScreen>
     );
     switch (category) {
       case 'work':
-        _pendingDevicePurpose = null;
         await _runCinematicIntroSequence(
           introStage: _PowerBootStage.workPurposeIntro,
           choicesStage: _PowerBootStage.workPurpose,
@@ -360,23 +402,17 @@ class _PowerBootScreenState extends State<PowerBootScreen>
         );
         return;
       case 'personal':
-        _pendingDevicePurpose = null;
+        _pendingDeviceRole = null;
         await _preparePurposeConfirmation(AppStartUserPurpose.personal);
         return;
       case 'device':
-        _pendingDevicePurpose = null;
-        setState(() => _cinematicSequence = 'device_purpose');
-        AppStartDebugTrace.log(
-          'power_boot',
-          'device_purpose_branch_enter_requested',
-        );
-        LauncherDiagnostics.record(
-          'device_purpose_branch_enter_requested',
-          scope: 'power_boot',
-        );
-        await _transitionToStage(
-          _PowerBootStage.devicePurpose,
-          event: 'device_purpose_entered',
+        await _runCinematicIntroSequence(
+          introStage: _PowerBootStage.devicePurposeIntro,
+          choicesStage: _PowerBootStage.devicePurpose,
+          holdDuration: _devicePurposeIntroHoldDuration,
+          sequence: 'device_purpose',
+          introVisibleEvent: 'device_purpose_intro_visible',
+          choicesVisibleEvent: 'device_purpose_entered',
         );
         return;
     }
@@ -390,76 +426,53 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       return;
     }
     await HapticFeedback.selectionClick();
+    _pendingDeviceRole = null;
     await _preparePurposeConfirmation(purpose);
   }
 
-  Future<void> _selectDevicePurpose(_DevicePurposeKind kind) async {
+  Future<void> _selectDeviceRole(AppDeviceRole role) async {
     if (_interactionLocked || _stage != _PowerBootStage.devicePurpose) return;
     await HapticFeedback.selectionClick();
-    setState(() => _pendingDevicePurpose = kind);
-    final kindId = _devicePurposeId(kind);
-    final kindLabel = _devicePurposeLabel(kind);
+    setState(() => _pendingDeviceRole = role);
     AppStartDebugTrace.log(
       'power_boot',
-      'device_purpose_selected',
+      'device_role_selected',
       meta: <String, Object?>{
-        'devicePurpose': kindId,
-        'deviceLabel': kindLabel,
-        'mappedPurpose': AppStartUserPurpose.tabletInstallation.storageValue,
+        'deviceRole': role.storageValue,
+        'label': role.label,
       },
     );
     LauncherDiagnostics.record(
-      'device_purpose_selected',
+      'startup_device_role_selected',
       scope: 'power_boot',
-      meta: <String, Object?>{
-        'devicePurpose': kindId,
-        'deviceLabel': kindLabel,
-        'mappedPurpose': AppStartUserPurpose.tabletInstallation.storageValue,
-      },
+      meta: <String, Object?>{'deviceRole': role.storageValue},
     );
     await _preparePurposeConfirmation(
       AppStartUserPurpose.tabletInstallation,
     );
   }
 
-  String _devicePurposeId(_DevicePurposeKind kind) {
-    return switch (kind) {
-      _DevicePurposeKind.sensor => 'sensor',
-      _DevicePurposeKind.tablet => 'tablet',
-    };
-  }
-
-  String _devicePurposeLabel(_DevicePurposeKind kind) {
-    return switch (kind) {
-      _DevicePurposeKind.sensor => '감지센서',
-      _DevicePurposeKind.tablet => '태블릿/탭',
-    };
-  }
-
-  String get _pendingPurposeConfirmationLabel {
-    final devicePurpose = _pendingDevicePurpose;
-    if (_pendingPurpose == AppStartUserPurpose.tabletInstallation &&
-        devicePurpose != null) {
-      return _devicePurposeLabel(devicePurpose);
-    }
-    return _pendingPurpose?.confirmationLabel ?? '';
-  }
-
   Future<void> _preparePurposeConfirmation(
     AppStartUserPurpose purpose,
   ) async {
     if (_interactionLocked) return;
+    if (purpose != AppStartUserPurpose.tabletInstallation) {
+      _pendingDeviceRole = null;
+    }
     setState(() => _pendingPurpose = purpose);
+    final confirmationLabel =
+        purpose == AppStartUserPurpose.tabletInstallation &&
+                _pendingDeviceRole != null
+            ? _pendingDeviceRole!.confirmationLabel
+            : purpose.confirmationLabel;
     AppStartDebugTrace.log(
       'power_boot',
       'purpose_pending_selected',
       meta: <String, Object?>{
         'purpose': purpose.storageValue,
+        'deviceRole': _pendingDeviceRole?.storageValue ?? '',
         'label': purpose.label,
-        'confirmationLabel': _pendingPurposeConfirmationLabel,
-        'devicePurpose': _pendingDevicePurpose == null
-            ? '-'
-            : _devicePurposeId(_pendingDevicePurpose!),
+        'confirmationLabel': confirmationLabel,
       },
     );
     LauncherDiagnostics.record(
@@ -467,10 +480,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       scope: 'power_boot',
       meta: <String, Object?>{
         'purpose': purpose.storageValue,
-        'confirmationLabel': _pendingPurposeConfirmationLabel,
-        'devicePurpose': _pendingDevicePurpose == null
-            ? '-'
-            : _devicePurposeId(_pendingDevicePurpose!),
+        'confirmationLabel': confirmationLabel,
       },
     );
     await _transitionToStage(
@@ -492,23 +502,46 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       await _restartPurposeSelection();
       return;
     }
+    final pendingDeviceRole = _pendingDeviceRole ?? _selectedDeviceRole;
+    if (purpose == AppStartUserPurpose.tabletInstallation &&
+        pendingDeviceRole == null) {
+      AppStartDebugTrace.log(
+        'power_boot',
+        'device_role_required_before_confirmation',
+      );
+      LauncherDiagnostics.record(
+        'startup_device_role_required_before_confirmation',
+        scope: 'power_boot',
+      );
+      await _transitionToStage(
+        _PowerBootStage.devicePurpose,
+        event: 'device_purpose_required',
+      );
+      return;
+    }
     setState(() => _purposeCommitting = true);
     await HapticFeedback.mediumImpact();
+    final confirmationLabel =
+        purpose == AppStartUserPurpose.tabletInstallation &&
+                _pendingDeviceRole != null
+            ? _pendingDeviceRole!.confirmationLabel
+            : purpose.confirmationLabel;
     AppStartDebugTrace.log(
       'power_boot',
       'purpose_confirmation_confirmed',
       meta: <String, Object?>{
         'purpose': purpose.storageValue,
-        'confirmationLabel': _pendingPurposeConfirmationLabel,
-        'devicePurpose': _pendingDevicePurpose == null
-            ? '-'
-            : _devicePurposeId(_pendingDevicePurpose!),
+        'deviceRole': _pendingDeviceRole?.storageValue ?? '',
+        'confirmationLabel': confirmationLabel,
       },
     );
     LauncherDiagnostics.record(
       'startup_purpose_confirmation_confirmed',
       scope: 'power_boot',
-      meta: <String, Object?>{'purpose': purpose.storageValue},
+      meta: <String, Object?>{
+        'purpose': purpose.storageValue,
+        'deviceRole': _pendingDeviceRole?.storageValue ?? '',
+      },
     );
     await _runSetupNoticeAndCommit(purpose);
   }
@@ -518,10 +551,15 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       return;
     }
     final discardedPurpose = _pendingPurpose;
-    final discardedDevicePurpose = _pendingDevicePurpose;
+    final discardedDeviceRole = _pendingDeviceRole;
+    final returnToDeviceRole =
+        discardedPurpose == AppStartUserPurpose.tabletInstallation &&
+            discardedDeviceRole != null;
     setState(() {
       _pendingPurpose = null;
-      _pendingDevicePurpose = null;
+      if (!returnToDeviceRole) {
+        _pendingDeviceRole = null;
+      }
     });
     await HapticFeedback.selectionClick();
     AppStartDebugTrace.log(
@@ -529,9 +567,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       'purpose_confirmation_restarted',
       meta: <String, Object?>{
         'discardedPurpose': discardedPurpose?.storageValue ?? 'none',
-        'discardedDevicePurpose': discardedDevicePurpose == null
-            ? 'none'
-            : _devicePurposeId(discardedDevicePurpose),
+        'deviceRole': discardedDeviceRole?.storageValue ?? '',
       },
     );
     LauncherDiagnostics.record(
@@ -539,14 +575,16 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       scope: 'power_boot',
       meta: <String, Object?>{
         'discardedPurpose': discardedPurpose?.storageValue ?? 'none',
-        'discardedDevicePurpose': discardedDevicePurpose == null
-            ? 'none'
-            : _devicePurposeId(discardedDevicePurpose),
+        'deviceRole': discardedDeviceRole?.storageValue ?? '',
       },
     );
     await _transitionToStage(
-      _PowerBootStage.purposeCategory,
-      event: 'purpose_category_restarted',
+      returnToDeviceRole
+          ? _PowerBootStage.devicePurpose
+          : _PowerBootStage.purposeCategory,
+      event: returnToDeviceRole
+          ? 'device_purpose_reopened'
+          : 'purpose_category_restarted',
     );
   }
 
@@ -640,13 +678,30 @@ class _PowerBootScreenState extends State<PowerBootScreen>
     );
 
     try {
+      final committedDeviceRole =
+          purpose == AppStartUserPurpose.tabletInstallation
+              ? _pendingDeviceRole ?? _selectedDeviceRole
+              : null;
+      if (purpose == AppStartUserPurpose.tabletInstallation &&
+          committedDeviceRole == null) {
+        throw StateError(
+          'Device role is required for tablet installation.',
+        );
+      }
       await AppStartFlowPrefs.setUserPurpose(purpose);
+      if (committedDeviceRole == null) {
+        await AppStartFlowPrefs.clearDeviceRole();
+      } else {
+        await AppStartFlowPrefs.setDeviceRole(committedDeviceRole);
+      }
       await AppStartFlowPrefs.setPermissionNoticeDone(true);
       if (!mounted || generation != _cinematicGeneration) return;
       setState(() {
         _selectedPurpose = purpose;
+        _selectedDeviceRole = committedDeviceRole;
         _pendingPurpose = null;
-        _pendingDevicePurpose = null;
+        _pendingDeviceRole = null;
+        _deviceRoleMigrationRequired = false;
         _stageTransitioning = false;
         _cinematicExiting = false;
       });
@@ -655,6 +710,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
         'purpose_committed',
         meta: <String, Object?>{
           'purpose': purpose.storageValue,
+          'deviceRole': committedDeviceRole?.storageValue ?? '',
           'permissionNoticeDone': true,
         },
       );
@@ -663,6 +719,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
         scope: 'power_boot',
         meta: <String, Object?>{
           'purpose': purpose.storageValue,
+          'deviceRole': committedDeviceRole?.storageValue ?? '',
           'permissionNoticeDone': true,
         },
       );
@@ -719,6 +776,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       'terminal_open_requested',
       meta: <String, Object?>{
         'purpose': _selectedPurpose?.storageValue ?? 'existing',
+        'deviceRole': _selectedDeviceRole?.storageValue ?? '',
       },
     );
     if (!_reduceMotion && _revealController.value > 0) {
@@ -818,6 +876,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
 
   Future<void> _showDeveloperStatus() async {
     final persistedPurpose = await AppStartFlowPrefs.getUserPurpose();
+    final persistedDeviceRole = await AppStartFlowPrefs.getDeviceRole();
     final permissionNoticeDone =
         await AppStartFlowPrefs.getPermissionNoticeDone();
     if (!mounted) return;
@@ -837,13 +896,17 @@ class _PowerBootScreenState extends State<PowerBootScreen>
         'Cinematic exit ms: ${_cinematicExitDuration.inMilliseconds}',
         'Purpose intro hold ms: ${_purposeIntroHoldDuration.inMilliseconds}',
         'Work intro hold ms: ${_workPurposeIntroHoldDuration.inMilliseconds}',
+        'Device intro hold ms: ${_devicePurposeIntroHoldDuration.inMilliseconds}',
         'Setup notice hold ms: ${_setupNoticeHoldDuration.inMilliseconds}',
         'Selected purpose: ${_selectedPurpose?.storageValue ?? '-'}',
+        'Selected device role: ${_selectedDeviceRole?.storageValue ?? '-'}',
         'Pending purpose: ${_pendingPurpose?.storageValue ?? '-'}',
-        'Pending confirmation: ${_pendingPurposeConfirmationLabel.isEmpty ? '-' : _pendingPurposeConfirmationLabel}',
-        'Pending device purpose: ${_pendingDevicePurpose == null ? '-' : _devicePurposeId(_pendingDevicePurpose!)}',
-        'Pending device label: ${_pendingDevicePurpose == null ? '-' : _devicePurposeLabel(_pendingDevicePurpose!)}',
+        'Pending device role: ${_pendingDeviceRole?.storageValue ?? '-'}',
+        'Pending confirmation: ${_pendingPurpose == AppStartUserPurpose.tabletInstallation && _pendingDeviceRole != null ? _pendingDeviceRole!.confirmationLabel : _pendingPurpose?.confirmationLabel ?? '-'}',
         'Persisted purpose: ${persistedPurpose?.storageValue ?? '-'}',
+        'Persisted device role: ${persistedDeviceRole?.storageValue ?? '-'}',
+        'Device role migration pending: ${persistedPurpose == AppStartUserPurpose.tabletInstallation && persistedDeviceRole == null}',
+        'Device role migration active: $_deviceRoleMigrationRequired',
         'Permission notice done: $permissionNoticeDone',
         'Startup ready: ${_report?.readyCount ?? 0}/4',
         'Notifications: ${_report?.notificationsReady == true ? 'READY' : 'WARN'}',
@@ -987,19 +1050,28 @@ class _PowerBootScreenState extends State<PowerBootScreen>
     );
   }
 
+  Widget _buildDevicePurposeIntro(BuildContext context) {
+    return _buildCinematicIntro(
+      context,
+      '기기 유형을 선택해주세요.',
+    );
+  }
+
   Widget _buildDevicePurpose(BuildContext context) {
     return _buildCinematicChoices(
       context,
       choices: <_CinematicChoiceData>[
         _CinematicChoiceData(
-          label: '감지센서',
-          selected: _pendingDevicePurpose == _DevicePurposeKind.sensor,
-          onPressed: () => _selectDevicePurpose(_DevicePurposeKind.sensor),
+          label: AppDeviceRole.tablet.label,
+          selected: _selectedDeviceRole == AppDeviceRole.tablet ||
+              _pendingDeviceRole == AppDeviceRole.tablet,
+          onPressed: () => _selectDeviceRole(AppDeviceRole.tablet),
         ),
         _CinematicChoiceData(
-          label: '태블릿/탭',
-          selected: _pendingDevicePurpose == _DevicePurposeKind.tablet,
-          onPressed: () => _selectDevicePurpose(_DevicePurposeKind.tablet),
+          label: AppDeviceRole.sensor.label,
+          selected: _selectedDeviceRole == AppDeviceRole.sensor ||
+              _pendingDeviceRole == AppDeviceRole.sensor,
+          onPressed: () => _selectDeviceRole(AppDeviceRole.sensor),
         ),
       ],
     );
@@ -1008,6 +1080,11 @@ class _PowerBootScreenState extends State<PowerBootScreen>
   Widget _buildPurposeConfirmation(BuildContext context) {
     final purpose = _pendingPurpose;
     if (purpose == null) return const SizedBox.shrink();
+    final confirmationLabel =
+        purpose == AppStartUserPurpose.tabletInstallation &&
+                _pendingDeviceRole != null
+            ? _pendingDeviceRole!.confirmationLabel
+            : purpose.confirmationLabel;
     final tokens = CommonUiTheme.of(context);
     final textTheme = Theme.of(context).textTheme;
     return ConstrainedBox(
@@ -1021,7 +1098,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
               animation: _stageAnimation(0, .42),
               reduceMotion: _reduceMotion,
               child: Text(
-                _pendingPurposeConfirmationLabel,
+                confirmationLabel,
                 textAlign: TextAlign.center,
                 style: textTheme.headlineSmall?.copyWith(
                   color: tokens.textPrimary,
@@ -1159,6 +1236,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       _PowerBootStage.purposeCategory => _buildPurposeCategory(context),
       _PowerBootStage.workPurposeIntro => _buildWorkPurposeIntro(context),
       _PowerBootStage.workPurpose => _buildWorkPurpose(context),
+      _PowerBootStage.devicePurposeIntro => _buildDevicePurposeIntro(context),
       _PowerBootStage.devicePurpose => _buildDevicePurpose(context),
       _PowerBootStage.purposeConfirmation =>
         _buildPurposeConfirmation(context),
@@ -1231,21 +1309,22 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       unawaited(_restartPurposeSelection());
       return;
     }
-    if (_stage == _PowerBootStage.workPurpose) {
+    if (_stage == _PowerBootStage.devicePurpose &&
+        _deviceRoleMigrationRequired) {
       unawaited(
         _transitionToStage(
-          _PowerBootStage.purposeCategory,
-          event: 'purpose_category_reopened',
+          _PowerBootStage.ready,
+          event: 'device_role_migration_deferred',
         ),
       );
       return;
     }
-    if (_stage == _PowerBootStage.devicePurpose) {
-      _pendingDevicePurpose = null;
+    if (_stage == _PowerBootStage.workPurpose ||
+        _stage == _PowerBootStage.devicePurpose) {
       unawaited(
         _transitionToStage(
           _PowerBootStage.purposeCategory,
-          event: 'purpose_category_reopened_from_device',
+          event: 'purpose_category_reopened',
         ),
       );
       return;

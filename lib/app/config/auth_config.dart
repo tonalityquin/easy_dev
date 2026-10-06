@@ -2,7 +2,7 @@ class AuthConfig {
   AuthConfig._();
 
   // static const String webClientId =
-  //     '87171076301-obvlgmokctsqmskeutmjlccpunftaqg5.apps.googleusercontent.com';
+  //    '87171076301-obvlgmokctsqmskeutmjlccpunftaqg5.apps.googleusercontent.com';
 
   // static const String gcsBucketName = 'parkinworkin-storage';
 

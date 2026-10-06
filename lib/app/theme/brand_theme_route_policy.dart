@@ -54,6 +54,7 @@ class BrandThemeRoutePolicy {
     AppRoutes.tripleTypePage,
     AppRoutes.minorTypePage,
     AppRoutes.tablet,
+    AppRoutes.sensor,
     AppRoutes.personal,
   };
 
