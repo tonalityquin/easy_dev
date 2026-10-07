@@ -8,7 +8,7 @@ import '../applications/sensor_occupancy_models.dart';
 import '../applications/sensor_trigger_zone.dart';
 
 class SensorOccupancyBaselineStore {
-  static const String _prefix = 'sensor_occupancy_baseline_v2';
+  static const String _prefix = 'sensor_occupancy_baseline_v3';
 
   String _key(String area) {
     return '${_prefix}_${Uri.encodeComponent(area.trim())}';
@@ -29,7 +29,12 @@ class SensorOccupancyBaselineStore {
       if (x is! num || y is! num) return null;
       points.add(Offset(x.toDouble(), y.toDouble()));
     }
-    final zone = SensorTriggerZone.tryFromPoints(points);
+    final entryEdge = SensorTriggerZone.parseEntryEdge(decoded['entryEdge']);
+    if (entryEdge == null) return null;
+    final zone = SensorTriggerZone.tryFromPoints(
+      points,
+      entryEdgeType: entryEdge,
+    );
     if (zone == null) return null;
     final width = decoded['width'];
     final height = decoded['height'];
@@ -83,6 +88,7 @@ class SensorOccupancyBaselineStore {
         'p3y': baseline.zone.point3.dy,
         'p4x': baseline.zone.point4.dx,
         'p4y': baseline.zone.point4.dy,
+        'entryEdge': baseline.zone.entryEdgeType.name,
         'width': baseline.feature.width,
         'height': baseline.feature.height,
         'gray': base64Encode(Uint8List.fromList(baseline.feature.gray)),

@@ -7,16 +7,44 @@ import '../applications/sensor_polygon_geometry.dart';
 import '../applications/sensor_trigger_zone.dart';
 import 'sensor_camera_image_geometry_reader.dart';
 
+class SensorObjectZoneEvidence {
+  const SensorObjectZoneEvidence({
+    required this.index,
+    required this.boundingBox,
+    required this.bottomCenter,
+    required this.polygonCoverage,
+    required this.boundingBoxAreaRatio,
+    required this.bottomCenterInside,
+    required this.closeOverlap,
+    required this.largeOverlap,
+    required this.bottomCenterEntry,
+  });
+
+  final int index;
+  final Rect boundingBox;
+  final Offset bottomCenter;
+  final double polygonCoverage;
+  final double boundingBoxAreaRatio;
+  final bool bottomCenterInside;
+  final bool closeOverlap;
+  final bool largeOverlap;
+  final bool bottomCenterEntry;
+
+  bool get matched => closeOverlap || largeOverlap || bottomCenterEntry;
+}
+
 class SensorObjectZoneMatch {
   const SensorObjectZoneMatch({
     required this.matchedIndexes,
     required this.bottomCenterMatchedIndexes,
+    required this.evidences,
     required this.maxPolygonCoverage,
     required this.maxBoundingBoxAreaRatio,
   });
 
   final List<int> matchedIndexes;
   final List<int> bottomCenterMatchedIndexes;
+  final List<SensorObjectZoneEvidence> evidences;
   final double maxPolygonCoverage;
   final double maxBoundingBoxAreaRatio;
 
@@ -53,11 +81,13 @@ class SensorObjectDetectionResult {
     final polygonArea = zone.area;
     final matches = <int>[];
     final bottomCenterMatches = <int>[];
+    final evidences = <SensorObjectZoneEvidence>[];
     var maxPolygonCoverage = 0.0;
     var maxBoundingBoxAreaRatio = 0.0;
     for (var index = 0; index < normalizedBoundingBoxes.length; index++) {
       final box = normalizedBoundingBoxes[index];
-      final clipped = SensorPolygonGeometry.clipPolygonWithRect(zone.points, box);
+      final clipped =
+          SensorPolygonGeometry.clipPolygonWithRect(zone.points, box);
       final intersectionArea = SensorPolygonGeometry.area(clipped);
       final polygonCoverage =
           polygonArea <= 0 ? 0.0 : intersectionArea / polygonArea;
@@ -76,10 +106,22 @@ class SensorObjectDetectionResult {
           boxAreaRatio >= largeBoundingBoxAreaRatio;
       final bottomCenterEntry = bottomCenterInside &&
           boxAreaRatio >= bottomCenterBoundingBoxAreaRatio;
+      final evidence = SensorObjectZoneEvidence(
+        index: index,
+        boundingBox: box,
+        bottomCenter: bottomCenter,
+        polygonCoverage: polygonCoverage.clamp(0.0, 1.0).toDouble(),
+        boundingBoxAreaRatio: boxAreaRatio.clamp(0.0, 1.0).toDouble(),
+        bottomCenterInside: bottomCenterInside,
+        closeOverlap: closeOverlap,
+        largeOverlap: largeOverlap,
+        bottomCenterEntry: bottomCenterEntry,
+      );
+      evidences.add(evidence);
       if (bottomCenterEntry) {
         bottomCenterMatches.add(index);
       }
-      if (closeOverlap || largeOverlap || bottomCenterEntry) {
+      if (evidence.matched) {
         matches.add(index);
       }
     }
@@ -87,6 +129,7 @@ class SensorObjectDetectionResult {
       matchedIndexes: List<int>.unmodifiable(matches),
       bottomCenterMatchedIndexes:
           List<int>.unmodifiable(bottomCenterMatches),
+      evidences: List<SensorObjectZoneEvidence>.unmodifiable(evidences),
       maxPolygonCoverage: maxPolygonCoverage.clamp(0.0, 1.0).toDouble(),
       maxBoundingBoxAreaRatio:
           maxBoundingBoxAreaRatio.clamp(0.0, 1.0).toDouble(),

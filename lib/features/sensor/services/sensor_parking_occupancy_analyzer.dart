@@ -98,6 +98,156 @@ class SensorParkingOccupancyAnalyzer {
     );
   }
 
+  SensorEntryChangeAnalysis analyzeEntryChange(
+    SensorOccupancyFeature baseline,
+    SensorOccupancyFeature current,
+  ) {
+    if (baseline.width != current.width ||
+        baseline.height != current.height ||
+        baseline.gray.length != current.gray.length ||
+        baseline.edge.length != current.edge.length) {
+      throw StateError('Sensor occupancy feature size mismatch.');
+    }
+    final width = current.width;
+    final height = current.height;
+    final stripRows = math.max(3, (height * 0.25).round()).clamp(1, height).toInt();
+    final frontRows = math.min(2, stripRows);
+    final guardColumns =
+        math.max(2, (width * 0.125).round()).clamp(1, math.max(1, width ~/ 3)).toInt();
+    final coreStart = guardColumns;
+    final coreEnd = math.max(coreStart, width - guardColumns);
+    final coreWidth = math.max(1, coreEnd - coreStart);
+    final columnChanges = List<int>.filled(width, 0);
+    final frontColumnChanges = List<int>.filled(width, 0);
+    final changedMask = List<bool>.filled(width * stripRows, false);
+    var changedCells = 0;
+    var frontChangedCells = 0;
+    var coreChangedCells = 0;
+    var guardChangedCells = 0;
+    var maxDepthIndex = -1;
+    var differenceSum = 0.0;
+    for (var depthIndex = 0; depthIndex < stripRows; depthIndex++) {
+      final y = depthIndex;
+      for (var x = 0; x < width; x++) {
+        final index = y * width + x;
+        final grayDelta =
+            (baseline.gray[index] - current.gray[index]).abs() / 255.0;
+        final edgeDelta =
+            (baseline.edge[index] - current.edge[index]).abs() / 255.0;
+        final cellDifference = grayDelta * 0.35 + edgeDelta * 0.65;
+        differenceSum += cellDifference;
+        if (cellDifference >= 0.18) {
+          changedCells++;
+          columnChanges[x]++;
+          changedMask[depthIndex * width + x] = true;
+          if (depthIndex < frontRows) {
+            frontChangedCells++;
+            frontColumnChanges[x]++;
+          }
+          if (x >= coreStart && x < coreEnd) {
+            coreChangedCells++;
+          } else {
+            guardChangedCells++;
+          }
+          if (depthIndex > maxDepthIndex) {
+            maxDepthIndex = depthIndex;
+          }
+        }
+      }
+    }
+    final minimumColumnChanges = math.max(1, (stripRows * 0.25).ceil());
+    var activeColumns = 0;
+    var activeCoreColumns = 0;
+    for (var x = 0; x < width; x++) {
+      final active = frontColumnChanges[x] > 0 ||
+          columnChanges[x] >= minimumColumnChanges;
+      if (active) {
+        activeColumns++;
+        if (x >= coreStart && x < coreEnd) {
+          activeCoreColumns++;
+        }
+      }
+    }
+    final visited = List<bool>.filled(changedMask.length, false);
+    final queue = <int>[];
+    for (var y = 0; y < frontRows; y++) {
+      for (var x = 0; x < width; x++) {
+        final localIndex = y * width + x;
+        if (changedMask[localIndex] && !visited[localIndex]) {
+          visited[localIndex] = true;
+          queue.add(localIndex);
+        }
+      }
+    }
+    var queueIndex = 0;
+    var connectedChangedCells = 0;
+    var maxConnectedDepth = -1;
+    while (queueIndex < queue.length) {
+      final localIndex = queue[queueIndex++];
+      final y = localIndex ~/ width;
+      final x = localIndex % width;
+      connectedChangedCells++;
+      if (y > maxConnectedDepth) maxConnectedDepth = y;
+      final neighbors = <int>[
+        if (x > 0) localIndex - 1,
+        if (x + 1 < width) localIndex + 1,
+        if (y > 0) localIndex - width,
+        if (y + 1 < stripRows) localIndex + width,
+      ];
+      for (final neighbor in neighbors) {
+        if (!visited[neighbor] && changedMask[neighbor]) {
+          visited[neighbor] = true;
+          queue.add(neighbor);
+        }
+      }
+    }
+    final stripCellCount = width * stripRows;
+    final frontCellCount = width * frontRows;
+    final coreCellCount = coreWidth * stripRows;
+    final guardCellCount = math.max(1, stripCellCount - coreCellCount);
+    final changedCellRatio = stripCellCount == 0
+        ? 0.0
+        : (changedCells / stripCellCount).clamp(0.0, 1.0).toDouble();
+    final frontChangedCellRatio = frontCellCount == 0
+        ? 0.0
+        : (frontChangedCells / frontCellCount).clamp(0.0, 1.0).toDouble();
+    final spanRatio = width == 0
+        ? 0.0
+        : (activeColumns / width).clamp(0.0, 1.0).toDouble();
+    final depthRatio = maxDepthIndex < 0 || height == 0
+        ? 0.0
+        : ((maxDepthIndex + 1) / height).clamp(0.0, 1.0).toDouble();
+    final meanDifference = stripCellCount == 0
+        ? 0.0
+        : (differenceSum / stripCellCount).clamp(0.0, 1.0).toDouble();
+    final coreChangedCellRatio =
+        (coreChangedCells / coreCellCount).clamp(0.0, 1.0).toDouble();
+    final sideGuardChangedCellRatio =
+        (guardChangedCells / guardCellCount).clamp(0.0, 1.0).toDouble();
+    final coreSpanRatio =
+        (activeCoreColumns / coreWidth).clamp(0.0, 1.0).toDouble();
+    final connectedDepthRatio = maxConnectedDepth < 0 || height == 0
+        ? 0.0
+        : ((maxConnectedDepth + 1) / height).clamp(0.0, 1.0).toDouble();
+    final entryRootedRatio = changedCells == 0
+        ? 0.0
+        : (connectedChangedCells / changedCells).clamp(0.0, 1.0).toDouble();
+    return SensorEntryChangeAnalysis(
+      changedCellRatio: changedCellRatio,
+      frontChangedCellRatio: frontChangedCellRatio,
+      spanRatio: spanRatio,
+      depthRatio: depthRatio,
+      meanDifference: meanDifference,
+      changedCellCount: changedCells,
+      activeColumnCount: activeColumns,
+      coreChangedCellRatio: coreChangedCellRatio,
+      sideGuardChangedCellRatio: sideGuardChangedCellRatio,
+      coreSpanRatio: coreSpanRatio,
+      connectedDepthRatio: connectedDepthRatio,
+      entryRootedRatio: entryRootedRatio,
+    );
+  }
+
   SensorOccupancyFeature mergeFeatures(
     List<SensorOccupancyFeature> features,
   ) {

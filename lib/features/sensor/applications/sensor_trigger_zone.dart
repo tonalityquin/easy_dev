@@ -11,9 +11,36 @@ enum SensorTriggerZoneHandle {
   point4,
 }
 
+enum SensorTriggerZoneEdge {
+  edge12,
+  edge23,
+  edge34,
+  edge41,
+}
+
+@immutable
+class SensorTriggerZoneEntryEdge {
+  const SensorTriggerZoneEntryEdge({
+    required this.type,
+    required this.startIndex,
+    required this.endIndex,
+    required this.oppositeStartIndex,
+    required this.oppositeEndIndex,
+  });
+
+  final SensorTriggerZoneEdge type;
+  final int startIndex;
+  final int endIndex;
+  final int oppositeStartIndex;
+  final int oppositeEndIndex;
+}
+
 @immutable
 class SensorTriggerZone {
-  const SensorTriggerZone._(this.points);
+  const SensorTriggerZone._(
+    this.points,
+    this.entryEdgeType,
+  );
 
   static const double defaultWidth = 0.36;
   static const double defaultHeight = 0.24;
@@ -22,6 +49,7 @@ class SensorTriggerZone {
   static const double recognitionExpansionFactor = 0.65;
 
   final List<Offset> points;
+  final SensorTriggerZoneEdge entryEdgeType;
 
   Offset get point1 => points[0];
   Offset get point2 => points[1];
@@ -48,18 +76,68 @@ class SensorTriggerZone {
       points.every((point) =>
           point.dx >= 0 && point.dx <= 1 && point.dy >= 0 && point.dy <= 1);
 
-  SensorTriggerZone get recognitionZone {
-    final edge12Y = (point1.dy + point2.dy) / 2;
-    final edge34Y = (point3.dy + point4.dy) / 2;
-    final next = List<Offset>.from(points);
-    if (edge12Y <= edge34Y) {
-      next[0] = _expandedPoint(point1, point4);
-      next[1] = _expandedPoint(point2, point3);
-    } else {
-      next[2] = _expandedPoint(point3, point2);
-      next[3] = _expandedPoint(point4, point1);
+  SensorTriggerZoneEntryEdge get entryEdge {
+    switch (entryEdgeType) {
+      case SensorTriggerZoneEdge.edge12:
+        return const SensorTriggerZoneEntryEdge(
+          type: SensorTriggerZoneEdge.edge12,
+          startIndex: 0,
+          endIndex: 1,
+          oppositeStartIndex: 3,
+          oppositeEndIndex: 2,
+        );
+      case SensorTriggerZoneEdge.edge23:
+        return const SensorTriggerZoneEntryEdge(
+          type: SensorTriggerZoneEdge.edge23,
+          startIndex: 1,
+          endIndex: 2,
+          oppositeStartIndex: 0,
+          oppositeEndIndex: 3,
+        );
+      case SensorTriggerZoneEdge.edge34:
+        return const SensorTriggerZoneEntryEdge(
+          type: SensorTriggerZoneEdge.edge34,
+          startIndex: 2,
+          endIndex: 3,
+          oppositeStartIndex: 1,
+          oppositeEndIndex: 0,
+        );
+      case SensorTriggerZoneEdge.edge41:
+        return const SensorTriggerZoneEntryEdge(
+          type: SensorTriggerZoneEdge.edge41,
+          startIndex: 3,
+          endIndex: 0,
+          oppositeStartIndex: 2,
+          oppositeEndIndex: 1,
+        );
     }
-    final candidate = SensorTriggerZone.fromPoints(next);
+  }
+
+  List<Offset> get entryOrderedPoints {
+    final edge = entryEdge;
+    return List<Offset>.unmodifiable(<Offset>[
+      points[edge.startIndex],
+      points[edge.endIndex],
+      points[edge.oppositeEndIndex],
+      points[edge.oppositeStartIndex],
+    ]);
+  }
+
+  SensorTriggerZone get recognitionZone {
+    final edge = entryEdge;
+    final next = List<Offset>.from(points);
+    next[edge.startIndex] = _expandedPoint(
+      points[edge.startIndex],
+      points[edge.oppositeStartIndex],
+    );
+    next[edge.endIndex] = _expandedPoint(
+      points[edge.endIndex],
+      points[edge.oppositeEndIndex],
+    );
+    final candidate = SensorTriggerZone.fromPoints(
+      next,
+      entryEdgeType: entryEdgeType,
+    );
     return candidate.isValid ? candidate : this;
   }
 
@@ -67,6 +145,7 @@ class SensorTriggerZone {
     Offset center, {
     double width = defaultWidth,
     double height = defaultHeight,
+    SensorTriggerZoneEdge entryEdgeType = SensorTriggerZoneEdge.edge12,
   }) {
     final safeWidth = width.clamp(minimumEdgeLength, 1.0).toDouble();
     final safeHeight = height.clamp(minimumEdgeLength, 1.0).toDouble();
@@ -76,30 +155,42 @@ class SensorTriggerZone {
       center.dx.clamp(halfWidth, 1.0 - halfWidth).toDouble(),
       center.dy.clamp(halfHeight, 1.0 - halfHeight).toDouble(),
     );
-    return SensorTriggerZone.fromPoints(<Offset>[
-      Offset(safeCenter.dx - halfWidth, safeCenter.dy - halfHeight),
-      Offset(safeCenter.dx + halfWidth, safeCenter.dy - halfHeight),
-      Offset(safeCenter.dx + halfWidth, safeCenter.dy + halfHeight),
-      Offset(safeCenter.dx - halfWidth, safeCenter.dy + halfHeight),
-    ]);
+    return SensorTriggerZone.fromPoints(
+      <Offset>[
+        Offset(safeCenter.dx - halfWidth, safeCenter.dy - halfHeight),
+        Offset(safeCenter.dx + halfWidth, safeCenter.dy - halfHeight),
+        Offset(safeCenter.dx + halfWidth, safeCenter.dy + halfHeight),
+        Offset(safeCenter.dx - halfWidth, safeCenter.dy + halfHeight),
+      ],
+      entryEdgeType: entryEdgeType,
+    );
   }
 
-  factory SensorTriggerZone.fromRect(Rect value) {
+  factory SensorTriggerZone.fromRect(
+    Rect value, {
+    SensorTriggerZoneEdge entryEdgeType = SensorTriggerZoneEdge.edge12,
+  }) {
     final rect = Rect.fromLTRB(
       value.left.clamp(0.0, 1.0).toDouble(),
       value.top.clamp(0.0, 1.0).toDouble(),
       value.right.clamp(0.0, 1.0).toDouble(),
       value.bottom.clamp(0.0, 1.0).toDouble(),
     );
-    return SensorTriggerZone.fromPoints(<Offset>[
-      rect.topLeft,
-      rect.topRight,
-      rect.bottomRight,
-      rect.bottomLeft,
-    ]);
+    return SensorTriggerZone.fromPoints(
+      <Offset>[
+        rect.topLeft,
+        rect.topRight,
+        rect.bottomRight,
+        rect.bottomLeft,
+      ],
+      entryEdgeType: entryEdgeType,
+    );
   }
 
-  factory SensorTriggerZone.fromPoints(List<Offset> value) {
+  factory SensorTriggerZone.fromPoints(
+    List<Offset> value, {
+    SensorTriggerZoneEdge? entryEdgeType,
+  }) {
     if (value.length != 4) {
       throw ArgumentError.value(value.length, 'points.length');
     }
@@ -111,13 +202,54 @@ class SensorTriggerZone {
           ),
         )
         .toList(growable: false);
-    return SensorTriggerZone._(List<Offset>.unmodifiable(clamped));
+    return SensorTriggerZone._(
+      List<Offset>.unmodifiable(clamped),
+      entryEdgeType ?? inferLegacyEntryEdge(clamped),
+    );
   }
 
-  static SensorTriggerZone? tryFromPoints(List<Offset> value) {
+  static SensorTriggerZone? tryFromPoints(
+    List<Offset> value, {
+    SensorTriggerZoneEdge? entryEdgeType,
+  }) {
     if (value.length != 4) return null;
-    final zone = SensorTriggerZone.fromPoints(value);
+    final zone = SensorTriggerZone.fromPoints(
+      value,
+      entryEdgeType: entryEdgeType,
+    );
     return zone.isValid ? zone : null;
+  }
+
+  static SensorTriggerZoneEdge inferLegacyEntryEdge(List<Offset> points) {
+    if (points.length != 4) return SensorTriggerZoneEdge.edge12;
+    final edge12Y = (points[0].dy + points[1].dy) / 2;
+    final edge34Y = (points[2].dy + points[3].dy) / 2;
+    return edge12Y <= edge34Y
+        ? SensorTriggerZoneEdge.edge12
+        : SensorTriggerZoneEdge.edge34;
+  }
+
+  static SensorTriggerZoneEdge? parseEntryEdge(Object? value) {
+    if (value is String) {
+      for (final edge in SensorTriggerZoneEdge.values) {
+        if (edge.name == value) return edge;
+      }
+    }
+    if (value is num) {
+      final index = value.toInt();
+      if (index >= 0 && index < SensorTriggerZoneEdge.values.length) {
+        return SensorTriggerZoneEdge.values[index];
+      }
+    }
+    return null;
+  }
+
+  SensorTriggerZone withEntryEdge(SensorTriggerZoneEdge nextEntryEdge) {
+    if (nextEntryEdge == entryEdgeType) return this;
+    return SensorTriggerZone.fromPoints(
+      points,
+      entryEdgeType: nextEntryEdge,
+    );
   }
 
   SensorTriggerZone moveCenter(Offset nextCenter) {
@@ -135,6 +267,7 @@ class SensorTriggerZone {
     if (bounds.bottom + dy > 1) dy = 1 - bounds.bottom;
     return SensorTriggerZone.fromPoints(
       points.map((point) => point + Offset(dx, dy)).toList(growable: false),
+      entryEdgeType: entryEdgeType,
     );
   }
 
@@ -148,7 +281,10 @@ class SensorTriggerZone {
       cameraPoint.dx.clamp(0.0, 1.0).toDouble(),
       cameraPoint.dy.clamp(0.0, 1.0).toDouble(),
     );
-    final candidate = SensorTriggerZone.fromPoints(next);
+    final candidate = SensorTriggerZone.fromPoints(
+      next,
+      entryEdgeType: entryEdgeType,
+    );
     return candidate.isValid ? candidate : this;
   }
 
@@ -158,6 +294,7 @@ class SensorTriggerZone {
     SensorTriggerZone other, {
     double epsilon = 0.002,
   }) {
+    if (entryEdgeType != other.entryEdgeType) return false;
     for (var index = 0; index < 4; index++) {
       if ((points[index].dx - other.points[index].dx).abs() > epsilon ||
           (points[index].dy - other.points[index].dy).abs() > epsilon) {
@@ -167,14 +304,17 @@ class SensorTriggerZone {
     return true;
   }
 
-  String get fingerprint => points
-      .expand(
-        (point) => <String>[
-          point.dx.toStringAsFixed(4),
-          point.dy.toStringAsFixed(4),
-        ],
-      )
-      .join(':');
+  String get fingerprint {
+    final coordinates = points
+        .expand(
+          (point) => <String>[
+            point.dx.toStringAsFixed(4),
+            point.dy.toStringAsFixed(4),
+          ],
+        )
+        .join(':');
+    return '$coordinates:${entryEdgeType.name}';
+  }
 
   Offset _expandedPoint(Offset near, Offset far) {
     final dx = near.dx + (near.dx - far.dx) * recognitionExpansionFactor;

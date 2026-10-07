@@ -15,7 +15,7 @@ class SensorPerspectiveTransformer {
     required int height,
   }) {
     final destination = img.Image(width: width, height: height);
-    final points = zone.points
+    final points = zone.entryOrderedPoints
         .map(
           (point) => Offset(
             point.dx * (source.width - 1),
@@ -80,11 +80,12 @@ class SensorPerspectiveTransformer {
   }
 
   double estimatedAspectRatio(SensorTriggerZone zone) {
-    final top = (zone.point2 - zone.point1).distance;
-    final bottom = (zone.point3 - zone.point4).distance;
-    final left = (zone.point4 - zone.point1).distance;
-    final right = (zone.point3 - zone.point2).distance;
-    final horizontal = math.max(0.001, (top + bottom) / 2);
+    final points = zone.entryOrderedPoints;
+    final entry = (points[1] - points[0]).distance;
+    final far = (points[2] - points[3]).distance;
+    final left = (points[3] - points[0]).distance;
+    final right = (points[2] - points[1]).distance;
+    final horizontal = math.max(0.001, (entry + far) / 2);
     final vertical = math.max(0.001, (left + right) / 2);
     return horizontal / vertical;
   }

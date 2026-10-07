@@ -513,6 +513,41 @@ class SensorDetectionState extends ChangeNotifier {
     return SensorDetectionSampleOutcome.unchanged;
   }
 
+  bool beginEntryOcr({String source = 'unknown'}) {
+    if (_phase != SensorDetectionPhase.armed ||
+        _ocrActive ||
+        !runtimeReady) {
+      SensorDebugTrace.record(
+        'SensorDetection',
+        'entry_ocr_begin_rejected',
+        <String, Object?>{
+          'phase': _phase.name,
+          'ocrActive': _ocrActive,
+          'runtimeReady': runtimeReady,
+          'source': source,
+        },
+      );
+      return false;
+    }
+    _ocrActive = true;
+    _phase = SensorDetectionPhase.ocrActive;
+    _detectedStreak = 0;
+    _recentDetectionSamples.clear();
+    _clearStreak = 0;
+    _clearStopwatch?.stop();
+    _clearStopwatch = null;
+    SensorDebugTrace.record(
+      'SensorDetection',
+      'ocr_begin',
+      <String, Object?>{
+        'source': source,
+        'mode': 'entry',
+      },
+    );
+    notifyListeners();
+    return true;
+  }
+
   bool beginOcr({String source = 'unknown'}) {
     if (_phase != SensorDetectionPhase.detected || _ocrActive) {
       SensorDebugTrace.record(

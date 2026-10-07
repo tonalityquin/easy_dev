@@ -14,6 +14,8 @@ import '../../../../shared/page/input/pages/live_ocr_page.dart';
 import '../../../../shared/page/input/widgets/live_ocr_source_rect_route.dart';
 import '../../applications/sensor_debug_trace.dart';
 import '../../applications/sensor_detection_state.dart';
+import '../../applications/sensor_entry_gate.dart';
+import '../../applications/sensor_entry_geometry.dart';
 import '../../applications/sensor_occupancy_models.dart';
 import '../../applications/sensor_recognition_gate.dart';
 import '../../applications/sensor_trigger_point_state.dart';
@@ -41,6 +43,7 @@ class SensorDetectionContent extends StatefulWidget {
 class _SensorDetectionContentState extends State<SensorDetectionContent>
     with TickerProviderStateMixin {
   static const Duration _sampleInterval = Duration(milliseconds: 850);
+  static const Duration _approachSampleInterval = Duration(milliseconds: 180);
   static const Duration _cameraInitializeTimeout = Duration(seconds: 8);
   static const int _captureErrorBackoffThreshold = 2;
   static const int _captureErrorRecoverThreshold = 4;
@@ -52,6 +55,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
   final SensorParkingOccupancyAnalyzer _occupancyAnalyzer =
       const SensorParkingOccupancyAnalyzer();
   final SensorRecognitionGate _recognitionGate = const SensorRecognitionGate();
+  final SensorEntryGate _entryGate = SensorEntryGate();
   final SensorOccupancyBaselineStore _baselineStore =
       SensorOccupancyBaselineStore();
   final Uuid _uuid = const Uuid();
@@ -84,6 +88,9 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
   int _triggerCornerRejectedSerial = 0;
   List<Rect> _lastDetectionBoxes = const <Rect>[];
   Set<int> _lastMatchedBoxIndexes = const <int>{};
+  Set<int> _lastBottomCenterMatchedBoxIndexes = const <int>{};
+  bool _lastEntryActive = false;
+  bool _lastEntryTriggered = false;
   String? _lastCoordinateSignature;
   SensorOccupancyBaseline? _occupancyBaseline;
   String? _baselineLoadKey;
@@ -300,6 +307,10 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
     _triggerDragging = false;
     _lastDetectionBoxes = const <Rect>[];
     _lastMatchedBoxIndexes = const <int>{};
+    _lastBottomCenterMatchedBoxIndexes = const <int>{};
+    _lastEntryActive = false;
+    _lastEntryTriggered = false;
+    _entryGate.reset();
     _lastCoordinateSignature = null;
     if (mounted) {
       setState(() {});
@@ -622,6 +633,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
         'polygonValid': zone?.isValid,
         'polygonArea': zone?.area.toStringAsFixed(4),
         'polygonMinEdge': zone?.minEdge.toStringAsFixed(4),
+        'entryEdge': zone?.entryEdgeType.name,
         'p1x': zone?.point1.dx.toStringAsFixed(4),
         'p1y': zone?.point1.dy.toStringAsFixed(4),
         'p2x': zone?.point2.dx.toStringAsFixed(4),
@@ -805,7 +817,55 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
     SensorCameraCoordinateMapper mapper,
   ) {
     final triggerState = context.read<SensorTriggerPointState>();
-    if (!triggerState.isEditing || triggerState.placementComplete) return;
+    if (!triggerState.isEditing) return;
+    if (triggerState.placementComplete) {
+      final zone = triggerState.draftCameraZone;
+      if (zone == null) return;
+      final viewportCorners = _cameraZoneToViewport(mapper, zone);
+      final entryEdge = _nearestTriggerEdge(
+        localPosition,
+        viewportCorners,
+      );
+      if (entryEdge == null) return;
+      final changed = triggerState.selectDraftEntryEdge(entryEdge);
+      if (!changed) return;
+      final nextZone = triggerState.draftCameraZone;
+      if (nextZone == null) return;
+      setState(() {
+        _triggerEditViewportCorners = _cameraZoneToViewport(mapper, nextZone);
+      });
+      SensorDebugTrace.record(
+        'SensorTrigger',
+        'entry_edge_tapped',
+        <String, Object?>{
+          'entryEdge': entryEdge.name,
+          'tapX': localPosition.dx.toStringAsFixed(1),
+          'tapY': localPosition.dy.toStringAsFixed(1),
+          'zone': nextZone.fingerprint,
+        },
+      );
+      if (DevAuth.devModeEnabled.value) {
+        SensorDebugTrace.publishStatus(
+          'SensorTrigger',
+          'entry_edge_selected_status',
+          title: '진입 변 변경',
+          detail: entryEdge.name,
+          tone: SensorDebugStatusTone.info,
+          details: <String, Object?>{
+            'entryEdge': entryEdge.name,
+            'zone': nextZone.fingerprint,
+          },
+        );
+      }
+      _publishTriggerEditStatus(
+        zone: nextZone,
+        viewportCorners: _triggerEditViewportCorners,
+        source: 'entry_edge_tap',
+        placementCount: 4,
+      );
+      unawaited(HapticFeedback.selectionClick());
+      return;
+    }
     final cameraPoint = mapper.viewportToCameraImageNormalized(localPosition);
     final added = triggerState.addDraftCameraCorner(cameraPoint);
     if (!added) {
@@ -842,6 +902,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
         'polygonComplete': triggerState.placementComplete,
         'polygonArea': zone?.area.toStringAsFixed(4),
         'polygonValid': zone?.isValid,
+        'entryEdge': zone?.entryEdgeType.name,
       },
     );
     if (triggerState.placementComplete && zone != null) {
@@ -853,6 +914,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
           'polygonMinEdge': zone.minEdge.toStringAsFixed(4),
           'polygonConvex': zone.isConvex,
           'polygonSelfIntersecting': zone.selfIntersecting,
+          'entryEdge': zone.entryEdgeType.name,
         },
       );
     }
@@ -863,6 +925,41 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
       placementCount: triggerState.placementCount,
     );
     unawaited(HapticFeedback.selectionClick());
+  }
+
+  SensorTriggerZoneEdge? _nearestTriggerEdge(
+    Offset point,
+    List<Offset> corners, {
+    double maximumDistance = 30,
+  }) {
+    if (corners.length != 4) return null;
+    final candidates = <SensorTriggerZoneEdge, List<int>>{
+      SensorTriggerZoneEdge.edge12: const <int>[0, 1],
+      SensorTriggerZoneEdge.edge23: const <int>[1, 2],
+      SensorTriggerZoneEdge.edge34: const <int>[2, 3],
+      SensorTriggerZoneEdge.edge41: const <int>[3, 0],
+    };
+    SensorTriggerZoneEdge? best;
+    var bestDistance = maximumDistance;
+    for (final entry in candidates.entries) {
+      final start = corners[entry.value[0]];
+      final end = corners[entry.value[1]];
+      final segment = end - start;
+      final lengthSquared = segment.dx * segment.dx + segment.dy * segment.dy;
+      if (lengthSquared <= 0.0001) continue;
+      final relative = point - start;
+      final projection =
+          ((relative.dx * segment.dx + relative.dy * segment.dy) / lengthSquared)
+              .clamp(0.0, 1.0)
+              .toDouble();
+      final projected = start + segment * projection;
+      final distance = (point - projected).distance;
+      if (distance <= bestDistance) {
+        bestDistance = distance;
+        best = entry.key;
+      }
+    }
+    return best;
   }
 
   void _beginTriggerMove(
@@ -895,7 +992,10 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
     if (currentViewport.length != 4) return;
     final nextViewport = currentViewport.map((point) => point + delta).toList();
     final nextCamera = mapper.viewportPolygonToCameraImageNormalized(nextViewport);
-    final candidate = SensorTriggerZone.tryFromPoints(nextCamera);
+    final candidate = SensorTriggerZone.tryFromPoints(
+      nextCamera,
+      entryEdgeType: zone.entryEdgeType,
+    );
     if (candidate == null) return;
     triggerState.updateDraftCameraZone(candidate);
     setState(() {
@@ -1182,7 +1282,20 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
           capturedPath = captured.path;
           final objectResult = await _detector.detectFile(captured.path);
           final baselineObjectMatch =
-              objectResult.matchZone(zone.recognitionZone);
+              objectResult.matchZone(zone);
+          _updateDetectionVisualization(
+            objectResult,
+            baselineObjectMatch.matchedIndexes,
+            bottomCenterMatchedIndexes:
+                baselineObjectMatch.bottomCenterMatchedIndexes,
+          );
+          final strongBaselineEvidence = baselineObjectMatch.evidences.any(
+            (evidence) =>
+                evidence.polygonCoverage >=
+                    SensorRecognitionGate.strongMlCoverageThreshold &&
+                evidence.boundingBoxAreaRatio >=
+                    SensorRecognitionGate.strongMlBoundingBoxThreshold,
+          );
           SensorDebugTrace.record(
             'SensorOccupancy',
             'baseline_object_check',
@@ -1192,19 +1305,76 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
               'matchedCount': baselineObjectMatch.matchedCount,
               'bottomCenterMatched':
                   baselineObjectMatch.bottomCenterMatched,
+              'bottomCenterMatchedCount':
+                  baselineObjectMatch.bottomCenterMatchedCount,
+              'strongMlEvidence': strongBaselineEvidence,
               'polygonCoverage':
                   baselineObjectMatch.maxPolygonCoverage.toStringAsFixed(4),
               'bboxAreaRatio': baselineObjectMatch.maxBoundingBoxAreaRatio
                   .toStringAsFixed(4),
             },
           );
-          final baselineBlocked = baselineObjectMatch.bottomCenterMatched ||
-              (baselineObjectMatch.maxPolygonCoverage >=
-                      SensorRecognitionGate.strongMlCoverageThreshold &&
-                  baselineObjectMatch.maxBoundingBoxAreaRatio >=
-                      SensorRecognitionGate.strongMlBoundingBoxThreshold);
-          if (baselineBlocked) {
-            throw StateError('Sensor occupancy baseline contains an object.');
+          if (DevAuth.devModeEnabled.value) {
+            for (final evidence in baselineObjectMatch.evidences) {
+              final box = evidence.boundingBox;
+              final point = evidence.bottomCenter;
+              SensorDebugTrace.record(
+                'SensorOccupancy',
+                'baseline_object_detail',
+                <String, Object?>{
+                  'sample': index + 1,
+                  'index': evidence.index,
+                  'left': box.left.toStringAsFixed(4),
+                  'top': box.top.toStringAsFixed(4),
+                  'right': box.right.toStringAsFixed(4),
+                  'bottom': box.bottom.toStringAsFixed(4),
+                  'bottomCenterX': point.dx.toStringAsFixed(4),
+                  'bottomCenterY': point.dy.toStringAsFixed(4),
+                  'polygonCoverage':
+                      evidence.polygonCoverage.toStringAsFixed(4),
+                  'bboxAreaRatio':
+                      evidence.boundingBoxAreaRatio.toStringAsFixed(4),
+                  'bottomCenterInside': evidence.bottomCenterInside,
+                  'closeOverlap': evidence.closeOverlap,
+                  'largeOverlap': evidence.largeOverlap,
+                  'bottomCenterEntry': evidence.bottomCenterEntry,
+                  'matched': evidence.matched,
+                },
+              );
+            }
+          }
+          if (baselineObjectMatch.matched) {
+            final evidenceDetails = <String, Object?>{
+              'sample': index + 1,
+              'objectCount': objectResult.objectCount,
+              'matchedCount': baselineObjectMatch.matchedCount,
+              'strongMlEvidence': strongBaselineEvidence,
+              'bottomCenterMatched':
+                  baselineObjectMatch.bottomCenterMatched,
+              'bottomCenterMatchedCount':
+                  baselineObjectMatch.bottomCenterMatchedCount,
+              'polygonCoverage':
+                  baselineObjectMatch.maxPolygonCoverage.toStringAsFixed(4),
+              'bboxAreaRatio': baselineObjectMatch.maxBoundingBoxAreaRatio
+                  .toStringAsFixed(4),
+            };
+            SensorDebugTrace.record(
+              'SensorOccupancy',
+              'baseline_object_evidence_ignored',
+              evidenceDetails,
+            );
+            if (DevAuth.devModeEnabled.value) {
+              SensorDebugTrace.publishStatus(
+                'SensorOccupancy',
+                'baseline_object_evidence_warning',
+                title: '기준 저장 객체 감지',
+                detail:
+                    '샘플 ${index + 1} · 겹침 ${(baselineObjectMatch.maxPolygonCoverage * 100).toStringAsFixed(1)}%',
+                tone: SensorDebugStatusTone.warning,
+                sticky: false,
+                details: evidenceDetails,
+              );
+            }
           }
           final feature =
               await _occupancyAnalyzer.extractFeature(captured.path, zone);
@@ -1312,8 +1482,11 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
 
   void _updateDetectionVisualization(
     SensorObjectDetectionResult result,
-    List<int> matchedIndexes,
-  ) {
+    List<int> matchedIndexes, {
+    List<int> bottomCenterMatchedIndexes = const <int>[],
+    bool entryActive = false,
+    bool entryTriggered = false,
+  }) {
     final nextImageSize = Size(
       result.imageWidth.toDouble(),
       result.imageHeight.toDouble(),
@@ -1337,6 +1510,10 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
           'imageHeight': result.imageHeight,
           'boxes': boxes,
           'matchedIndexes': matchedIndexes.join(','),
+          'bottomCenterMatchedIndexes':
+              bottomCenterMatchedIndexes.join(','),
+          'entryActive': entryActive,
+          'entryTriggered': entryTriggered,
         },
       );
     }
@@ -1346,6 +1523,10 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
         if (devMode) {
           _lastDetectionBoxes = result.normalizedBoundingBoxes;
           _lastMatchedBoxIndexes = matchedIndexes.toSet();
+          _lastBottomCenterMatchedBoxIndexes =
+              bottomCenterMatchedIndexes.toSet();
+          _lastEntryActive = entryActive;
+          _lastEntryTriggered = entryTriggered;
         }
       });
     }
@@ -1508,6 +1689,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
         'generation': generation,
         'source': source,
         'intervalMs': _sampleInterval.inMilliseconds,
+        'approachIntervalMs': _approachSampleInterval.inMilliseconds,
       },
     );
     unawaited(_detectionLoop(generation));
@@ -1517,16 +1699,19 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
     while (mounted && generation == _loopGeneration && !_routeActive) {
       final workState = context.read<SensorWorkSessionState>();
       if (!workState.isActive) {
+        _entryGate.reset();
         await Future<void>.delayed(const Duration(milliseconds: 120));
         continue;
       }
       final triggerState = context.read<SensorTriggerPointState>();
       final triggerZone = triggerState.savedCameraZone;
       if (!triggerState.isReady || triggerState.isEditing) {
+        _entryGate.reset();
         await Future<void>.delayed(const Duration(milliseconds: 120));
         continue;
       }
       if (triggerZone == null) {
+        _entryGate.reset();
         if (!_triggerMissingStatusPublished) {
           _triggerMissingStatusPublished = true;
           SensorDebugTrace.publishStatus(
@@ -1549,6 +1734,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
       if (!mounted || generation != _loopGeneration) return;
       final baseline = _occupancyBaseline;
       if (baseline == null || !baseline.zone.roughlyEquals(triggerZone)) {
+        _entryGate.reset();
         await Future<void>.delayed(const Duration(milliseconds: 160));
         continue;
       }
@@ -1572,13 +1758,20 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
 
       final detectionState = context.read<SensorDetectionState>();
       if (!detectionState.canSample) {
+        _entryGate.reset();
         await Future<void>.delayed(const Duration(milliseconds: 100));
         continue;
+      }
+      if (detectionState.phase != SensorDetectionPhase.armed) {
+        _entryGate.reset();
       }
 
       _capturing = true;
       String? capturedPath;
       var launchOcr = false;
+      var launchEarlyEntryOcr = false;
+      var launchSource = 'stable_occupancy';
+      var approachActive = false;
 
       try {
         final sampleStopwatch = Stopwatch()..start();
@@ -1594,6 +1787,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
             currentTriggerState.isEditing ||
             currentZone == null ||
             currentZone.fingerprint != triggerZone.fingerprint) {
+          _entryGate.reset();
           SensorDebugTrace.record(
             'SensorTrigger',
             'sample_discarded',
@@ -1610,12 +1804,27 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
           baseline.feature,
           currentFeature,
         );
+        final entryChange = _occupancyAnalyzer.analyzeEntryChange(
+          baseline.feature,
+          currentFeature,
+        );
+        final phaseBeforeSample = detectionState.phase;
         final recognitionZone = triggerZone.recognitionZone;
-        final mlMatch = result.matchZone(recognitionZone);
+        final approachMlMatch = result.matchZone(recognitionZone);
+        final mlMatch = result.matchZone(triggerZone);
         final recognitionDecision =
             _recognitionGate.evaluate(occupancy, mlMatch);
+        final entryDecision = phaseBeforeSample == SensorDetectionPhase.armed
+            ? _entryGate.evaluate(
+                zone: triggerZone,
+                entryChange: entryChange,
+                occupancy: occupancy,
+                mlMatch: mlMatch,
+              )
+            : null;
+        approachActive = entryDecision?.active ?? false;
         final occupiedCandidate = recognitionDecision.candidate;
-        final clearCandidate = occupancy.clearLike && !mlMatch.matched;
+        final clearCandidate = occupancy.clearLike && !occupiedCandidate;
         final reason = clearCandidate
             ? 'baseline_clear'
             : recognitionDecision.reason;
@@ -1635,7 +1844,89 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
           reason: reason,
         );
         sampleStopwatch.stop();
-        _updateDetectionVisualization(result, mlMatch.matchedIndexes);
+        _updateDetectionVisualization(
+          result,
+          mlMatch.matchedIndexes,
+          bottomCenterMatchedIndexes: mlMatch.bottomCenterMatchedIndexes,
+          entryActive: entryDecision?.active ?? false,
+          entryTriggered: entryDecision?.triggered ?? false,
+        );
+        if (entryDecision != null &&
+            (entryDecision.active || entryDecision.triggered)) {
+          SensorDebugTrace.record(
+            'SensorEntry',
+            'entry_evidence',
+            <String, Object?>{
+              'sampleAge': entryDecision.sampleAge,
+              'mlSupport': entryDecision.mlSupport,
+              'changedCellRatio':
+                  entryDecision.changedCellRatio.toStringAsFixed(4),
+              'frontChangedCellRatio':
+                  entryDecision.frontChangedCellRatio.toStringAsFixed(4),
+              'spanRatio': entryDecision.spanRatio.toStringAsFixed(4),
+              'depthRatio': entryDecision.depthRatio.toStringAsFixed(4),
+              'coreChangedCellRatio':
+                  entryDecision.coreChangedCellRatio.toStringAsFixed(4),
+              'sideGuardChangedCellRatio':
+                  entryDecision.sideGuardChangedCellRatio.toStringAsFixed(4),
+              'coreSpanRatio': entryDecision.coreSpanRatio.toStringAsFixed(4),
+              'connectedDepthRatio':
+                  entryDecision.connectedDepthRatio.toStringAsFixed(4),
+              'entryRootedRatio':
+                  entryDecision.entryRootedRatio.toStringAsFixed(4),
+              'meanDifference':
+                  entryDecision.meanDifference.toStringAsFixed(4),
+              'changedCellDelta':
+                  entryDecision.changedCellDelta.toStringAsFixed(4),
+              'frontChangedCellDelta':
+                  entryDecision.frontChangedCellDelta.toStringAsFixed(4),
+              'spanDelta': entryDecision.spanDelta.toStringAsFixed(4),
+              'depthDelta': entryDecision.depthDelta.toStringAsFixed(4),
+              'active': entryDecision.active,
+              'triggered': entryDecision.triggered,
+              'triggerKind': entryDecision.triggerKind.name,
+              'structureChange':
+                  occupancy.structureChangeScore.toStringAsFixed(4),
+              'globalChangedCellRatio':
+                  occupancy.changedCellRatio.toStringAsFixed(4),
+            },
+          );
+          if (entryDecision.triggered && DevAuth.devModeEnabled.value) {
+            SensorDebugTrace.publishStatus(
+              'SensorEntry',
+              'entry_triggered_status',
+              title: '진입 감지',
+              detail:
+                  '${entryDecision.triggerKind.name} · 폭 ${(entryDecision.spanRatio * 100).toStringAsFixed(0)}% · 변화 ${(entryDecision.changedCellRatio * 100).toStringAsFixed(0)}%',
+              tone: SensorDebugStatusTone.success,
+              details: <String, Object?>{
+                'triggerKind': entryDecision.triggerKind.name,
+                'sampleAge': entryDecision.sampleAge,
+                'mlSupport': entryDecision.mlSupport,
+                'changedCellRatio':
+                    entryDecision.changedCellRatio.toStringAsFixed(4),
+                'frontChangedCellRatio':
+                    entryDecision.frontChangedCellRatio.toStringAsFixed(4),
+                'spanRatio': entryDecision.spanRatio.toStringAsFixed(4),
+                'depthRatio': entryDecision.depthRatio.toStringAsFixed(4),
+                'coreChangedCellRatio':
+                    entryDecision.coreChangedCellRatio.toStringAsFixed(4),
+                'sideGuardChangedCellRatio':
+                    entryDecision.sideGuardChangedCellRatio.toStringAsFixed(4),
+                'coreSpanRatio':
+                    entryDecision.coreSpanRatio.toStringAsFixed(4),
+                'connectedDepthRatio':
+                    entryDecision.connectedDepthRatio.toStringAsFixed(4),
+                'entryRootedRatio':
+                    entryDecision.entryRootedRatio.toStringAsFixed(4),
+                'changedCellDelta':
+                    entryDecision.changedCellDelta.toStringAsFixed(4),
+                'spanDelta': entryDecision.spanDelta.toStringAsFixed(4),
+                'depthDelta': entryDecision.depthDelta.toStringAsFixed(4),
+              },
+            );
+          }
+        }
         if (DevAuth.devModeEnabled.value) {
           SensorDebugTrace.record(
             'SensorOccupancy',
@@ -1660,17 +1951,25 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
                   mlMatch.maxBoundingBoxAreaRatio.toStringAsFixed(4),
               'weakOccupancyEvidence':
                   recognitionDecision.weakOccupancyEvidence,
+              'minimumOccupancyEvidence':
+                  recognitionDecision.minimumOccupancyEvidence,
               'strongMlEvidence': recognitionDecision.strongMlEvidence,
               'spatialEntryEvidence':
                   recognitionDecision.spatialEntryEvidence,
+              'entryActive': entryDecision?.active ?? false,
+              'entryTriggered': entryDecision?.triggered ?? false,
+              'entryTriggerKind': entryDecision?.triggerKind.name,
               'reason': reason,
               'elapsedMs': sampleStopwatch.elapsedMilliseconds,
               'zone': triggerZone.fingerprint,
               'recognitionZone': recognitionZone.fingerprint,
+              'approachMlMatched': approachMlMatch.matched,
+              'approachMlMatchedCount': approachMlMatch.matchedCount,
+              'approachMlPolygonCoverage':
+                  approachMlMatch.maxPolygonCoverage.toStringAsFixed(4),
             },
           );
         }
-        final phaseBeforeSample = detectionState.phase;
         final detectedStreakBefore = detectionState.detectedStreak;
         final clearStreakBefore = detectionState.clearStreak;
         final outcome = detectionState.registerOccupancySample(
@@ -1688,7 +1987,46 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
           clearStreakBefore: clearStreakBefore,
           outcome: outcome,
         );
-        launchOcr = outcome == SensorDetectionSampleOutcome.detectedStable;
+        if (entryDecision?.triggered ?? false) {
+          launchOcr = true;
+          launchEarlyEntryOcr =
+              outcome != SensorDetectionSampleOutcome.detectedStable;
+          launchSource = 'entry_${entryDecision!.triggerKind.name}';
+          SensorDebugTrace.record(
+            'SensorEntry',
+            'ocr_entry_triggered',
+            <String, Object?>{
+              'source': launchSource,
+              'earlyEntry': launchEarlyEntryOcr,
+              'sampleAge': entryDecision.sampleAge,
+              'mlSupport': entryDecision.mlSupport,
+              'changedCellRatio':
+                  entryDecision.changedCellRatio.toStringAsFixed(4),
+              'frontChangedCellRatio':
+                  entryDecision.frontChangedCellRatio.toStringAsFixed(4),
+              'spanRatio': entryDecision.spanRatio.toStringAsFixed(4),
+              'depthRatio': entryDecision.depthRatio.toStringAsFixed(4),
+              'coreChangedCellRatio':
+                  entryDecision.coreChangedCellRatio.toStringAsFixed(4),
+              'sideGuardChangedCellRatio':
+                  entryDecision.sideGuardChangedCellRatio.toStringAsFixed(4),
+              'coreSpanRatio': entryDecision.coreSpanRatio.toStringAsFixed(4),
+              'connectedDepthRatio':
+                  entryDecision.connectedDepthRatio.toStringAsFixed(4),
+              'entryRootedRatio':
+                  entryDecision.entryRootedRatio.toStringAsFixed(4),
+              'changedCellDelta':
+                  entryDecision.changedCellDelta.toStringAsFixed(4),
+              'spanDelta': entryDecision.spanDelta.toStringAsFixed(4),
+              'depthDelta': entryDecision.depthDelta.toStringAsFixed(4),
+              'occupancyOutcome': outcome.name,
+            },
+          );
+        } else if (outcome == SensorDetectionSampleOutcome.detectedStable) {
+          launchOcr = true;
+          launchEarlyEntryOcr = false;
+          launchSource = 'stable_occupancy';
+        }
       } catch (error, stackTrace) {
         final message = error.toString();
         final cameraFailure = error is CameraException ||
@@ -1738,11 +2076,16 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
       }
 
       if (launchOcr && mounted && generation == _loopGeneration) {
-        await _launchLiveOcr();
+        await _launchLiveOcr(
+          source: launchSource,
+          earlyEntry: launchEarlyEntryOcr,
+        );
         return;
       }
 
-      await Future<void>.delayed(_sampleInterval);
+      await Future<void>.delayed(
+        approachActive ? _approachSampleInterval : _sampleInterval,
+      );
     }
   }
 
@@ -1818,16 +2161,27 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
     }
   }
 
-  Future<void> _launchLiveOcr() async {
+  Future<void> _launchLiveOcr({
+    required String source,
+    required bool earlyEntry,
+  }) async {
     if (!mounted || _routeActive) return;
     final detectionState = context.read<SensorDetectionState>();
-    if (!detectionState.beginOcr(source: 'stable_occupancy')) return;
+    final started = earlyEntry
+        ? detectionState.beginEntryOcr(source: source)
+        : detectionState.beginOcr(source: source);
+    if (!started) return;
+    _entryGate.reset();
     SensorDebugTrace.publishStatus(
       'SensorOCR',
       'handoff_started',
       title: 'Live OCR 전환 준비',
       tone: SensorDebugStatusTone.progress,
       sticky: true,
+      details: <String, Object?>{
+        'source': source,
+        'earlyEntry': earlyEntry,
+      },
     );
 
     _routeActive = true;
@@ -1856,6 +2210,8 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
         'sourceTop': sourceRect.top.toStringAsFixed(1),
         'sourceWidth': sourceRect.width.toStringAsFixed(1),
         'sourceHeight': sourceRect.height.toStringAsFixed(1),
+        'triggerSource': source,
+        'earlyEntry': earlyEntry,
       },
     );
 
@@ -2036,6 +2392,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
     required String source,
     required bool closeDetector,
   }) async {
+    _entryGate.reset();
     final controller = _cameraController;
     _cameraController = null;
     if (mounted) {
@@ -2168,17 +2525,18 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
             children: <Widget>[
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTapDown: mapper == null
+                onTapDown: mapper == null || triggerState.isEditing
                     ? null
                     : (details) {
-                        if (triggerState.isEditing) {
-                          _handleTriggerTap(details.localPosition, mapper);
-                          return;
-                        }
                         final previewPoint = mapper.viewportToPreviewNormalized(
                           details.localPosition,
                         );
                         unawaited(_meterTo(previewPoint));
+                      },
+                onTapUp: mapper == null || !triggerState.isEditing
+                    ? null
+                    : (details) {
+                        _handleTriggerTap(details.localPosition, mapper);
                       },
                 onPanStart: triggerState.isEditing && mapper != null
                     ? (details) {
@@ -2264,6 +2622,15 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
                         mapper: mapper,
                         cameraBoundingBoxes: _lastDetectionBoxes,
                         matchedIndexes: _lastMatchedBoxIndexes,
+                        bottomCenterMatchedIndexes:
+                            _lastBottomCenterMatchedBoxIndexes,
+                        entryActive: _lastEntryActive,
+                        entryTriggered: _lastEntryTriggered,
+                        entryGeometry: triggerState.savedCameraZone == null
+                            ? null
+                            : SensorEntryBandGeometry.fromZone(
+                                triggerState.savedCameraZone!,
+                              ),
                         triggerZone: triggerState.savedCameraZone,
                         recognitionZone:
                             triggerState.savedCameraZone?.recognitionZone,
@@ -2285,6 +2652,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
                 feedbackCornerSerial: _triggerCornerFeedbackSerial,
                 rejectedCornerIndex: _triggerCornerRejectedIndex,
                 rejectedCornerSerial: _triggerCornerRejectedSerial,
+                entryEdgeType: triggerState.displayCameraZone?.entryEdgeType,
                 onEdit: editEnabled
                     ? () => unawaited(_beginTriggerEdit(viewportSize))
                     : null,

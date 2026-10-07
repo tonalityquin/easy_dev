@@ -65,7 +65,7 @@ class SensorTriggerPointState extends ChangeNotifier {
       'load_requested',
       <String, Object?>{
         'area': normalized,
-        'coordinateSpace': 'camera_image_normalized_polygon_v4',
+        'coordinateSpace': 'camera_image_normalized_polygon_v5',
       },
     );
     try {
@@ -89,7 +89,7 @@ class SensorTriggerPointState extends ChangeNotifier {
           'legacyZoneAvailable': legacyZone != null,
           'legacyPointAvailable': legacyPoint != null,
           ..._zoneDetails(zone),
-          'coordinateSpace': 'camera_image_normalized_polygon_v4',
+          'coordinateSpace': 'camera_image_normalized_polygon_v5',
         },
       );
     } catch (error) {
@@ -196,6 +196,28 @@ class SensorTriggerPointState extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool selectDraftEntryEdge(SensorTriggerZoneEdge edge) {
+    final current = _draftCameraZone;
+    if (!_isEditing || _isSaving || current == null || !current.isValid) {
+      return false;
+    }
+    if (current.entryEdgeType == edge) return false;
+    final next = current.withEntryEdge(edge);
+    _draftCameraZone = next;
+    _draftCameraCorners = next.points;
+    SensorDebugTrace.record(
+      'SensorTrigger',
+      'entry_edge_selected',
+      <String, Object?>{
+        'area': _area,
+        'entryEdge': edge.name,
+        ..._zoneDetails(next),
+      },
+    );
+    notifyListeners();
+    return true;
+  }
+
   void cancelEdit() {
     if (!_isEditing || _isSaving) return;
     _draftCameraZone = _savedCameraZone;
@@ -227,7 +249,7 @@ class SensorTriggerPointState extends ChangeNotifier {
       <String, Object?>{
         'area': _area,
         ..._zoneDetails(zone),
-        'coordinateSpace': 'camera_image_normalized_polygon_v4',
+        'coordinateSpace': 'camera_image_normalized_polygon_v5',
       },
     );
     try {
@@ -245,7 +267,7 @@ class SensorTriggerPointState extends ChangeNotifier {
         <String, Object?>{
           'area': _area,
           ..._zoneDetails(zone),
-          'coordinateSpace': 'camera_image_normalized_polygon_v4',
+          'coordinateSpace': 'camera_image_normalized_polygon_v5',
         },
       );
       return true;
@@ -277,6 +299,7 @@ class SensorTriggerPointState extends ChangeNotifier {
       'polygonArea': zone.area.toStringAsFixed(4),
       'polygonMinEdge': zone.minEdge.toStringAsFixed(4),
       'polygonValid': zone.isValid,
+      'entryEdge': zone.entryEdgeType.name,
     };
   }
 }

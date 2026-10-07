@@ -33,6 +33,37 @@ class SensorOccupancyBaseline {
 }
 
 @immutable
+class SensorEntryChangeAnalysis {
+  const SensorEntryChangeAnalysis({
+    required this.changedCellRatio,
+    required this.frontChangedCellRatio,
+    required this.spanRatio,
+    required this.depthRatio,
+    required this.meanDifference,
+    required this.changedCellCount,
+    required this.activeColumnCount,
+    required this.coreChangedCellRatio,
+    required this.sideGuardChangedCellRatio,
+    required this.coreSpanRatio,
+    required this.connectedDepthRatio,
+    required this.entryRootedRatio,
+  });
+
+  final double changedCellRatio;
+  final double frontChangedCellRatio;
+  final double spanRatio;
+  final double depthRatio;
+  final double meanDifference;
+  final int changedCellCount;
+  final int activeColumnCount;
+  final double coreChangedCellRatio;
+  final double sideGuardChangedCellRatio;
+  final double coreSpanRatio;
+  final double connectedDepthRatio;
+  final double entryRootedRatio;
+}
+
+@immutable
 class SensorOccupancyAnalysis {
   const SensorOccupancyAnalysis({
     required this.structureChangeScore,

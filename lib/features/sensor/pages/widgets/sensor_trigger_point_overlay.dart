@@ -19,6 +19,7 @@ class SensorTriggerPointOverlay extends StatefulWidget {
     required this.feedbackCornerSerial,
     required this.rejectedCornerIndex,
     required this.rejectedCornerSerial,
+    required this.entryEdgeType,
     required this.onEdit,
     required this.onSave,
     required this.onCancel,
@@ -40,6 +41,7 @@ class SensorTriggerPointOverlay extends StatefulWidget {
   final int feedbackCornerSerial;
   final int? rejectedCornerIndex;
   final int rejectedCornerSerial;
+  final SensorTriggerZoneEdge? entryEdgeType;
   final VoidCallback? onEdit;
   final VoidCallback? onSave;
   final VoidCallback? onCancel;
@@ -59,6 +61,7 @@ class _SensorTriggerPointOverlayState extends State<SensorTriggerPointOverlay>
   late final AnimationController _pulseController;
   late final AnimationController _edgeRevealController;
   late final AnimationController _completionController;
+  late final AnimationController _entryEdgeController;
   int? _revealingFromCount;
   int? _newCornerIndex;
   int _cornerEntranceSerial = 0;
@@ -82,6 +85,11 @@ class _SensorTriggerPointOverlayState extends State<SensorTriggerPointOverlay>
       vsync: this,
       duration: const Duration(milliseconds: 240),
     );
+    _entryEdgeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+      value: 1,
+    );
     _edgeRevealController.addStatusListener(_handleEdgeRevealStatus);
     _syncPulse();
   }
@@ -92,6 +100,33 @@ class _SensorTriggerPointOverlayState extends State<SensorTriggerPointOverlay>
     if (oldWidget.isEditing != widget.isEditing ||
         oldWidget.reduceMotion != widget.reduceMotion) {
       _schedulePulseSync();
+    }
+    if (oldWidget.entryEdgeType != widget.entryEdgeType &&
+        widget.entryEdgeType != null) {
+      if (widget.reduceMotion) {
+        _scheduleTransitionSync(
+          event: 'entry_edge_animation_reduced',
+          details: <String, Object?>{
+            'entryEdge': widget.entryEdgeType?.name,
+          },
+          action: () {
+            _entryEdgeController.stop();
+            if (_entryEdgeController.value != 1.0) {
+              _entryEdgeController.value = 1.0;
+            }
+          },
+        );
+      } else {
+        _scheduleTransitionSync(
+          event: 'entry_edge_animation_started',
+          details: <String, Object?>{
+            'entryEdge': widget.entryEdgeType?.name,
+          },
+          action: () {
+            _entryEdgeController.forward(from: 0.0);
+          },
+        );
+      }
     }
 
     if (!widget.isEditing) {
@@ -294,12 +329,20 @@ class _SensorTriggerPointOverlayState extends State<SensorTriggerPointOverlay>
     return (1 - value) * 2;
   }
 
+  double _entryEdgeStrength() {
+    if (widget.reduceMotion) return 0;
+    final value = _entryEdgeController.value;
+    if (value <= 0.5) return value * 2;
+    return (1 - value) * 2;
+  }
+
   @override
   void dispose() {
     _edgeRevealController.removeStatusListener(_handleEdgeRevealStatus);
     _pulseController.dispose();
     _edgeRevealController.dispose();
     _completionController.dispose();
+    _entryEdgeController.dispose();
     super.dispose();
   }
 
@@ -319,6 +362,7 @@ class _SensorTriggerPointOverlayState extends State<SensorTriggerPointOverlay>
                 _pulseController,
                 _edgeRevealController,
                 _completionController,
+                _entryEdgeController,
               ]),
               builder: (context, child) {
                 return CustomPaint(
@@ -331,6 +375,9 @@ class _SensorTriggerPointOverlayState extends State<SensorTriggerPointOverlay>
                     edgeProgress:
                         widget.reduceMotion ? 1 : _edgeRevealController.value,
                     completion: _completionStrength(),
+                    entryEdgeType: widget.entryEdgeType,
+                    entryColor: tokens.warning,
+                    entrySelection: _entryEdgeStrength(),
                   ),
                 );
               },
@@ -506,6 +553,9 @@ class _TriggerPolygonPainter extends CustomPainter {
     required this.revealingFromCount,
     required this.edgeProgress,
     required this.completion,
+    required this.entryEdgeType,
+    required this.entryColor,
+    required this.entrySelection,
   });
 
   final List<Offset> points;
@@ -515,6 +565,9 @@ class _TriggerPolygonPainter extends CustomPainter {
   final int? revealingFromCount;
   final double edgeProgress;
   final double completion;
+  final SensorTriggerZoneEdge? entryEdgeType;
+  final Color entryColor;
+  final double entrySelection;
 
   void _drawSegment(
     Canvas canvas,
@@ -594,6 +647,21 @@ class _TriggerPolygonPainter extends CustomPainter {
     canvas.drawPath(path, paint);
   }
 
+  List<int>? _entryIndexes() {
+    switch (entryEdgeType) {
+      case SensorTriggerZoneEdge.edge12:
+        return const <int>[0, 1];
+      case SensorTriggerZoneEdge.edge23:
+        return const <int>[1, 2];
+      case SensorTriggerZoneEdge.edge34:
+        return const <int>[2, 3];
+      case SensorTriggerZoneEdge.edge41:
+        return const <int>[3, 0];
+      case null:
+        return null;
+    }
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     if (points.isEmpty) return;
@@ -614,6 +682,23 @@ class _TriggerPolygonPainter extends CustomPainter {
         ..strokeJoin = StrokeJoin.round
         ..strokeCap = StrokeCap.round;
       _drawPolygonStroke(canvas, glow);
+      final indexes = _entryIndexes();
+      if (indexes != null) {
+        final entryGlow = Paint()
+          ..color = entryColor.withOpacity(
+            0.14 + pulse * 0.08 + entrySelection * 0.18,
+          )
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 10 + pulse * 4 + entrySelection * 8
+          ..strokeCap = StrokeCap.round;
+        final entryStroke = Paint()
+          ..color = entryColor.withOpacity(0.92)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.6 + pulse * 0.8 + entrySelection * 1.8
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(points[indexes[0]], points[indexes[1]], entryGlow);
+        canvas.drawLine(points[indexes[0]], points[indexes[1]], entryStroke);
+      }
     }
   }
 
@@ -625,7 +710,10 @@ class _TriggerPolygonPainter extends CustomPainter {
         oldDelegate.pulse != pulse ||
         oldDelegate.revealingFromCount != revealingFromCount ||
         oldDelegate.edgeProgress != edgeProgress ||
-        oldDelegate.completion != completion;
+        oldDelegate.completion != completion ||
+        oldDelegate.entryEdgeType != entryEdgeType ||
+        oldDelegate.entryColor != entryColor ||
+        oldDelegate.entrySelection != entrySelection;
   }
 }
 
