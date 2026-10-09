@@ -189,7 +189,11 @@ class _CommonButtonState extends State<CommonButton> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (widget.icon != null) ...[
-                      Icon(widget.icon, size: 20, color: colors.foreground),
+                      Icon(
+                        widget.icon,
+                        size: 20,
+                        color: colors.foreground,
+                      ),
                       const SizedBox(width: 8),
                     ],
                     Flexible(

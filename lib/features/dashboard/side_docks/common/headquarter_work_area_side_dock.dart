@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_side_dock.dart';
+import '../../../../design_system/common_ui/common_ui_side_dock_list_surface.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/tts/application/plate_tts_session_diagnostics.dart';
 import '../../../account/applications/user_state.dart';
@@ -85,6 +86,7 @@ class _HeadquarterWorkAreaSideDockState
   String? _error;
   _WorkAreaViewData? _selectedArea;
   List<_WorkAreaViewData> _areas = const <_WorkAreaViewData>[];
+  String? _lastActionSurfaceSignature;
 
   @override
   void initState() {
@@ -114,6 +116,7 @@ class _HeadquarterWorkAreaSideDockState
     final division = userState.division.trim();
     final developerMode = await DevAuth.isDevModeEnabled();
     if (!mounted) return;
+    _log('developer_mode enabled=$developerMode');
     if (session == null || division.isEmpty) {
       setState(() {
         _developerMode = developerMode;
@@ -210,8 +213,14 @@ class _HeadquarterWorkAreaSideDockState
   Future<void> _showStatus() async {
     if (!_developerMode || !mounted) return;
     HapticFeedback.mediumImpact();
+    final actionSurfaceStage = _selectedArea == null ? 'area' : 'mode';
+    final actionSurfaceItems = <String>[
+      if (_selectedArea != null) 'area_list',
+      'open_secondary',
+      if (_developerMode) 'open_sprint',
+    ];
     _log(
-      'status_open division=$_division areaCount=${_areas.length} selected=${_selectedArea?.areaName ?? ''} downloadedAt=$_downloadedAtIso error=${_error ?? ''}',
+      'status_open division=$_division areaCount=${_areas.length} selected=${_selectedArea?.areaName ?? ''} downloadedAt=$_downloadedAtIso error=${_error ?? ''} actionSurfaceStage=$actionSurfaceStage actionSurfaceItems=${actionSurfaceItems.join(',')}',
     );
     final lines = <String>[
       ...LauncherDiagnostics.lines,
@@ -281,6 +290,86 @@ class _HeadquarterWorkAreaSideDockState
         areaName: area.areaName,
         modeKey: mode.id,
       ),
+    );
+  }
+
+  void _scheduleActionSurfaceStateLog() {
+    final stage = _selectedArea == null ? 'area' : 'mode';
+    final items = <String>[
+      if (_selectedArea != null) 'area_list',
+      'open_secondary',
+      if (_developerMode) 'open_sprint',
+    ];
+    final signature = '$stage|$_developerMode|${items.join(',')}';
+    if (_lastActionSurfaceSignature == signature) return;
+    _lastActionSurfaceSignature = signature;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _log(
+        'action_surface_state stage=$stage developer=$_developerMode itemCount=${items.length} items=${items.join(',')}',
+      );
+    });
+  }
+
+  Widget _buildActionSurface(bool reduceMotion) {
+    _scheduleActionSurfaceStateLog();
+    final actions = <Widget>[
+      if (_selectedArea != null)
+        CommonAnimatedReveal(
+          key: const ValueKey<String>('action-surface-area-list'),
+          duration: CommonUiMotion.selection,
+          offset: reduceMotion ? Offset.zero : const Offset(0, 0.05),
+          child: CommonSideDockListAction(
+            icon: Icons.arrow_back_rounded,
+            title: '지역 목록',
+            showChevron: false,
+            onTap: () {
+              _log('action_surface_tap action=area_list');
+              setState(() => _selectedArea = null);
+            },
+          ),
+        ),
+      CommonAnimatedReveal(
+        key: const ValueKey<String>('action-surface-open-secondary'),
+        duration: CommonUiMotion.selection,
+        offset: reduceMotion ? Offset.zero : const Offset(0, 0.05),
+        child: CommonSideDockListAction(
+          icon: Icons.tune_rounded,
+          title: '운영 관리',
+          onTap: () {
+            _log('action_surface_tap action=open_secondary');
+            Navigator.of(context).pop(
+              const HeadquarterWorkAreaDockResult.openSecondary(),
+            );
+          },
+        ),
+      ),
+      if (_developerMode)
+        CommonAnimatedReveal(
+          key: const ValueKey<String>('action-surface-open-sprint'),
+          duration: CommonUiMotion.selection,
+          delay: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 22),
+          offset: reduceMotion ? Offset.zero : const Offset(0, 0.05),
+          child: CommonSideDockListAction(
+            icon: Icons.bolt_rounded,
+            title: '스프린트',
+            onTap: () {
+              _log('action_surface_tap action=open_sprint');
+              Navigator.of(context).pop(
+                const HeadquarterWorkAreaDockResult.openSprint(),
+              );
+            },
+          ),
+        ),
+    ];
+
+    return CommonAnimatedReveal(
+      key: const ValueKey<String>('headquarter-work-area-action-surface'),
+      duration: CommonUiMotion.selection,
+      offset: reduceMotion ? Offset.zero : const Offset(0, 0.035),
+      child: CommonSideDockListSurface(children: actions),
     );
   }
 
@@ -370,49 +459,7 @@ class _HeadquarterWorkAreaSideDockState
             Divider(height: 1, color: tokens.borderSubtle),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              child: Row(
-                children: [
-                  if (_selectedArea != null)
-                    Expanded(
-                      child: CommonButton(
-                        label: '지역 목록',
-                        icon: Icons.arrow_back_rounded,
-                        onPressed: () {
-                          HapticFeedback.selectionClick();
-                          setState(() => _selectedArea = null);
-                        },
-                        variant: CommonButtonVariant.secondary,
-                        haptic: CommonHaptic.none,
-                      ),
-                    ),
-                  if (_selectedArea != null) const SizedBox(width: 8),
-                  Expanded(
-                    child: CommonButton(
-                      label: '운영 관리',
-                      icon: Icons.tune_rounded,
-                      onPressed: () => Navigator.of(context).pop(
-                        const HeadquarterWorkAreaDockResult.openSecondary(),
-                      ),
-                      variant: CommonButtonVariant.tertiary,
-                      haptic: CommonHaptic.selection,
-                    ),
-                  ),
-                  if (_developerMode) ...[
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: CommonButton(
-                        label: '스프린트',
-                        icon: Icons.bolt_rounded,
-                        onPressed: () => Navigator.of(context).pop(
-                          const HeadquarterWorkAreaDockResult.openSprint(),
-                        ),
-                        variant: CommonButtonVariant.tertiary,
-                        haptic: CommonHaptic.selection,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+              child: _buildActionSurface(reduceMotion),
             ),
           ],
         ),

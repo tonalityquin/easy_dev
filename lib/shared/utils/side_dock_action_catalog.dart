@@ -12,7 +12,16 @@ class SideDockActionCatalog {
   static const IconData faqIcon = Icons.help_center_rounded;
 
   static const String updateLabel = '업데이트';
+  static const String updateDescription = '앱의 최신 업데이트를 확인합니다.';
   static const IconData updateIcon = Icons.system_update_alt_rounded;
+
+  static const String themeDescription = '앱의 화면 테마를 변경합니다.';
+  static const String workRulesDescription = '현재 지역의 업무 규칙을 확인합니다.';
+  static const String workManualDescription = '현재 지역의 업무 메뉴얼을 확인합니다.';
+  static const String monthlyParkingDescription =
+      '정기 주차 차량 정보를 확인하고 관리합니다.';
+  static const String departureCompletedDescription =
+      '출차가 완료된 차량 내역을 확인합니다.';
 
   static const String termsLabel = '이용약관';
   static const IconData termsIcon = Icons.description_rounded;

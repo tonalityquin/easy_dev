@@ -119,6 +119,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     debugPrint(
       '[OpsDashboardSideDock] mounted mode=${widget.modeLabel} layout=single_scroll',
     );
+    debugPrint(
+      '[OpsDashboardSideDock] description_manifest work_rules=${SideDockActionCatalog.workRulesDescription} work_manual=${SideDockActionCatalog.workManualDescription} monthly_parking=${SideDockActionCatalog.monthlyParkingDescription} departure_completed=${SideDockActionCatalog.departureCompletedDescription} update=${SideDockActionCatalog.updateDescription} theme=${SideDockActionCatalog.themeDescription} presentation=title_description animation=section_reveal',
+    );
     _refreshDeveloperMode();
   }
 
@@ -569,7 +572,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         id: 'update',
         category: _DashboardActionCategory.support,
         label: SideDockActionCatalog.updateLabel,
-        description: '',
+        description: SideDockActionCatalog.updateDescription,
         icon: SideDockActionCatalog.updateIcon,
         color: tokens.accentContainer,
         foreground: tokens.onAccentContainer,
@@ -632,7 +635,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         id: 'theme',
         category: _DashboardActionCategory.settings,
         label: '테마',
-        description: '',
+        description: SideDockActionCatalog.themeDescription,
         icon: Icons.palette_outlined,
         color: tokens.surfaceSelected,
         foreground: tokens.textPrimary,
@@ -763,6 +766,14 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     trace.log('monthlyVisible=$monthlyVisible', progress: 0.765);
     trace.log('businessUi=common_side_dock_action_tile', progress: 0.768);
     trace.log('businessTileCount=${monthlyVisible ? 4 : 3}', progress: 0.769);
+    trace.log(
+      'businessReveal=staggered delayMs=22 durationMs=190 offsetY=6 reduceMotionAware=true',
+      progress: 0.7692,
+    );
+    trace.log(
+      'descriptionManifest=work_rules:${SideDockActionCatalog.workRulesDescription}|work_manual:${SideDockActionCatalog.workManualDescription}|monthly_parking:${SideDockActionCatalog.monthlyParkingDescription}|departure_completed:${SideDockActionCatalog.departureCompletedDescription}|update:${SideDockActionCatalog.updateDescription}|theme:${SideDockActionCatalog.themeDescription}',
+      progress: 0.7695,
+    );
     trace.log('workRuleVisible=true activeView=${_view.name}', progress: 0.77);
     trace.log('workManualVisible=true activeView=${_view.name}', progress: 0.775);
     trace.log('developerMode=$developerMode', progress: 0.77);
@@ -882,7 +893,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         id: 'work_rules',
         category: _DashboardActionCategory.business,
         label: '업무 규칙',
-        description: '',
+        description: SideDockActionCatalog.workRulesDescription,
         icon: Icons.rule_rounded,
         color: tokens.infoContainer,
         foreground: tokens.onInfoContainer,
@@ -894,7 +905,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         id: 'work_manual',
         category: _DashboardActionCategory.business,
         label: '업무 메뉴얼',
-        description: '',
+        description: SideDockActionCatalog.workManualDescription,
         icon: Icons.menu_book_rounded,
         color: tokens.infoContainer,
         foreground: tokens.onInfoContainer,
@@ -907,7 +918,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
           id: 'monthly_parking',
           category: _DashboardActionCategory.business,
           label: '정기 주차',
-          description: '',
+          description: SideDockActionCatalog.monthlyParkingDescription,
           icon: Icons.dashboard_customize_rounded,
           color: tokens.accentContainer,
           foreground: tokens.onAccentContainer,
@@ -922,7 +933,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         id: 'departure_completed',
         category: _DashboardActionCategory.business,
         label: '출차 완료',
-        description: '',
+        description: SideDockActionCatalog.departureCompletedDescription,
         icon: Icons.directions_car_filled_rounded,
         color: tokens.successContainer,
         foreground: tokens.onSuccessContainer,
@@ -944,7 +955,12 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var index = 0; index < actions.length; index++) ...[
-          _DashboardActionTile(action: actions[index]),
+          _DashboardStaggeredReveal(
+            key: ValueKey<String>('business_action_${actions[index].id}'),
+            order: index,
+            offsetY: 6,
+            child: _DashboardActionTile(action: actions[index]),
+          ),
           if (index != actions.length - 1) const SizedBox(height: 10),
         ],
       ],

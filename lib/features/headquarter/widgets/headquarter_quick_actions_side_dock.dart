@@ -13,6 +13,7 @@ import '../../../app/theme/theme_settings_dialog.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../shared/utils/side_dock_action_catalog.dart';
 import '../../community/application/discord/discord_config.dart';
 import '../../community/page/faq_side_dock.dart';
 import '../../community/page/side_docks/discord_side_dock.dart';
@@ -184,6 +185,12 @@ class _HeadquarterQuickActionsPanelState
     HeadquarterSideDockLauncherController.recordDebug(
       'quick_actions_panel_initialized source=${widget.source} side=left design=legacy_head_hub_actions_v1519 workContext=dashboard_style searchPresentation=dashboard_style groupedResults=true',
     );
+    HeadquarterSideDockLauncherController.recordDebug(
+      'quick_actions_action_manifest work=headquarter_navigation,work_manual,work_rules,memo settings=theme,third_party_support,refresh_area_master,logout reveal=staggered delayMs=22 durationMs=190 reduceMotionAware=true',
+    );
+    HeadquarterSideDockLauncherController.recordDebug(
+      'quick_actions_description_manifest theme=${SideDockActionCatalog.themeDescription} update=${SideDockActionCatalog.updateDescription} presentation=title_description animation=staggered',
+    );
   }
 
   @override
@@ -353,26 +360,6 @@ class _HeadquarterQuickActionsPanelState
         onTap: _openThirdPartyChannel,
       ),
       _DockAction(
-        id: 'work_rules',
-        category: _QuickActionCategory.work,
-        icon: Icons.rule_rounded,
-        label: '업무 규칙',
-        description: '현재 지역의 업무 규칙 보고서를 확인합니다.',
-        color: tokens.infoContainer,
-        foreground: tokens.onInfoContainer,
-        onTap: (_) async {},
-      ),
-      _DockAction(
-        id: 'work_manual',
-        category: _QuickActionCategory.work,
-        icon: Icons.menu_book_rounded,
-        label: '업무 메뉴얼',
-        description: '현재 지역의 업무 메뉴얼을 확인합니다.',
-        color: tokens.infoContainer,
-        foreground: tokens.onInfoContainer,
-        onTap: (_) async {},
-      ),
-      _DockAction(
         id: 'headquarter_navigation',
         category: _QuickActionCategory.work,
         icon: Icons.location_city_rounded,
@@ -391,17 +378,24 @@ class _HeadquarterQuickActionsPanelState
         },
       ),
       _DockAction(
-        id: 'launcher_disable',
+        id: 'work_manual',
         category: _QuickActionCategory.work,
-        icon: Icons.lightbulb_rounded,
-        label: '빠른 열기 끄기',
-        description: '본사 Side Dock 전역 핸들을 끕니다.',
-        color: tokens.warningContainer,
-        foreground: tokens.onWarningContainer,
-        onTap: (_) => HeadquarterSideDockLauncherController.setEnabled(
-          false,
-          source: 'headquarter_quick_actions_side_dock',
-        ),
+        icon: Icons.menu_book_rounded,
+        label: '업무 메뉴얼',
+        description: '현재 지역의 업무 메뉴얼을 확인합니다.',
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
+        onTap: (_) async {},
+      ),
+      _DockAction(
+        id: 'work_rules',
+        category: _QuickActionCategory.work,
+        icon: Icons.rule_rounded,
+        label: '업무 규칙',
+        description: '현재 지역의 업무 규칙 보고서를 확인합니다.',
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
+        onTap: (_) async {},
       ),
       _DockAction(
         id: 'memo',
@@ -415,25 +409,6 @@ class _HeadquarterQuickActionsPanelState
           context: rootContext,
           useCommonUi: true,
         ),
-      ),
-      _DockAction(
-        id: 'refresh_area_master',
-        category: _QuickActionCategory.work,
-        icon: Icons.download_rounded,
-        label: '다운받기',
-        description: '현재 근무 회사의 전체 지역 정보를 최신 상태로 내려받습니다.',
-        color: tokens.infoContainer,
-        foreground: tokens.onInfoContainer,
-        onTap: (rootContext) async {
-          final outcome = await HeadquarterAreaMasterDownloadWorkflow.run(
-            context: rootContext,
-            source: 'headquarter_quick_actions_side_dock',
-            useCommonUi: true,
-          );
-          HeadquarterSideDockLauncherController.recordDebug(
-            'quick_actions_area_master_download_result status=${outcome.status.name} areas=${outcome.areaCount} downloadedAt=${outcome.downloadedAtIso}',
-          );
-        },
       ),
       _DockAction(
         id: 'field',
@@ -500,7 +475,7 @@ class _HeadquarterQuickActionsPanelState
         category: _QuickActionCategory.settings,
         icon: Icons.palette_outlined,
         label: '테마',
-        description: null,
+        description: SideDockActionCatalog.themeDescription,
         color: tokens.surfaceSelected,
         foreground: tokens.textPrimary,
         onTap: (rootContext) => showCommonThemeSettingsDialog(
@@ -522,6 +497,28 @@ class _HeadquarterQuickActionsPanelState
             source: 'headquarter_quick_actions_side_dock',
             side: CommonSideDockSide.left,
             accessPolicy: DiscordConnectionSupportAccessPolicy.headquarter,
+          );
+        },
+      ),
+      _DockAction(
+        id: 'refresh_area_master',
+        category: _QuickActionCategory.settings,
+        icon: Icons.download_rounded,
+        label: '다운받기',
+        description: '현재 근무 회사의 전체 지역 정보를 최신 상태로 내려받습니다.',
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
+        onTap: (rootContext) async {
+          HeadquarterSideDockLauncherController.recordDebug(
+            'quick_actions_area_master_download_start source=${widget.source} category=settings',
+          );
+          final outcome = await HeadquarterAreaMasterDownloadWorkflow.run(
+            context: rootContext,
+            source: 'headquarter_quick_actions_side_dock',
+            useCommonUi: true,
+          );
+          HeadquarterSideDockLauncherController.recordDebug(
+            'quick_actions_area_master_download_result status=${outcome.status.name} areas=${outcome.areaCount} downloadedAt=${outcome.downloadedAtIso} category=settings',
           );
         },
       ),
@@ -559,7 +556,7 @@ class _HeadquarterQuickActionsPanelState
         category: _QuickActionCategory.support,
         icon: Icons.system_update_alt_rounded,
         label: '업데이트',
-        description: null,
+        description: SideDockActionCatalog.updateDescription,
         color: tokens.accentContainer,
         foreground: tokens.onAccentContainer,
         onTap: (rootContext) async {
