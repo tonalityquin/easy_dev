@@ -10,8 +10,9 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../shared/page/input/pages/live_ocr_page.dart';
-import '../../../../shared/page/input/widgets/live_ocr_source_rect_route.dart';
+import '../../../../shared/page/live_ocr/pages/live_ocr_page.dart';
+import '../../../../shared/page/live_ocr/widgets/live_ocr_source_rect_route.dart';
+import '../../../../shared/page/sensor/pages/sensor_live_ocr_page.dart';
 import '../../applications/sensor_debug_trace.dart';
 import '../../applications/sensor_detection_state.dart';
 import '../../applications/sensor_entry_gate.dart';
@@ -1772,6 +1773,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
       var launchEarlyEntryOcr = false;
       var launchSource = 'stable_occupancy';
       var approachActive = false;
+      Uint8List? launchInitialFrameBytes;
 
       try {
         final sampleStopwatch = Stopwatch()..start();
@@ -2027,6 +2029,26 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
           launchEarlyEntryOcr = false;
           launchSource = 'stable_occupancy';
         }
+        if (launchOcr) {
+          try {
+            launchInitialFrameBytes = await File(captured.path).readAsBytes();
+            SensorDebugTrace.record(
+              'SensorOCR',
+              'trigger_frame_preserved',
+              <String, Object?>{
+                'bytes': launchInitialFrameBytes.length,
+                'source': launchSource,
+                'earlyEntry': launchEarlyEntryOcr,
+              },
+            );
+          } catch (error) {
+            SensorDebugTrace.record(
+              'SensorOCR',
+              'trigger_frame_preserve_failed',
+              <String, Object?>{'error': error},
+            );
+          }
+        }
       } catch (error, stackTrace) {
         final message = error.toString();
         final cameraFailure = error is CameraException ||
@@ -2079,6 +2101,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
         await _launchLiveOcr(
           source: launchSource,
           earlyEntry: launchEarlyEntryOcr,
+          initialFrameBytes: launchInitialFrameBytes,
         );
         return;
       }
@@ -2164,6 +2187,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
   Future<void> _launchLiveOcr({
     required String source,
     required bool earlyEntry,
+    Uint8List? initialFrameBytes,
   }) async {
     if (!mounted || _routeActive) return;
     final detectionState = context.read<SensorDetectionState>();
@@ -2212,6 +2236,7 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
         'sourceHeight': sourceRect.height.toStringAsFixed(1),
         'triggerSource': source,
         'earlyEntry': earlyEntry,
+        'initialFrameBytes': initialFrameBytes?.length ?? 0,
       },
     );
 
@@ -2236,8 +2261,9 @@ class _SensorDetectionContentState extends State<SensorDetectionContent>
 
     try {
       final route = routeController.buildRoute(
-        builder: (_) => LiveOcrPage(
+        builder: (_) => SensorLiveOcrPage(
           sessionId: sessionId,
+          initialFrameBytes: initialFrameBytes,
           onExitPreparing: (_) async {
             if (!mounted) return;
             routeController.setExitTargetRect(

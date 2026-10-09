@@ -42,8 +42,10 @@ import '../../../plate/editor/workspaces/plate_identity_workspace.dart';
 import '../application/input_plate_registration_policy.dart';
 import '../application/input_plate_service.dart';
 import '../controllers/input_plate_controller.dart';
-import 'live_ocr_page.dart';
-import '../widgets/live_ocr_source_rect_route.dart';
+import '../../live_ocr/pages/live_ocr_page.dart';
+import '../../live_ocr/widgets/live_ocr_source_rect_route.dart';
+import '../../sensor/pages/sensor_live_ocr_page.dart';
+import 'input_live_ocr_page.dart';
 import 'sheets/input_region_bottom_sheet.dart';
 
 enum _MonthlyFetchFailureType { notFound, inactive, readError }
@@ -436,6 +438,27 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     if (!mounted || result == null) return;
     _log(
       'ocr=rail_result applied=${result.applied} manualCompletion=${result.requiresManualCompletion} focus=${result.focusTarget.name}',
+    );
+  }
+
+  Future<void> _openSensorScannerFromRail(Rect sourceRect) async {
+    if (!mounted || _busy || _scannerActive || _editorTrace?.developerMode != true) {
+      _log(
+        'sensor_ocr=rail_open_skipped busy=$_busy scannerActive=$_scannerActive developer=${_editorTrace?.developerMode == true}',
+      );
+      return;
+    }
+    _log(
+      'sensor_ocr=transition_open source=rail_sensor_ocr rect=${_rectDebug(sourceRect)}',
+    );
+    final result = await _openLiveScanner(
+      source: 'rail_sensor_action',
+      sourceRect: sourceRect,
+      sensorProfile: true,
+    );
+    if (!mounted || result == null) return;
+    _log(
+      'sensor_ocr=rail_result applied=${result.applied} manualCompletion=${result.requiresManualCompletion} focus=${result.focusTarget.name}',
     );
   }
 
@@ -1333,24 +1356,31 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     return replacements[value] ?? value;
   }
 
-  bool _applyOcrPlate(String plate, {String? sessionId}) {
-    final raw = _normalizeOcr(plate).replaceAll('-', '');
-    final match = RegExp(r'^(\d{2,3})(.)(\d{4})$').firstMatch(raw);
-    String front = '';
-    String mid = '';
-    String back = '';
-    if (match != null) {
-      front = match.group(1)!;
-      mid = _normalizeMiddle(match.group(2)!);
-      back = match.group(3)!;
-    } else if (RegExp(r'^\d{7}$').hasMatch(raw)) {
-      front = raw.substring(0, 3);
-      back = raw.substring(3);
-    } else if (RegExp(r'^\d{6}$').hasMatch(raw)) {
-      front = raw.substring(0, 2);
-      back = raw.substring(2);
-    } else {
-      _log('ocr=apply_rejected raw=$raw');
+  bool _commitOcrIdentity({
+    required String front,
+    required String mid,
+    required String back,
+    required bool requiresMidCompletion,
+    String? sessionId,
+  }) {
+    if (!RegExp(r'^\d{2,3}$').hasMatch(front) ||
+        !RegExp(r'^\d{4}$').hasMatch(back)) {
+      _log(
+        'ocr=apply_rejected front=$front mid=$mid back=$back reason=invalid_digit_structure',
+      );
+      return false;
+    }
+    if (requiresMidCompletion) {
+      if (mid.isNotEmpty) {
+        _log(
+          'ocr=apply_rejected front=$front mid=$mid back=$back reason=incomplete_with_mid',
+        );
+        return false;
+      }
+    } else if (!RegExp(r'^[가-힣]$').hasMatch(mid)) {
+      _log(
+        'ocr=apply_rejected front=$front mid=$mid back=$back reason=invalid_middle',
+      );
       return false;
     }
 
@@ -1378,12 +1408,48 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     _syncIdentityDraftFromCommitted();
     final valid = controller.isInputValid();
     _log(
-      'ocr=applied plate=${controller.buildPlateNumber()} valid=$valid midRequired=${mid.isEmpty}',
+      'ocr=applied plate=${controller.buildPlateNumber()} valid=$valid '
+      'midRequired=$requiresMidCompletion frontLen=${front.length}',
     );
-    if (valid) {
+    if (valid && !requiresMidCompletion) {
       _lookupGeneralStatusForCurrentPlate();
     }
     return true;
+  }
+
+  bool _applyOcrPlate(String plate, {String? sessionId}) {
+    final raw = _normalizeOcr(plate).replaceAll('-', '');
+    final match = RegExp(r'^(\d{2,3})([가-힣])(\d{4})$').firstMatch(raw);
+    if (match == null) {
+      _log('ocr=apply_rejected raw=$raw reason=incomplete_or_invalid_plate');
+      return false;
+    }
+    final front = match.group(1)!;
+    final mid = _normalizeMiddle(match.group(2)!);
+    final back = match.group(3)!;
+    return _commitOcrIdentity(
+      front: front,
+      mid: mid,
+      back: back,
+      requiresMidCompletion: false,
+      sessionId: sessionId,
+    );
+  }
+
+  bool _applyIncompleteOcrIdentity({
+    required String front,
+    required String back,
+    String? sessionId,
+  }) {
+    final normalizedFront = _normalizeOcr(front).replaceAll('-', '');
+    final normalizedBack = _normalizeOcr(back).replaceAll('-', '');
+    return _commitOcrIdentity(
+      front: normalizedFront,
+      mid: '',
+      back: normalizedBack,
+      requiresMidCompletion: true,
+      sessionId: sessionId,
+    );
   }
 
   PlateIdentityAuxiliaryResult _resolveLiveOcrResult(
@@ -1402,8 +1468,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     } else if (result.requiresMidCompletion &&
         result.weakFront != null &&
         result.weakBack != null) {
-      applied = _applyOcrPlate(
-        '${result.weakFront}${result.weakBack}',
+      applied = _applyIncompleteOcrIdentity(
+        front: result.weakFront!,
+        back: result.weakBack!,
         sessionId: result.sessionId,
       );
       middleSuggestions = List<String>.from(
@@ -1481,6 +1548,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     bool automatic = false,
     String source = 'side_dock',
     Rect? sourceRect,
+    bool sensorProfile = false,
   }) async {
     if (!mounted) return null;
     if (_scannerActive) {
@@ -1504,21 +1572,32 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
     PlateIdentityAuxiliaryResult? preparedResult;
     _log(
-      'ocr=open sessionId=$sessionId automatic=$automatic source=$source sourceRect=${_rectDebug(entryRect)} transition=source_rect_crop',
+      'ocr=open sessionId=$sessionId automatic=$automatic source=$source profile=${sensorProfile ? 'sensor_dev_apply' : 'input'} sourceRect=${_rectDebug(entryRect)} transition=source_rect_crop',
     );
     try {
       final route = morphController.buildRoute(
-        builder: (_) => LiveOcrPage(
-          sessionId: sessionId,
-          onExitPreparing: (result) async {
+        builder: (_) {
+          Future<void> prepare(LiveOcrSessionResult result) async {
             preparedResult = await _prepareLiveOcrExit(
               result,
               source: source,
               sourceRect: entryRect,
               routeController: morphController,
             );
-          },
-        ),
+          }
+
+          if (sensorProfile) {
+            return SensorLiveOcrPage(
+              sessionId: sessionId,
+              allowIncompleteResult: true,
+              onExitPreparing: prepare,
+            );
+          }
+          return InputLiveOcrPage(
+            sessionId: sessionId,
+            onExitPreparing: prepare,
+          );
+        },
       );
       final result =
       await Navigator.of(routeContext).push<LiveOcrSessionResult>(route);
@@ -2248,6 +2327,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               policy,
               source: 'rail',
             ),
+            onSensorLiveOcr: _editorTrace?.developerMode == true
+                ? (sourceRect) =>
+                    unawaited(_openSensorScannerFromRail(sourceRect))
+                : null,
             onLiveOcr: (sourceRect) =>
                 unawaited(_openScannerFromRail(sourceRect)),
           ),

@@ -12,6 +12,7 @@ class PlateEditorRail extends StatelessWidget {
     required this.selectedWorkspace,
     required this.onSelected,
     this.title = '차량 관리',
+    this.onSensorLiveOcr,
     this.onLiveOcr,
     this.disabledWorkspaces = const <PlateEditorWorkspace>{},
   });
@@ -21,6 +22,7 @@ class PlateEditorRail extends StatelessWidget {
   final PlateEditorWorkspace? selectedWorkspace;
   final ValueChanged<PlateEditorWorkspace> onSelected;
   final String title;
+  final ValueChanged<Rect>? onSensorLiveOcr;
   final ValueChanged<Rect>? onLiveOcr;
   final Set<PlateEditorWorkspace> disabledWorkspaces;
 
@@ -160,7 +162,9 @@ class PlateEditorRail extends StatelessWidget {
           children: entries,
         );
 
+        final sensorLiveOcr = onSensorLiveOcr;
         final liveOcr = onLiveOcr;
+        final hasOcrActions = sensorLiveOcr != null || liveOcr != null;
         return CommonSideRailSurface(
           title: title,
           metrics: metrics,
@@ -177,10 +181,27 @@ class PlateEditorRail extends StatelessWidget {
                     : const Duration(milliseconds: 130),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
-                child: liveOcr == null
+                transitionBuilder: (child, animation) {
+                  final slide = Tween<Offset>(
+                    begin: const Offset(0, .08),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  );
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(position: slide, child: child),
+                  );
+                },
+                child: !hasOcrActions
                     ? const SizedBox.shrink(key: ValueKey<String>('no_live_ocr'))
                     : Column(
-                        key: const ValueKey<String>('live_ocr'),
+                        key: ValueKey<String>(
+                          'live_ocr_${sensorLiveOcr != null}_${liveOcr != null}',
+                        ),
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Padding(
@@ -193,18 +214,38 @@ class PlateEditorRail extends StatelessWidget {
                               color: tokens.borderSubtle,
                             ),
                           ),
-                          Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: metrics.actionInsetHorizontal,
-                              vertical: metrics.actionInsetVertical,
+                          if (sensorLiveOcr != null)
+                            Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                metrics.actionInsetHorizontal,
+                                metrics.actionInsetVertical,
+                                metrics.actionInsetHorizontal,
+                                liveOcr == null ? metrics.actionInsetVertical : 2,
+                              ),
+                              child: _PlateEditorLiveOcrAction(
+                                enabled: enabled,
+                                compact: metrics.compact,
+                                extent: metrics.minimumButtonExtent,
+                                visualLabel: 'Sensor OCR',
+                                semanticLabel: 'Sensor Live OCR',
+                                tooltip: 'Sensor Live OCR',
+                                icon: Icons.directions_car_filled_rounded,
+                                onTap: sensorLiveOcr,
+                              ),
                             ),
-                            child: _PlateEditorLiveOcrAction(
-                              enabled: enabled,
-                              compact: metrics.compact,
-                              extent: metrics.minimumButtonExtent,
-                              onTap: liveOcr,
+                          if (liveOcr != null)
+                            Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: metrics.actionInsetHorizontal,
+                                vertical: metrics.actionInsetVertical,
+                              ),
+                              child: _PlateEditorLiveOcrAction(
+                                enabled: enabled,
+                                compact: metrics.compact,
+                                extent: metrics.minimumButtonExtent,
+                                onTap: liveOcr,
+                              ),
                             ),
-                          ),
                         ],
                       ),
               ),
@@ -222,12 +263,20 @@ class _PlateEditorLiveOcrAction extends StatefulWidget {
     required this.compact,
     required this.extent,
     required this.onTap,
+    this.visualLabel = 'OCR',
+    this.semanticLabel = 'Live OCR',
+    this.tooltip = 'Live OCR',
+    this.icon = Icons.document_scanner_rounded,
   });
 
   final bool enabled;
   final bool compact;
   final double extent;
   final ValueChanged<Rect> onTap;
+  final String visualLabel;
+  final String semanticLabel;
+  final String tooltip;
+  final IconData icon;
 
   @override
   State<_PlateEditorLiveOcrAction> createState() =>
@@ -262,14 +311,14 @@ class _PlateEditorLiveOcrActionState
   @override
   Widget build(BuildContext context) {
     return CommonSideRailActionButton(
-      semanticLabel: 'Live OCR',
-      visualLabel: 'OCR',
-      icon: Icons.document_scanner_rounded,
+      semanticLabel: widget.semanticLabel,
+      visualLabel: widget.visualLabel,
+      icon: widget.icon,
       selected: false,
       enabled: widget.enabled,
       compact: widget.compact,
       extent: widget.extent,
-      tooltip: 'Live OCR',
+      tooltip: widget.tooltip,
       onTap: _handleTap,
     );
   }

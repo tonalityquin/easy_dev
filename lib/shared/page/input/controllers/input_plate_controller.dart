@@ -409,12 +409,15 @@ class InputPlateController {
   }
 
   bool isInputValid() {
+    final front = controllerFrontDigit.text.trim();
+    final middle = controllerMidDigit.text.trim();
+    final back = controllerBackDigit.text.trim();
     final validFront = isThreeDigit
-        ? controllerFrontDigit.text.length == 3
-        : controllerFrontDigit.text.length == 2;
-    return validFront &&
-        controllerMidDigit.text.length == 1 &&
-        controllerBackDigit.text.length == 4;
+        ? RegExp(r'^\d{3}$').hasMatch(front)
+        : RegExp(r'^\d{2}$').hasMatch(front);
+    final validMiddle = RegExp(r'^[가-힣]$').hasMatch(middle);
+    final validBack = RegExp(r'^\d{4}$').hasMatch(back);
+    return validFront && validMiddle && validBack;
   }
 
   String? get photoLookupPlateNumber {
