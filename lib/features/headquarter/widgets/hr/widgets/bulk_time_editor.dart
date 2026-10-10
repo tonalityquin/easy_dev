@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+import '../../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../selector/application/dev_auth.dart';
@@ -231,10 +232,14 @@ class _BulkTimeEditorState extends State<BulkTimeEditor> {
       return;
     }
     setState(() => _applying = true);
-    await Future<void>.delayed(
-      MediaQuery.maybeOf(context)?.disableAnimations ?? false
-          ? Duration.zero
-          : const Duration(milliseconds: 150),
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    await MotionTimingDiagnostics.waitForFlow(
+      'bulk_time_apply_pacing',
+      const Duration(milliseconds: 150),
+      scope: 'bulk_time_editor',
+      reduceMotion: reduceMotion,
+      meta: <String, Object?>{'kind': widget.kind.name},
     );
     if (!mounted) return;
     widget.onDebugLog(

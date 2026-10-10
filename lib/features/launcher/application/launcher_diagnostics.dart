@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../app/auth/gmail_sender_diagnostics.dart';
 import '../../../app/init/app_start_debug_trace.dart';
 import '../../../app/init/startup_tasks.dart';
@@ -27,6 +28,7 @@ class LauncherDiagnostics {
       ...PlateTtsSessionDiagnostics.lines,
       ...AttendanceDiagnostics.lines,
       ...AreaSnapshotPersistence.debugLines,
+      ...MotionTimingDiagnostics.lines,
       ..._lines,
     ];
     if (merged.isEmpty) {
@@ -77,6 +79,7 @@ class LauncherDiagnostics {
         'gmailSenderLines': GmailSenderDiagnostics.lines.length,
         'plateTtsSessionLines': PlateTtsSessionDiagnostics.lines.length,
         'attendanceLines': AttendanceDiagnostics.lines.length,
+        'motionTimingLines': MotionTimingDiagnostics.lines.length,
       },
     );
     await StatusDialog.showSuccess(

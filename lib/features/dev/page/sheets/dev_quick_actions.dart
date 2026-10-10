@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/app_navigator.dart';
 import '../../application/debug_session_controller.dart';
@@ -303,9 +304,12 @@ class _DebugLauncherState extends State<_DebugLauncher>
     HapticFeedback.mediumImpact();
     await _setExpanded(false);
     if (mounted) setState(() => _ending = true);
-    if (!_reduceMotion) {
-      await Future<void>.delayed(const Duration(milliseconds: 160));
-    }
+    await MotionTimingDiagnostics.waitForFlow(
+      'developer_mode_exit_pacing',
+      const Duration(milliseconds: 160),
+      scope: 'developer_quick_actions',
+      reduceMotion: _reduceMotion,
+    );
     await DevQuickActions.disableDeveloperMode(
       source: 'developer_quick_actions',
     );

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../application/debug_session_controller.dart';
 import '../../presentation/debug_tool_shell.dart';
 
@@ -685,9 +686,12 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
       meta: <String, Object?>{'route': _breadcrumb},
     );
     if (mounted) Navigator.of(context, rootNavigator: true).pop();
-    if (!reduceMotion) {
-      await Future<void>.delayed(const Duration(milliseconds: 160));
-    }
+    await MotionTimingDiagnostics.waitForFlow(
+      'developer_mode_exit_pacing',
+      const Duration(milliseconds: 160),
+      scope: 'sqlite_explorer',
+      reduceMotion: reduceMotion,
+    );
     await DebugSessionController.disable(source: 'sqlite');
   }
 

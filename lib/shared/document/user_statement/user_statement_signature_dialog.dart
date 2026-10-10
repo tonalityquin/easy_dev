@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import '../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
@@ -102,8 +103,16 @@ class _UserStatementSignatureDialogState
     });
     debugPrint('[UserStatementSignature] save_start');
     try {
-      await Future<void>.delayed(
-        _reduceMotion ? Duration.zero : const Duration(milliseconds: 16),
+      MotionTimingDiagnostics.record(
+        'signature_capture_frame_wait_start',
+        scope: 'user_statement_signature',
+        reduceMotion: _reduceMotion,
+      );
+      await WidgetsBinding.instance.endOfFrame;
+      MotionTimingDiagnostics.record(
+        'signature_capture_frame_wait_complete',
+        scope: 'user_statement_signature',
+        reduceMotion: _reduceMotion,
       );
       if (!mounted) return;
       final boundary =

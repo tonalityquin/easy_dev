@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/common_ui/common_ui_overlays.dart';
@@ -568,10 +569,14 @@ class _ParkingCompletedPlateSearchSideDockState
     debugPrint(
       '[PlateSearchSideDock] handoff_request plate=${selected.plateNumber} policy=close_then_open overlayStacking=false',
     );
-    if (!_reduceMotion) {
-      await Future<void>.delayed(const Duration(milliseconds: 90));
-      if (!mounted) return;
-    }
+    await MotionTimingDiagnostics.waitForFlow(
+      'parking_search_handoff_pacing',
+      const Duration(milliseconds: 90),
+      scope: 'parking_completed_plate_search',
+      reduceMotion: _reduceMotion,
+      meta: <String, Object?>{'plate': selected.plateNumber},
+    );
+    if (!mounted) return;
     Navigator.of(context).pop(selected);
   }
 

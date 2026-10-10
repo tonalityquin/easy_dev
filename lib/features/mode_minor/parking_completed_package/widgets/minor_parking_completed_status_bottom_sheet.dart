@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 
@@ -667,9 +668,12 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
 
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (!reduceMotion) {
-      await Future<void>.delayed(const Duration(milliseconds: 220));
-    }
+    await MotionTimingDiagnostics.waitForFlow(
+      'completion_feedback_hold',
+      const Duration(milliseconds: 220),
+      scope: 'minor_parking_completed',
+      reduceMotion: reduceMotion,
+    );
   }
 
   Future<void> _logDrivingCancel({

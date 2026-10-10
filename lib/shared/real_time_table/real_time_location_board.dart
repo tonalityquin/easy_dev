@@ -6,6 +6,7 @@ import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/utils/motion_timing_diagnostics.dart';
 import '../../app/utils/status_dialog.dart';
 import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/location/domain/models/grid_rect.dart';
@@ -1323,10 +1324,14 @@ class _ParentMapSlideState extends State<_ParentMapSlide> {
     );
 
     try {
-      if (!reduceMotion) {
-        await Future<void>.delayed(const Duration(milliseconds: 48));
-        if (!mounted || _focusedZoneKey != zone.fullName) return;
-      }
+      await MotionTimingDiagnostics.waitForFlow(
+        'realtime_location_dialog_open_pacing',
+        const Duration(milliseconds: 48),
+        scope: 'realtime_location_board',
+        reduceMotion: reduceMotion,
+        meta: <String, Object?>{'zone': zone.fullName},
+      );
+      if (!mounted || _focusedZoneKey != zone.fullName) return;
 
       await showGeneralDialog<void>(
         context: context,

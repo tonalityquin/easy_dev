@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../utils/motion_timing_diagnostics.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../features/selector/application/dev_auth.dart';
@@ -210,8 +211,11 @@ class _AppStartGoogleServicesSetupScreenState
       scope: 'google_services_setup',
     );
     if (!mounted) return;
-    await Future<void>.delayed(
-      _reduceMotion ? Duration.zero : const Duration(milliseconds: 520),
+    await MotionTimingDiagnostics.waitForFlow(
+      'google_services_skip_navigation',
+      const Duration(milliseconds: 520),
+      scope: 'google_services_setup',
+      reduceMotion: _reduceMotion,
     );
     if (!mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../../app/init/missing_weekday_end_time_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
@@ -147,8 +148,15 @@ class _CommonCommuteInWorkButtonWidgetState
       },
     );
 
-    await Future<void>.delayed(
-      _reduceMotion ? Duration.zero : const Duration(milliseconds: 650),
+    await MotionTimingDiagnostics.waitForFlow(
+      'commute_end_time_result',
+      AppFlowPacing.commuteEndTimeResult,
+      scope: 'commute_work_button',
+      reduceMotion: _reduceMotion,
+      meta: <String, Object?>{
+        'mode': widget.spec.modeKey,
+        'destination': destination.name,
+      },
     );
     if (!mounted) return;
     await _continueAfterClockIn(destination);

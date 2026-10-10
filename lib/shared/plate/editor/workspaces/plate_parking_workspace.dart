@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
@@ -646,8 +647,12 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
   Future<void> _towerAutoAssignSettle() async {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (reduceMotion) return;
-    await Future<void>.delayed(const Duration(milliseconds: 170));
+    await MotionTimingDiagnostics.waitForFlow(
+      'tower_auto_assign_settle',
+      const Duration(milliseconds: 170),
+      scope: 'plate_parking_workspace',
+      reduceMotion: reduceMotion,
+    );
   }
 
   Future<void> _autoSelectTowerSlot(

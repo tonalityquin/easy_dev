@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../app/utils/status_dialog.dart';
@@ -1527,8 +1528,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     if (!mounted) return resolved;
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (resolved.requiresManualCompletion && !reduceMotion) {
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+    if (resolved.requiresManualCompletion) {
+      await MotionTimingDiagnostics.waitForFlow(
+        'input_plate_manual_completion_pacing',
+        const Duration(milliseconds: 200),
+        scope: 'input_plate',
+        reduceMotion: reduceMotion,
+      );
       if (!mounted) return resolved;
     }
     widget.sideDockPresentationController?.show();
@@ -2014,9 +2020,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (!reduceMotion) {
-      await Future<void>.delayed(const Duration(milliseconds: 190));
-    }
+    await MotionTimingDiagnostics.waitForFlow(
+      'input_plate_forced_close_pacing',
+      const Duration(milliseconds: 190),
+      scope: 'input_plate',
+      reduceMotion: reduceMotion,
+    );
     if (!mounted) return;
     _log(
       'close=forced source=parking_mixed_configuration discardConfirmation=false',

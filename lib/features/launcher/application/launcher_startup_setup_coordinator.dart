@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../app/auth/google_auth_session.dart';
 import '../../../app/config/auth_config.dart';
 import '../../../app/config/gmail_sender_config.dart';
@@ -389,8 +390,12 @@ class LauncherStartupSetupCoordinator extends ChangeNotifier {
       'permission_step_completed',
       meta: debugMeta(),
     );
-    await Future<void>.delayed(
-      reduceMotion ? Duration.zero : const Duration(milliseconds: 420),
+    await MotionTimingDiagnostics.waitForFlow(
+      'launcher_permission_advance',
+      AppFlowPacing.launcherPermissionAdvance,
+      scope: 'launcher_startup_setup',
+      reduceMotion: reduceMotion,
+      meta: <String, Object?>{'step': step},
     );
     await _advancePermissionStep();
   }
@@ -530,8 +535,12 @@ class LauncherStartupSetupCoordinator extends ChangeNotifier {
         meta: debugMeta(),
       );
       if (!granted) return;
-      await Future<void>.delayed(
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 280),
+      await MotionTimingDiagnostics.waitForFlow(
+        'launcher_permission_resume_advance',
+        AppFlowPacing.launcherPermissionResumeAdvance,
+        scope: 'launcher_startup_setup',
+        reduceMotion: reduceMotion,
+        meta: <String, Object?>{'step': step, 'source': 'external_settings'},
       );
       await _advancePermissionStep();
       return;
@@ -544,8 +553,12 @@ class LauncherStartupSetupCoordinator extends ChangeNotifier {
       meta: debugMeta(),
     );
     if (_permissionCoordinator.isGranted(step)) {
-      await Future<void>.delayed(
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 280),
+      await MotionTimingDiagnostics.waitForFlow(
+        'launcher_permission_resume_advance',
+        AppFlowPacing.launcherPermissionResumeAdvance,
+        scope: 'launcher_startup_setup',
+        reduceMotion: reduceMotion,
+        meta: <String, Object?>{'step': step, 'source': 'resume_refresh'},
       );
       await _advancePermissionStep();
     }

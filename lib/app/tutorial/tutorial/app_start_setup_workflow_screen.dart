@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../utils/motion_timing_diagnostics.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../design_system/common_ui/common_ui_side_dock_frame.dart';
@@ -720,8 +721,12 @@ class _AppStartSetupWorkflowScreenState
       'phase_success_hold',
       meta: <String, Object?>{'reason': reason, 'phase': _phase.name},
     );
-    await Future<void>.delayed(
-      _reduceMotion ? Duration.zero : const Duration(milliseconds: 460),
+    await MotionTimingDiagnostics.waitForFlow(
+      'setup_workflow_phase_success_hold',
+      const Duration(milliseconds: 460),
+      scope: 'setup_workflow',
+      reduceMotion: _reduceMotion,
+      meta: <String, Object?>{'reason': reason, 'phase': _phase.name},
     );
     if (!mounted) return;
     await _reloadAndEnterResolvedPhase();
@@ -737,16 +742,19 @@ class _AppStartSetupWorkflowScreenState
         'purpose': _effectivePurpose?.storageValue ?? 'legacy_unknown',
       },
     );
-    Future<void>.delayed(
-      _reduceMotion ? Duration.zero : const Duration(milliseconds: 720),
-      () {
-        if (!mounted) return;
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          AppRoutes.startGate,
-          (route) => false,
-        );
-      },
-    );
+    unawaited(() async {
+      await MotionTimingDiagnostics.waitForFlow(
+        'setup_workflow_complete_navigation',
+        const Duration(milliseconds: 720),
+        scope: 'setup_workflow',
+        reduceMotion: _reduceMotion,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.startGate,
+        (route) => false,
+      );
+    }());
   }
 
   Future<void> _showDeveloperStatus() async {

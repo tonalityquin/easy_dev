@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
 import '../../../../app/init/missing_weekday_end_time_dialog.dart';
@@ -437,6 +438,8 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       title: 'Commute Application Status',
       description: <String>[
         'Context: ${widget.spec.diagnosticKey}',
+        'Reduce motion: $_reduceMotion',
+        'Flow pacing: preserved',
         'Stage: ${_stage.name}',
         'Working session: ${userState.isWorking}',
         'Working local: $localIsWorking',
@@ -902,8 +905,15 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       },
     );
 
-    await Future<void>.delayed(
-      _reduceMotion ? Duration.zero : const Duration(milliseconds: 650),
+    await MotionTimingDiagnostics.waitForFlow(
+      'commute_end_time_result',
+      AppFlowPacing.commuteEndTimeResult,
+      scope: 'commute_power',
+      reduceMotion: _reduceMotion,
+      meta: <String, Object?>{
+        'mode': widget.spec.diagnosticKey,
+        'destination': destination.name,
+      },
     );
     if (!mounted) return;
     await _continueAfterClockIn(destination);
@@ -1096,8 +1106,15 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         _clockInIssueFailureDetail = '';
       });
       await HapticFeedback.lightImpact();
-      await Future<void>.delayed(
-        _reduceMotion ? Duration.zero : const Duration(milliseconds: 420),
+      await MotionTimingDiagnostics.waitForFlow(
+        'commute_clock_in_success',
+        AppFlowPacing.commuteClockInSuccess,
+        scope: 'commute_power',
+        reduceMotion: _reduceMotion,
+        meta: <String, Object?>{
+          'mode': widget.spec.diagnosticKey,
+          'destination': result.destination.name,
+        },
       );
       if (!mounted) return;
 

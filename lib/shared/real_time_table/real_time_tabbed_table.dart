@@ -8,9 +8,11 @@ import 'package:flutter/gestures.dart'
     show PointerCancelEvent, PointerDownEvent, PointerMoveEvent, PointerUpEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
+
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../app/utils/motion_timing_diagnostics.dart';
 import '../../app/utils/status_dialog.dart';
 import '../../app/utils/developer_operation_status_dialog.dart';
 import '../../app/utils/operational_data_sync_workflow.dart';
@@ -6501,10 +6503,13 @@ class _ParentSelectorTileState extends State<_ParentSelectorTile> {
       _pressed = false;
       _activating = true;
     });
-    if (!reduceMotion) {
-      await Future<void>.delayed(const Duration(milliseconds: 90));
-      if (!mounted) return;
-    }
+    await MotionTimingDiagnostics.waitForFlow(
+      'realtime_table_action_pacing',
+      const Duration(milliseconds: 90),
+      scope: 'realtime_tabbed_table',
+      reduceMotion: reduceMotion,
+    );
+    if (!mounted) return;
     widget.onTap();
   }
 

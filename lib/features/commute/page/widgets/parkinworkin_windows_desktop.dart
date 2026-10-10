@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../launcher/application/launcher_diagnostics.dart';
 
@@ -425,6 +426,13 @@ class ParkinWorkinApplicationFieldState
       if (widget.reduceMotion) {
         _pressController.value = 1;
         _startMessageController.value = 0;
+        await MotionTimingDiagnostics.waitForFlow(
+          'commute_application_press_pacing',
+          ParkinWorkinApplicationField.appPressDuration,
+          scope: 'commute_application_field',
+          reduceMotion: widget.reduceMotion,
+          meta: <String, Object?>{'mode': widget.modeKey},
+        );
       } else {
         unawaited(_startMessageController.reverse());
         await _pressController.forward(from: 0);

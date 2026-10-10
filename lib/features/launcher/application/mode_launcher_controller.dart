@@ -5,6 +5,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../app/auth/gmail_sender_auth.dart';
 import '../../../app/command/application/service_settings_command_handler.dart';
 import '../../../app/command/application/terminal_command_path.dart';
@@ -1935,9 +1936,12 @@ class ModeLauncherController extends ChangeNotifier {
         );
         notifyListeners();
         try {
-          if (!reduceMotion) {
-            await Future<void>.delayed(const Duration(milliseconds: 160));
-          }
+          await MotionTimingDiagnostics.waitForFlow(
+            'mode_terminal_exit',
+            AppFlowPacing.modeTerminalExit,
+            scope: 'mode_terminal',
+            reduceMotion: reduceMotion,
+          );
           if (_disposed || !context.mounted) {
             return const ModeLauncherSubmitResult(routeReplaced: true);
           }
@@ -4224,12 +4228,17 @@ class ModeLauncherController extends ChangeNotifier {
   }
 
   Future<void> _commandDelay(bool reduceMotion) {
-    if (reduceMotion) {
-      return Future<void>.delayed(const Duration(milliseconds: 18));
-    }
     final seed = _runningCommand.hashCode.abs() + _loginStage.index * 17;
-    return Future<void>.delayed(
-      Duration(milliseconds: 105 + seed % 86),
+    final duration = Duration(milliseconds: 105 + seed % 86);
+    return MotionTimingDiagnostics.waitForFlow(
+      'mode_terminal_command',
+      duration,
+      scope: 'mode_terminal',
+      reduceMotion: reduceMotion,
+      meta: <String, Object?>{
+        'command': _runningCommand,
+        'loginStage': _loginStage.name,
+      },
     );
   }
 

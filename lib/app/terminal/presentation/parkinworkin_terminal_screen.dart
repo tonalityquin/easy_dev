@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../utils/motion_timing_diagnostics.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
 import '../../../features/launcher/application/mode_launcher_controller.dart';
 import '../../../features/launcher/application/terminal_auth_coordinator.dart';
@@ -240,9 +241,12 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
 
   Future<void> _initializeTerminal() async {
     if (_isLauncher) {
-      if (!_reduceMotion) {
-        await Future<void>.delayed(const Duration(milliseconds: 520));
-      }
+      await MotionTimingDiagnostics.waitForFlow(
+        'launcher_initial_presentation',
+        AppFlowPacing.launcherInitialPresentation,
+        scope: 'parkinworkin_terminal',
+        reduceMotion: _reduceMotion,
+      );
       if (!mounted) return;
       await _launcherController!.initialize(
         context,
@@ -261,10 +265,15 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         context: _contextLabel,
       );
     }
-    await Future<void>.delayed(
-      _reduceMotion
-          ? Duration.zero
-          : Duration(milliseconds: 75 + (_contextLabel.hashCode.abs() % 55)),
+    final initialFocusDelay = Duration(
+      milliseconds: 75 + (_contextLabel.hashCode.abs() % 55),
+    );
+    await MotionTimingDiagnostics.waitForFlow(
+      'terminal_initial_focus',
+      initialFocusDelay,
+      scope: 'parkinworkin_terminal',
+      reduceMotion: _reduceMotion,
+      meta: <String, Object?>{'context': _contextLabel},
     );
     if (!mounted || _interactionLocked) return;
     if (_isLauncher) {
@@ -800,23 +809,23 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       context: _contextLabel,
       meta: <String, Object?>{
         'workspaceTargetRoute': result.targetRoute,
-        'durationMs': _reduceMotion
-            ? 0
-            : _activeSessionRestoreProgressSettleDuration.inMilliseconds,
+        'durationMs': _activeSessionRestoreProgressSettleDuration.inMilliseconds,
       },
     );
     LauncherDiagnostics.record(
       'launcher_work_session_restore_progress_settle_started',
       meta: <String, Object?>{
         'workspaceTargetRoute': result.targetRoute,
-        'durationMs': _reduceMotion
-            ? 0
-            : _activeSessionRestoreProgressSettleDuration.inMilliseconds,
+        'durationMs': _activeSessionRestoreProgressSettleDuration.inMilliseconds,
       },
     );
-    if (!_reduceMotion) {
-      await Future<void>.delayed(_activeSessionRestoreProgressSettleDuration);
-    }
+    await MotionTimingDiagnostics.waitForFlow(
+      'launcher_work_session_restore_progress_settle',
+      _activeSessionRestoreProgressSettleDuration,
+      scope: 'parkinworkin_terminal',
+      reduceMotion: _reduceMotion,
+      meta: <String, Object?>{'targetRoute': result.targetRoute},
+    );
     if (!mounted) return result.targetRoute!;
     ParkinWorkinTerminalDiagnostics.record(
       'launcher_work_session_restore_progress_settle_completed',
@@ -844,24 +853,16 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       context: _contextLabel,
       meta: <String, Object?>{
         'workspaceTargetRoute': result.targetRoute,
-        'progressSettleMs': _reduceMotion
-            ? 0
-            : _activeSessionRestoreProgressSettleDuration.inMilliseconds,
-        'holdMs': _reduceMotion
-            ? 0
-            : _activeSessionRestoreCompleteHoldDuration.inMilliseconds,
+        'progressSettleMs': _activeSessionRestoreProgressSettleDuration.inMilliseconds,
+        'holdMs': _activeSessionRestoreCompleteHoldDuration.inMilliseconds,
       },
     );
     LauncherDiagnostics.record(
       'launcher_work_session_restore_completed',
       meta: <String, Object?>{
         'workspaceTargetRoute': result.targetRoute,
-        'progressSettleMs': _reduceMotion
-            ? 0
-            : _activeSessionRestoreProgressSettleDuration.inMilliseconds,
-        'holdMs': _reduceMotion
-            ? 0
-            : _activeSessionRestoreCompleteHoldDuration.inMilliseconds,
+        'progressSettleMs': _activeSessionRestoreProgressSettleDuration.inMilliseconds,
+        'holdMs': _activeSessionRestoreCompleteHoldDuration.inMilliseconds,
       },
     );
     ParkinWorkinTerminalDiagnostics.record(
@@ -869,23 +870,23 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       context: _contextLabel,
       meta: <String, Object?>{
         'workspaceTargetRoute': result.targetRoute,
-        'durationMs': _reduceMotion
-            ? 0
-            : _activeSessionRestoreCompleteHoldDuration.inMilliseconds,
+        'durationMs': _activeSessionRestoreCompleteHoldDuration.inMilliseconds,
       },
     );
     LauncherDiagnostics.record(
       'launcher_work_session_restore_completion_hold_started',
       meta: <String, Object?>{
         'workspaceTargetRoute': result.targetRoute,
-        'durationMs': _reduceMotion
-            ? 0
-            : _activeSessionRestoreCompleteHoldDuration.inMilliseconds,
+        'durationMs': _activeSessionRestoreCompleteHoldDuration.inMilliseconds,
       },
     );
-    if (!_reduceMotion) {
-      await Future<void>.delayed(_activeSessionRestoreCompleteHoldDuration);
-    }
+    await MotionTimingDiagnostics.waitForFlow(
+      'launcher_work_session_restore_completion_hold',
+      _activeSessionRestoreCompleteHoldDuration,
+      scope: 'parkinworkin_terminal',
+      reduceMotion: _reduceMotion,
+      meta: <String, Object?>{'targetRoute': result.targetRoute},
+    );
     if (!mounted) return result.targetRoute!;
     ParkinWorkinTerminalDiagnostics.record(
       'launcher_work_session_restore_completion_hold_completed',
@@ -1010,19 +1011,26 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
           'authenticationSource':
               _launcherController!.authenticationSourceLabel,
           'automaticResume': automaticResume,
-          'durationMs': _reduceMotion ? 0 : readyHold.inMilliseconds,
+          'durationMs': readyHold.inMilliseconds,
         },
       );
-      if (!_reduceMotion) {
-        await Future<void>.delayed(readyHold);
-      }
+      await MotionTimingDiagnostics.waitForFlow(
+        'launcher_ready_hold',
+        readyHold,
+        scope: 'parkinworkin_terminal',
+        reduceMotion: _reduceMotion,
+        meta: <String, Object?>{
+          'source': source,
+          'automaticResume': automaticResume,
+        },
+      );
       ParkinWorkinTerminalDiagnostics.record(
         'launcher_ready_hold_completed',
         context: _contextLabel,
         meta: <String, Object?>{
           'source': source,
           'automaticResume': automaticResume,
-          'durationMs': _reduceMotion ? 0 : readyHold.inMilliseconds,
+          'durationMs': readyHold.inMilliseconds,
         },
       );
       if (!mounted || _interactionLocked) return;
@@ -1463,10 +1471,15 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   Future<void> _restoreFocusAfterSurface(Future<void> completion) async {
     await completion;
     if (!mounted || _busy || _interactionLocked) return;
-    await Future<void>.delayed(
-      _reduceMotion
-          ? Duration.zero
-          : Duration(milliseconds: 75 + (_contextLabel.hashCode.abs() % 45)),
+    final restoreFocusDelay = Duration(
+      milliseconds: 75 + (_contextLabel.hashCode.abs() % 45),
+    );
+    await MotionTimingDiagnostics.waitForFlow(
+      'terminal_restore_focus',
+      restoreFocusDelay,
+      scope: 'parkinworkin_terminal',
+      reduceMotion: _reduceMotion,
+      meta: <String, Object?>{'context': _contextLabel},
     );
     if (mounted &&
         !_isLauncher &&
@@ -1574,6 +1587,8 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
                 'Input reserve: ${inputLayout.minimumInputWidth.toStringAsFixed(1)}',
               ].join('\n');
     final interactionDescription = <String>[
+      'Reduce motion: $_reduceMotion',
+      'Flow pacing: preserved',
       'App exiting: $_exitInProgress',
       'Interaction locked: $_interactionLocked',
       if (_isLauncher)

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/location/domain/models/grid_rect.dart';
 import '../../../../features/location/domain/models/location_model.dart';
@@ -237,10 +238,13 @@ class _PlateParkingParentTileState extends State<_PlateParkingParentTile> {
       _pressed = false;
       _activating = true;
     });
-    if (!reduceMotion) {
-      await Future<void>.delayed(const Duration(milliseconds: 90));
-      if (!mounted) return;
-    }
+    await MotionTimingDiagnostics.waitForFlow(
+      'selector_activation_pacing',
+      const Duration(milliseconds: 90),
+      scope: 'plate_parking_parent_selector',
+      reduceMotion: reduceMotion,
+    );
+    if (!mounted) return;
     widget.onTap();
   }
 

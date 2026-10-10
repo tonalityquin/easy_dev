@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../app/command/presentation/terminal_launcher_button.dart';
 import '../../../app/init/app_exit_service.dart';
 import '../../../app/init/db_connection_status_section.dart';
@@ -861,9 +862,13 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
           SingleInsideWorkspaceContent.dotMap,
           source: 'before_${request.name}',
         );
-        if (!reduceMotion) {
-          await Future<void>.delayed(_workspaceTransitionDuration);
-        }
+        await MotionTimingDiagnostics.waitForFlow(
+          'single_workspace_transition_pacing',
+          _workspaceTransitionDuration,
+          scope: 'single_inside',
+          reduceMotion: reduceMotion,
+          meta: <String, Object?>{'request': request.name, 'source': source},
+        );
         if (!mounted) return;
       }
       await _handleDockRequest(request, source: source);

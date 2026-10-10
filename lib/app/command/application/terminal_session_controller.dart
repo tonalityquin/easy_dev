@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/motion_timing_diagnostics.dart';
 import 'app_command_definition.dart';
 import 'app_command_diagnostics.dart';
 import 'app_command_executor.dart';
@@ -313,10 +314,12 @@ class TerminalSessionController extends ChangeNotifier {
     );
     notifyListeners();
 
-    await Future<void>.delayed(
-      reduceMotion
-          ? const Duration(milliseconds: 18)
-          : const Duration(milliseconds: 105),
+    await MotionTimingDiagnostics.waitForFlow(
+      'terminal_setting_command',
+      AppFlowPacing.terminalSettingCommand,
+      scope: 'terminal_session',
+      reduceMotion: reduceMotion,
+      meta: <String, Object?>{'command': _runningCommand},
     );
     if (_disposed || !context.mounted) {
       _busy = false;
@@ -402,10 +405,12 @@ class TerminalSessionController extends ChangeNotifier {
       path: _commandPath.terminalPath,
     );
     notifyListeners();
-    await Future<void>.delayed(
-      reduceMotion
-          ? const Duration(milliseconds: 18)
-          : const Duration(milliseconds: 105),
+    await MotionTimingDiagnostics.waitForFlow(
+      'terminal_email_command',
+      AppFlowPacing.terminalEmailCommand,
+      scope: 'terminal_session',
+      reduceMotion: reduceMotion,
+      meta: <String, Object?>{'command': 'email'},
     );
     if (_disposed || !context.mounted) {
       _busy = false;
@@ -489,10 +494,12 @@ class TerminalSessionController extends ChangeNotifier {
       path: _commandPath.terminalPath,
     );
     notifyListeners();
-    await Future<void>.delayed(
-      reduceMotion
-          ? const Duration(milliseconds: 18)
-          : const Duration(milliseconds: 180),
+    await MotionTimingDiagnostics.waitForFlow(
+      'terminal_protected_command',
+      AppFlowPacing.terminalProtectedCommand,
+      scope: 'terminal_session',
+      reduceMotion: reduceMotion,
+      meta: <String, Object?>{'command': 'AUTH'},
     );
     if (_disposed || !context.mounted) {
       _busy = false;
@@ -578,13 +585,15 @@ class TerminalSessionController extends ChangeNotifier {
     );
     notifyListeners();
 
-    await Future<void>.delayed(
-      reduceMotion
-          ? const Duration(milliseconds: 18)
-          : Duration(
-              milliseconds: 105 +
-                  ((definition.command).hashCode.abs() % 85),
-            ),
+    final commandDelay = Duration(
+      milliseconds: 105 + ((definition.command).hashCode.abs() % 85),
+    );
+    await MotionTimingDiagnostics.waitForFlow(
+      'terminal_command_execution',
+      commandDelay,
+      scope: 'terminal_session',
+      reduceMotion: reduceMotion,
+      meta: <String, Object?>{'command': definition.command},
     );
     if (_disposed || !context.mounted) {
       _busy = false;

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../utils/motion_timing_diagnostics.dart';
 import '../../features/selector/application/dev_auth.dart';
 import '../utils/status_dialog.dart';
 
@@ -15,7 +16,11 @@ class AppStartDebugTrace {
   static List<String> get lines => List<String>.unmodifiable(_lines);
 
   static String get debugPrintCode {
-    return _lines
+    final merged = <String>[
+      ..._lines,
+      ...MotionTimingDiagnostics.lines,
+    ];
+    return merged
         .map((line) => 'debugPrint(${jsonEncode(line)});')
         .join('\n');
   }
@@ -54,7 +59,10 @@ class AppStartDebugTrace {
     log(
       scope,
       'developer_status_open',
-      meta: <String, Object?>{'lines': _lines.length},
+      meta: <String, Object?>{
+        'lines': _lines.length,
+        'motionTimingLines': MotionTimingDiagnostics.lines.length,
+      },
     );
 
     await HapticFeedback.mediumImpact();

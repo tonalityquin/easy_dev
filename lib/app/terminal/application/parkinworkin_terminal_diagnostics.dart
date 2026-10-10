@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../utils/motion_timing_diagnostics.dart';
 import '../../../features/account/applications/tablet_account_diagnostics.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
 import '../../auth/gmail_sender_diagnostics.dart';
@@ -55,6 +56,7 @@ class ParkinWorkinTerminalDiagnostics {
       ...GmailSenderDiagnostics.lines,
       ...AreaSnapshotPersistence.debugLines,
       ...ThemeDebugTrace.lines,
+      ...MotionTimingDiagnostics.lines,
       ..._lines,
     ];
     if (merged.isEmpty) {
@@ -87,6 +89,7 @@ class ParkinWorkinTerminalDiagnostics {
         'workStatusNotificationLines':
             WorkStatusNotificationController.debugLines.length,
         'appStartLines': AppStartDebugTrace.lines.length,
+        'motionTimingLines': MotionTimingDiagnostics.lines.length,
       },
     );
     await StatusDialog.showSuccess(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../app/init/app_navigator.dart';
 import '../../../app/theme/brand_theme_route_policy.dart';
 
@@ -78,9 +79,12 @@ class _DebugHub extends StatelessWidget {
       AppRoutes.modeLauncher,
       (route) => false,
     );
-    if (!reduceMotion) {
-      await Future<void>.delayed(const Duration(milliseconds: 160));
-    }
+    await MotionTimingDiagnostics.waitForFlow(
+      'developer_mode_exit_pacing',
+      const Duration(milliseconds: 160),
+      scope: 'developer_hub',
+      reduceMotion: reduceMotion,
+    );
     await DebugSessionController.disable(source: 'developer_hub');
   }
 

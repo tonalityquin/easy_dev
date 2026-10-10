@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
@@ -623,9 +624,12 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     }
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    if (!reduceMotion) {
-      await Future<void>.delayed(const Duration(milliseconds: 190));
-    }
+    await MotionTimingDiagnostics.waitForFlow(
+      'modify_plate_forced_close_pacing',
+      const Duration(milliseconds: 190),
+      scope: 'modify_plate',
+      reduceMotion: reduceMotion,
+    );
     if (!mounted) return;
     _log(
       'close=forced source=parking_mixed_configuration discardConfirmation=false',

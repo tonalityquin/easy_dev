@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../app/di/routes.dart';
 import '../../../app/init/app_device_role.dart';
 import '../../../app/init/app_start_debug_trace.dart';
@@ -845,9 +846,12 @@ class _PowerBootScreenState extends State<PowerBootScreen>
           'exiting': _exiting,
         },
       );
-      if (!_reduceMotion) {
-        await Future<void>.delayed(const Duration(milliseconds: 180));
-      }
+      await MotionTimingDiagnostics.waitForFlow(
+        'power_exit_pacing',
+        const Duration(milliseconds: 180),
+        scope: 'power_boot',
+        reduceMotion: _reduceMotion,
+      );
       if (!mounted) return;
       LauncherDiagnostics.record(
         'power_exit_requested',

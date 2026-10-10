@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../application/debug_session_controller.dart';
 import '../../presentation/debug_tool_shell.dart';
 
@@ -475,9 +476,12 @@ class _LocalPrefsBottomSheetState extends State<LocalPrefsBottomSheet> {
       source: 'shared_preferences',
     );
     if (mounted) Navigator.of(context).pop();
-    if (!reduceMotion) {
-      await Future<void>.delayed(const Duration(milliseconds: 160));
-    }
+    await MotionTimingDiagnostics.waitForFlow(
+      'developer_mode_exit_pacing',
+      const Duration(milliseconds: 160),
+      scope: 'local_prefs',
+      reduceMotion: reduceMotion,
+    );
     await DebugSessionController.disable(source: 'shared_preferences');
   }
 

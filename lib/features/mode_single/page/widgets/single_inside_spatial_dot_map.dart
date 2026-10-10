@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
 import '../../../../shared/parking_dot_map/parking_status_dot_map_surface.dart';
@@ -210,10 +211,14 @@ class _SingleInsideSpatialDotMapState extends State<SingleInsideSpatialDotMap> {
     );
 
     try {
-      if (!reduceMotion) {
-        await Future<void>.delayed(const Duration(milliseconds: 48));
-        if (!mounted || _focusedChildKey != childKey) return;
-      }
+      await MotionTimingDiagnostics.waitForFlow(
+        'single_dotmap_dialog_open_pacing',
+        const Duration(milliseconds: 48),
+        scope: 'single_inside_dotmap',
+        reduceMotion: reduceMotion,
+        meta: <String, Object?>{'childKey': childKey},
+      );
+      if (!mounted || _focusedChildKey != childKey) return;
       await showGeneralDialog<void>(
         context: context,
         useRootNavigator: true,
