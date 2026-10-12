@@ -11,11 +11,15 @@ class SingleInsideWorkScheduleContentSurface extends StatefulWidget {
     required this.scheduleRevision,
     required this.onChanged,
     required this.onDeveloperStatus,
+    this.showHeader = true,
+    this.onCloseEnabledChanged,
   });
 
   final int scheduleRevision;
   final VoidCallback onChanged;
   final Future<void> Function() onDeveloperStatus;
+  final bool showHeader;
+  final ValueChanged<bool>? onCloseEnabledChanged;
 
   @override
   State<SingleInsideWorkScheduleContentSurface> createState() =>
@@ -31,10 +35,15 @@ class _SingleInsideWorkScheduleContentSurfaceState
     super.initState();
     _editorController = WeeklyWorkScheduleEditorController()
       ..addListener(_handleEditorStateChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onCloseEnabledChanged?.call(!_editorController.saving);
+    });
   }
 
   void _handleEditorStateChanged() {
     if (!mounted) return;
+    widget.onCloseEnabledChanged?.call(!_editorController.saving);
     setState(() {});
   }
 
@@ -79,30 +88,32 @@ class _SingleInsideWorkScheduleContentSurfaceState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onLongPress: () async {
-              await HapticFeedback.mediumImpact();
-              SingleInsideDiagnostics.log(
-                'status',
-                'developer_status_request source=work_schedule_workspace_header revision=${widget.scheduleRevision} saveMode=explicit dirty=${_editorController.hasChanges} saving=${_editorController.saving}',
-              );
-              await widget.onDeveloperStatus();
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-              child: Text(
-                '근무 일정',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: text.titleMedium?.copyWith(
-                  color: tokens.textPrimary,
-                  fontWeight: FontWeight.w900,
+          if (widget.showHeader) ...[
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onLongPress: () async {
+                await HapticFeedback.mediumImpact();
+                SingleInsideDiagnostics.log(
+                  'status',
+                  'developer_status_request source=work_schedule_workspace_header revision=${widget.scheduleRevision} saveMode=explicit dirty=${_editorController.hasChanges} saving=${_editorController.saving}',
+                );
+                await widget.onDeveloperStatus();
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                child: Text(
+                  '근무 일정',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.titleMedium?.copyWith(
+                    color: tokens.textPrimary,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
+          ],
           Expanded(
             child: Align(
               alignment: Alignment.topCenter,

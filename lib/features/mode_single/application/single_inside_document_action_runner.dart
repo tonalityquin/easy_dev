@@ -4,19 +4,15 @@ import 'package:provider/provider.dart';
 
 import '../../../app/utils/area_context_debug_trace.dart';
 import '../../../app/utils/block_dialog/break_duration_blocking_dialog.dart';
-import '../../../shared/document/backup/backup_form_page.dart';
-import '../../../shared/document/user_statement/user_statement_form_page.dart';
 import '../../account/applications/user_state.dart';
 import '../../commute/domain/repositories/commute_log_repository.dart';
 import '../../dev/application/area_state.dart';
-import 'att_brk_mode_db.dart';
+import 'single_attendance_submission_summary_service.dart';
 import 'single_inside_diagnostics.dart';
 
 enum SingleInsideDocumentAction {
   commuteSubmit,
   restTimeSubmit,
-  statementForm,
-  leaveApplication,
 }
 
 class SingleInsideDocumentActionRunner {
@@ -35,12 +31,6 @@ class SingleInsideDocumentActionRunner {
           break;
         case SingleInsideDocumentAction.restTimeSubmit:
           await _runRestTimeSubmit(context);
-          break;
-        case SingleInsideDocumentAction.statementForm:
-          await showUserStatementSideDock(context: context);
-          break;
-        case SingleInsideDocumentAction.leaveApplication:
-          await showBackupApplicationSideDock(context: context);
           break;
       }
       SingleInsideDiagnostics.log(
@@ -70,7 +60,7 @@ class SingleInsideDocumentActionRunner {
     if (!proceed || !context.mounted) return;
     await _submitLocalAttendanceRecordsToFirestore(
       context,
-      statuses: const ['출근', '퇴근'],
+      statuses: const <String>['출근', '퇴근'],
       validationFailMessage: '출퇴근 기록 제출 실패: 사용자/근무지 정보가 비어 있습니다.\n'
           '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
       noLocalRecordsMessage: '제출할 출퇴근 기록이 없습니다.',
@@ -94,7 +84,7 @@ class SingleInsideDocumentActionRunner {
     if (!proceed || !context.mounted) return;
     await _submitLocalAttendanceRecordsToFirestore(
       context,
-      statuses: const ['휴게'],
+      statuses: const <String>['휴게'],
       validationFailMessage: '휴게시간 기록 제출 실패: 사용자/근무지 정보가 비어 있습니다.\n'
           '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
       noLocalRecordsMessage: '제출할 휴게시간 기록이 없습니다.',
@@ -141,15 +131,15 @@ class SingleInsideDocumentActionRunner {
     }
 
     try {
-      final records = await _loadLocalCommuteRecordsFromSqlite(
+      final summary = await SingleAttendanceSubmissionSummaryService.load(
         statuses: statuses,
       );
       SingleInsideDiagnostics.log(
         'document',
-        'local_records_loaded tag=$debugTag count=${records.length} statuses=${statuses.join(',')}',
+        'local_records_loaded tag=$debugTag count=${summary.totalLocalCount} eligible=${summary.eligibleCount} statuses=${statuses.join(',')}',
       );
 
-      if (records.isEmpty) {
+      if (summary.totalLocalCount == 0) {
         debugPrint(noLocalRecordsMessage);
         SingleInsideDiagnostics.log(
           'document',
@@ -158,14 +148,14 @@ class SingleInsideDocumentActionRunner {
         return;
       }
 
-      final filtered = _filterUpToDayBeforeLatest(records);
-      final uploadTargets = filtered.uploadTargets;
       final dateFormatter = DateFormat('yyyy-MM-dd');
       final timeFormatter = DateFormat('HH:mm');
-      final latestDayStr = dateFormatter.format(filtered.latestDay);
-      final cutoffDayStr = dateFormatter.format(filtered.cutoffDay);
+      final latestDay = summary.latestDay;
+      final cutoffDay = summary.cutoffDay;
+      final latestDayStr = latestDay == null ? '-' : dateFormatter.format(latestDay);
+      final cutoffDayStr = cutoffDay == null ? '-' : dateFormatter.format(cutoffDay);
 
-      if (uploadTargets.isEmpty) {
+      if (summary.uploadTargets.isEmpty) {
         final message = '$noUploadTargetsMessage\n'
             '가장 최근 날짜: $latestDayStr\n'
             '업로드 범위: $cutoffDayStr(포함) 이전';
@@ -183,7 +173,7 @@ class SingleInsideDocumentActionRunner {
       var failedCount = 0;
       var deletedCount = 0;
 
-      for (final record in uploadTargets) {
+      for (final record in summary.uploadTargets) {
         final status = record.status;
         final eventDateTime = record.dateTime;
         final dateStr = dateFormatter.format(eventDateTime);
@@ -196,7 +186,8 @@ class SingleInsideDocumentActionRunner {
 
         if (alreadyExists) {
           skippedCount++;
-          deletedCount += await _deleteLocalAttendanceRow(record);
+          deletedCount +=
+              await SingleAttendanceSubmissionSummaryService.deleteRecord(record);
           continue;
         }
 
@@ -219,7 +210,8 @@ class SingleInsideDocumentActionRunner {
 
         if (nowExists) {
           successCount++;
-          deletedCount += await _deleteLocalAttendanceRow(record);
+          deletedCount +=
+              await SingleAttendanceSubmissionSummaryService.deleteRecord(record);
         } else {
           failedCount++;
         }
@@ -268,145 +260,4 @@ class SingleInsideDocumentActionRunner {
       );
     }
   }
-
-  static _FilteredLocalRecords _filterUpToDayBeforeLatest(
-    List<_LocalCommuteRecord> records,
-  ) {
-    if (records.isEmpty) {
-      return _FilteredLocalRecords(
-        uploadTargets: const <_LocalCommuteRecord>[],
-        latestDay: DateTime(1970, 1, 1),
-        cutoffDay: DateTime(1970, 1, 1),
-      );
-    }
-
-    final latestDay = records
-        .map((record) => _dayOnly(record.dateTime))
-        .reduce((a, b) => a.isAfter(b) ? a : b);
-    final cutoffDay = latestDay.subtract(const Duration(days: 1));
-    final targets = records
-        .where((record) => !_dayOnly(record.dateTime).isAfter(cutoffDay))
-        .toList();
-
-    return _FilteredLocalRecords(
-      uploadTargets: targets,
-      latestDay: latestDay,
-      cutoffDay: cutoffDay,
-    );
-  }
-
-  static Future<List<_LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
-    required List<String> statuses,
-  }) async {
-    final db = await AttBrkModeDb.instance.database;
-    final result = <_LocalCommuteRecord>[];
-    final dateTimeParser = DateFormat('yyyy-MM-dd HH:mm');
-    final needWorkIn = statuses.contains('출근');
-    final needWorkOut = statuses.contains('퇴근');
-
-    if (needWorkIn || needWorkOut) {
-      final workRows = await db.query(
-        AttBrkModeDb.workAttendanceTable,
-        columns: ['date', 'type', 'time'],
-        orderBy: 'date ASC, created_at ASC',
-      );
-
-      for (final row in workRows) {
-        final typeCode = row['type'] as String;
-        final dateStr = row['date'] as String;
-        final timeStr = row['time'] as String;
-        String? statusLabel;
-        if (typeCode == 'work_in' && needWorkIn) {
-          statusLabel = '출근';
-        } else if (typeCode == 'work_out' && needWorkOut) {
-          statusLabel = '퇴근';
-        } else {
-          continue;
-        }
-
-        try {
-          final dateTime = dateTimeParser.parse('$dateStr $timeStr');
-          result.add(
-            _LocalCommuteRecord(
-              status: statusLabel,
-              dateTime: dateTime,
-              localTable: AttBrkModeDb.workAttendanceTable,
-              localDate: dateStr,
-              localType: typeCode,
-            ),
-          );
-        } catch (_) {}
-      }
-    }
-
-    if (statuses.contains('휴게')) {
-      final breakRows = await db.query(
-        AttBrkModeDb.breakAttendanceTable,
-        columns: ['date', 'type', 'time'],
-        orderBy: 'date ASC, created_at ASC',
-      );
-
-      for (final row in breakRows) {
-        final dateStr = row['date'] as String;
-        final typeCode = (row['type'] as String?) ?? 'start';
-        final timeStr = row['time'] as String;
-        try {
-          final dateTime = dateTimeParser.parse('$dateStr $timeStr');
-          result.add(
-            _LocalCommuteRecord(
-              status: '휴게',
-              dateTime: dateTime,
-              localTable: AttBrkModeDb.breakAttendanceTable,
-              localDate: dateStr,
-              localType: typeCode,
-            ),
-          );
-        } catch (_) {}
-      }
-    }
-
-    return result;
-  }
-
-  static Future<int> _deleteLocalAttendanceRow(
-    _LocalCommuteRecord record,
-  ) async {
-    final db = await AttBrkModeDb.instance.database;
-    return db.delete(
-      record.localTable,
-      where: 'date = ? AND type = ?',
-      whereArgs: [record.localDate, record.localType],
-    );
-  }
-
-  static DateTime _dayOnly(DateTime dateTime) =>
-      DateTime(dateTime.year, dateTime.month, dateTime.day);
-}
-
-class _LocalCommuteRecord {
-  const _LocalCommuteRecord({
-    required this.status,
-    required this.dateTime,
-    required this.localTable,
-    required this.localDate,
-    required this.localType,
-  });
-
-  final String status;
-  final DateTime dateTime;
-  final String localTable;
-  final String localDate;
-  final String localType;
-}
-
-class _FilteredLocalRecords {
-  const _FilteredLocalRecords({
-    required this.uploadTargets,
-    required this.latestDay,
-    required this.cutoffDay,
-  });
-
-  final List<_LocalCommuteRecord> uploadTargets;
-  final DateTime latestDay;
-  final DateTime cutoffDay;
 }

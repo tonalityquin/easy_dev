@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../app/command/presentation/terminal_launcher_button.dart';
 import '../../../app/init/app_exit_service.dart';
 import '../../../app/init/db_connection_status_section.dart';
@@ -19,24 +18,28 @@ import '../../../shared/area_remote_settings/application/local_area_capability_r
 import '../../../shared/secondary/application/secondary_info.dart';
 import '../../../shared/secondary/application/secondary_state.dart';
 import '../../../shared/document/work_start_report/dashboard_start_report_form_page.dart';
+import '../../../shared/document/user_statement/user_statement_form_page.dart';
+import '../../../shared/document/backup/backup_form_page.dart';
 import '../../../shared/secondary/side_docks/secondary_side_dock.dart';
 import '../../account/applications/user_state.dart';
 import '../../community/page/faq_side_dock.dart';
 import '../../dev/application/area_state.dart';
 import '../../headquarter/application/headquarter_support_actions.dart';
-import '../../rule/widgets/work_rule_report_surface.dart';
 import '../../selector/dialogs/update_dialog.dart';
 import '../../attendance/application/common_attendance_service.dart';
 import '../../dev/debug/debug_api_logger.dart';
 import '../application/single_inside_diagnostics.dart';
 import '../application/single_operational_data_sync_workflow.dart';
-import '../application/single_inside_document_action_runner.dart';
 import '../controllers/single_inside_controller.dart';
 import 'sheets/report/widgets/single_inside_end_report_form_page.dart';
+import '../application/single_attendance_submission_summary_service.dart';
+import 'side_docks/single_inside_attendance_submit_side_dock.dart';
+import 'side_docks/single_inside_parking_side_dock.dart';
 import 'side_docks/single_inside_side_dock.dart';
-import 'widgets/single_inside_bottom_action_surface.dart';
+import 'side_docks/single_inside_work_rules_side_dock.dart';
+import 'side_docks/single_inside_work_schedule_side_dock.dart';
+import 'side_docks/single_inside_work_manual_side_dock.dart';
 import 'widgets/single_inside_punch_recorder_content_surface.dart';
-import 'widgets/single_inside_work_schedule_content_surface.dart';
 import 'widgets/single_inside_spatial_dot_map.dart';
 
 enum SingleInsideMode {
@@ -44,11 +47,18 @@ enum SingleInsideMode {
   fieldUser,
 }
 
-enum SingleInsideWorkspaceContent {
-  dotMap,
+enum SingleInsideContentDockContent {
   workSchedule,
-  punchRecorder,
+  parkingArea,
+  workRules,
   workManual,
+  workStartReport,
+  workEndReport,
+  statementForm,
+  leaveApplication,
+  faq,
+  commuteSubmit,
+  restTimeSubmit,
 }
 
 bool _singleOperationsRoleAllowed(RoleType role) {
@@ -148,36 +158,35 @@ class SingleInsideScreen extends StatefulWidget {
 }
 
 class _SingleInsideScreenState extends State<SingleInsideScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   final SingleInsideController controller = SingleInsideController();
+  final SingleInsideSpatialDotMapController _parkingSpatialController =
+      SingleInsideSpatialDotMapController();
+  late final AnimationController _contentDockController;
+  late final Animation<double> _contentDockProgress;
   String _lastModeSignature = '';
   String _lastUserSignature = '';
   int _scheduleRevision = 0;
   int _spatialRefreshRevision = 0;
   int _ruleRefreshRevision = 0;
-  static const Duration _initialRulesAutoOpenHold = Duration(milliseconds: 260);
-  static const Duration _punchAutoReturnDelay = Duration(seconds: 3);
-  static const Duration _workspaceTransitionDuration = Duration(milliseconds: 220);
+  int _hotKeyRefreshRevision = 0;
+  static const Duration _contentDockSwitchDuration = Duration(milliseconds: 230);
 
   bool _dashboardActionRunning = false;
+  final Set<SingleInsideContentDockContent> _mountedContentDocks =
+      <SingleInsideContentDockContent>{};
+  bool _contentDockCloseEnabled = true;
+  bool _parkingDetailOpen = false;
   double _lastRailWidth = 56;
   double _lastWorkspaceWidth = 0;
+  double _lastContentDockWidth = 0;
   String _lastDashboardLayoutSignature = '';
-  SingleInsideWorkspaceContent _workspaceContent =
-      SingleInsideWorkspaceContent.punchRecorder;
-  SingleInsideWorkspaceContent _previousWorkspaceContent =
-      SingleInsideWorkspaceContent.dotMap;
-  int _punchCountdownRevision = 1;
-  String _punchCountdownSource = 'screen_open';
-  bool _punchAutoReturnScheduled = true;
-  bool _punchCountdownEnabled = false;
-  bool _suppressWorkspaceTransition = false;
-  bool _notificationCountdownPending = false;
-  bool _notificationCountdownFrameScheduled = false;
+  SingleInsideContentDockContent? _contentDockContent;
+  bool _notificationRevealPending = false;
+  bool _notificationRevealFrameScheduled = false;
   String? _pendingNotificationTapId;
   String _lastConsumedNotificationTapId = '-';
   DateTime? _notificationVisibleFrameAt;
-  DateTime? _notificationCountdownStartedAt;
   int _notificationTapConsumeCount = 0;
   int _lastHandledNotificationTapRevision = 0;
   int _notificationRevealCount = 0;
@@ -186,16 +195,23 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
   DateTime? _lastNotificationTapAt;
   DateTime? _lastNotificationRevealAt;
   bool _pendingNotificationDeveloperStatus = false;
-  bool _workScheduleMounted = false;
-  bool _workManualMounted = false;
   bool _initialWorkspaceRevealCompleted = false;
-  bool _initialRulesAutoOpenDelayScheduled = false;
-  bool _initialRulesAutoOpenRequested = false;
-  bool _initialAutomationCancelled = false;
+
+  bool get _contentDockOpen => _contentDockContent != null;
 
   @override
   void initState() {
     super.initState();
+    _contentDockController = AnimationController(
+      vsync: this,
+      duration: CommonUiMotion.layout,
+      reverseDuration: CommonUiMotion.overlay,
+    );
+    _contentDockProgress = CurvedAnimation(
+      parent: _contentDockController,
+      curve: CommonUiMotion.enter,
+      reverseCurve: CommonUiMotion.exit,
+    );
     WidgetsBinding.instance.addObserver(this);
     final initialTapRevision =
         WorkStatusNotificationController.notificationTapRevision.value;
@@ -206,8 +222,6 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
       _lastHandledNotificationTapRevision =
           initialTapRevision > 0 ? initialTapRevision - 1 : 0;
       _pendingNotificationTapId = initialPendingTap.id;
-      _punchCountdownSource = 'notification_resume';
-      _suppressWorkspaceTransition = true;
       _lastNotificationTapSource = initialPendingTap.source;
       _lastNotificationTapEvent = initialPendingTap.event;
       _lastNotificationTapAt = initialPendingTap.tappedAt;
@@ -219,7 +233,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
     );
     SingleInsideDiagnostics.log(
       'screen',
-      'init notificationTapRevision=$initialTapRevision pendingTapId=${initialPendingTap?.id ?? '-'} countdownEnabled=$_punchCountdownEnabled notificationCountdownPending=$_notificationCountdownPending',
+      'init notificationTapRevision=$initialTapRevision pendingTapId=${initialPendingTap?.id ?? '-'} workspace=punchRecorder contentDock=${_contentDockContent?.name ?? 'closed'} notificationRevealPending=$_notificationRevealPending',
     );
     controller.initialize(context);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -245,19 +259,22 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
       _handleNotificationTapRevision,
     );
     WidgetsBinding.instance.removeObserver(this);
+    _contentDockController.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) return;
-    if (_notificationCountdownPending) {
-      _scheduleNotificationCountdownAfterVisibleFrame(
-        source: 'app_resumed',
-      );
+    if (state != AppLifecycleState.resumed || !mounted) return;
+    setState(() => _hotKeyRefreshRevision++);
+    SingleInsideDiagnostics.log(
+      'hotkey',
+      'refresh_requested source=app_resumed revision=$_hotKeyRefreshRevision',
+    );
+    if (_notificationRevealPending) {
+      _scheduleNotificationRevealAfterVisibleFrame(source: 'app_resumed');
       return;
     }
-    _restoreWorkspaceTransitionAfterFrame(source: 'app_resumed');
   }
 
   Future<void> _restorePendingNotificationTapAfterMount() async {
@@ -266,22 +283,9 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
     );
     if (!mounted) return;
     _handleNotificationTapRevision();
-    if (_notificationCountdownPending) {
-      _scheduleNotificationCountdownAfterVisibleFrame(
+    if (_notificationRevealPending) {
+      _scheduleNotificationRevealAfterVisibleFrame(
         source: 'single_screen_mount',
-      );
-      return;
-    }
-    if (!_punchCountdownEnabled &&
-        _workspaceContent == SingleInsideWorkspaceContent.punchRecorder) {
-      setState(() {
-        _punchCountdownEnabled = true;
-        _punchCountdownRevision++;
-        _punchCountdownSource = 'screen_open';
-      });
-      SingleInsideDiagnostics.log(
-        'punch_content',
-        'initial_countdown_armed source=screen_open revision=$_punchCountdownRevision',
       );
     }
   }
@@ -296,7 +300,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
     if (pendingTap == null) {
       SingleInsideDiagnostics.log(
         'workspace',
-        'notification_tap_revision_without_pending revision=$revision active=${_workspaceContent.name}',
+        'notification_tap_revision_without_pending revision=$revision active=punchRecorder',
       );
       return;
     }
@@ -306,15 +310,15 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
     if (pendingTap.source != 'notification_body') {
       SingleInsideDiagnostics.log(
         'workspace',
-        'notification_tap_ignored tapId=${pendingTap.id} source=${pendingTap.source} event=${pendingTap.event} revision=$revision active=${_workspaceContent.name}',
+        'notification_tap_ignored tapId=${pendingTap.id} source=${pendingTap.source} event=${pendingTap.event} revision=$revision active=punchRecorder',
       );
       return;
     }
-    if (_notificationCountdownPending &&
+    if (_notificationRevealPending &&
         _pendingNotificationTapId == pendingTap.id) {
       SingleInsideDiagnostics.log(
         'workspace',
-        'notification_tap_duplicate_ignored tapId=${pendingTap.id} revision=$revision active=${_workspaceContent.name}',
+        'notification_tap_duplicate_ignored tapId=${pendingTap.id} revision=$revision active=punchRecorder',
       );
       return;
     }
@@ -329,80 +333,74 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
     required WorkStatusNotificationTap tap,
   }) {
     if (!mounted) return;
-    final current = _workspaceContent;
     final now = DateTime.now();
     setState(() {
-      _previousWorkspaceContent = current;
-      _workspaceContent = SingleInsideWorkspaceContent.punchRecorder;
-      _punchCountdownSource = 'notification_resume';
-      _punchAutoReturnScheduled = true;
-      _punchCountdownEnabled = false;
-      _suppressWorkspaceTransition = true;
-      _notificationCountdownPending = true;
+      _notificationRevealPending = true;
       _pendingNotificationTapId = tap.id;
       _notificationVisibleFrameAt = null;
-      _notificationCountdownStartedAt = null;
       _notificationRevealCount++;
       _lastNotificationRevealAt = now;
       _pendingNotificationDeveloperStatus = true;
     });
     SingleInsideDiagnostics.log(
       'workspace',
-      'notification_punch_reveal tapId=${tap.id} source=${tap.source} event=${tap.event} tapRevision=$revision from=${current.name} to=${SingleInsideWorkspaceContent.punchRecorder.name} punchRevision=$_punchCountdownRevision countdownSource=$_punchCountdownSource countdownEnabled=$_punchCountdownEnabled transitionSuppressed=$_suppressWorkspaceTransition tappedAt=${tap.tappedAt.toIso8601String()} revealAt=${now.toIso8601String()}',
+      'notification_punch_reveal tapId=${tap.id} source=${tap.source} event=${tap.event} tapRevision=$revision home=punchRecorder tappedAt=${tap.tappedAt.toIso8601String()} revealAt=${now.toIso8601String()}',
     );
-    _scheduleNotificationCountdownAfterVisibleFrame(
-      source: 'notification_tap',
-    );
+    if (_contentDockOpen || _contentDockController.value > 0) {
+      unawaited(
+        _setContentDock(
+          null,
+          source: 'notification_punch_reveal',
+        ),
+      );
+    }
+    _scheduleNotificationRevealAfterVisibleFrame(source: 'notification_tap');
   }
 
-  void _scheduleNotificationCountdownAfterVisibleFrame({
-    required String source,
-  }) {
-    if (!mounted || !_notificationCountdownPending) return;
-    if (_notificationCountdownFrameScheduled) return;
-    if (_workspaceContent != SingleInsideWorkspaceContent.punchRecorder) {
-      SingleInsideDiagnostics.log(
-        'punch_content',
-        'notification_countdown_deferred source=$source reason=workspace active=${_workspaceContent.name}',
-      );
-      return;
-    }
+  void _scheduleNotificationRevealAfterVisibleFrame({required String source}) {
+    if (!mounted || !_notificationRevealPending) return;
+    if (_notificationRevealFrameScheduled) return;
     final lifecycle = WidgetsBinding.instance.lifecycleState;
     if (lifecycle != AppLifecycleState.resumed) {
       SingleInsideDiagnostics.log(
         'punch_content',
-        'notification_countdown_deferred source=$source reason=lifecycle state=${lifecycle?.name ?? '-'} tapId=${_pendingNotificationTapId ?? '-'}',
+        'notification_reveal_deferred source=$source reason=lifecycle state=${lifecycle?.name ?? '-'} tapId=${_pendingNotificationTapId ?? '-'}',
       );
       return;
     }
-    _notificationCountdownFrameScheduled = true;
+    _notificationRevealFrameScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _notificationCountdownFrameScheduled = false;
+      _notificationRevealFrameScheduled = false;
       if (!mounted ||
-          !_notificationCountdownPending ||
-          _workspaceContent != SingleInsideWorkspaceContent.punchRecorder ||
+          !_notificationRevealPending ||
           WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
         return;
       }
       final now = DateTime.now();
       final tapId = _pendingNotificationTapId;
+      final showDeveloperStatus = _pendingNotificationDeveloperStatus;
       setState(() {
-        _notificationCountdownPending = false;
-        _punchCountdownEnabled = true;
-        _punchCountdownRevision++;
+        _notificationRevealPending = false;
         _notificationVisibleFrameAt = now;
-        _notificationCountdownStartedAt = now;
-        _suppressWorkspaceTransition = false;
+        _pendingNotificationDeveloperStatus = false;
       });
       SingleInsideDiagnostics.log(
         'punch_content',
-        'notification_countdown_started source=$source tapId=${tapId ?? '-'} visibleFrameAt=${now.toIso8601String()} delayMs=${_punchAutoReturnDelay.inMilliseconds} revision=$_punchCountdownRevision transitionSuppressed=$_suppressWorkspaceTransition',
+        'notification_reveal_committed source=$source tapId=${tapId ?? '-'} visibleFrameAt=${now.toIso8601String()} home=punchRecorder',
       );
       if (tapId != null && tapId.isNotEmpty) {
         unawaited(
           _consumePendingNotificationTap(
             tapId: tapId,
             source: 'notification_visible_frame',
+          ),
+        );
+      }
+      if (showDeveloperStatus) {
+        unawaited(
+          _showDeveloperStatus(
+            title: 'Single 알림 복귀 상태',
+            description: '알림 복귀 및 출퇴근 기록기 표시 상태',
           ),
         );
       }
@@ -429,201 +427,186 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
     );
   }
 
-  void _restoreWorkspaceTransitionAfterFrame({required String source}) {
-    if (!_suppressWorkspaceTransition || !mounted) return;
-    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
-      SingleInsideDiagnostics.log(
-        'workspace',
-        'workspace_transition_restore_deferred source=$source lifecycle=${WidgetsBinding.instance.lifecycleState?.name ?? '-'}',
-      );
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_suppressWorkspaceTransition) return;
-      setState(() => _suppressWorkspaceTransition = false);
-      SingleInsideDiagnostics.log(
-        'workspace',
-        'workspace_transition_restored source=$source active=${_workspaceContent.name} punchRevision=$_punchCountdownRevision',
-      );
-    });
-  }
-
   void _completeInitialWorkspaceReveal({required bool reduceMotion}) {
     if (_initialWorkspaceRevealCompleted || !mounted) return;
     setState(() => _initialWorkspaceRevealCompleted = true);
     SingleInsideDiagnostics.log(
       'screen',
-      'initial_workspace_reveal_completed reduceMotion=$reduceMotion rulesAutoOpenRequested=false',
+      'initial_workspace_reveal_completed reduceMotion=$reduceMotion rulesAutoOpen=false contentDockDefault=closed',
     );
-    if (_initialAutomationCancelled) {
-      return;
-    }
-    if (reduceMotion) {
-      _requestInitialRulesAutoOpen(source: 'reduce_motion');
-      return;
-    }
-    unawaited(_scheduleInitialRulesAutoOpen());
   }
 
-  Future<void> _scheduleInitialRulesAutoOpen() async {
-    if (_initialRulesAutoOpenDelayScheduled ||
-        _initialRulesAutoOpenRequested ||
-        _initialAutomationCancelled ||
-        !mounted) {
-      return;
-    }
-    _initialRulesAutoOpenDelayScheduled = true;
-    SingleInsideDiagnostics.log(
-      'screen',
-      'initial_rules_auto_open_hold_started durationMs=${_initialRulesAutoOpenHold.inMilliseconds}',
-    );
-    await Future<void>.delayed(_initialRulesAutoOpenHold);
+  Future<void> _setContentDock(
+    SingleInsideContentDockContent? next, {
+    required String source,
+    bool force = false,
+  }) async {
     if (!mounted) return;
-    if (_initialAutomationCancelled ||
-        _initialRulesAutoOpenRequested) {
+    final current = _contentDockContent;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    if (!force && !_contentDockCloseEnabled && next != current) {
       SingleInsideDiagnostics.log(
-        'screen',
-        'initial_rules_auto_open_hold_cancelled cancelled=$_initialAutomationCancelled rulesAutoOpenRequested=$_initialRulesAutoOpenRequested dashboardMode=compact_only',
+        'content_dock',
+        'transition_blocked source=$source current=${current?.name ?? 'closed'} next=${next?.name ?? 'closed'} closeEnabled=$_contentDockCloseEnabled',
       );
       return;
     }
-    SingleInsideDiagnostics.log(
-      'screen',
-      'initial_rules_auto_open_hold_completed durationMs=${_initialRulesAutoOpenHold.inMilliseconds}',
-    );
-    _requestInitialRulesAutoOpen(source: 'hold_completed');
-  }
 
-  void _requestInitialRulesAutoOpen({required String source}) {
-    if (!mounted ||
-        _initialAutomationCancelled ||
-        _initialRulesAutoOpenRequested) {
-      return;
-    }
-    setState(() => _initialRulesAutoOpenRequested = true);
-    final holdMs = source == 'hold_completed'
-        ? _initialRulesAutoOpenHold.inMilliseconds
-        : 0;
-    SingleInsideDiagnostics.log(
-      'screen',
-      'initial_rules_auto_open_requested source=$source holdMs=$holdMs',
-    );
-  }
-
-  void _cancelInitialAutomation(String source) {
-    if (_initialAutomationCancelled || !mounted) {
-      return;
-    }
-    setState(() => _initialAutomationCancelled = true);
-    SingleInsideDiagnostics.log(
-      'screen',
-      'initial_automation_cancelled source=$source revealCompleted=$_initialWorkspaceRevealCompleted delayScheduled=$_initialRulesAutoOpenDelayScheduled rulesAutoOpenRequested=$_initialRulesAutoOpenRequested',
-    );
-  }
-
-  Future<void> _handleInitialRulesAutoOpenCompleted() async {
-    if (!mounted) return;
-    SingleInsideDiagnostics.log(
-      'dashboard',
-      'initial_rules_auto_open_completed dashboardMode=compact_only railPersistent=true workspaceContent=${_workspaceContent.name}',
-    );
-  }
-
-  void _switchWorkspaceContent(
-    SingleInsideWorkspaceContent next, {
-    required String source,
-  }) {
-    if (!mounted) return;
-    final current = _workspaceContent;
-    if (current == next) {
-      if (next == SingleInsideWorkspaceContent.punchRecorder) {
+    if (next == null) {
+      if (current == null && _contentDockController.value <= .001) {
         SingleInsideDiagnostics.log(
-          'workspace',
-          'punch_request_ignored_already_active source=$source revision=$_punchCountdownRevision countdownSource=$_punchCountdownSource',
+          'content_dock',
+          'close_ignored source=$source progress=${_contentDockController.value.toStringAsFixed(3)}',
         );
+        return;
       }
-      return;
-    }
-    setState(() {
-      _previousWorkspaceContent = current;
-      _workspaceContent = next;
-      if (next == SingleInsideWorkspaceContent.workSchedule) {
-        _workScheduleMounted = true;
+      if (_parkingSpatialController.detailOpen) {
+        await _parkingSpatialController.closeDetail(
+          source: '${source}_before_dock_close',
+        );
+        if (!mounted) return;
       }
-      if (next == SingleInsideWorkspaceContent.workManual) {
-        _workManualMounted = true;
-      }
-      if (next == SingleInsideWorkspaceContent.punchRecorder) {
-        _punchCountdownRevision++;
-        _punchCountdownSource = source;
-        _punchAutoReturnScheduled = true;
-        _punchCountdownEnabled = true;
+      SingleInsideDiagnostics.log(
+        'content_dock',
+        'animation_started action=close content=${current?.name ?? 'none'} source=$source reduceMotion=$reduceMotion closeEnabled=$_contentDockCloseEnabled railWidth=${_lastRailWidth.toStringAsFixed(1)} workspaceWidth=${_lastWorkspaceWidth.toStringAsFixed(1)} dockWidth=${_lastContentDockWidth.toStringAsFixed(1)} progress=${_contentDockController.value.toStringAsFixed(3)}',
+      );
+      if (reduceMotion) {
+        _contentDockController.value = 0;
       } else {
-        _punchAutoReturnScheduled = false;
-        _punchCountdownEnabled = false;
-        if (source != 'punch_auto_return') {
-          _pendingNotificationDeveloperStatus = false;
+        try {
+          await _contentDockController.reverse().orCancel;
+        } on TickerCanceled {
+          return;
         }
       }
-    });
-    SingleInsideDiagnostics.log(
-      'workspace',
-      'switch from=${current.name} to=${next.name} source=$source punchRevision=$_punchCountdownRevision countdownSource=$_punchCountdownSource',
-    );
-  }
-
-  void _handleWorkspaceBack({required String source}) {
-    if (!mounted) return;
-    final current = _workspaceContent;
-    if (current == SingleInsideWorkspaceContent.dotMap) {
-      SingleInsideDiagnostics.log(
-        'workspace',
-        'back_ignored active=${current.name} source=$source',
-      );
-      return;
-    }
-    SingleInsideDiagnostics.log(
-      'workspace',
-      'back_requested active=${current.name} target=dotMap source=$source',
-    );
-    _switchWorkspaceContent(
-      SingleInsideWorkspaceContent.dotMap,
-      source: source,
-    );
-  }
-
-  void _handlePunchAutoReturn() {
-    if (!mounted ||
-        _workspaceContent != SingleInsideWorkspaceContent.punchRecorder) {
-      return;
-    }
-    final showNotificationDeveloperStatus =
-        _pendingNotificationDeveloperStatus &&
-            _punchCountdownSource == 'notification_resume';
-    _pendingNotificationDeveloperStatus = false;
-    SingleInsideDiagnostics.log(
-      'punch_content',
-      'auto_return_switch target=dotMap revision=$_punchCountdownRevision source=$_punchCountdownSource developerStatusPending=$showNotificationDeveloperStatus',
-    );
-    _switchWorkspaceContent(
-      SingleInsideWorkspaceContent.dotMap,
-      source: 'punch_auto_return',
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      setState(() {
+        _contentDockContent = null;
+        _contentDockCloseEnabled = true;
+        _hotKeyRefreshRevision++;
+      });
       SingleInsideDiagnostics.log(
-        'workspace',
-        'auto_return_frame_committed active=${_workspaceContent.name} expected=dotMap revision=$_punchCountdownRevision',
+        'content_dock',
+        'animation_completed action=close content=${current?.name ?? 'none'} source=$source progress=${_contentDockController.value.toStringAsFixed(3)} workspaceOffset=${(-_lastRailWidth * _contentDockController.value).toStringAsFixed(1)}',
       );
-      if (showNotificationDeveloperStatus) {
-        unawaited(
-          _showDeveloperStatus(
-            title: 'Single 알림 복귀 상태',
-            description: '알림 복귀 및 출퇴근 기록기 표시 상태',
-          ),
+      return;
+    }
+
+    if (current == next && (_contentDockController.value - 1).abs() < .001) {
+      SingleInsideDiagnostics.log(
+        'content_dock',
+        'open_ignored content=${next.name} source=$source progress=${_contentDockController.value.toStringAsFixed(3)}',
+      );
+      return;
+    }
+
+    if (current != null && current != next && _contentDockController.value > .001) {
+      if (_parkingSpatialController.detailOpen) {
+        await _parkingSpatialController.closeDetail(
+          source: '${source}_before_content_switch',
         );
+        if (!mounted) return;
       }
+      setState(() {
+        _contentDockContent = next;
+        _mountedContentDocks.add(next);
+        _contentDockCloseEnabled = true;
+        _hotKeyRefreshRevision++;
+      });
+      SingleInsideDiagnostics.log(
+        'content_dock',
+        'content_switched from=${current.name} to=${next.name} source=$source motionMs=${reduceMotion ? 0 : _contentDockSwitchDuration.inMilliseconds} progress=${_contentDockController.value.toStringAsFixed(3)}',
+      );
+      return;
+    }
+
+    setState(() {
+      _contentDockContent = next;
+      _mountedContentDocks.add(next);
+      _contentDockCloseEnabled = true;
     });
+    SingleInsideDiagnostics.log(
+      'content_dock',
+      'animation_started action=open content=${next.name} source=$source reduceMotion=$reduceMotion railWidth=${_lastRailWidth.toStringAsFixed(1)} workspaceWidth=${_lastWorkspaceWidth.toStringAsFixed(1)} dockWidth=${_lastContentDockWidth.toStringAsFixed(1)} progress=${_contentDockController.value.toStringAsFixed(3)}',
+    );
+    if (reduceMotion) {
+      _contentDockController.value = 1;
+    } else {
+      try {
+        await _contentDockController.forward().orCancel;
+      } on TickerCanceled {
+        return;
+      }
+    }
+    if (!mounted) return;
+    SingleInsideDiagnostics.log(
+      'content_dock',
+      'animation_completed action=open content=${next.name} source=$source progress=${_contentDockController.value.toStringAsFixed(3)} workspaceOffset=${(-_lastRailWidth * _contentDockController.value).toStringAsFixed(1)}',
+    );
+  }
+
+  void _setContentDockCloseEnabled(bool enabled, {required String source}) {
+    if (!mounted || _contentDockCloseEnabled == enabled) return;
+    setState(() => _contentDockCloseEnabled = enabled);
+    SingleInsideDiagnostics.log(
+      'content_dock',
+      'close_enabled_changed enabled=$enabled source=$source content=${_contentDockContent?.name ?? 'closed'}',
+    );
+  }
+
+  void _setContentDockCloseEnabledFor(
+    SingleInsideContentDockContent content,
+    bool enabled, {
+    required String source,
+  }) {
+    if (_contentDockContent != content) {
+      SingleInsideDiagnostics.log(
+        'content_dock',
+        'close_enabled_ignored enabled=$enabled source=$source owner=${content.name} active=${_contentDockContent?.name ?? 'closed'}',
+      );
+      return;
+    }
+    _setContentDockCloseEnabled(enabled, source: source);
+  }
+
+  void _handleParkingDetailStateChanged(bool open) {
+    if (_parkingDetailOpen == open || !mounted) return;
+    setState(() => _parkingDetailOpen = open);
+    SingleInsideDiagnostics.log(
+      'content_dock',
+      'parking_detail_state open=$open content=${_contentDockContent?.name ?? 'closed'}',
+    );
+  }
+
+  void _handleSystemBack() {
+    if (_parkingSpatialController.detailOpen || _parkingDetailOpen) {
+      unawaited(
+        _parkingSpatialController.closeDetail(source: 'system_back'),
+      );
+      return;
+    }
+    if (_contentDockOpen || _contentDockController.value > .001) {
+      if (!_contentDockCloseEnabled) {
+        SingleInsideDiagnostics.log(
+          'content_dock',
+          'system_back_blocked content=${_contentDockContent?.name ?? 'closed'} closeEnabled=false',
+        );
+        return;
+      }
+      unawaited(
+        _setContentDock(
+          null,
+          source: 'system_back',
+        ),
+      );
+      return;
+    }
+    SingleInsideDiagnostics.log(
+      'workspace',
+      'system_back_at_home home=punchRecorder',
+    );
   }
 
   Future<void> _resetStaleWorkingState() async {
@@ -704,7 +687,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
             secondaryState.canAccess(Section.user);
     SingleInsideDiagnostics.log(
       'status',
-      'snapshot viewport=${media?.size.width.toStringAsFixed(1)}x${media?.size.height.toStringAsFixed(1)} role=${userState.session?.role ?? ''} normalizedRole=${secondaryState.role.name} area=${userState.currentArea} division=${userState.division} areaStateCapabilities=${LocalAreaCapabilityRefresh.keys(areaState.capabilitiesOfCurrentArea)} locationAccess=${secondaryState.canAccess(Section.location)} locationAccessReason=${secondaryState.accessDebugReason(Section.location)} operationsVisible=$operationsVisible scheduleRevision=$_scheduleRevision spatialRevision=$_spatialRefreshRevision ruleRevision=$_ruleRefreshRevision dashboardMode=compact_only railWidth=${_lastRailWidth.toStringAsFixed(1)} workspaceWidth=${_lastWorkspaceWidth.toStringAsFixed(1)} dashboardActionRunning=$_dashboardActionRunning workspaceContent=${_workspaceContent.name} workspaceContentPrevious=${_previousWorkspaceContent.name} punchContentPlacement=workspace_full workspaceBackPolicy=return_to_parking_area scheduleSaveMode=explicit punchAutoReturnScheduled=$_punchAutoReturnScheduled punchAutoReturnMs=${_punchAutoReturnDelay.inMilliseconds} punchCountdownRevision=$_punchCountdownRevision punchCountdownSource=$_punchCountdownSource punchCountdownEnabled=$_punchCountdownEnabled suppressWorkspaceTransition=$_suppressWorkspaceTransition notificationCountdownPending=$_notificationCountdownPending notificationCountdownFrameScheduled=$_notificationCountdownFrameScheduled pendingNotificationTapId=${_pendingNotificationTapId ?? '-'} lastConsumedNotificationTapId=$_lastConsumedNotificationTapId notificationVisibleFrameAt=${_notificationVisibleFrameAt?.toIso8601String() ?? '-'} notificationCountdownStartedAt=${_notificationCountdownStartedAt?.toIso8601String() ?? '-'} notificationTapConsumeCount=$_notificationTapConsumeCount notificationTapRevision=${WorkStatusNotificationController.notificationTapRevision.value} workStatusLastNotificationTapId=${WorkStatusNotificationController.lastNotificationTapId} workStatusPendingNotificationTapId=${WorkStatusNotificationController.pendingNotificationTap?.id ?? '-'} workStatusPendingNotificationTapAt=${WorkStatusNotificationController.pendingNotificationTap?.tappedAt.toIso8601String() ?? '-'} lastHandledNotificationTapRevision=$_lastHandledNotificationTapRevision notificationRevealCount=$_notificationRevealCount lastNotificationTapSource=$_lastNotificationTapSource lastNotificationTapEvent=$_lastNotificationTapEvent lastNotificationTapAt=${_lastNotificationTapAt?.toIso8601String() ?? '-'} lastNotificationRevealAt=${_lastNotificationRevealAt?.toIso8601String() ?? '-'} pendingNotificationDeveloperStatus=$_pendingNotificationDeveloperStatus workScheduleMounted=$_workScheduleMounted workManualMounted=$_workManualMounted initialRevealCompleted=$_initialWorkspaceRevealCompleted initialRulesAutoOpenDelayScheduled=$_initialRulesAutoOpenDelayScheduled initialRulesAutoOpenRequested=$_initialRulesAutoOpenRequested initialAutomationCancelled=$_initialAutomationCancelled initialRulesAutoOpenHoldMs=${_initialRulesAutoOpenHold.inMilliseconds}',
+      'snapshot viewport=${media?.size.width.toStringAsFixed(1)}x${media?.size.height.toStringAsFixed(1)} role=${userState.session?.role ?? ''} normalizedRole=${secondaryState.role.name} area=${userState.currentArea} division=${userState.division} areaStateCapabilities=${LocalAreaCapabilityRefresh.keys(areaState.capabilitiesOfCurrentArea)} locationAccess=${secondaryState.canAccess(Section.location)} locationAccessReason=${secondaryState.accessDebugReason(Section.location)} operationsVisible=$operationsVisible scheduleRevision=$_scheduleRevision spatialRevision=$_spatialRefreshRevision ruleRevision=$_ruleRefreshRevision hotKeyRevision=$_hotKeyRefreshRevision dashboardMode=compact_only railWidth=${_lastRailWidth.toStringAsFixed(1)} workspaceWidth=${_lastWorkspaceWidth.toStringAsFixed(1)} contentDockWidth=${_lastContentDockWidth.toStringAsFixed(1)} contentDock=${_contentDockContent?.name ?? 'closed'} contentDockProgress=${_contentDockController.value.toStringAsFixed(3)} contentDockCloseEnabled=$_contentDockCloseEnabled mountedContentDocks=${_mountedContentDocks.map((item) => item.name).join(',')} parkingDetailOpen=$_parkingDetailOpen parkingControllerDetailOpen=${_parkingSpatialController.detailOpen} dashboardActionRunning=$_dashboardActionRunning workspaceContent=punchRecorder punchContentPlacement=workspace_home workspaceBackPolicy=detail_then_content_dock_then_punch scheduleSaveMode=explicit notificationRevealPending=$_notificationRevealPending notificationRevealFrameScheduled=$_notificationRevealFrameScheduled pendingNotificationTapId=${_pendingNotificationTapId ?? '-'} lastConsumedNotificationTapId=$_lastConsumedNotificationTapId notificationVisibleFrameAt=${_notificationVisibleFrameAt?.toIso8601String() ?? '-'} notificationTapConsumeCount=$_notificationTapConsumeCount notificationTapRevision=${WorkStatusNotificationController.notificationTapRevision.value} workStatusLastNotificationTapId=${WorkStatusNotificationController.lastNotificationTapId} workStatusPendingNotificationTapId=${WorkStatusNotificationController.pendingNotificationTap?.id ?? '-'} workStatusPendingNotificationTapAt=${WorkStatusNotificationController.pendingNotificationTap?.tappedAt.toIso8601String() ?? '-'} lastHandledNotificationTapRevision=$_lastHandledNotificationTapRevision notificationRevealCount=$_notificationRevealCount lastNotificationTapSource=$_lastNotificationTapSource lastNotificationTapEvent=$_lastNotificationTapEvent lastNotificationTapAt=${_lastNotificationTapAt?.toIso8601String() ?? '-'} lastNotificationRevealAt=${_lastNotificationRevealAt?.toIso8601String() ?? '-'} pendingNotificationDeveloperStatus=$_pendingNotificationDeveloperStatus initialRevealCompleted=$_initialWorkspaceRevealCompleted rulesAutoOpen=false auxiliaryPresentation=embedded_content_side_dock',
     );
     await SingleInsideDiagnostics.showStatus(
       context,
@@ -807,28 +790,70 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
     );
   }
 
-  bool _dashboardRequestPreservesWorkspace(SingleInsideDockRequest request) {
+  SingleInsideContentDockContent? _contentDockTargetForRequest(
+    SingleInsideDockRequest request,
+  ) {
     switch (request) {
       case SingleInsideDockRequest.workSchedule:
-      case SingleInsideDockRequest.punchRecorder:
+        return SingleInsideContentDockContent.workSchedule;
+      case SingleInsideDockRequest.parkingArea:
+        return SingleInsideContentDockContent.parkingArea;
+      case SingleInsideDockRequest.workRules:
+        return SingleInsideContentDockContent.workRules;
       case SingleInsideDockRequest.workManual:
+        return SingleInsideContentDockContent.workManual;
+      case SingleInsideDockRequest.workStartReport:
+        return SingleInsideContentDockContent.workStartReport;
+      case SingleInsideDockRequest.workEndReport:
+        return SingleInsideContentDockContent.workEndReport;
+      case SingleInsideDockRequest.statementForm:
+        return SingleInsideContentDockContent.statementForm;
+      case SingleInsideDockRequest.leaveApplication:
+        return SingleInsideContentDockContent.leaveApplication;
       case SingleInsideDockRequest.faq:
+        return SingleInsideContentDockContent.faq;
+      case SingleInsideDockRequest.commuteSubmit:
+        return SingleInsideContentDockContent.commuteSubmit;
+      case SingleInsideDockRequest.restTimeSubmit:
+        return SingleInsideContentDockContent.restTimeSubmit;
       case SingleInsideDockRequest.update:
       case SingleInsideDockRequest.terms:
       case SingleInsideDockRequest.privacy:
-      case SingleInsideDockRequest.theme:
-        return true;
-      case SingleInsideDockRequest.workStartReport:
-      case SingleInsideDockRequest.workEndReport:
-      case SingleInsideDockRequest.commuteSubmit:
-      case SingleInsideDockRequest.restTimeSubmit:
-      case SingleInsideDockRequest.statementForm:
-      case SingleInsideDockRequest.leaveApplication:
       case SingleInsideDockRequest.operations:
       case SingleInsideDockRequest.operationalSync:
+      case SingleInsideDockRequest.theme:
       case SingleInsideDockRequest.logout:
       case SingleInsideDockRequest.exitApp:
-        return false;
+        return null;
+    }
+  }
+
+  SingleInsideDockRequest? get _selectedDockRequest {
+    switch (_contentDockContent) {
+      case SingleInsideContentDockContent.workSchedule:
+        return SingleInsideDockRequest.workSchedule;
+      case SingleInsideContentDockContent.parkingArea:
+        return SingleInsideDockRequest.parkingArea;
+      case SingleInsideContentDockContent.workRules:
+        return SingleInsideDockRequest.workRules;
+      case SingleInsideContentDockContent.workManual:
+        return SingleInsideDockRequest.workManual;
+      case SingleInsideContentDockContent.workStartReport:
+        return SingleInsideDockRequest.workStartReport;
+      case SingleInsideContentDockContent.workEndReport:
+        return SingleInsideDockRequest.workEndReport;
+      case SingleInsideContentDockContent.statementForm:
+        return SingleInsideDockRequest.statementForm;
+      case SingleInsideContentDockContent.leaveApplication:
+        return SingleInsideDockRequest.leaveApplication;
+      case SingleInsideContentDockContent.faq:
+        return SingleInsideDockRequest.faq;
+      case SingleInsideContentDockContent.commuteSubmit:
+        return SingleInsideDockRequest.commuteSubmit;
+      case SingleInsideContentDockContent.restTimeSubmit:
+        return SingleInsideDockRequest.restTimeSubmit;
+      case null:
+        return null;
     }
   }
 
@@ -837,39 +862,24 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
     String source,
   ) async {
     if (_dashboardActionRunning || !mounted) return;
-    if (request == SingleInsideDockRequest.punchRecorder &&
-        _workspaceContent == SingleInsideWorkspaceContent.punchRecorder) {
-      SingleInsideDiagnostics.log(
-        'dashboard',
-        'action_ignored_already_active request=${request.name} source=$source revision=$_punchCountdownRevision countdownSource=$_punchCountdownSource',
-      );
-      return;
-    }
-    _cancelInitialAutomation('dashboard_action_${request.name}');
     setState(() => _dashboardActionRunning = true);
     try {
       await HapticFeedback.selectionClick();
       if (!mounted) return;
+      final contentTarget = _contentDockTargetForRequest(request);
       SingleInsideDiagnostics.log(
         'dashboard',
-        'action_selected request=${request.name} source=$source dashboardMode=compact_only railWidth=${_lastRailWidth.toStringAsFixed(1)} workspaceWidth=${_lastWorkspaceWidth.toStringAsFixed(1)} workspaceContent=${_workspaceContent.name}',
+        'action_selected request=${request.name} source=$source dashboardMode=compact_only railWidth=${_lastRailWidth.toStringAsFixed(1)} workspaceWidth=${_lastWorkspaceWidth.toStringAsFixed(1)} contentDockWidth=${_lastContentDockWidth.toStringAsFixed(1)} contentDock=${_contentDockContent?.name ?? 'closed'} contentDockProgress=${_contentDockController.value.toStringAsFixed(3)} contentDockCloseEnabled=$_contentDockCloseEnabled parkingDetailOpen=$_parkingDetailOpen workspaceContent=punchRecorder target=${contentTarget?.name ?? 'action'}',
       );
-      final reduceMotion =
-          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-      if (!_dashboardRequestPreservesWorkspace(request) &&
-          _workspaceContent != SingleInsideWorkspaceContent.dotMap) {
-        _switchWorkspaceContent(
-          SingleInsideWorkspaceContent.dotMap,
+      if (contentTarget == null &&
+          (_contentDockOpen || _contentDockController.value > .001)) {
+        await _setContentDock(
+          null,
           source: 'before_${request.name}',
         );
-        await MotionTimingDiagnostics.waitForFlow(
-          'single_workspace_transition_pacing',
-          _workspaceTransitionDuration,
-          scope: 'single_inside',
-          reduceMotion: reduceMotion,
-          meta: <String, Object?>{'request': request.name, 'source': source},
-        );
-        if (!mounted) return;
+        if (!mounted || _contentDockOpen || _contentDockController.value > .001) {
+          return;
+        }
       }
       await _handleDockRequest(request, source: source);
     } finally {
@@ -887,74 +897,18 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
       'menu',
       'handle_request request=${request.name} source=$source',
     );
+    final contentTarget = _contentDockTargetForRequest(request);
+    if (contentTarget != null) {
+      if (_contentDockContent == contentTarget &&
+          _contentDockController.value > .001) {
+        await _setContentDock(null, source: source);
+        return;
+      }
+      await _setContentDock(contentTarget, source: source);
+      return;
+    }
+
     switch (request) {
-      case SingleInsideDockRequest.workSchedule:
-        _switchWorkspaceContent(
-          _workspaceContent == SingleInsideWorkspaceContent.workSchedule
-              ? SingleInsideWorkspaceContent.dotMap
-              : SingleInsideWorkspaceContent.workSchedule,
-          source: source,
-        );
-        break;
-      case SingleInsideDockRequest.punchRecorder:
-        _switchWorkspaceContent(
-          SingleInsideWorkspaceContent.punchRecorder,
-          source: source,
-        );
-        break;
-      case SingleInsideDockRequest.workManual:
-        _switchWorkspaceContent(
-          _workspaceContent == SingleInsideWorkspaceContent.workManual
-              ? SingleInsideWorkspaceContent.dotMap
-              : SingleInsideWorkspaceContent.workManual,
-          source: source,
-        );
-        break;
-      case SingleInsideDockRequest.workStartReport:
-        await _openWorkStartReport(context);
-        break;
-      case SingleInsideDockRequest.workEndReport:
-        await _openWorkEndReport(context);
-        break;
-      case SingleInsideDockRequest.commuteSubmit:
-        await _runDocumentAction(
-          context,
-          SingleInsideDocumentAction.commuteSubmit,
-        );
-        break;
-      case SingleInsideDockRequest.restTimeSubmit:
-        await _runDocumentAction(
-          context,
-          SingleInsideDocumentAction.restTimeSubmit,
-        );
-        break;
-      case SingleInsideDockRequest.statementForm:
-        await _runDocumentAction(
-          context,
-          SingleInsideDocumentAction.statementForm,
-        );
-        break;
-      case SingleInsideDockRequest.leaveApplication:
-        await _runDocumentAction(
-          context,
-          SingleInsideDocumentAction.leaveApplication,
-        );
-        break;
-      case SingleInsideDockRequest.faq:
-        SingleInsideDiagnostics.log(
-          'support',
-          'faq_open source=$source side=right',
-        );
-        await showFaqSideDock<void>(
-          context: context,
-          side: CommonSideDockSide.right,
-          source: 'single_mini_side_dock',
-        );
-        SingleInsideDiagnostics.log(
-          'support',
-          'faq_closed source=$source side=right',
-        );
-        break;
       case SingleInsideDockRequest.update:
         SingleInsideDiagnostics.log(
           'support',
@@ -1011,38 +965,19 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
       case SingleInsideDockRequest.exitApp:
         await _handleAppExit(context);
         break;
+      case SingleInsideDockRequest.workSchedule:
+      case SingleInsideDockRequest.parkingArea:
+      case SingleInsideDockRequest.workRules:
+      case SingleInsideDockRequest.workManual:
+      case SingleInsideDockRequest.workStartReport:
+      case SingleInsideDockRequest.workEndReport:
+      case SingleInsideDockRequest.statementForm:
+      case SingleInsideDockRequest.leaveApplication:
+      case SingleInsideDockRequest.faq:
+      case SingleInsideDockRequest.commuteSubmit:
+      case SingleInsideDockRequest.restTimeSubmit:
+        break;
     }
-  }
-
-  Future<void> _openWorkStartReport(BuildContext context) async {
-    SingleInsideDiagnostics.log(
-      'work',
-      'open target=work_start_report implementation=dashboard_shared',
-    );
-    await showDashboardStartReportSideDock(context: context);
-    SingleInsideDiagnostics.log(
-      'work',
-      'closed target=work_start_report implementation=dashboard_shared',
-    );
-  }
-
-  Future<void> _openWorkEndReport(BuildContext context) async {
-    SingleInsideDiagnostics.log(
-      'work',
-      'open target=work_end_report implementation=single',
-    );
-    await showSingleInsideEndReportSideDock(context: context);
-    SingleInsideDiagnostics.log(
-      'work',
-      'closed target=work_end_report implementation=single',
-    );
-  }
-
-  Future<void> _runDocumentAction(
-    BuildContext context,
-    SingleInsideDocumentAction action,
-  ) async {
-    await SingleInsideDocumentActionRunner.run(context, action);
   }
 
   Future<void> _openOperations(BuildContext context) async {
@@ -1080,6 +1015,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
       setState(() {
         _spatialRefreshRevision++;
         _ruleRefreshRevision++;
+        _hotKeyRefreshRevision++;
       });
     }
   }
@@ -1090,6 +1026,15 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
     SingleInsideDiagnostics.log(
       'schedule',
       'changed revision=$_scheduleRevision',
+    );
+  }
+
+  void _handleHotKeyDataChanged(String source) {
+    if (!mounted) return;
+    setState(() => _hotKeyRefreshRevision++);
+    SingleInsideDiagnostics.log(
+      'hotkey',
+      'refresh_requested source=$source revision=$_hotKeyRefreshRevision',
     );
   }
 
@@ -1105,7 +1050,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
             canPop: false,
             onPopInvoked: (didPop) {
               if (didPop) return;
-              _handleWorkspaceBack(source: 'system_back');
+              _handleSystemBack();
             },
             child: Scaffold(
               backgroundColor: tokens.canvas,
@@ -1151,10 +1096,18 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
                               ? 52.0
                               : 56.0;
                       final workspaceWidth = bodyWidth - railWidth;
+                      final contentDockWidth = workspaceWidth <= 360
+                          ? workspaceWidth
+                          : workspaceWidth < 560
+                              ? workspaceWidth * .78
+                              : (workspaceWidth * .44)
+                                  .clamp(360.0, 420.0)
+                                  .toDouble();
                       _lastRailWidth = railWidth;
                       _lastWorkspaceWidth = workspaceWidth;
+                      _lastContentDockWidth = contentDockWidth;
                       final dashboardLayoutSignature =
-                          '${bodyWidth.toStringAsFixed(1)}|${bodyHeight.toStringAsFixed(1)}|${railWidth.toStringAsFixed(1)}|${workspaceWidth.toStringAsFixed(1)}|compact_only';
+                          '${bodyWidth.toStringAsFixed(1)}|${bodyHeight.toStringAsFixed(1)}|${railWidth.toStringAsFixed(1)}|${workspaceWidth.toStringAsFixed(1)}|${contentDockWidth.toStringAsFixed(1)}|compact_only';
                       if (_lastDashboardLayoutSignature !=
                           dashboardLayoutSignature) {
                         _lastDashboardLayoutSignature =
@@ -1167,92 +1120,323 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
                           }
                           SingleInsideDiagnostics.log(
                             'dashboard',
-                            'layout mode=compact_only railWidth=${railWidth.toStringAsFixed(1)} workspaceWidth=${workspaceWidth.toStringAsFixed(1)} bodyWidth=${bodyWidth.toStringAsFixed(1)} expandable=false overlay=false scrim=false',
+                            'layout mode=compact_only railWidth=${railWidth.toStringAsFixed(1)} workspaceWidth=${workspaceWidth.toStringAsFixed(1)} contentDockWidth=${contentDockWidth.toStringAsFixed(1)} bodyWidth=${bodyWidth.toStringAsFixed(1)} contentDockEmbedded=true contentDock=${_contentDockContent?.name ?? 'closed'} workspaceResize=false workspaceClip=true scrim=false rulesPlacement=content_side_dock parkingDetailPresentation=embedded',
                           );
                         });
                       }
 
-                      final workspace = Column(
-                        children: [
-                          Expanded(
-                            child: _SingleInsideWorkspaceSwitcher(
-                              active: _workspaceContent,
-                              duration: reduceMotion ||
-                                      _suppressWorkspaceTransition
-                                  ? Duration.zero
-                                  : _workspaceTransitionDuration,
-                              dotMap: SingleInsideSpatialDotMap(
-                                area: userState.currentArea,
-                                refreshRevision: _spatialRefreshRevision,
+                      final workspace = SingleInsidePunchRecorderContentSurface(
+                        key: ValueKey<String>(
+                          'single_punch_content_${session.id}_${currentArea}_$currentDivision',
+                        ),
+                        userId: session.id,
+                        userName: session.displayName,
+                        area: currentArea,
+                        division: currentDivision,
+                        scheduleRevision: _scheduleRevision,
+                        hotKeyRefreshRevision: _hotKeyRefreshRevision,
+                        allowReports: mode == SingleInsideMode.leader,
+                        onHotKeyRequest: _dispatchDashboardRequest,
+                        onDeveloperStatus: () => _showDeveloperStatus(),
+                      );
+
+                      bool dockMounted(SingleInsideContentDockContent content) =>
+                          _mountedContentDocks.contains(content);
+
+                      void closeDock(String source) {
+                        unawaited(_setContentDock(null, source: source));
+                      }
+
+                      final workScheduleDock =
+                          dockMounted(SingleInsideContentDockContent.workSchedule)
+                              ? SingleInsideWorkScheduleSideDock(
+                                  key: ValueKey<String>(
+                                    'single_work_schedule_dock_${session.id}_$currentArea',
+                                  ),
+                                  area: currentArea,
+                                  scheduleRevision: _scheduleRevision,
+                                  onChanged: _handleScheduleChanged,
+                                  onClose: () => closeDock(
+                                    'work_schedule_dock_close_button',
+                                  ),
+                                  onDeveloperStatus: () => _showDeveloperStatus(
+                                    title: 'Single 근무 일정 상태',
+                                    description: '근무 일정 Side Dock 및 저장 상태 로그',
+                                  ),
+                                  closeEnabled: _contentDockCloseEnabled,
+                                  onCloseEnabledChanged: (enabled) =>
+                                      _setContentDockCloseEnabledFor(
+                                    SingleInsideContentDockContent.workSchedule,
+                                    enabled,
+                                    source: 'work_schedule',
+                                  ),
+                                )
+                              : const SizedBox.shrink();
+
+                      final parkingDock =
+                          dockMounted(SingleInsideContentDockContent.parkingArea)
+                              ? SingleInsideParkingSideDock(
+                                  key: ValueKey<String>(
+                                    'single_parking_dock_${session.id}_$currentArea',
+                                  ),
+                                  area: currentArea,
+                                  refreshRevision: _spatialRefreshRevision,
+                                  controller: _parkingSpatialController,
+                                  onDetailStateChanged:
+                                      _handleParkingDetailStateChanged,
+                                  onClose: () => closeDock(
+                                    'parking_dock_close_button',
+                                  ),
+                                  onDeveloperStatus: () => _showDeveloperStatus(
+                                    title: 'Single 주차 구역 상태',
+                                    description:
+                                        '주차 구역 Side Dock 및 공간 상태 로그',
+                                  ),
+                                )
+                              : const SizedBox.shrink();
+
+                      final workRulesDock =
+                          dockMounted(SingleInsideContentDockContent.workRules)
+                              ? SingleInsideWorkRulesSideDock(
+                                  key: ValueKey<String>(
+                                    'single_work_rules_dock_${session.id}_${currentArea}_$currentDivision',
+                                  ),
+                                  division: currentDivision,
+                                  area: currentArea,
+                                  capabilityEnabled: areaState
+                                      .capabilitiesOfCurrentArea
+                                      .contains(Capability.rule),
+                                  refreshRevision: _ruleRefreshRevision,
+                                  onClose: () => closeDock(
+                                    'work_rules_dock_close_button',
+                                  ),
+                                  onDeveloperStatus: () => _showDeveloperStatus(
+                                    title: 'Single 업무 규칙 상태',
+                                    description:
+                                        '업무 규칙 Side Dock 및 데이터 상태 로그',
+                                  ),
+                                )
+                              : const SizedBox.shrink();
+
+                      final workManualDock =
+                          dockMounted(SingleInsideContentDockContent.workManual)
+                              ? SingleInsideWorkManualSideDock(
+                                  key: ValueKey<String>(
+                                    'single_work_manual_dock_${session.id}_${currentArea}_$currentDivision',
+                                  ),
+                                  division: currentDivision,
+                                  area: currentArea,
+                                  capabilityEnabled: areaState
+                                      .capabilitiesOfCurrentArea
+                                      .contains(Capability.rule),
+                                  refreshRevision: _ruleRefreshRevision,
+                                  onClose: () => closeDock(
+                                    'work_manual_dock_close_button',
+                                  ),
+                                  onDeveloperStatus: () => _showDeveloperStatus(
+                                    title: 'Single 업무 메뉴얼 상태',
+                                    description:
+                                        '업무 메뉴얼 Side Dock 및 데이터 상태 로그',
+                                  ),
+                                )
+                              : const SizedBox.shrink();
+
+                      final workStartReportDock = dockMounted(
+                        SingleInsideContentDockContent.workStartReport,
+                      )
+                          ? DashboardStartReportSideDock(
+                              key: ValueKey<String>(
+                                'single_start_report_dock_${session.id}_$currentArea',
                               ),
-                              workSchedule: _workScheduleMounted
-                                  ? SingleInsideWorkScheduleContentSurface(
-                                      scheduleRevision: _scheduleRevision,
-                                      onChanged: _handleScheduleChanged,
-                                      onDeveloperStatus: () => _showDeveloperStatus(),
-                                    )
-                                  : const SizedBox.shrink(),
-                              workManual: _workManualMounted
-                                  ? WorkRuleReportWorkspace(
-                                      key: ValueKey<String>(
-                                        'single_work_manual_${session.id}_${currentArea}_$currentDivision',
-                                      ),
-                                      division: currentDivision,
-                                      area: currentArea,
-                                      capabilityEnabled: areaState
-                                          .capabilitiesOfCurrentArea
-                                          .contains(Capability.rule),
-                                      source: 'single_inside_work_manual',
-                                      side: WorkRuleReportSide.inline,
-                                      contentMode: WorkRuleReportContentMode
-                                          .responseManual,
-                                      refreshRevision: _ruleRefreshRevision,
-                                      onBack: () => _handleWorkspaceBack(
-                                        source: 'work_manual_back_button',
-                                      ),
-                                      onDebug: (message) =>
-                                          SingleInsideDiagnostics.log(
-                                        'manual',
-                                        message,
-                                      ),
-                                    )
-                                  : const SizedBox.shrink(),
-                              punchRecorder: SingleInsidePunchRecorderContentSurface(
-                                key: ValueKey<String>(
-                                  'single_punch_content_${session.id}_${userState.currentArea}_$currentDivision',
-                                ),
-                                active: _workspaceContent ==
-                                    SingleInsideWorkspaceContent.punchRecorder,
-                                countdownRevision: _punchCountdownRevision,
-                                countdownSource: _punchCountdownSource,
-                                countdownEnabled: _punchCountdownEnabled,
-                                autoReturnDuration: _punchAutoReturnDelay,
-                                userId: session.id,
-                                userName: session.displayName,
-                                area: userState.currentArea,
-                                division: currentDivision,
-                                scheduleRevision: _scheduleRevision,
-                                onAutoReturn: _handlePunchAutoReturn,
-                                onDeveloperStatus: () => _showDeveloperStatus(),
+                              onClose: () => closeDock(
+                                'work_start_report_close_button',
                               ),
-                            ),
+                              onCloseEnabledChanged: (enabled) =>
+                                  _setContentDockCloseEnabledFor(
+                                SingleInsideContentDockContent.workStartReport,
+                                enabled,
+                                source: 'work_start_report',
+                              ),
+                            )
+                          : const SizedBox.shrink();
+
+                      final workEndReportDock = dockMounted(
+                        SingleInsideContentDockContent.workEndReport,
+                      )
+                          ? SingleInsideEndReportSideDock(
+                              key: ValueKey<String>(
+                                'single_end_report_dock_${session.id}_$currentArea',
+                              ),
+                              onClose: () => closeDock(
+                                'work_end_report_close_button',
+                              ),
+                              onCloseEnabledChanged: (enabled) =>
+                                  _setContentDockCloseEnabledFor(
+                                SingleInsideContentDockContent.workEndReport,
+                                enabled,
+                                source: 'work_end_report',
+                              ),
+                            )
+                          : const SizedBox.shrink();
+
+                      final statementDock = dockMounted(
+                        SingleInsideContentDockContent.statementForm,
+                      )
+                          ? UserStatementSideDock(
+                              key: ValueKey<String>(
+                                'single_statement_dock_${session.id}_$currentArea',
+                              ),
+                              onClose: () => closeDock(
+                                'statement_form_close_button',
+                              ),
+                              onCloseEnabledChanged: (enabled) =>
+                                  _setContentDockCloseEnabledFor(
+                                SingleInsideContentDockContent.statementForm,
+                                enabled,
+                                source: 'statement_form',
+                              ),
+                            )
+                          : const SizedBox.shrink();
+
+                      final leaveApplicationDock = dockMounted(
+                        SingleInsideContentDockContent.leaveApplication,
+                      )
+                          ? BackupApplicationSideDock(
+                              key: ValueKey<String>(
+                                'single_leave_application_dock_${session.id}_$currentArea',
+                              ),
+                              onClose: () => closeDock(
+                                'leave_application_close_button',
+                              ),
+                              onCloseEnabledChanged: (enabled) =>
+                                  _setContentDockCloseEnabledFor(
+                                SingleInsideContentDockContent.leaveApplication,
+                                enabled,
+                                source: 'leave_application',
+                              ),
+                            )
+                          : const SizedBox.shrink();
+
+                      final faqDock =
+                          dockMounted(SingleInsideContentDockContent.faq)
+                              ? FaqSideDockContent(
+                                  key: const ValueKey<String>(
+                                    'single_faq_content_dock',
+                                  ),
+                                  side: CommonSideDockSide.right,
+                                  source: 'single_embedded_content_dock',
+                                  onClose: () => closeDock(
+                                    'faq_close_button',
+                                  ),
+                                )
+                              : const SizedBox.shrink();
+
+                      final commuteSubmitDock = dockMounted(
+                        SingleInsideContentDockContent.commuteSubmit,
+                      )
+                          ? SingleInsideAttendanceSubmitSideDock(
+                              key: ValueKey<String>(
+                                'single_commute_submit_dock_${session.id}_$currentArea',
+                              ),
+                              kind: SingleAttendanceSubmissionKind.commute,
+                              area: currentArea,
+                              refreshRevision: _hotKeyRefreshRevision,
+                              onClose: () => closeDock(
+                                'commute_submit_close_button',
+                              ),
+                              onCloseEnabledChanged: (enabled) =>
+                                  _setContentDockCloseEnabledFor(
+                                SingleInsideContentDockContent.commuteSubmit,
+                                enabled,
+                                source: 'commute_submit',
+                              ),
+                              onSubmitted: () => _handleHotKeyDataChanged(
+                                'commute_submit_complete',
+                              ),
+                              onDeveloperStatus: () => _showDeveloperStatus(
+                                title: 'Single 출퇴근 제출 상태',
+                                description: '출퇴근 제출 Side Dock 및 로컬 기록 상태 로그',
+                              ),
+                            )
+                          : const SizedBox.shrink();
+
+                      final restTimeSubmitDock = dockMounted(
+                        SingleInsideContentDockContent.restTimeSubmit,
+                      )
+                          ? SingleInsideAttendanceSubmitSideDock(
+                              key: ValueKey<String>(
+                                'single_rest_submit_dock_${session.id}_$currentArea',
+                              ),
+                              kind: SingleAttendanceSubmissionKind.restTime,
+                              area: currentArea,
+                              refreshRevision: _hotKeyRefreshRevision,
+                              onClose: () => closeDock(
+                                'rest_submit_close_button',
+                              ),
+                              onCloseEnabledChanged: (enabled) =>
+                                  _setContentDockCloseEnabledFor(
+                                SingleInsideContentDockContent.restTimeSubmit,
+                                enabled,
+                                source: 'rest_submit',
+                              ),
+                              onSubmitted: () => _handleHotKeyDataChanged(
+                                'rest_submit_complete',
+                              ),
+                              onDeveloperStatus: () => _showDeveloperStatus(
+                                title: 'Single 휴게 제출 상태',
+                                description: '휴게 제출 Side Dock 및 로컬 기록 상태 로그',
+                              ),
+                            )
+                          : const SizedBox.shrink();
+
+                      final contentDock = DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: tokens.surface.withOpacity(
+                            tokens.isDark ? .94 : .97,
                           ),
-                          SafeArea(
-                            top: false,
-                            right: false,
-                            child: SingleInsideBottomActionSurface(
-                              division: currentDivision,
-                              area: userState.currentArea,
-                              refreshRevision: _ruleRefreshRevision,
-                              initialAutoOpenRequested:
-                                  _initialRulesAutoOpenRequested,
-                              onInitialAutoOpenCompleted:
-                                  _handleInitialRulesAutoOpenCompleted,
-                              onInitialAutomationInterrupted:
-                                  _cancelInitialAutomation,
-                            ),
+                          border: Border(
+                            left: BorderSide(color: tokens.borderSubtle),
                           ),
-                        ],
+                          boxShadow: [
+                            BoxShadow(
+                              color: tokens.shadow.withOpacity(.14),
+                              blurRadius: 22,
+                              offset: const Offset(-8, 0),
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: _SingleInsideContentDockSwitcher(
+                            active: _contentDockContent,
+                            duration: reduceMotion
+                                ? Duration.zero
+                                : _contentDockSwitchDuration,
+                            children: <SingleInsideContentDockContent, Widget>{
+                              SingleInsideContentDockContent.workSchedule:
+                                  workScheduleDock,
+                              SingleInsideContentDockContent.parkingArea:
+                                  parkingDock,
+                              SingleInsideContentDockContent.workRules:
+                                  workRulesDock,
+                              SingleInsideContentDockContent.workManual:
+                                  workManualDock,
+                              SingleInsideContentDockContent.workStartReport:
+                                  workStartReportDock,
+                              SingleInsideContentDockContent.workEndReport:
+                                  workEndReportDock,
+                              SingleInsideContentDockContent.statementForm:
+                                  statementDock,
+                              SingleInsideContentDockContent.leaveApplication:
+                                  leaveApplicationDock,
+                              SingleInsideContentDockContent.faq: faqDock,
+                              SingleInsideContentDockContent.commuteSubmit:
+                                  commuteSubmitDock,
+                              SingleInsideContentDockContent.restTimeSubmit:
+                                  restTimeSubmitDock,
+                            },
+                          ),
+                        ),
                       );
 
                       final dashboard = SafeArea(
@@ -1262,25 +1446,77 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
                           width: railWidth,
                           showReport: mode == SingleInsideMode.leader,
                           showOperations: showOperations,
-                          enabled: !_dashboardActionRunning,
+                          enabled: !_dashboardActionRunning &&
+                              _contentDockCloseEnabled,
                           onDeveloperStatus: () => _showDeveloperStatus(),
-                          onManualInteraction: _cancelInitialAutomation,
                           onRequest: _dispatchDashboardRequest,
-                          workScheduleSelected: _workspaceContent ==
-                              SingleInsideWorkspaceContent.workSchedule,
-                          punchRecorderSelected: _workspaceContent ==
-                              SingleInsideWorkspaceContent.punchRecorder,
-                          workManualSelected: _workspaceContent ==
-                              SingleInsideWorkspaceContent.workManual,
+                          selectedRequest: _selectedDockRequest,
                         ),
                       );
 
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(child: workspace),
-                          dashboard,
-                        ],
+                      return ClipRect(
+                        child: AnimatedBuilder(
+                          animation: _contentDockProgress,
+                          builder: (context, _) {
+                            final progress = _contentDockProgress.value
+                                .clamp(0.0, 1.0)
+                                .toDouble();
+                            final workspaceBlocked = progress > .001;
+                            final contentDockInteractive = _contentDockOpen &&
+                                !_contentDockController.isAnimating &&
+                                progress >= .999;
+                            return Stack(
+                              clipBehavior: Clip.hardEdge,
+                              children: [
+                                Positioned(
+                                  left: 0,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: workspaceWidth,
+                                  child: Transform.translate(
+                                    offset: Offset(-railWidth * progress, 0),
+                                    child: ExcludeSemantics(
+                                      excluding: workspaceBlocked,
+                                      child: IgnorePointer(
+                                        ignoring: workspaceBlocked,
+                                        child: workspace,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  right: railWidth,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: contentDockWidth,
+                                  child: Transform.translate(
+                                    offset: Offset(
+                                      contentDockWidth * (1 - progress),
+                                      0,
+                                    ),
+                                    child: ExcludeSemantics(
+                                      excluding: progress <= .001,
+                                      child: IgnorePointer(
+                                        ignoring: !contentDockInteractive,
+                                        child: TickerMode(
+                                          enabled: progress > .001,
+                                          child: contentDock,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  right: 0,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: railWidth,
+                                  child: dashboard,
+                                ),
+                              ],
+                            );
+                          },
+                        ),
                       );
                     },
                   );
@@ -1296,7 +1532,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
                   }
                   return TweenAnimationBuilder<double>(
                     key: ValueKey<String>(
-                      'single_spatial_${session.id}_${userState.currentArea}',
+                      'single_workspace_${session.id}_$currentArea',
                     ),
                     tween: Tween<double>(begin: 0, end: 1),
                     duration: const Duration(milliseconds: 320),
@@ -1324,68 +1560,42 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
   }
 }
 
-class _SingleInsideWorkspaceSwitcher extends StatelessWidget {
-  const _SingleInsideWorkspaceSwitcher({
+class _SingleInsideContentDockSwitcher extends StatelessWidget {
+  const _SingleInsideContentDockSwitcher({
     required this.active,
     required this.duration,
-    required this.dotMap,
-    required this.workSchedule,
-    required this.punchRecorder,
-    required this.workManual,
+    required this.children,
   });
 
-  final SingleInsideWorkspaceContent active;
+  final SingleInsideContentDockContent? active;
   final Duration duration;
-  final Widget dotMap;
-  final Widget workSchedule;
-  final Widget punchRecorder;
-  final Widget workManual;
+  final Map<SingleInsideContentDockContent, Widget> children;
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       fit: StackFit.expand,
       children: [
-        _SingleInsideWorkspaceLayer(
-          active: active == SingleInsideWorkspaceContent.dotMap,
-          duration: duration,
-          offset: const Offset(-.018, 0),
-          child: dotMap,
-        ),
-        _SingleInsideWorkspaceLayer(
-          active: active == SingleInsideWorkspaceContent.workSchedule,
-          duration: duration,
-          offset: const Offset(.018, 0),
-          child: workSchedule,
-        ),
-        _SingleInsideWorkspaceLayer(
-          active: active == SingleInsideWorkspaceContent.punchRecorder,
-          duration: duration,
-          offset: const Offset(0, .025),
-          child: punchRecorder,
-        ),
-        _SingleInsideWorkspaceLayer(
-          active: active == SingleInsideWorkspaceContent.workManual,
-          duration: duration,
-          offset: const Offset(.018, 0),
-          child: workManual,
-        ),
+        for (final entry in children.entries)
+          _SingleInsideContentDockLayer(
+            active: active == entry.key,
+            duration: duration,
+            child: entry.value,
+          ),
       ],
     );
   }
 }
 
-class _SingleInsideWorkspaceLayer extends StatelessWidget {
-  const _SingleInsideWorkspaceLayer({
+class _SingleInsideContentDockLayer extends StatelessWidget {
+  const _SingleInsideContentDockLayer({
     required this.active,
     required this.duration,
-    required this.offset,
     required this.child,
   });
 
   final bool active;
   final Duration duration;
-  final Offset offset;
   final Widget child;
 
   @override
@@ -1399,12 +1609,17 @@ class _SingleInsideWorkspaceLayer extends StatelessWidget {
           duration: duration,
           curve: Curves.easeOutCubic,
           child: AnimatedSlide(
-            offset: active ? Offset.zero : offset,
+            offset: active ? Offset.zero : const Offset(.035, 0),
             duration: duration,
             curve: Curves.easeOutCubic,
-            child: TickerMode(
-              enabled: active,
-              child: child,
+            child: AnimatedScale(
+              scale: active ? 1 : .992,
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              child: TickerMode(
+                enabled: active,
+                child: child,
+              ),
             ),
           ),
         ),

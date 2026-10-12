@@ -19,51 +19,123 @@ import '../../../location/domain/models/location_model.dart';
 import '../../../location/domain/models/parking_grid_model.dart';
 import '../../application/single_inside_diagnostics.dart';
 
+class SingleInsideSpatialDotMapController {
+  _SingleInsideSpatialDotMapState? _state;
+
+  bool get detailOpen => _state?._childDetailOpen ?? false;
+
+  Future<bool> closeDetail({String source = 'external'}) async {
+    final state = _state;
+    if (state == null) return false;
+    return state._collapseChild(source);
+  }
+
+  void _attach(_SingleInsideSpatialDotMapState state) {
+    _state = state;
+  }
+
+  void _detach(_SingleInsideSpatialDotMapState state) {
+    if (identical(_state, state)) {
+      _state = null;
+    }
+  }
+}
+
 class SingleInsideSpatialDotMap extends StatefulWidget {
   const SingleInsideSpatialDotMap({
     super.key,
     required this.area,
     required this.refreshRevision,
+    this.controller,
+    this.onDetailStateChanged,
   });
 
   final String area;
   final int refreshRevision;
+  final SingleInsideSpatialDotMapController? controller;
+  final ValueChanged<bool>? onDetailStateChanged;
 
   @override
   State<SingleInsideSpatialDotMap> createState() =>
       _SingleInsideSpatialDotMapState();
 }
 
-class _SingleInsideSpatialDotMapState extends State<SingleInsideSpatialDotMap> {
+class _SingleInsideSpatialDotMapState extends State<SingleInsideSpatialDotMap>
+    with SingleTickerProviderStateMixin {
   final PageController _pageController = PageController();
+  final GlobalKey _surfaceKey = GlobalKey();
+  late final AnimationController _childFocusController;
   List<_SingleSpatialMapEntry> _entries = const <_SingleSpatialMapEntry>[];
   bool _loading = true;
   bool _failed = false;
-  bool _childDialogOpen = false;
+  bool _childDetailOpen = false;
   int _pageIndex = 0;
   int _loadToken = 0;
   String? _focusedChildKey;
-  String _childCloseSource = 'route';
+  String _childCloseSource = 'embedded';
+  _SingleSpatialMapEntry? _focusedEntry;
+  ParkingSpatialChildRegion<LocationModel>? _focusedRegion;
+  Rect? _focusedSourceRect;
+  Rect? _focusedTargetRect;
 
   @override
   void initState() {
     super.initState();
+    _childFocusController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 340),
+      reverseDuration: const Duration(milliseconds: 280),
+    );
+    widget.controller?._attach(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
   void didUpdateWidget(covariant SingleInsideSpatialDotMap oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?._detach(this);
+      widget.controller?._attach(this);
+    }
     if (oldWidget.area.trim() != widget.area.trim() ||
         oldWidget.refreshRevision != widget.refreshRevision) {
+      _clearChildFocusImmediately(source: 'data_identity_changed');
       _load();
     }
   }
 
   @override
   void dispose() {
+    if (_childDetailOpen) {
+      widget.onDetailStateChanged?.call(false);
+    }
+    widget.controller?._detach(this);
+    _childFocusController.dispose();
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _notifyDetailState(bool open) {
+    widget.onDetailStateChanged?.call(open);
+  }
+
+  void _clearChildFocusImmediately({required String source}) {
+    final hadFocus = _childDetailOpen || _focusedChildKey != null;
+    _childFocusController.stop();
+    _childFocusController.value = 0;
+    _childDetailOpen = false;
+    _focusedChildKey = null;
+    _focusedEntry = null;
+    _focusedRegion = null;
+    _focusedSourceRect = null;
+    _focusedTargetRect = null;
+    if (hadFocus) {
+      _notifyDetailState(false);
+      SingleInsideDiagnostics.log(
+        'dotmap',
+        'child_focus_reset source=$source return=parent_overview',
+      );
+    }
   }
 
   Future<void> _load() async {
@@ -130,7 +202,7 @@ class _SingleInsideSpatialDotMapState extends State<SingleInsideSpatialDotMap> {
       });
       SingleInsideDiagnostics.log(
         'dotmap',
-        'hierarchy_resolved area=$area locationCount=${locations.length} parents=${entries.length} children=$childCount slots=$slotCount towers=$towerCount plateData=false viewCollection=false',
+        'hierarchy_resolved area=$area locationCount=${locations.length} parents=${entries.length} children=$childCount slots=$slotCount towers=$towerCount plateData=false viewCollection=false detailPresentation=embedded_side_dock',
       );
       SingleInsideDiagnostics.log(
         'dotmap',
@@ -180,12 +252,20 @@ class _SingleInsideSpatialDotMapState extends State<SingleInsideSpatialDotMap> {
   Future<void> _focusChild(
     _SingleSpatialMapEntry entry,
     ParkingSpatialChildRegion<LocationModel> region,
-    Rect sourceRect,
+    Rect sourceGlobalRect,
   ) async {
-    if (_childDialogOpen) {
+    if (_childDetailOpen || _childFocusController.value > .001) {
       SingleInsideDiagnostics.log(
         'dotmap',
-        'child_focus_blocked parent=${entry.name} child=${region.source.locationName} reason=dialog_open',
+        'child_focus_blocked parent=${entry.name} child=${region.source.locationName} reason=embedded_detail_open',
+      );
+      return;
+    }
+    final surfaceRenderObject = _surfaceKey.currentContext?.findRenderObject();
+    if (surfaceRenderObject is! RenderBox || !surfaceRenderObject.hasSize) {
+      SingleInsideDiagnostics.log(
+        'dotmap',
+        'child_focus_blocked parent=${entry.name} child=${region.source.locationName} reason=surface_unavailable',
       );
       return;
     }
@@ -196,99 +276,50 @@ class _SingleInsideSpatialDotMapState extends State<SingleInsideSpatialDotMap> {
     final childKey = '${entry.id}:${child.id}';
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final targetRect = parkingSpatialTargetRect(context);
+    final surfaceOrigin = surfaceRenderObject.localToGlobal(Offset.zero);
+    final sourceRect = sourceGlobalRect.shift(-surfaceOrigin);
+    final size = surfaceRenderObject.size;
+    final inset = size.width < 280 || size.height < 280 ? 4.0 : 8.0;
+    final targetRect = Rect.fromLTWH(
+      inset,
+      inset,
+      math.max(1.0, size.width - inset * 2).toDouble(),
+      math.max(1.0, size.height - inset * 2).toDouble(),
+    );
     final duration =
-        reduceMotion ? Duration.zero : const Duration(milliseconds: 340);
-    _childCloseSource = 'route';
-    _childDialogOpen = true;
-    if (mounted) {
-      setState(() => _focusedChildKey = childKey);
-    }
-    HapticFeedback.selectionClick();
+        reduceMotion ? Duration.zero : _childFocusController.duration!;
+    _childCloseSource = 'embedded_open';
+    setState(() {
+      _childDetailOpen = true;
+      _focusedChildKey = childKey;
+      _focusedEntry = entry;
+      _focusedRegion = region;
+      _focusedSourceRect = sourceRect;
+      _focusedTargetRect = targetRect;
+    });
+    _notifyDetailState(true);
+    await HapticFeedback.selectionClick();
     SingleInsideDiagnostics.log(
       'dotmap',
-      'child_focus_started parent=${entry.name} child=$childName childKind=${child.isTowerChild ? 'tower' : 'spatial'} viewport=${region.childRect.toKey()} sourceRect=${parkingSpatialRectDebug(sourceRect)} targetRect=${parkingSpatialRectDebug(targetRect)} durationMs=${duration.inMilliseconds} slots=${parkingSpatialCapacityForChild(child)} areaIds=${region.effectiveParkingAreaIds.length} plateData=false',
+      'child_focus_started parent=${entry.name} child=$childName childKind=${child.isTowerChild ? 'tower' : 'spatial'} presentation=embedded_side_dock viewport=${region.childRect.toKey()} sourceGlobal=${parkingSpatialRectDebug(sourceGlobalRect)} sourceLocal=${parkingSpatialRectDebug(sourceRect)} targetLocal=${parkingSpatialRectDebug(targetRect)} durationMs=${duration.inMilliseconds} slots=${parkingSpatialCapacityForChild(child)} areaIds=${region.effectiveParkingAreaIds.length} plateData=false',
     );
 
     try {
       await MotionTimingDiagnostics.waitForFlow(
-        'single_dotmap_dialog_open_pacing',
+        'single_dotmap_embedded_open_pacing',
         const Duration(milliseconds: 48),
         scope: 'single_inside_dotmap',
         reduceMotion: reduceMotion,
         meta: <String, Object?>{'childKey': childKey},
       );
-      if (!mounted || _focusedChildKey != childKey) return;
-      await showGeneralDialog<void>(
-        context: context,
-        useRootNavigator: true,
-        barrierDismissible: false,
-        barrierLabel: '$childName 주차 구역',
-        barrierColor: Colors.transparent,
-        transitionDuration: duration,
-        pageBuilder: (_, __, ___) => const SizedBox.expand(),
-        transitionBuilder: (dialogContext, animation, _, __) {
-          void close(String source) {
-            if (_childCloseSource != 'route') return;
-            _childCloseSource = source;
-            HapticFeedback.selectionClick();
-            SingleInsideDiagnostics.log(
-              'dotmap',
-              'child_focus_collapse_started parent=${entry.name} child=$childName source=$source',
-            );
-            Navigator.of(dialogContext).pop();
-          }
-
-          return ParkingSpatialSourceRectTransition(
-            animation: animation,
-            sourceRect: sourceRect,
-            targetRect: targetRect,
-            reduceMotion: reduceMotion,
-            closeSemanticsLabel: '$childName 닫기',
-            onCloseRequested: close,
-            onSystemPop: () {
-              if (_childCloseSource == 'route') {
-                _childCloseSource = 'system_back';
-                HapticFeedback.selectionClick();
-                SingleInsideDiagnostics.log(
-                  'dotmap',
-                  'child_focus_collapse_started parent=${entry.name} child=$childName source=system_back',
-                );
-              }
-            },
-            onExpanded: () {
-              SingleInsideDiagnostics.log(
-                'dotmap',
-                'child_focus_completed parent=${entry.name} child=$childName center=${parkingSpatialRectDebug(targetRect)} slots=${parkingSpatialCapacityForChild(child)} plateData=false',
-              );
-            },
-            onCollapseLifecycle: (info) {
-              SingleInsideDiagnostics.log(
-                'dotmap',
-                'child_focus_collapse_lifecycle parent=${entry.name} child=$childName expanded=${info.expandedBeforeCollapse} early=${info.earlyCollapse} maxProgress=${info.maxRawProgress.toStringAsFixed(3)}',
-              );
-            },
-            onCollapsed: () {
-              SingleInsideDiagnostics.log(
-                'dotmap',
-                'child_focus_collapse_completed parent=${entry.name} child=$childName source=$_childCloseSource target=${parkingSpatialRectDebug(sourceRect)}',
-              );
-            },
-            builder: (context, progress, interactionEnabled) {
-              return _SingleChildFocusSurface(
-                child: child,
-                grid: entry.grid,
-                childRect: region.childRect,
-                effectiveParkingAreaIds: region.effectiveParkingAreaIds,
-                progress: progress,
-                reduceMotion: reduceMotion,
-                interactionEnabled: interactionEnabled,
-                onClose: () => close('dialog_header'),
-              );
-            },
-          );
-        },
-      );
+      if (!mounted || !_childDetailOpen || _focusedChildKey != childKey) return;
+      if (reduceMotion) {
+        _childFocusController.value = 1;
+      } else {
+        await _childFocusController.forward(from: 0).orCancel;
+      }
+    } on TickerCanceled {
+      return;
     } catch (error, stackTrace) {
       SingleInsideDiagnostics.log(
         'dotmap',
@@ -304,18 +335,175 @@ class _SingleInsideSpatialDotMapState extends State<SingleInsideSpatialDotMap> {
           ),
         );
       }
-    } finally {
-      _childDialogOpen = false;
-      if (mounted && _focusedChildKey == childKey) {
-        setState(() => _focusedChildKey = null);
-      } else if (_focusedChildKey == childKey) {
-        _focusedChildKey = null;
-      }
-      SingleInsideDiagnostics.log(
-        'dotmap',
-        'child_focus_closed parent=${entry.name} child=$childName source=$_childCloseSource return=parent_overview',
-      );
+      await _collapseChild('open_failure');
     }
+  }
+
+  Future<bool> _collapseChild(String source) async {
+    if (!_childDetailOpen && _childFocusController.value <= .001) return false;
+    if (_childFocusController.status == AnimationStatus.reverse) return true;
+    final entry = _focusedEntry;
+    final region = _focusedRegion;
+    final sourceRect = _focusedSourceRect;
+    final child = region?.source;
+    final childName = child == null
+        ? '-'
+        : child.locationName.trim().isEmpty
+            ? child.id
+            : child.locationName.trim();
+    _childCloseSource = source;
+    await HapticFeedback.selectionClick();
+    SingleInsideDiagnostics.log(
+      'dotmap',
+      'child_focus_collapse_started parent=${entry?.name ?? '-'} child=$childName source=$source presentation=embedded_side_dock progress=${_childFocusController.value.toStringAsFixed(3)}',
+    );
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    try {
+      if (reduceMotion) {
+        _childFocusController.value = 0;
+      } else {
+        await _childFocusController.reverse().orCancel;
+      }
+    } on TickerCanceled {
+      return true;
+    }
+    if (!mounted) return true;
+    setState(() {
+      _childDetailOpen = false;
+      _focusedChildKey = null;
+      _focusedEntry = null;
+      _focusedRegion = null;
+      _focusedSourceRect = null;
+      _focusedTargetRect = null;
+    });
+    _notifyDetailState(false);
+    SingleInsideDiagnostics.log(
+      'dotmap',
+      'child_focus_closed parent=${entry?.name ?? '-'} child=$childName source=$source return=parent_overview target=${sourceRect == null ? '-' : parkingSpatialRectDebug(sourceRect)}',
+    );
+    return true;
+  }
+
+  Widget _buildLoadedMap(
+    BuildContext context,
+    CommonUiTokens tokens,
+    bool reduceMotion,
+  ) {
+    final entry = _focusedEntry;
+    final region = _focusedRegion;
+    final sourceRect = _focusedSourceRect;
+    final targetRect = _focusedTargetRect;
+    final child = region?.source;
+    return Container(
+      key: _surfaceKey,
+      color: tokens.canvas,
+      child: Stack(
+        clipBehavior: Clip.hardEdge,
+        children: [
+          Positioned.fill(
+            child: PageView.builder(
+              controller: _pageController,
+              physics: _childDetailOpen
+                  ? const NeverScrollableScrollPhysics()
+                  : const ClampingScrollPhysics(),
+              itemCount: _entries.length,
+              onPageChanged: _onPageChanged,
+              itemBuilder: (context, index) {
+                final pageEntry = _entries[index];
+                return _SingleSpatialMapPage(
+                  entry: pageEntry,
+                  focusedChildKey: _focusedChildKey,
+                  reduceMotion: reduceMotion,
+                  onChildTap: (childRegion, childSourceRect) {
+                    unawaited(
+                      _focusChild(pageEntry, childRegion, childSourceRect),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          Positioned(
+            left: 16,
+            right: 16,
+            top: 14,
+            child: IgnorePointer(
+              child: _SingleSpatialHeader(
+                entry: _entries[_pageIndex],
+                index: _pageIndex,
+                count: _entries.length,
+              ),
+            ),
+          ),
+          if (_entries.length > 1)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 14,
+              child: IgnorePointer(
+                child: _SingleSpatialPageIndicator(
+                  count: _entries.length,
+                  index: _pageIndex,
+                ),
+              ),
+            ),
+          if (entry != null &&
+              region != null &&
+              sourceRect != null &&
+              targetRect != null &&
+              child != null)
+            Positioned.fill(
+              child: ParkingSpatialSourceRectTransition(
+                animation: _childFocusController,
+                sourceRect: sourceRect,
+                targetRect: targetRect,
+                reduceMotion: reduceMotion,
+                closeSemanticsLabel:
+                    '${child.locationName.trim().isEmpty ? child.id : child.locationName.trim()} 닫기',
+                onCloseRequested: (source) {
+                  unawaited(_collapseChild(source));
+                },
+                onSystemPop: () {
+                  unawaited(_collapseChild('system_back_embedded'));
+                },
+                onExpanded: () {
+                  SingleInsideDiagnostics.log(
+                    'dotmap',
+                    'child_focus_completed parent=${entry.name} child=${child.locationName.trim().isEmpty ? child.id : child.locationName.trim()} presentation=embedded_side_dock target=${parkingSpatialRectDebug(targetRect)} slots=${parkingSpatialCapacityForChild(child)} plateData=false',
+                  );
+                },
+                onCollapseLifecycle: (info) {
+                  SingleInsideDiagnostics.log(
+                    'dotmap',
+                    'child_focus_collapse_lifecycle parent=${entry.name} child=${child.locationName.trim().isEmpty ? child.id : child.locationName.trim()} expanded=${info.expandedBeforeCollapse} early=${info.earlyCollapse} maxProgress=${info.maxRawProgress.toStringAsFixed(3)} presentation=embedded_side_dock',
+                  );
+                },
+                onCollapsed: () {
+                  SingleInsideDiagnostics.log(
+                    'dotmap',
+                    'child_focus_collapse_completed parent=${entry.name} child=${child.locationName.trim().isEmpty ? child.id : child.locationName.trim()} source=$_childCloseSource target=${parkingSpatialRectDebug(sourceRect)} presentation=embedded_side_dock',
+                  );
+                },
+                builder: (context, progress, interactionEnabled) {
+                  return _SingleChildFocusSurface(
+                    child: child,
+                    grid: entry.grid,
+                    childRect: region.childRect,
+                    effectiveParkingAreaIds: region.effectiveParkingAreaIds,
+                    progress: progress,
+                    reduceMotion: reduceMotion,
+                    interactionEnabled: interactionEnabled,
+                    onClose: () {
+                      unawaited(_collapseChild('detail_header'));
+                    },
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -362,63 +550,7 @@ class _SingleInsideSpatialDotMapState extends State<SingleInsideSpatialDotMap> {
                       icon: Icons.grid_off_rounded,
                       label: '등록된 공간 정보가 없습니다',
                     )
-                  : Container(
-                      key: ValueKey<String>(
-                        'single_dotmap_loaded_${widget.area}_${widget.refreshRevision}',
-                      ),
-                      color: tokens.canvas,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: PageView.builder(
-                              controller: _pageController,
-                              physics: _childDialogOpen
-                                  ? const NeverScrollableScrollPhysics()
-                                  : const ClampingScrollPhysics(),
-                              itemCount: _entries.length,
-                              onPageChanged: _onPageChanged,
-                              itemBuilder: (context, index) {
-                                final entry = _entries[index];
-                                return _SingleSpatialMapPage(
-                                  entry: entry,
-                                  focusedChildKey: _focusedChildKey,
-                                  reduceMotion: reduceMotion,
-                                  onChildTap: (region, sourceRect) {
-                                    unawaited(
-                                      _focusChild(entry, region, sourceRect),
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                          ),
-                          Positioned(
-                            left: 16,
-                            right: 16,
-                            top: 14,
-                            child: IgnorePointer(
-                              child: _SingleSpatialHeader(
-                                entry: _entries[_pageIndex],
-                                index: _pageIndex,
-                                count: _entries.length,
-                              ),
-                            ),
-                          ),
-                          if (_entries.length > 1)
-                            Positioned(
-                              left: 16,
-                              right: 16,
-                              bottom: 14,
-                              child: IgnorePointer(
-                                child: _SingleSpatialPageIndicator(
-                                  count: _entries.length,
-                                  index: _pageIndex,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                  : _buildLoadedMap(context, tokens, reduceMotion),
     );
   }
 }

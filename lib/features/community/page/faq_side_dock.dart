@@ -138,10 +138,12 @@ class FaqSideDockContent extends StatefulWidget {
     super.key,
     required this.side,
     required this.source,
+    this.onClose,
   });
 
   final CommonSideDockSide side;
   final String source;
+  final VoidCallback? onClose;
 
   @override
   State<FaqSideDockContent> createState() => _FaqSideDockContentState();
@@ -278,6 +280,11 @@ class _FaqSideDockContentState extends State<FaqSideDockContent> {
       'dock_close_requested side=${widget.side.name} source=${widget.source}',
     );
     if (!mounted) return;
+    final externalClose = widget.onClose;
+    if (externalClose != null) {
+      externalClose();
+      return;
+    }
     await Navigator.of(context).maybePop();
   }
 
@@ -359,6 +366,7 @@ class _FaqSideDockContentState extends State<FaqSideDockContent> {
         : '${_faqCatalog.length}개 항목';
 
     return CommonSideDockFrame(
+      showCloseTooltip: false,
       title: 'FAQ / 문의',
       subtitle: subtitle,
       icon: Icons.help_center_rounded,

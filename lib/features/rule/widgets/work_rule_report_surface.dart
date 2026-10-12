@@ -165,6 +165,7 @@ class WorkRuleReportWorkspace extends StatefulWidget {
     this.refreshRevision = 0,
     this.developerMode = false,
     this.onDebug,
+    this.showHeader = true,
   });
 
   final String division;
@@ -177,6 +178,7 @@ class WorkRuleReportWorkspace extends StatefulWidget {
   final int refreshRevision;
   final bool developerMode;
   final ValueChanged<String>? onDebug;
+  final bool showHeader;
 
   @override
   State<WorkRuleReportWorkspace> createState() =>
@@ -513,77 +515,79 @@ class _WorkRuleReportWorkspaceState extends State<WorkRuleReportWorkspace> {
       key: const ValueKey<String>('work_rule_report_workspace'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Semantics(
-              button: true,
-              label: '업무 목록으로',
-              child: IconButton(
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  _debug('work_rule_report=close_requested source=back_button');
-                  widget.onBack();
-                },
-                icon: Icon(
-                  Icons.arrow_back_rounded,
-                  color: tokens.iconPrimary,
-                ),
-              ),
-            ),
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: tokens.accentContainer,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: tokens.borderSubtle),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                widget.contentMode.icon,
-                color: tokens.onAccentContainer,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.contentMode.workspaceTitle,
-                    style: text.titleMedium?.copyWith(
-                      color: tokens.textPrimary,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    widget.area.trim().isEmpty ? '현재 지역' : widget.area.trim(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.labelMedium?.copyWith(
-                      color: tokens.textSecondary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (showDeveloperStatus)
+        if (widget.showHeader) ...[
+          Row(
+            children: [
               Semantics(
                 button: true,
-                label: widget.contentMode.statusTitle,
+                label: '업무 목록으로',
                 child: IconButton(
-                  onPressed: _showDeveloperStatus,
+                  onPressed: () {
+                    HapticFeedback.selectionClick();
+                    _debug('work_rule_report=close_requested source=back_button');
+                    widget.onBack();
+                  },
                   icon: Icon(
-                    Icons.bug_report_outlined,
-                    color: tokens.iconSecondary,
+                    Icons.arrow_back_rounded,
+                    color: tokens.iconPrimary,
                   ),
                 ),
               ),
-          ],
-        ),
-        const SizedBox(height: 10),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: tokens.accentContainer,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: tokens.borderSubtle),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  widget.contentMode.icon,
+                  color: tokens.onAccentContainer,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.contentMode.workspaceTitle,
+                      style: text.titleMedium?.copyWith(
+                        color: tokens.textPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      widget.area.trim().isEmpty ? '현재 지역' : widget.area.trim(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelMedium?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (showDeveloperStatus)
+                Semantics(
+                  button: true,
+                  label: widget.contentMode.statusTitle,
+                  child: IconButton(
+                    onPressed: _showDeveloperStatus,
+                    icon: Icon(
+                      Icons.bug_report_outlined,
+                      color: tokens.iconSecondary,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+        ],
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {

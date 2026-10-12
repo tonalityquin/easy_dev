@@ -16,6 +16,8 @@ import '../../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../../design_system/common_ui/common_ui_side_dock_action_tile.dart';
 import '../../../../design_system/common_ui/common_ui_side_dock_frame.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../shared/attendance_submission/attendance_submission_review_model.dart';
+import '../../../../shared/attendance_submission/attendance_submission_review_surface.dart';
 import '../../../../shared/sheet_tool/document_box_action.dart';
 import '../../../../shared/sheet_tool/document_box_action_executor.dart';
 import '../../../../shared/utils/side_dock_action_catalog.dart';
@@ -53,7 +55,7 @@ class OpsDashboardSideDock extends StatefulWidget {
       _OpsDashboardSideDockState();
 }
 
-enum _OpsDashboardView { dashboard, workRuleReport, workManual }
+enum _OpsDashboardView { dashboard, workRuleReport, workManual, commuteReview, restTimeReview }
 
 class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
   final ScrollController _dockScrollController = ScrollController();
@@ -63,6 +65,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
   String _lastBusinessDebugSignature = '';
   bool _developerMode = false;
   bool _developerModeResolved = false;
+  bool _detailBusy = false;
   _OpsDashboardView _view = _OpsDashboardView.dashboard;
 
   bool _isFieldCommon(UserState userState) {
@@ -500,12 +503,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         icon: SideDockActionCatalog.commuteSubmitIcon,
         color: tokens.infoContainer,
         foreground: tokens.onInfoContainer,
-        onPressed: () => _runDocumentAction(
-          context,
-          isFieldCommon
-              ? DocumentBoxAction.submitFielderCommuteRecords
-              : DocumentBoxAction.submitLeaderCommuteRecords,
-        ),
+        onPressed: () async {
+          _openSubmissionReview(AttendanceSubmissionKind.commute);
+        },
       ),
       _DashboardAction(
         id: 'rest_time_submit',
@@ -515,12 +515,9 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         icon: SideDockActionCatalog.restTimeSubmitIcon,
         color: tokens.successContainer,
         foreground: tokens.onSuccessContainer,
-        onPressed: () => _runDocumentAction(
-          context,
-          isFieldCommon
-              ? DocumentBoxAction.submitFielderRestTimeRecords
-              : DocumentBoxAction.submitLeaderRestTimeRecords,
-        ),
+        onPressed: () async {
+          _openSubmissionReview(AttendanceSubmissionKind.restTime);
+        },
       ),
       _DashboardAction(
         id: 'photo_transfer',
@@ -837,12 +834,46 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     setState(() => _view = _OpsDashboardView.workManual);
   }
 
+  void _openSubmissionReview(AttendanceSubmissionKind kind) {
+    final next = kind == AttendanceSubmissionKind.commute
+        ? _OpsDashboardView.commuteReview
+        : _OpsDashboardView.restTimeReview;
+    if (_view == next) return;
+    _searchFocusNode.unfocus();
+    HapticFeedback.selectionClick();
+    final areaState = context.read<AreaState>();
+    debugPrint(
+      '[OpsDashboardSideDock] attendance_review_open_requested kind=${kind.name} mode=${widget.modeLabel} division=${areaState.currentDivision.trim()} area=${areaState.currentArea.trim()} side=right',
+    );
+    setState(() {
+      _detailBusy = false;
+      _view = next;
+    });
+  }
+
+  void _setDetailBusy(bool value) {
+    if (_detailBusy == value) return;
+    setState(() => _detailBusy = value);
+    debugPrint(
+      '[OpsDashboardSideDock] detail_busy view=${_view.name} value=$value',
+    );
+  }
+
   void _closeWorkDetail({required String source}) {
     if (_view == _OpsDashboardView.dashboard) return;
+    if (_detailBusy) {
+      debugPrint(
+        '[OpsDashboardSideDock] detail_close_blocked source=$source view=${_view.name} reason=busy',
+      );
+      return;
+    }
     debugPrint(
-      '[OpsDashboardSideDock] work_detail_close_requested source=$source mode=${widget.modeLabel} view=${_view.name}',
+      '[OpsDashboardSideDock] detail_close_requested source=$source mode=${widget.modeLabel} view=${_view.name}',
     );
-    setState(() => _view = _OpsDashboardView.dashboard);
+    setState(() {
+      _detailBusy = false;
+      _view = _OpsDashboardView.dashboard;
+    });
   }
 
   void _requestBusinessAction(
@@ -1294,38 +1325,63 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
             children: dashboardChildren,
           ),
         );
-        final detail = WorkRuleReportWorkspace(
-          key: ValueKey<String>(
-            _view == _OpsDashboardView.workManual
-                ? 'ops_work_manual'
-                : 'ops_work_rule_report',
-          ),
-          division: areaState.currentDivision,
-          area: areaState.currentArea,
-          capabilityEnabled:
-              areaState.capabilitiesOfCurrentArea.contains(Capability.rule),
-          source: _view == _OpsDashboardView.workManual
-              ? 'ops_dashboard_manual_${widget.modeLabel}'
-              : 'ops_dashboard_${widget.modeLabel}',
-          side: WorkRuleReportSide.right,
-          contentMode: _view == _OpsDashboardView.workManual
-              ? WorkRuleReportContentMode.responseManual
-              : WorkRuleReportContentMode.notice,
-          developerMode: _developerMode,
-          onBack: () => _closeWorkDetail(
+        final Widget detail;
+        if (_view == _OpsDashboardView.commuteReview ||
+            _view == _OpsDashboardView.restTimeReview) {
+          final reviewKind = _view == _OpsDashboardView.commuteReview
+              ? AttendanceSubmissionKind.commute
+              : AttendanceSubmissionKind.restTime;
+          detail = AttendanceSubmissionReviewWorkspace(
+            key: ValueKey<String>('ops_attendance_review_${reviewKind.name}'),
+            kind: reviewKind,
+            area: areaState.currentArea,
+            side: AttendanceSubmissionReviewSide.right,
+            developerMode: _developerMode,
+            source: 'dashboard_${widget.modeLabel}',
+            onBusyChanged: _setDetailBusy,
+            onSubmitted: () {
+              debugPrint(
+                '[OpsDashboardSideDock] attendance_review_submitted kind=${reviewKind.name} mode=${widget.modeLabel}',
+              );
+            },
+            onBack: () => _closeWorkDetail(
+              source: '${reviewKind.name}_review_back_button',
+            ),
+          );
+        } else {
+          detail = WorkRuleReportWorkspace(
+            key: ValueKey<String>(
+              _view == _OpsDashboardView.workManual
+                  ? 'ops_work_manual'
+                  : 'ops_work_rule_report',
+            ),
+            division: areaState.currentDivision,
+            area: areaState.currentArea,
+            capabilityEnabled:
+                areaState.capabilitiesOfCurrentArea.contains(Capability.rule),
             source: _view == _OpsDashboardView.workManual
-                ? 'manual_back_button'
-                : 'report_back_button',
-          ),
-          onDebug: (message) => debugPrint(
-            '[OpsDashboardSideDock] $message',
-          ),
-        );
+                ? 'ops_dashboard_manual_${widget.modeLabel}'
+                : 'ops_dashboard_${widget.modeLabel}',
+            side: WorkRuleReportSide.right,
+            contentMode: _view == _OpsDashboardView.workManual
+                ? WorkRuleReportContentMode.responseManual
+                : WorkRuleReportContentMode.notice,
+            developerMode: _developerMode,
+            onBack: () => _closeWorkDetail(
+              source: _view == _OpsDashboardView.workManual
+                  ? 'manual_back_button'
+                  : 'report_back_button',
+            ),
+            onDebug: (message) => debugPrint(
+              '[OpsDashboardSideDock] $message',
+            ),
+          );
+        }
 
         return PopScope(
           canPop: !detailVisible,
           onPopInvoked: (didPop) {
-            if (didPop || !detailVisible) return;
+            if (didPop || !detailVisible || _detailBusy) return;
             _closeWorkDetail(source: 'system_back');
           },
           child: AnimatedSwitcher(
@@ -1336,9 +1392,8 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
             switchOutCurve: Curves.easeInCubic,
             transitionBuilder: (child, animation) {
               if (reduceMotion) return child;
-              final detailChild = child.key ==
-                      const ValueKey<String>('ops_work_rule_report') ||
-                  child.key == const ValueKey<String>('ops_work_manual');
+              final detailChild = child.key !=
+                  const ValueKey<String>('ops_dashboard');
               final begin = detailChild
                   ? const Offset(.025, 0)
                   : const Offset(-.025, 0);

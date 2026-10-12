@@ -193,6 +193,82 @@ class AttBrkRepository {
     return rowId > 0;
   }
 
+
+  Future<void> upsertReviewEvent({
+    required DateTime date,
+    required AttBrkModeType type,
+    required String time,
+  }) async {
+    final normalizedTime = time.trim();
+    final match = RegExp(r'^(\d{2}):(\d{2})$').firstMatch(normalizedTime);
+    if (match == null) {
+      throw FormatException('유효하지 않은 시간 형식입니다.');
+    }
+    final hour = int.parse(match.group(1)!);
+    final minute = int.parse(match.group(2)!);
+    if (hour > 23 || minute > 59) {
+      throw FormatException('유효하지 않은 시간입니다.');
+    }
+    final db = await _database;
+    final day = _dateFormatter.format(date);
+    final eventAt = DateTime(date.year, date.month, date.day, hour, minute);
+    final values = <String, Object?>{
+      'date': day,
+      'type': type.isBreak ? _breakTypeStart : type.code,
+      'time': normalizedTime,
+      'created_at': eventAt.toIso8601String(),
+    };
+    await db.insert(
+      type.isBreak
+          ? AttBrkModeDb.breakAttendanceTable
+          : AttBrkModeDb.workAttendanceTable,
+      values,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    debugPrint(
+      '[ATTENDANCE_REVIEW] local_upsert date=$day type=${type.code} time=$normalizedTime',
+    );
+  }
+
+  Future<int> deleteReviewEvent({
+    required DateTime date,
+    required AttBrkModeType type,
+  }) async {
+    final db = await _database;
+    final day = _dateFormatter.format(date);
+    final table = type.isBreak
+        ? AttBrkModeDb.breakAttendanceTable
+        : AttBrkModeDb.workAttendanceTable;
+    final localType = type.isBreak ? _breakTypeStart : type.code;
+    final deleted = await db.delete(
+      table,
+      where: 'date = ? AND type = ?',
+      whereArgs: <Object?>[day, localType],
+    );
+    debugPrint(
+      '[ATTENDANCE_REVIEW] local_delete date=$day type=${type.code} deleted=$deleted',
+    );
+    return deleted;
+  }
+
+  Future<int> deleteReviewCommuteDate(DateTime date) async {
+    final db = await _database;
+    final day = _dateFormatter.format(date);
+    final deleted = await db.delete(
+      AttBrkModeDb.workAttendanceTable,
+      where: 'date = ? AND type IN (?, ?)',
+      whereArgs: <Object?>[
+        day,
+        AttBrkModeType.workIn.code,
+        AttBrkModeType.workOut.code,
+      ],
+    );
+    debugPrint(
+      '[ATTENDANCE_REVIEW] local_delete_commute_date date=$day deleted=$deleted',
+    );
+    return deleted;
+  }
+
   Future<void> clearEventsForDate(DateTime dateTime) async {
     final db = await _database;
     final date = _dateFormatter.format(dateTime);

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../utils/build_optimization_diagnostics.dart';
 import '../../utils/motion_timing_diagnostics.dart';
 import '../../../features/account/applications/tablet_account_diagnostics.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
@@ -57,6 +58,7 @@ class ParkinWorkinTerminalDiagnostics {
       ...AreaSnapshotPersistence.debugLines,
       ...ThemeDebugTrace.lines,
       ...MotionTimingDiagnostics.lines,
+      ...BuildOptimizationDiagnostics.lines,
       ..._lines,
     ];
     if (merged.isEmpty) {
@@ -74,6 +76,8 @@ class ParkinWorkinTerminalDiagnostics {
   }) async {
     final enabled = await DevAuth.isDevModeEnabled();
     if (!enabled || !context.mounted) return;
+    await BuildOptimizationDiagnostics.refresh(source: 'terminal_status');
+    if (!context.mounted) return;
     record(
       'developer_status_open',
       context: terminalContext,
@@ -90,6 +94,7 @@ class ParkinWorkinTerminalDiagnostics {
             WorkStatusNotificationController.debugLines.length,
         'appStartLines': AppStartDebugTrace.lines.length,
         'motionTimingLines': MotionTimingDiagnostics.lines.length,
+        'buildOptimizationLines': BuildOptimizationDiagnostics.lines.length,
       },
     );
     await StatusDialog.showSuccess(

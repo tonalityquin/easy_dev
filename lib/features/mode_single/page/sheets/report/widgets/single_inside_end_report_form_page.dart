@@ -44,7 +44,14 @@ Future<void> showSingleInsideEndReportSideDock({
 }
 
 class SingleInsideEndReportSideDock extends StatefulWidget {
-  const SingleInsideEndReportSideDock({super.key});
+  const SingleInsideEndReportSideDock({
+    super.key,
+    this.onClose,
+    this.onCloseEnabledChanged,
+  });
+
+  final VoidCallback? onClose;
+  final ValueChanged<bool>? onCloseEnabledChanged;
 
   @override
   State<SingleInsideEndReportSideDock> createState() =>
@@ -120,6 +127,7 @@ class _SingleInsideEndReportSideDockState
     DevAuth.devModeEnabled.addListener(_onDeveloperModeChanged);
     _vehicleCountCtrl.addListener(_onVehicleCountChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onCloseEnabledChanged?.call(!_sending && !_firstSubmitting);
       unawaited(_initialize());
     });
   }
@@ -617,6 +625,7 @@ class _SingleInsideEndReportSideDockState
       _lastFailure = '';
       _firstSubmitStage = 'firestore_write';
     });
+    widget.onCloseEnabledChanged?.call(false);
     _recordDebug(
       'first_submit_start area=$area divisionConfigured=${division.isNotEmpty} vehicle=$raw',
     );
@@ -662,6 +671,7 @@ class _SingleInsideEndReportSideDockState
     } finally {
       if (mounted) {
         setState(() => _firstSubmitting = false);
+        widget.onCloseEnabledChanged?.call(!_sending);
       }
     }
   }
@@ -681,6 +691,7 @@ class _SingleInsideEndReportSideDockState
       _mailBody = '';
       _updateMailContent(forceBody: true);
     });
+    widget.onCloseEnabledChanged?.call(false);
     _submitStage = 'prepare';
     _recordDebug(
       'final_submit_start area=${_resolveReportArea()} vehicle=${_vehicleCountCtrl.text.trim()} special=$_hasSpecialNote contentLen=${_contentCtrl.text.trim().length} recipientCount=${_recipientCount(_recipient)}',
@@ -724,6 +735,7 @@ class _SingleInsideEndReportSideDockState
 
       if (!mounted) return;
       setState(() => _sending = false);
+      widget.onCloseEnabledChanged?.call(!_firstSubmitting);
       await HapticFeedback.lightImpact();
       await StatusDialog.showSuccess(
         context,
@@ -731,10 +743,11 @@ class _SingleInsideEndReportSideDockState
         useCommonUi: true,
       );
       if (!mounted) return;
-      Navigator.of(context).pop();
+      _closeDock();
     } catch (error, stackTrace) {
       if (mounted) {
         setState(() => _sending = false);
+        widget.onCloseEnabledChanged?.call(!_firstSubmitting);
       }
       await _handleFailure(
         reason: _submitStage,
@@ -848,6 +861,11 @@ class _SingleInsideEndReportSideDockState
     _recordDebug(
       'dock_close first=$_firstSubmitStatusLabel vehicleValid=$_isVehicleCountValid special=${_hasSpecialNote ?? 'unset'} contentLen=${_contentCtrl.text.trim().length}',
     );
+    final externalClose = widget.onClose;
+    if (externalClose != null) {
+      externalClose();
+      return;
+    }
     Navigator.of(context).pop();
   }
 
@@ -1874,6 +1892,7 @@ class _SingleInsideEndReportSideDockState
     final tokens = CommonUiTheme.of(context);
     final area = _resolveReportArea();
     return CommonSideDockFrame(
+      showCloseTooltip: false,
       title: '업무 종료 보고',
       subtitle: '$area · Single 업무 종료',
       icon: Icons.task_alt_rounded,

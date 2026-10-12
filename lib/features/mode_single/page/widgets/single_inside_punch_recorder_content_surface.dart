@@ -3,116 +3,33 @@ import 'package:flutter/services.dart';
 
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../application/single_inside_diagnostics.dart';
+import '../side_docks/single_inside_side_dock.dart';
+import 'single_inside_hot_key_section.dart';
 import 'widgets/single_inside_punch_recorder_section.dart';
 
-class SingleInsidePunchRecorderContentSurface extends StatefulWidget {
+class SingleInsidePunchRecorderContentSurface extends StatelessWidget {
   const SingleInsidePunchRecorderContentSurface({
     super.key,
-    required this.active,
-    required this.countdownRevision,
-    required this.countdownSource,
-    required this.countdownEnabled,
-    required this.autoReturnDuration,
     required this.userId,
     required this.userName,
     required this.area,
     required this.division,
     required this.scheduleRevision,
-    required this.onAutoReturn,
+    required this.hotKeyRefreshRevision,
+    required this.allowReports,
+    required this.onHotKeyRequest,
     required this.onDeveloperStatus,
   });
 
-  final bool active;
-  final int countdownRevision;
-  final String countdownSource;
-  final bool countdownEnabled;
-  final Duration autoReturnDuration;
   final String userId;
   final String userName;
   final String area;
   final String division;
   final int scheduleRevision;
-  final VoidCallback onAutoReturn;
+  final int hotKeyRefreshRevision;
+  final bool allowReports;
+  final SingleInsideDashboardRequestHandler onHotKeyRequest;
   final Future<void> Function() onDeveloperStatus;
-
-  @override
-  State<SingleInsidePunchRecorderContentSurface> createState() =>
-      _SingleInsidePunchRecorderContentSurfaceState();
-}
-
-class _SingleInsidePunchRecorderContentSurfaceState
-    extends State<SingleInsidePunchRecorderContentSurface>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _countdownController;
-  int _completedRevision = -1;
-
-  @override
-  void initState() {
-    super.initState();
-    _countdownController = AnimationController(
-      vsync: this,
-      duration: widget.autoReturnDuration,
-    )..addStatusListener(_handleCountdownStatus);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !widget.active || !widget.countdownEnabled) return;
-      _restartCountdown(source: widget.countdownSource);
-    });
-  }
-
-  void _handleCountdownStatus(AnimationStatus status) {
-    if (status != AnimationStatus.completed ||
-        !widget.active ||
-        !widget.countdownEnabled) {
-      return;
-    }
-    if (_completedRevision == widget.countdownRevision) return;
-    _completedRevision = widget.countdownRevision;
-    SingleInsideDiagnostics.log(
-      'punch_content',
-      'auto_return_completed target=dotMap revision=${widget.countdownRevision}',
-    );
-    widget.onAutoReturn();
-  }
-
-  void _restartCountdown({required String source}) {
-    if (!widget.active || !widget.countdownEnabled) return;
-    _completedRevision = -1;
-    _countdownController
-      ..stop()
-      ..duration = widget.autoReturnDuration
-      ..forward(from: 0);
-    SingleInsideDiagnostics.log(
-      'punch_content',
-      'auto_return_scheduled source=$source delayMs=${widget.autoReturnDuration.inMilliseconds} revision=${widget.countdownRevision}',
-    );
-  }
-
-  @override
-  void didUpdateWidget(
-    covariant SingleInsidePunchRecorderContentSurface oldWidget,
-  ) {
-    super.didUpdateWidget(oldWidget);
-    if (!widget.active || !widget.countdownEnabled) {
-      _countdownController
-        ..stop()
-        ..value = 0;
-      return;
-    }
-    if (!oldWidget.active ||
-        !oldWidget.countdownEnabled ||
-        oldWidget.countdownRevision != widget.countdownRevision ||
-        oldWidget.autoReturnDuration != widget.autoReturnDuration) {
-      _restartCountdown(source: widget.countdownSource);
-    }
-  }
-
-  @override
-  void dispose() {
-    _countdownController
-      ..removeStatusListener(_handleCountdownStatus)
-      ..dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +51,7 @@ class _SingleInsidePunchRecorderContentSurfaceState
                 'status',
                 'developer_status_request source=punch_workspace_header',
               );
-              await widget.onDeveloperStatus();
+              await onDeveloperStatus();
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
@@ -149,76 +66,56 @@ class _SingleInsidePunchRecorderContentSurfaceState
               ),
             ),
           ),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: tokens.infoContainer,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: tokens.info.withOpacity(.28)),
-            ),
-            child: Row(
+          const SizedBox(height: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(
-                  Icons.timer_outlined,
-                  size: 16,
-                  color: tokens.info,
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: SingleInsidePunchRecorderSection(
+                      key: ValueKey<String>('$userId|$division|$area'),
+                      userId: userId,
+                      userName: userName,
+                      area: area,
+                      division: division,
+                      scheduleRevision: scheduleRevision,
+                      embedded: true,
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(height: 12),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1040),
+                    child: Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: tokens.borderSubtle,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Expanded(
-                  child: Text(
-                    '3초 뒤 주차 구역 표시로 되돌아갑니다',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.labelMedium?.copyWith(
-                      color: tokens.onInfoContainer,
-                      fontWeight: FontWeight.w800,
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1040),
+                      child: SizedBox.expand(
+                        child: SingleInsideHotKeySection(
+                          userId: userId,
+                          division: division,
+                          area: area,
+                          allowReports: allowReports,
+                          refreshRevision: hotKeyRefreshRevision,
+                          onRequest: onHotKeyRequest,
+                          onDeveloperStatus: onDeveloperStatus,
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 5),
-          AnimatedBuilder(
-            animation: _countdownController,
-            builder: (context, _) {
-              final value =
-                  (1 - _countdownController.value).clamp(0.0, 1.0).toDouble();
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(999),
-                child: LinearProgressIndicator(
-                  minHeight: 2,
-                  value: value,
-                  backgroundColor: tokens.infoContainer.withOpacity(.45),
-                  valueColor: AlwaysStoppedAnimation<Color>(tokens.info),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: SingleChildScrollView(
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  physics: const ClampingScrollPhysics(),
-                  child: SingleInsidePunchRecorderSection(
-                    key: ValueKey<String>(
-                      '${widget.userId}|${widget.division}|${widget.area}',
-                    ),
-                    userId: widget.userId,
-                    userName: widget.userName,
-                    area: widget.area,
-                    division: widget.division,
-                    scheduleRevision: widget.scheduleRevision,
-                    embedded: true,
-                  ),
-                ),
-              ),
             ),
           ),
         ],

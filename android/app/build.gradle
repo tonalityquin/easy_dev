@@ -1,7 +1,6 @@
 plugins {
     id "com.android.application"
     id "kotlin-android"
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id "dev.flutter.flutter-gradle-plugin"
     id "com.google.gms.google-services"
 }
@@ -11,10 +10,8 @@ android {
     compileSdk = 36
 
     compileOptions {
-        // Java 17
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // 최신 날짜/시간 API 등 desugaring 사용
         coreLibraryDesugaringEnabled true
     }
 
@@ -22,16 +19,20 @@ android {
         jvmTarget = "17"
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.quintus.dev"
-        minSdkVersion = flutter.minSdkVersion   // Flutter 기본 21 이상 권장
-        targetSdk = 36                          // 35 → 36로 상향 정렬
+        minSdkVersion = flutter.minSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-            ndk {
-        abiFilters "arm64-v8a", "armeabi-v7a"
-    }
+        ndk {
+            abiFilters "arm64-v8a", "armeabi-v7a"
+        }
     }
 
     signingConfigs {
@@ -52,25 +53,31 @@ android {
         release {
             signingConfig signingConfigs.release
 
-            // Play Console 16KB page size 오류 회피:
-            // x86_64용 TensorFlow Lite native library를 release AAB에서 제외
             ndk {
                 abiFilters.clear()
                 abiFilters.addAll(["armeabi-v7a", "arm64-v8a"])
             }
 
-            // 필요 시 최적화 활성화: 아래 두 옵션을 true로 바꾸고 proguard-rules.pro 구성
-            minifyEnabled false
+            minifyEnabled true
             shrinkResources false
+            proguardFiles(
+                getDefaultProguardFile('proguard-android-optimize.txt'),
+                'proguard-rules.pro'
+            )
+            buildConfigField "boolean", "R8_MINIFY_ENABLED", "true"
+            buildConfigField "boolean", "R8_OPTIMIZE_ENABLED", "true"
+            buildConfigField "boolean", "RESOURCE_SHRINK_ENABLED", "false"
         }
 
         debug {
             minifyEnabled false
             shrinkResources false
+            buildConfigField "boolean", "R8_MINIFY_ENABLED", "false"
+            buildConfigField "boolean", "R8_OPTIMIZE_ENABLED", "false"
+            buildConfigField "boolean", "RESOURCE_SHRINK_ENABLED", "false"
         }
     }
 
-    // 번들 라이브러리(Ml Kit 등)와 충돌할 수 있는 META-INF 정리
     packagingOptions {
         resources {
             excludes += ["META-INF/*"]
@@ -83,16 +90,9 @@ flutter {
 }
 
 dependencies {
-    // Firebase (BOM)
     implementation platform('com.google.firebase:firebase-bom:33.12.0')
     implementation 'com.google.firebase:firebase-auth'
     implementation 'com.google.firebase:firebase-firestore'
-
-    // Java 17 desugaring
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
-
-    // ✅ ML Kit Text Recognition — 한국어 오프라인 번들(설치 즉시 오프라인 동작)
     implementation 'com.google.mlkit:text-recognition-korean:16.0.1'
-    // (선택) 라틴 문자 같이 쓰면 필요
-    // implementation 'com.google.mlkit:text-recognition:16.0.1'
 }

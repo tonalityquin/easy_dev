@@ -13,6 +13,8 @@ import '../../../app/theme/theme_settings_dialog.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../shared/attendance_submission/attendance_submission_review_model.dart';
+import '../../../shared/attendance_submission/attendance_submission_review_surface.dart';
 import '../../../shared/utils/side_dock_action_catalog.dart';
 import '../../community/application/discord/discord_config.dart';
 import '../../community/page/faq_side_dock.dart';
@@ -166,7 +168,7 @@ class _HeadquarterQuickActionsPanel extends StatefulWidget {
       _HeadquarterQuickActionsPanelState();
 }
 
-enum _HeadquarterQuickView { actions, workRuleReport, workManual }
+enum _HeadquarterQuickView { actions, workRuleReport, workManual, commuteReview, restTimeReview }
 
 class _HeadquarterQuickActionsPanelState
     extends State<_HeadquarterQuickActionsPanel> {
@@ -176,6 +178,7 @@ class _HeadquarterQuickActionsPanelState
   final ScrollController _dockScrollController = ScrollController();
   final FocusNode _searchFocus = FocusNode();
   String _lastSearchValue = '';
+  bool _detailBusy = false;
   _HeadquarterQuickView _view = _HeadquarterQuickView.actions;
 
   @override
@@ -251,16 +254,51 @@ class _HeadquarterQuickActionsPanelState
     setState(() => _view = _HeadquarterQuickView.workManual);
   }
 
+  void _openSubmissionReview(AttendanceSubmissionKind kind) {
+    final next = kind == AttendanceSubmissionKind.commute
+        ? _HeadquarterQuickView.commuteReview
+        : _HeadquarterQuickView.restTimeReview;
+    if (_view == next) return;
+    _searchFocus.unfocus();
+    HapticFeedback.selectionClick();
+    final areaState = context.read<AreaState>();
+    HeadquarterSideDockLauncherController.recordDebug(
+      'quick_actions_attendance_review_open_requested source=${widget.source} kind=${kind.name} division=${areaState.currentDivision.trim()} area=${areaState.currentArea.trim()} side=left',
+    );
+    setState(() {
+      _detailBusy = false;
+      _view = next;
+    });
+  }
+
+  void _setDetailBusy(bool value) {
+    if (_detailBusy == value) return;
+    setState(() => _detailBusy = value);
+    HeadquarterSideDockLauncherController.recordDebug(
+      'quick_actions_detail_busy view=${_view.name} value=$value',
+    );
+  }
+
   void _closeWorkDetail({required String source}) {
     if (_view == _HeadquarterQuickView.actions) return;
+    if (_detailBusy) {
+      HeadquarterSideDockLauncherController.recordDebug(
+        'quick_actions_detail_close_blocked source=$source view=${_view.name} reason=busy',
+      );
+      return;
+    }
     HeadquarterSideDockLauncherController.recordDebug(
-      'quick_actions_work_detail_close_requested source=$source view=${_view.name}',
+      'quick_actions_detail_close_requested source=$source view=${_view.name}',
     );
-    setState(() => _view = _HeadquarterQuickView.actions);
+    setState(() {
+      _detailBusy = false;
+      _view = _HeadquarterQuickView.actions;
+    });
   }
 
   void _handleScrimTap() {
     if (_view != _HeadquarterQuickView.actions) {
+      if (_detailBusy) return;
       _closeWorkDetail(source: 'scrim');
       return;
     }
@@ -454,6 +492,26 @@ class _HeadquarterQuickActionsPanelState
             useRootNavigator: true,
           );
         },
+      ),
+      _DockAction(
+        id: 'commute_submit',
+        category: _QuickActionCategory.operations,
+        icon: SideDockActionCatalog.commuteSubmitIcon,
+        label: SideDockActionCatalog.commuteSubmitLabel,
+        description: SideDockActionCatalog.commuteSubmitDescription,
+        color: tokens.infoContainer,
+        foreground: tokens.onInfoContainer,
+        onTap: (_) async {},
+      ),
+      _DockAction(
+        id: 'rest_time_submit',
+        category: _QuickActionCategory.operations,
+        icon: SideDockActionCatalog.restTimeSubmitIcon,
+        label: SideDockActionCatalog.restTimeSubmitLabel,
+        description: SideDockActionCatalog.restTimeSubmitDescription,
+        color: tokens.successContainer,
+        foreground: tokens.onSuccessContainer,
+        onTap: (_) async {},
       ),
       _DockAction(
         id: 'statistics',
@@ -715,6 +773,28 @@ class _HeadquarterQuickActionsPanelState
               'quick_actions_$message',
             ),
           );
+        } else if (_view == _HeadquarterQuickView.commuteReview ||
+            _view == _HeadquarterQuickView.restTimeReview) {
+          final reviewKind = _view == _HeadquarterQuickView.commuteReview
+              ? AttendanceSubmissionKind.commute
+              : AttendanceSubmissionKind.restTime;
+          activeContent = AttendanceSubmissionReviewWorkspace(
+            key: ValueKey<String>('hq_attendance_review_${reviewKind.name}'),
+            kind: reviewKind,
+            area: areaState.currentArea,
+            side: AttendanceSubmissionReviewSide.left,
+            developerMode: widget.developerMode,
+            source: 'headquarter_${widget.source}',
+            onBusyChanged: _setDetailBusy,
+            onSubmitted: () {
+              HeadquarterSideDockLauncherController.recordDebug(
+                'quick_actions_attendance_review_submitted source=${widget.source} kind=${reviewKind.name}',
+              );
+            },
+            onBack: () => _closeWorkDetail(
+              source: '${reviewKind.name}_review_back_button',
+            ),
+          );
         } else {
           activeContent = _CommandPaletteDock(
             key: const ValueKey<String>('hq_quick_actions'),
@@ -740,6 +820,14 @@ class _HeadquarterQuickActionsPanelState
                 _openWorkManual();
                 return;
               }
+              if (action.id == 'commute_submit') {
+                _openSubmissionReview(AttendanceSubmissionKind.commute);
+                return;
+              }
+              if (action.id == 'rest_time_submit') {
+                _openSubmissionReview(AttendanceSubmissionKind.restTime);
+                return;
+              }
               _close(action);
             },
           );
@@ -752,9 +840,8 @@ class _HeadquarterQuickActionsPanelState
           switchOutCurve: Curves.easeInCubic,
           transitionBuilder: (child, animation) {
             if (reduceMotion) return child;
-            final detailChild = child.key ==
-                    const ValueKey<String>('hq_work_rule_report') ||
-                child.key == const ValueKey<String>('hq_work_manual');
+            final detailChild = child.key !=
+                const ValueKey<String>('hq_quick_actions');
             final begin = detailChild
                 ? const Offset(-.025, 0)
                 : const Offset(.025, 0);
@@ -783,7 +870,7 @@ class _HeadquarterQuickActionsPanelState
         return PopScope(
           canPop: !detailVisible,
           onPopInvoked: (didPop) {
-            if (didPop || !detailVisible) return;
+            if (didPop || !detailVisible || _detailBusy) return;
             _closeWorkDetail(source: 'system_back');
           },
           child: Stack(

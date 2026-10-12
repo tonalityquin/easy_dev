@@ -44,7 +44,14 @@ Future<void> showUserStatementSideDock({
 }
 
 class UserStatementSideDock extends StatefulWidget {
-  const UserStatementSideDock({super.key});
+  const UserStatementSideDock({
+    super.key,
+    this.onClose,
+    this.onCloseEnabledChanged,
+  });
+
+  final VoidCallback? onClose;
+  final ValueChanged<bool>? onCloseEnabledChanged;
 
   @override
   State<UserStatementSideDock> createState() => _UserStatementSideDockState();
@@ -99,6 +106,10 @@ class _UserStatementSideDockState extends State<UserStatementSideDock> {
     super.initState();
     _developerMode = DevAuth.devModeEnabled.value;
     DevAuth.devModeEnabled.addListener(_onDeveloperModeChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onCloseEnabledChanged?.call(!_sending);
+    });
     _nameCtrl.addListener(_onNameChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_initialize());
@@ -593,6 +604,7 @@ class _UserStatementSideDockState extends State<UserStatementSideDock> {
       _sending = true;
       _lastFailure = '';
     });
+    widget.onCloseEnabledChanged?.call(false);
     _submitStage = 'prepare';
     _recordDebug(
       'submit_start deptLen=${_deptCtrl.text.trim().length} nameLen=${_nameCtrl.text.trim().length} positionLen=${_positionCtrl.text.trim().length} contentLen=${_contentCtrl.text.trim().length} signature=${_signaturePngBytes != null} recipientCount=${_recipientCount(_recipient)}',
@@ -636,6 +648,7 @@ class _UserStatementSideDockState extends State<UserStatementSideDock> {
       _recordDebug('submit_complete');
       if (!mounted) return;
       setState(() => _sending = false);
+      widget.onCloseEnabledChanged?.call(true);
       await HapticFeedback.lightImpact();
       await StatusDialog.showSuccess(
         context,
@@ -643,9 +656,12 @@ class _UserStatementSideDockState extends State<UserStatementSideDock> {
         useCommonUi: true,
       );
       if (!mounted) return;
-      Navigator.of(context).pop();
+      _closeDock();
     } catch (error, stackTrace) {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        setState(() => _sending = false);
+        widget.onCloseEnabledChanged?.call(true);
+      }
       await _handleFailure(
         reason: _submitStage,
         error: error,
@@ -760,6 +776,11 @@ class _UserStatementSideDockState extends State<UserStatementSideDock> {
     _recordDebug(
       'dock_close contentLen=${_contentCtrl.text.trim().length} signature=${_signaturePngBytes != null}',
     );
+    final externalClose = widget.onClose;
+    if (externalClose != null) {
+      externalClose();
+      return;
+    }
     Navigator.of(context).pop();
   }
 
@@ -1295,6 +1316,7 @@ class _UserStatementSideDockState extends State<UserStatementSideDock> {
   Widget build(BuildContext context) {
     final area = _resolveArea();
     return CommonSideDockFrame(
+      showCloseTooltip: false,
       title: '경위서',
       subtitle: '$area · 경위서 작성',
       icon: Icons.description_outlined,

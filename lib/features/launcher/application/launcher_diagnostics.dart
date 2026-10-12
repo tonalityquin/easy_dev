@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../app/utils/build_optimization_diagnostics.dart';
 import '../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../app/auth/gmail_sender_diagnostics.dart';
 import '../../../app/init/app_start_debug_trace.dart';
@@ -29,6 +30,7 @@ class LauncherDiagnostics {
       ...AttendanceDiagnostics.lines,
       ...AreaSnapshotPersistence.debugLines,
       ...MotionTimingDiagnostics.lines,
+      ...BuildOptimizationDiagnostics.lines,
       ..._lines,
     ];
     if (merged.isEmpty) {
@@ -69,6 +71,8 @@ class LauncherDiagnostics {
   }) async {
     final enabled = await DevAuth.isDevModeEnabled();
     if (!enabled || !context.mounted) return;
+    await BuildOptimizationDiagnostics.refresh(source: 'launcher_status');
+    if (!context.mounted) return;
     record(
       'developer_status_open',
       scope: scope,
@@ -80,6 +84,7 @@ class LauncherDiagnostics {
         'plateTtsSessionLines': PlateTtsSessionDiagnostics.lines.length,
         'attendanceLines': AttendanceDiagnostics.lines.length,
         'motionTimingLines': MotionTimingDiagnostics.lines.length,
+        'buildOptimizationLines': BuildOptimizationDiagnostics.lines.length,
       },
     );
     await StatusDialog.showSuccess(

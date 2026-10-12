@@ -9,7 +9,8 @@ import '../../application/single_inside_diagnostics.dart';
 
 enum SingleInsideDockRequest {
   workSchedule,
-  punchRecorder,
+  parkingArea,
+  workRules,
   workManual,
   workStartReport,
   workEndReport,
@@ -43,12 +44,14 @@ class SingleInsideDashboardActionSpec {
     required this.section,
     required this.icon,
     required this.label,
+    required this.compactLabel,
   });
 
   final SingleInsideDockRequest request;
   final SingleInsideDashboardActionSection section;
   final IconData icon;
   final String label;
+  final String compactLabel;
 }
 
 List<SingleInsideDashboardActionSpec> singleInsideDashboardActionSpecs({
@@ -61,18 +64,28 @@ List<SingleInsideDashboardActionSpec> singleInsideDashboardActionSpecs({
       section: SingleInsideDashboardActionSection.work,
       icon: Icons.calendar_month_rounded,
       label: '근무 일정',
+      compactLabel: '일정',
     ),
     const SingleInsideDashboardActionSpec(
-      request: SingleInsideDockRequest.punchRecorder,
+      request: SingleInsideDockRequest.parkingArea,
       section: SingleInsideDashboardActionSection.work,
-      icon: Icons.access_time_rounded,
-      label: '출퇴근 기록기',
+      icon: Icons.local_parking_rounded,
+      label: '주차 구역',
+      compactLabel: '주차',
+    ),
+    const SingleInsideDashboardActionSpec(
+      request: SingleInsideDockRequest.workRules,
+      section: SingleInsideDashboardActionSection.work,
+      icon: Icons.rule_rounded,
+      label: '업무 규칙',
+      compactLabel: '규칙',
     ),
     const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.workManual,
       section: SingleInsideDashboardActionSection.work,
       icon: Icons.menu_book_rounded,
       label: '업무 메뉴얼',
+      compactLabel: '메뉴얼',
     ),
     if (showReport) ...[
       const SingleInsideDashboardActionSpec(
@@ -80,12 +93,14 @@ List<SingleInsideDashboardActionSpec> singleInsideDashboardActionSpecs({
         section: SingleInsideDashboardActionSection.report,
         icon: SideDockActionCatalog.workStartReportIcon,
         label: SideDockActionCatalog.workStartReportLabel,
+        compactLabel: '시작',
       ),
       const SingleInsideDashboardActionSpec(
         request: SingleInsideDockRequest.workEndReport,
         section: SingleInsideDashboardActionSection.report,
         icon: SideDockActionCatalog.workEndReportIcon,
         label: SideDockActionCatalog.workEndReportLabel,
+        compactLabel: '종료',
       ),
     ],
     const SingleInsideDashboardActionSpec(
@@ -93,48 +108,56 @@ List<SingleInsideDashboardActionSpec> singleInsideDashboardActionSpecs({
       section: SingleInsideDashboardActionSection.submit,
       icon: SideDockActionCatalog.commuteSubmitIcon,
       label: SideDockActionCatalog.commuteSubmitLabel,
+      compactLabel: '출퇴근',
     ),
     const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.restTimeSubmit,
       section: SingleInsideDashboardActionSection.submit,
       icon: SideDockActionCatalog.restTimeSubmitIcon,
       label: SideDockActionCatalog.restTimeSubmitLabel,
+      compactLabel: '휴게',
     ),
     const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.statementForm,
       section: SingleInsideDashboardActionSection.form,
       icon: SideDockActionCatalog.statementFormIcon,
       label: SideDockActionCatalog.statementFormLabel,
+      compactLabel: '경위서',
     ),
     const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.leaveApplication,
       section: SingleInsideDashboardActionSection.form,
       icon: SideDockActionCatalog.leaveApplicationIcon,
       label: SideDockActionCatalog.leaveApplicationLabel,
+      compactLabel: '연차',
     ),
     const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.faq,
       section: SingleInsideDashboardActionSection.support,
       icon: SideDockActionCatalog.faqIcon,
       label: SideDockActionCatalog.faqLabel,
+      compactLabel: 'FAQ',
     ),
     const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.update,
       section: SingleInsideDashboardActionSection.support,
       icon: SideDockActionCatalog.updateIcon,
       label: SideDockActionCatalog.updateLabel,
+      compactLabel: '업데이트',
     ),
     const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.terms,
       section: SingleInsideDashboardActionSection.support,
       icon: SideDockActionCatalog.termsIcon,
       label: SideDockActionCatalog.termsLabel,
+      compactLabel: '약관',
     ),
     const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.privacy,
       section: SingleInsideDashboardActionSection.support,
       icon: SideDockActionCatalog.privacyIcon,
       label: SideDockActionCatalog.privacyLabel,
+      compactLabel: '개인정보',
     ),
     if (showOperations)
       const SingleInsideDashboardActionSpec(
@@ -142,30 +165,35 @@ List<SingleInsideDashboardActionSpec> singleInsideDashboardActionSpecs({
         section: SingleInsideDashboardActionSection.settings,
         icon: SideDockActionCatalog.operationsIcon,
         label: SideDockActionCatalog.operationsLabel,
+        compactLabel: '운영',
       ),
     const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.operationalSync,
       section: SingleInsideDashboardActionSection.settings,
       icon: SideDockActionCatalog.operationalSyncIcon,
       label: SideDockActionCatalog.operationalSyncLabel,
+      compactLabel: '동기화',
     ),
     const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.theme,
       section: SingleInsideDashboardActionSection.settings,
       icon: Icons.palette_outlined,
       label: '테마',
+      compactLabel: '테마',
     ),
     const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.logout,
       section: SingleInsideDashboardActionSection.settings,
       icon: SideDockActionCatalog.logoutIcon,
       label: SideDockActionCatalog.logoutLabel,
+      compactLabel: '로그아웃',
     ),
     const SingleInsideDashboardActionSpec(
       request: SingleInsideDockRequest.exitApp,
       section: SingleInsideDashboardActionSection.settings,
       icon: Icons.power_settings_new_rounded,
       label: '앱 종료',
+      compactLabel: '앱종료',
     ),
   ];
 }
@@ -183,11 +211,8 @@ class SingleInsideDashboardRail extends StatelessWidget {
     required this.showOperations,
     required this.enabled,
     required this.onDeveloperStatus,
-    required this.onManualInteraction,
     required this.onRequest,
-    required this.workScheduleSelected,
-    required this.punchRecorderSelected,
-    required this.workManualSelected,
+    required this.selectedRequest,
   });
 
   final double width;
@@ -195,15 +220,11 @@ class SingleInsideDashboardRail extends StatelessWidget {
   final bool showOperations;
   final bool enabled;
   final Future<void> Function() onDeveloperStatus;
-  final ValueChanged<String> onManualInteraction;
   final SingleInsideDashboardRequestHandler onRequest;
-  final bool workScheduleSelected;
-  final bool punchRecorderSelected;
-  final bool workManualSelected;
+  final SingleInsideDockRequest? selectedRequest;
 
   Future<void> _request(SingleInsideDockRequest request) async {
     if (!enabled) return;
-    onManualInteraction('dashboard_action_${request.name}');
     await onRequest(request, 'compact_rail');
   }
 
@@ -213,7 +234,8 @@ class SingleInsideDashboardRail extends StatelessWidget {
   ) {
     switch (request) {
       case SingleInsideDockRequest.workSchedule:
-      case SingleInsideDockRequest.punchRecorder:
+      case SingleInsideDockRequest.parkingArea:
+      case SingleInsideDockRequest.workRules:
         return tokens.accent;
       case SingleInsideDockRequest.workManual:
         return tokens.info;
@@ -264,7 +286,7 @@ class SingleInsideDashboardRail extends StatelessWidget {
     final media = MediaQuery.maybeOf(context);
     final compact = (media?.size.height ?? 720) < 680 ||
         (media?.textScaler.scale(1.0) ?? 1.0) >= 1.18;
-    final extent = compact ? 42.0 : 46.0;
+    final extent = compact ? 46.0 : 50.0;
     final gap = compact ? 3.0 : 5.0;
     final actions = singleInsideDashboardActionSpecs(
       showReport: showReport,
@@ -303,17 +325,12 @@ class SingleInsideDashboardRail extends StatelessWidget {
         final action = sectionActions[i];
         final button = _DashboardRailIconButton(
           semanticLabel: action.label,
+          compactLabel: action.compactLabel,
           icon: action.icon,
           foreground: _foreground(tokens, action.request),
           extent: extent,
           enabled: enabled,
-          selected: action.request == SingleInsideDockRequest.workSchedule
-              ? workScheduleSelected
-              : action.request == SingleInsideDockRequest.punchRecorder
-                  ? punchRecorderSelected
-                  : action.request == SingleInsideDockRequest.workManual
-                      ? workManualSelected
-                      : false,
+          selected: action.request == selectedRequest,
           onTap: () => _request(action.request),
         );
         children.add(button);
@@ -334,12 +351,259 @@ class SingleInsideDashboardRail extends StatelessWidget {
           compact ? 3 : 4,
           compact ? 5 : 7,
         ),
-        child: ListView(
-          physics: const ClampingScrollPhysics(),
-          padding: EdgeInsets.zero,
+        child: _DashboardRailScrollViewport(
+          compact: compact,
           children: children,
         ),
       ),
+    );
+  }
+}
+
+
+class _DashboardRailScrollViewport extends StatefulWidget {
+  const _DashboardRailScrollViewport({
+    required this.compact,
+    required this.children,
+  });
+
+  final bool compact;
+  final List<Widget> children;
+
+  @override
+  State<_DashboardRailScrollViewport> createState() =>
+      _DashboardRailScrollViewportState();
+}
+
+class _DashboardRailScrollViewportState
+    extends State<_DashboardRailScrollViewport> {
+  late final ScrollController _controller;
+  bool _scrollable = false;
+  bool _canScrollUp = false;
+  bool _canScrollDown = false;
+  bool _scrolling = false;
+  double _offset = 0;
+  double _maxScrollExtent = 0;
+  double _viewportDimension = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = ScrollController();
+    _controller.addListener(_handleScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncMetrics());
+  }
+
+  @override
+  void didUpdateWidget(covariant _DashboardRailScrollViewport oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncMetrics());
+  }
+
+  void _handleScroll() {
+    _syncMetrics();
+  }
+
+  void _syncMetrics() {
+    if (!mounted || !_controller.hasClients) return;
+    final position = _controller.position;
+    final offset = position.pixels.clamp(0.0, position.maxScrollExtent).toDouble();
+    final maxExtent = position.maxScrollExtent.clamp(0.0, double.infinity).toDouble();
+    final viewport = position.viewportDimension.clamp(0.0, double.infinity).toDouble();
+    final scrollable = maxExtent > 1;
+    final canScrollUp = scrollable && offset > 1;
+    final canScrollDown = scrollable && offset < maxExtent - 1;
+    final stateChanged = scrollable != _scrollable ||
+        canScrollUp != _canScrollUp ||
+        canScrollDown != _canScrollDown;
+    final metricsChanged = (_maxScrollExtent - maxExtent).abs() > .5 ||
+        (_viewportDimension - viewport).abs() > .5;
+    if (!stateChanged && !metricsChanged && (_offset - offset).abs() < .5) {
+      return;
+    }
+    final previousScrollable = _scrollable;
+    setState(() {
+      _scrollable = scrollable;
+      _canScrollUp = canScrollUp;
+      _canScrollDown = canScrollDown;
+      _offset = offset;
+      _maxScrollExtent = maxExtent;
+      _viewportDimension = viewport;
+    });
+    if (previousScrollable != scrollable || metricsChanged) {
+      SingleInsideDiagnostics.log(
+        'dashboard',
+        'rail_scroll_metrics scrollable=$scrollable offset=${offset.toStringAsFixed(1)} max=${maxExtent.toStringAsFixed(1)} viewport=${viewport.toStringAsFixed(1)} compact=${widget.compact} compactLabelNoWrap=true compactLabelFit=scaleDown',
+      );
+    }
+  }
+
+  bool _handleNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification && !_scrolling) {
+      setState(() => _scrolling = true);
+      SingleInsideDiagnostics.log(
+        'dashboard',
+        'rail_scroll_start offset=${_offset.toStringAsFixed(1)} max=${_maxScrollExtent.toStringAsFixed(1)}',
+      );
+    } else if (notification is ScrollEndNotification) {
+      _syncMetrics();
+      if (_scrolling && mounted) {
+        setState(() => _scrolling = false);
+      }
+      SingleInsideDiagnostics.log(
+        'dashboard',
+        'rail_scroll_end offset=${_offset.toStringAsFixed(1)} max=${_maxScrollExtent.toStringAsFixed(1)} canUp=$_canScrollUp canDown=$_canScrollDown',
+      );
+    }
+    return false;
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_handleScroll);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : CommonUiMotion.selection;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final height = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : _viewportDimension;
+        final viewport = _viewportDimension > 0 ? _viewportDimension : height;
+        final contentExtent = viewport + _maxScrollExtent;
+        final minThumb = widget.compact ? 22.0 : 24.0;
+        final rawThumbHeight = contentExtent > 0 && viewport > 0
+            ? viewport * viewport / contentExtent
+            : viewport;
+        final safeMinThumb = viewport > 0
+            ? minThumb.clamp(0.0, viewport).toDouble()
+            : 0.0;
+        final thumbHeight = viewport > 0
+            ? rawThumbHeight.clamp(safeMinThumb, viewport).toDouble()
+            : 0.0;
+        final thumbTravel = (viewport - thumbHeight).clamp(0.0, double.infinity).toDouble();
+        final thumbTop = _maxScrollExtent > 0
+            ? (_offset / _maxScrollExtent).clamp(0.0, 1.0) * thumbTravel
+            : 0.0;
+        return Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            NotificationListener<ScrollNotification>(
+              onNotification: _handleNotification,
+              child: ListView(
+                controller: _controller,
+                physics: const ClampingScrollPhysics(),
+                padding: EdgeInsets.zero,
+                children: widget.children,
+              ),
+            ),
+            if (_scrollable)
+              AnimatedPositioned(
+                duration: _scrolling ? Duration.zero : duration,
+                curve: Curves.easeOutCubic,
+                left: 0,
+                top: thumbTop,
+                width: 2,
+                height: thumbHeight,
+                child: IgnorePointer(
+                  child: AnimatedOpacity(
+                    duration: duration,
+                    opacity: _scrolling ? .95 : .58,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: tokens.textSecondary,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            _DashboardRailContinuationCue(
+              visible: _canScrollUp,
+              top: true,
+              compact: widget.compact,
+            ),
+            _DashboardRailContinuationCue(
+              visible: _canScrollDown,
+              top: false,
+              compact: widget.compact,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DashboardRailContinuationCue extends StatelessWidget {
+  const _DashboardRailContinuationCue({
+    required this.visible,
+    required this.top,
+    required this.compact,
+  });
+
+  final bool visible;
+  final bool top;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : CommonUiMotion.selection;
+    final height = compact ? 22.0 : 24.0;
+    final cue = IgnorePointer(
+      child: AnimatedOpacity(
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        opacity: visible ? 1 : 0,
+        child: AnimatedSlide(
+          duration: duration,
+          curve: Curves.easeOutCubic,
+          offset: visible
+              ? Offset.zero
+              : Offset(0, top ? -.12 : .12),
+          child: Container(
+            height: height,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: top ? Alignment.topCenter : Alignment.bottomCenter,
+                end: top ? Alignment.bottomCenter : Alignment.topCenter,
+                colors: [
+                  tokens.surface,
+                  tokens.surface.withOpacity(.88),
+                  tokens.surface.withOpacity(0),
+                ],
+              ),
+            ),
+            alignment: top ? Alignment.topCenter : Alignment.bottomCenter,
+            child: Icon(
+              top
+                  ? Icons.keyboard_arrow_up_rounded
+                  : Icons.keyboard_arrow_down_rounded,
+              size: compact ? 14 : 15,
+              color: tokens.textSecondary,
+            ),
+          ),
+        ),
+      ),
+    );
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: top ? 0 : null,
+      bottom: top ? null : 0,
+      child: cue,
     );
   }
 }
@@ -392,6 +656,7 @@ class _DashboardRailSectionHeader extends StatelessWidget {
 class _DashboardRailIconButton extends StatefulWidget {
   const _DashboardRailIconButton({
     required this.semanticLabel,
+    required this.compactLabel,
     required this.icon,
     required this.foreground,
     required this.extent,
@@ -401,6 +666,7 @@ class _DashboardRailIconButton extends StatefulWidget {
   });
 
   final String semanticLabel;
+  final String compactLabel;
   final IconData icon;
   final Color foreground;
   final double extent;
@@ -611,14 +877,56 @@ class _DashboardRailIconButtonState extends State<_DashboardRailIconButton>
                       : const Duration(milliseconds: 180),
                   curve: Curves.easeOutCubic,
                   scale: _pressed && enabled ? 1.06 : 1,
-                  child: Icon(
-                    widget.icon,
-                    size: 21,
-                    color: enabled
-                        ? widget.selected
-                            ? tokens.accent
-                            : widget.foreground
-                        : tokens.iconDisabled,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        widget.icon,
+                        size: 19,
+                        color: enabled
+                            ? widget.selected
+                                ? tokens.accent
+                                : widget.foreground
+                            : tokens.iconDisabled,
+                      ),
+                      const SizedBox(height: 1),
+                      AnimatedDefaultTextStyle(
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : CommonUiMotion.selection,
+                        curve: Curves.easeOutCubic,
+                        style: (Theme.of(context).textTheme.labelSmall ??
+                                const TextStyle())
+                            .copyWith(
+                          color: enabled
+                              ? widget.selected
+                                  ? tokens.accent
+                                  : tokens.textSecondary
+                              : tokens.textDisabled,
+                          fontSize: 9,
+                          fontWeight: widget.selected
+                              ? FontWeight.w900
+                              : FontWeight.w800,
+                          height: 1,
+                          letterSpacing: -.15,
+                        ),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 10,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.center,
+                            child: Text(
+                              widget.compactLabel,
+                              maxLines: 1,
+                              softWrap: false,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

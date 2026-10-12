@@ -50,7 +50,14 @@ Future<void> showBackupApplicationSideDock({
 }
 
 class BackupApplicationSideDock extends StatefulWidget {
-  const BackupApplicationSideDock({super.key});
+  const BackupApplicationSideDock({
+    super.key,
+    this.onClose,
+    this.onCloseEnabledChanged,
+  });
+
+  final VoidCallback? onClose;
+  final ValueChanged<bool>? onCloseEnabledChanged;
 
   @override
   State<BackupApplicationSideDock> createState() =>
@@ -114,6 +121,10 @@ class _BackupApplicationSideDockState
     super.initState();
     _developerMode = DevAuth.devModeEnabled.value;
     DevAuth.devModeEnabled.addListener(_onDeveloperModeChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      widget.onCloseEnabledChanged?.call(!_sending);
+    });
     _nameCtrl.addListener(_onNameChanged);
     for (final controller in <TextEditingController>[
       _reasonCtrl,
@@ -675,6 +686,7 @@ class _BackupApplicationSideDockState
       _sending = true;
       _lastFailure = '';
     });
+    widget.onCloseEnabledChanged?.call(false);
     _submitStage = 'prepare';
     _recordDebug(
       'submit_start contract=${_contractTypeText(_contractType)} nameConfigured=${_nameCtrl.text.trim().isNotEmpty} rrnConfigured=${_rrnCtrl.text.trim().isNotEmpty} rrnLen=${_rrnCtrl.text.trim().length} support=$supportValid signature=${_signaturePngBytes != null} recipientCount=${_recipientCount(_recipient)}',
@@ -719,6 +731,7 @@ class _BackupApplicationSideDockState
       _recordDebug('submit_complete');
       if (!mounted) return;
       setState(() => _sending = false);
+      widget.onCloseEnabledChanged?.call(true);
       await HapticFeedback.lightImpact();
       await StatusDialog.showSuccess(
         context,
@@ -726,9 +739,12 @@ class _BackupApplicationSideDockState
         useCommonUi: true,
       );
       if (!mounted) return;
-      Navigator.of(context).pop();
+      _closeDock();
     } catch (error, stackTrace) {
-      if (mounted) setState(() => _sending = false);
+      if (mounted) {
+        setState(() => _sending = false);
+        widget.onCloseEnabledChanged?.call(true);
+      }
       await _handleFailure(
         reason: _submitStage,
         error: error,
@@ -844,6 +860,11 @@ class _BackupApplicationSideDockState
     _recordDebug(
       'dock_close contract=${_contractTypeText(_contractType)} support=${_supportFieldsComplete} signature=${_signaturePngBytes != null}',
     );
+    final externalClose = widget.onClose;
+    if (externalClose != null) {
+      externalClose();
+      return;
+    }
     Navigator.of(context).pop();
   }
 
@@ -1498,6 +1519,7 @@ class _BackupApplicationSideDockState
   Widget build(BuildContext context) {
     final area = _resolveArea();
     return CommonSideDockFrame(
+      showCloseTooltip: false,
       title: '연차 지원 신청서',
       subtitle: '$area · 지원 신청',
       icon: Icons.event_available_outlined,

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../utils/build_optimization_diagnostics.dart';
 import '../utils/motion_timing_diagnostics.dart';
 import '../../features/selector/application/dev_auth.dart';
 import '../utils/status_dialog.dart';
@@ -19,6 +20,7 @@ class AppStartDebugTrace {
     final merged = <String>[
       ..._lines,
       ...MotionTimingDiagnostics.lines,
+      ...BuildOptimizationDiagnostics.lines,
     ];
     return merged
         .map((line) => 'debugPrint(${jsonEncode(line)});')
@@ -56,12 +58,16 @@ class AppStartDebugTrace {
     final developerMode = await DevAuth.isDevModeEnabled();
     if (!developerMode || !context.mounted) return;
 
+    await BuildOptimizationDiagnostics.refresh(source: 'app_start_status');
+    if (!context.mounted) return;
+
     log(
       scope,
       'developer_status_open',
       meta: <String, Object?>{
         'lines': _lines.length,
         'motionTimingLines': MotionTimingDiagnostics.lines.length,
+        'buildOptimizationLines': BuildOptimizationDiagnostics.lines.length,
       },
     );
 

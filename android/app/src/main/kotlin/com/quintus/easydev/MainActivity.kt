@@ -13,6 +13,8 @@ class MainActivity : FlutterActivity() {
         private const val APP_EXIT_CHANNEL = "com.quintus.dev/app_exit"
         private const val WORK_STATUS_NOTIFICATION_CHANNEL =
             "com.quintus.dev/work_status_notification"
+        private const val BUILD_OPTIMIZATION_CHANNEL =
+            "com.quintus.dev/build_optimization"
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -48,6 +50,31 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            BUILD_OPTIMIZATION_CHANNEL
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getBuildOptimizationStatus" -> {
+                    result.success(buildOptimizationStatus())
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun buildOptimizationStatus(): Map<String, Any?> {
+        return mapOf(
+            "applicationId" to BuildConfig.APPLICATION_ID,
+            "buildType" to BuildConfig.BUILD_TYPE,
+            "debug" to BuildConfig.DEBUG,
+            "versionName" to BuildConfig.VERSION_NAME,
+            "versionCode" to BuildConfig.VERSION_CODE,
+            "minifyEnabled" to BuildConfig.R8_MINIFY_ENABLED,
+            "optimizeRulesEnabled" to BuildConfig.R8_OPTIMIZE_ENABLED,
+            "resourceShrinkEnabled" to BuildConfig.RESOURCE_SHRINK_ENABLED
+        )
     }
 
     private fun pinForegroundNotification(

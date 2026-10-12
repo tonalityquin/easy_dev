@@ -43,7 +43,14 @@ Future<void> showDashboardStartReportSideDock({
 }
 
 class DashboardStartReportSideDock extends StatefulWidget {
-  const DashboardStartReportSideDock({super.key});
+  const DashboardStartReportSideDock({
+    super.key,
+    this.onClose,
+    this.onCloseEnabledChanged,
+  });
+
+  final VoidCallback? onClose;
+  final ValueChanged<bool>? onCloseEnabledChanged;
 
   @override
   State<DashboardStartReportSideDock> createState() =>
@@ -96,6 +103,7 @@ class _DashboardStartReportSideDockState
     _developerMode = DevAuth.devModeEnabled.value;
     DevAuth.devModeEnabled.addListener(_onDeveloperModeChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onCloseEnabledChanged?.call(!_sending);
       unawaited(_initialize());
     });
   }
@@ -477,6 +485,7 @@ class _DashboardStartReportSideDockState
       _mailBody = '';
       _updateMailContent(forceBody: true);
     });
+    widget.onCloseEnabledChanged?.call(false);
     _submitStage = 'prepare';
     _recordDebug(
       'submit_start area=${_resolveReportArea()} special=$_hasSpecialNote contentLen=${_contentCtrl.text.trim().length} recipientCount=${_recipientCount(_recipient)}',
@@ -521,6 +530,7 @@ class _DashboardStartReportSideDockState
 
       if (!mounted) return;
       setState(() => _sending = false);
+      widget.onCloseEnabledChanged?.call(true);
       await HapticFeedback.lightImpact();
       await StatusDialog.showSuccess(
         context,
@@ -528,10 +538,11 @@ class _DashboardStartReportSideDockState
         useCommonUi: true,
       );
       if (!mounted) return;
-      Navigator.of(context).pop();
+      _closeDock();
     } catch (error, stackTrace) {
       if (mounted) {
         setState(() => _sending = false);
+        widget.onCloseEnabledChanged?.call(true);
       }
       await _handleFailure(
         reason: _submitStage,
@@ -626,6 +637,11 @@ class _DashboardStartReportSideDockState
     _recordDebug(
       'dock_close special=${_hasSpecialNote ?? 'unset'} contentLen=${_contentCtrl.text.trim().length}',
     );
+    final externalClose = widget.onClose;
+    if (externalClose != null) {
+      externalClose();
+      return;
+    }
     Navigator.of(context).pop();
   }
 
@@ -1413,6 +1429,7 @@ class _DashboardStartReportSideDockState
     final area = _resolveReportArea();
 
     return CommonSideDockFrame(
+      showCloseTooltip: false,
       title: '업무 시작 보고',
       subtitle: '$area · 업무 시작',
       icon: Icons.play_circle_outline_rounded,
