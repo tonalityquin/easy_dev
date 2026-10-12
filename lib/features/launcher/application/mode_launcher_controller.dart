@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/utils/motion_timing_diagnostics.dart';
+import '../../../shared/auth/account_code_number.dart';
 import '../../../app/auth/gmail_sender_auth.dart';
 import '../../../app/command/application/service_settings_command_handler.dart';
 import '../../../app/command/application/terminal_command_path.dart';
@@ -98,14 +99,16 @@ class ModeLauncherController extends ChangeNotifier {
     'charge',
   };
   static const String nameDisplayLabel = 'NAME or Unique';
-  static const String phoneDisplayLabel = 'TEL or Code';
+  static const String codeNumberDisplayLabel = '코드번호';
+  static const String phoneDisplayLabel = '전화번호';
   static const String passwordDisplayLabel = 'PW or Serial';
   static const String _credentialRequiredMessage = '계정 인증이 필요합니다.';
   static const String _accountTypeSelectionMessage = '계정 유형 선택이 필요합니다.';
   static const String _workAreaSelectionMessage = '업무 지역 선택이 필요합니다.';
   static const String _modeSelectionMessage = '업무 모드 선택이 필요합니다.';
   static const String _nameError = '이름 혹은 유니크 명을 다시 확인하세요.';
-  static const String _phoneError = '전화번호 혹은 코드 번호를 다시 확인하세요.';
+  static const String _codeNumberError = '코드번호를 다시 확인하세요.';
+  static const String _phoneError = '전화번호를 다시 확인하세요.';
   static const String _passwordError = '비밀번호 혹은 시리얼 넘버를 다시 확인하세요.';
 
   ModeLauncherController({StartupReport? startupReport})
@@ -203,6 +206,12 @@ class ModeLauncherController extends ChangeNotifier {
   AppModeDefinition? get assignedMode => _assignedMode;
   AppModeDefinition? get selectedMode => _selectedMode;
   TerminalAccountKind? get selectedAccountKind => _selectedAccountKind;
+  String get accountIdentifierDisplayLabel =>
+      _selectedAccountKind == TerminalAccountKind.user
+          ? codeNumberDisplayLabel
+          : phoneDisplayLabel;
+  bool get accountIdentifierUsesCodeNumber =>
+      _selectedAccountKind == TerminalAccountKind.user;
   String get selectedAccountKindLabel => _selectedAccountKind == null
       ? ''
       : TerminalAuthCoordinator.accountKindLabel(_selectedAccountKind!);
@@ -3576,16 +3585,24 @@ class ModeLauncherController extends ChangeNotifier {
     }
 
     final normalizedName = name.trim();
-    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    final phonePattern = kind == TerminalAccountKind.personal
-        ? RegExp(r'^\d{9,11}$')
-        : RegExp(r'^\d{10,11}$');
+    final accountIdentifier = kind == TerminalAccountKind.user
+        ? AccountCodeNumber.normalize(phone)
+        : phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final validAccountIdentifier = kind == TerminalAccountKind.user
+        ? AccountCodeNumber.isValid(accountIdentifier)
+        : kind == TerminalAccountKind.personal
+            ? RegExp(r'^\d{9,11}$').hasMatch(accountIdentifier)
+            : RegExp(r'^\d{10,11}$').hasMatch(accountIdentifier);
     final validPassword = kind == TerminalAccountKind.personal
         ? RegExp(r'^\d{5}$').hasMatch(password)
         : password.length >= 5;
 
     final nameError = normalizedName.isEmpty ? _nameError : null;
-    final phoneError = phonePattern.hasMatch(digits) ? null : _phoneError;
+    final phoneError = validAccountIdentifier
+        ? null
+        : kind == TerminalAccountKind.user
+            ? _codeNumberError
+            : _phoneError;
     final passwordError = validPassword ? null : _passwordError;
 
     if (nameError != null || phoneError != null || passwordError != null) {
@@ -3597,7 +3614,7 @@ class ModeLauncherController extends ChangeNotifier {
           'phoneValid': phoneError == null,
           'passwordValid': passwordError == null,
           'nameLength': normalizedName.length,
-          'phoneMasked': _maskPhone(digits),
+          'accountIdentifierMasked': kind == TerminalAccountKind.user ? AccountCodeNumber.mask(accountIdentifier) : _maskPhone(accountIdentifier),
           'passwordLength': password.length,
         },
       );
@@ -3609,9 +3626,9 @@ class ModeLauncherController extends ChangeNotifier {
     }
 
     final changed =
-        _enteredName != normalizedName || _enteredPhone != digits;
+        _enteredName != normalizedName || _enteredPhone != accountIdentifier;
     _enteredName = normalizedName;
-    _enteredPhone = digits;
+    _enteredPhone = accountIdentifier;
     _enteredPassword = password;
     if (changed) {
       _authenticatedAccount = null;
@@ -3626,7 +3643,7 @@ class ModeLauncherController extends ChangeNotifier {
       meta: <String, Object?>{
         'accountKind': TerminalAuthCoordinator.accountKindId(kind),
         'nameLength': normalizedName.length,
-        'phoneMasked': _maskPhone(digits),
+        'accountIdentifierMasked': kind == TerminalAccountKind.user ? AccountCodeNumber.mask(accountIdentifier) : _maskPhone(accountIdentifier),
         'passwordLength': password.length,
         'sessionPersistence': TerminalAuthCoordinator.sessionPersistenceId(
           _sessionPersistence,
@@ -3639,7 +3656,7 @@ class ModeLauncherController extends ChangeNotifier {
       meta: <String, Object?>{
         'accountKind': TerminalAuthCoordinator.accountKindId(kind),
         'nameLength': normalizedName.length,
-        'phoneMasked': _maskPhone(digits),
+        'accountIdentifierMasked': kind == TerminalAccountKind.user ? AccountCodeNumber.mask(accountIdentifier) : _maskPhone(accountIdentifier),
         'passwordLength': password.length,
       },
     );
@@ -3688,7 +3705,7 @@ class ModeLauncherController extends ChangeNotifier {
         meta: <String, Object?>{
           'accountKind': TerminalAuthCoordinator.accountKindId(kind),
           'message': result.message,
-          'phoneMasked': _maskPhone(digits),
+          'accountIdentifierMasked': kind == TerminalAccountKind.user ? AccountCodeNumber.mask(accountIdentifier) : _maskPhone(accountIdentifier),
         },
       );
       notifyListeners();

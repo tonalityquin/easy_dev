@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
+import '../../../../shared/auth/account_code_number.dart';
 
 class CommonCommuteInInfoCardWidget extends StatefulWidget {
   const CommonCommuteInInfoCardWidget({super.key});
@@ -192,9 +193,9 @@ class _CommonCommuteInInfoCardWidgetState
                     Divider(height: 1, color: tokens.borderSubtle),
                     const SizedBox(height: 12),
                     _InfoRow(
-                      icon: Icons.phone_rounded,
-                      label: 'Tel.',
-                      value: _formatPhoneNumber(userState.phone),
+                      icon: Icons.tag_rounded,
+                      label: 'Code.',
+                      value: AccountCodeNumber.format(userState.codeNumber),
                     ),
                     const SizedBox(height: 8),
                     _InfoRow(
@@ -212,15 +213,6 @@ class _CommonCommuteInInfoCardWidgetState
     );
   }
 
-  String _formatPhoneNumber(String phone) {
-    if (phone.length == 11) {
-      return '${phone.substring(0, 3)}-${phone.substring(3, 7)}-${phone.substring(7)}';
-    }
-    if (phone.length == 10) {
-      return '${phone.substring(0, 3)}-${phone.substring(3, 6)}-${phone.substring(6)}';
-    }
-    return phone;
-  }
 }
 
 class _InfoRow extends StatelessWidget {

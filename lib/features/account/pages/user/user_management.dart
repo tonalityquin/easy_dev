@@ -8,6 +8,7 @@ import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../shared/auth/account_code_number.dart';
 import '../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
@@ -202,34 +203,8 @@ class _UserManagementState extends State<UserManagement> {
     return '${String.fromCharCode(runes.first)}$mask';
   }
 
-  String _maskPhone(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return '';
-
-    final digitMatches = RegExp(r'\d').allMatches(trimmed).toList();
-    if (digitMatches.isEmpty) return trimmed;
-
-    final maskIndexes = <int>{};
-    if (digitMatches.length >= 8) {
-      final start = ((digitMatches.length - 4) / 2).floor();
-      for (var i = start; i < start + 4 && i < digitMatches.length; i++) {
-        maskIndexes.add(digitMatches[i].start);
-      }
-    } else if (digitMatches.length <= 2) {
-      for (final match in digitMatches) {
-        maskIndexes.add(match.start);
-      }
-    } else {
-      for (var i = 1; i < digitMatches.length - 1; i++) {
-        maskIndexes.add(digitMatches[i].start);
-      }
-    }
-
-    final buffer = StringBuffer();
-    for (var i = 0; i < trimmed.length; i++) {
-      buffer.write(maskIndexes.contains(i) ? '*' : trimmed[i]);
-    }
-    return buffer.toString();
+  String _maskCodeNumber(String value) {
+    return AccountCodeNumber.mask(value);
   }
 
   Future<bool> _confirmToggleActive(
@@ -331,7 +306,7 @@ class _UserManagementState extends State<UserManagement> {
 
     try {
       trace.log(
-        '대상 계정 확인: 사용자 ${_maskName(selectedUser.name)}, 전화 ${_maskPhone(selectedUser.phone)}',
+        '대상 계정 확인: 사용자 ${_maskName(selectedUser.name)}, 코드번호 ${_maskCodeNumber(selectedUser.codeNumber)}',
         progress: 0.12,
       );
       trace.log(
@@ -426,7 +401,7 @@ class _UserManagementState extends State<UserManagement> {
     String? deleteError;
     try {
       trace.log(
-        '삭제 대상 확인: 사용자 ${_maskName(selectedUser.name)}, 전화 ${_maskPhone(selectedUser.phone)}',
+        '삭제 대상 확인: 사용자 ${_maskName(selectedUser.name)}, 코드번호 ${_maskCodeNumber(selectedUser.codeNumber)}',
         progress: 0.2,
       );
       trace.log('계정 삭제와 사용자 캐시 갱신을 요청합니다.', progress: 0.5);
@@ -480,7 +455,7 @@ class _UserManagementState extends State<UserManagement> {
     if (q.isEmpty) return true;
     final haystack = <String>[
       user.name,
-      user.phone,
+      user.codeNumber,
       user.email,
       user.role,
       user.position ?? '',
@@ -720,7 +695,7 @@ class _UserManagementState extends State<UserManagement> {
             return _UserDockRow(
               key: ValueKey<String>(user.id),
               name: _maskName(user.name),
-              phone: _maskPhone(user.phone),
+              codeNumber: _maskCodeNumber(user.codeNumber),
               email: _maskEmail(user.email),
               role: user.role,
               position: user.position ?? '',
@@ -942,7 +917,7 @@ class _UserDockRow extends StatelessWidget {
   const _UserDockRow({
     super.key,
     required this.name,
-    required this.phone,
+    required this.codeNumber,
     required this.email,
     required this.role,
     required this.position,
@@ -954,7 +929,7 @@ class _UserDockRow extends StatelessWidget {
   });
 
   final String name;
-  final String phone;
+  final String codeNumber;
   final String email;
   final String role;
   final String position;
@@ -1054,7 +1029,7 @@ class _UserDockRow extends StatelessWidget {
           ),
           const SizedBox(height: 3),
           Text(
-            phone.isEmpty ? '전화 미등록' : phone,
+            codeNumber.isEmpty ? '코드번호 없음' : codeNumber,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: textTheme.labelSmall?.copyWith(

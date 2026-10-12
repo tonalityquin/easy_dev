@@ -13,10 +13,12 @@ class FirestoreUserRepository implements UserRepository {
   Future<UserModel?> getUserById(String userId) => _readService.getUserById(userId);
 
   @override
-  Future<UserModel?> getUserByPhone(String phone) => _readService.getUserByPhone(phone);
+  Future<UserModel?> getUserByAccountCode(String accountCode) =>
+      _readService.getUserByAccountCode(accountCode);
 
   @override
-  Future<List<UserModel>> searchUsersByPhone(String phone) => _readService.searchUsersByPhone(phone);
+  Future<List<UserModel>> searchUsersByAccountCode(String accountCode) =>
+      _readService.searchUsersByAccountCode(accountCode);
 
   @override
   Future<UserModel?> getUserByHandle(String handle) => _readService.getUserByHandle(handle);
@@ -84,7 +86,8 @@ class FirestoreUserRepository implements UserRepository {
   Future<void> addTabletCard(TabletModel tablet) => _writeService.addTabletCard(tablet);
 
   @override
-  Future<void> updateUser(UserModel user) => _writeService.updateUser(user);
+  Future<void> updateUser(UserModel user, {String? previousId}) =>
+      _writeService.updateUser(user, previousId: previousId);
 
   @override
   Future<void> updateTablet(TabletModel tablet, {String? previousId}) =>
@@ -101,12 +104,12 @@ class FirestoreUserRepository implements UserRepository {
       _writeService.setUserActiveStatus(userId, isActive: isActive);
 
   @override
-  Future<void> updateLogOutUserStatus(String phone, String area, {bool? isWorking, bool? isSaved}) =>
-      _statusService.updateLogOutUserStatus(phone, area, isWorking: isWorking, isSaved: isSaved);
+  Future<void> updateLogOutUserStatus(String codeNumber, String area, {bool? isWorking, bool? isSaved}) =>
+      _statusService.updateLogOutUserStatus(codeNumber, area, isWorking: isWorking, isSaved: isSaved);
 
   @override
-  Future<void> updateWorkingUserStatus(String phone, String area, {bool? isWorking, bool? isSaved}) =>
-      _statusService.updateWorkingUserStatus(phone, area, isWorking: isWorking, isSaved: isSaved);
+  Future<void> updateWorkingUserStatus(String codeNumber, String area, {bool? isWorking, bool? isSaved}) =>
+      _statusService.updateWorkingUserStatus(codeNumber, area, isWorking: isWorking, isSaved: isSaved);
 
   @override
   Future<void> updateLoginSession({
@@ -123,12 +126,12 @@ class FirestoreUserRepository implements UserRepository {
       );
 
   @override
-  Future<void> updateLoadCurrentArea(String phone, String area, String currentArea) =>
-      _statusService.updateLoadCurrentArea(phone, area, currentArea);
+  Future<void> updateLoadCurrentArea(String codeNumber, String area, String currentArea) =>
+      _statusService.updateLoadCurrentArea(codeNumber, area, currentArea);
 
   @override
-  Future<void> areaPickerCurrentArea(String phone, String area, String currentArea) =>
-      _statusService.areaPickerCurrentArea(phone, area, currentArea);
+  Future<void> areaPickerCurrentArea(String codeNumber, String area, String currentArea) =>
+      _statusService.areaPickerCurrentArea(codeNumber, area, currentArea);
 
   @override
   Future<void> updateLogOutTabletStatus(String tabletId, {bool? isWorking, bool? isSaved}) =>

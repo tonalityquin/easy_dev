@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+
+import '../../../../shared/auth/account_code_number.dart';
 import '../../../../app/di/routes.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../controllers/service/service_login_controller.dart';
+import 'code_number_debug_action.dart';
 
 class ServiceLoginForm extends StatefulWidget {
   final ServiceLoginController controller;
@@ -117,23 +120,30 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
             child: Column(
               children: [
                 const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 8),
-                    child: Semantics(
-                      label: 'screen_tag: service login',
-                      child: Text(
-                        'service login',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurfaceVariant.withOpacity(0.80),
-                          letterSpacing: 0.2,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 8),
+                        child: Semantics(
+                          label: 'screen_tag: service login',
+                          child: Text(
+                            'service login',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: cs.onSurfaceVariant.withOpacity(0.80),
+                              letterSpacing: 0.2,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    const CodeNumberDebugAction(
+                      scope: 'service',
+                      title: '코드번호 로그인 로그',
+                    ),
+                  ],
                 ),
                 GestureDetector(
                   onTap: _onTopCompanyLogoTapped,
@@ -148,7 +158,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                   focusNode: _controller.nameFocus,
                   textInputAction: TextInputAction.next,
                   onSubmitted: (_) => FocusScope.of(context)
-                      .requestFocus(_controller.phoneFocus),
+                      .requestFocus(_controller.codeNumberFocus),
                   decoration: _controller.inputDecoration(
                     label: "이름",
                     icon: Icons.person,
@@ -156,17 +166,20 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                 ),
                 const SizedBox(height: 16),
                 TextField(
-                  controller: _controller.phoneController,
-                  focusNode: _controller.phoneFocus,
-                  keyboardType: TextInputType.phone,
+                  controller: _controller.codeNumberController,
+                  focusNode: _controller.codeNumberFocus,
+                  keyboardType: TextInputType.text,
+                  inputFormatters: const [AccountCodeNumberInputFormatter()],
+                  autocorrect: false,
+                  enableSuggestions: false,
                   textInputAction: TextInputAction.next,
                   onChanged: (value) =>
-                      _controller.formatPhoneNumber(value, setState),
+                      _controller.formatCodeNumber(value, setState),
                   onSubmitted: (_) => FocusScope.of(context)
                       .requestFocus(_controller.passwordFocus),
                   decoration: _controller.inputDecoration(
-                    label: "전화번호",
-                    icon: Icons.phone,
+                    label: "코드번호",
+                    icon: Icons.tag_rounded,
                   ),
                 ),
                 const SizedBox(height: 16),

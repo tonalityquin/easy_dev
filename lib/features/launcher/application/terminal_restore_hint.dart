@@ -15,7 +15,8 @@ class TerminalRestoreHint {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     final selectedArea = (prefs.getString('selectedArea') ?? '').trim();
-    final phone = (prefs.getString('phone') ?? '').trim();
+    final codeNumber = (prefs.getString('codeNumber') ?? '').trim();
+    final legacyPhone = (prefs.getString('phone') ?? '').trim();
     final personalPhone = (prefs.getString('personalPhone') ?? '').trim();
     final personalAccountId =
         (prefs.getString('personalAccountId') ?? '').trim();
@@ -23,10 +24,12 @@ class TerminalRestoreHint {
     final handle = (prefs.getString('handle') ?? '').trim();
     final cachedUser = (prefs.getString('cachedUserJson') ?? '').trim();
     final hasUser =
-        phone.isNotEmpty && selectedArea.isNotEmpty && cachedUser.isNotEmpty;
+        (codeNumber.isNotEmpty || legacyPhone.isNotEmpty) &&
+        selectedArea.isNotEmpty &&
+        cachedUser.isNotEmpty;
     final hasPersonal = selectedArea.isNotEmpty &&
         (personalPhone.isNotEmpty ||
-            (personalAccountId.isNotEmpty && phone.isNotEmpty));
+            (personalAccountId.isNotEmpty && legacyPhone.isNotEmpty));
     final hasTablet =
         selectedArea.isNotEmpty && (tabletPhone.isNotEmpty || handle.isNotEmpty);
 

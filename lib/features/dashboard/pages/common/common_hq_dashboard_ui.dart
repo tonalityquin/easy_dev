@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../account/applications/user_state.dart';
+import '../../../../shared/auth/account_code_number.dart';
 
 class CommonHqUserInfoCard extends StatefulWidget {
   const CommonHqUserInfoCard({super.key});
@@ -164,8 +165,8 @@ class _CommonHqUserInfoCardState extends State<CommonHqUserInfoCard> {
                     Divider(color: tokens.borderSubtle, height: 1),
                     const SizedBox(height: 10),
                     _CommonHqInfoRow(
-                      icon: Icons.phone_rounded,
-                      value: _safe(userState.phone),
+                      icon: Icons.tag_rounded,
+                      value: _safe(AccountCodeNumber.format(userState.codeNumber)),
                     ),
                     const SizedBox(height: 8),
                     _CommonHqInfoRow(

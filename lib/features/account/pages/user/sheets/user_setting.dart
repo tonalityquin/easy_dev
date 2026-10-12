@@ -10,6 +10,7 @@ import '../../../../../app/utils/status_dialog.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_origin_morph_dialog.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../../shared/auth/account_code_number.dart';
 import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
@@ -45,7 +46,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   };
 
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _codeNumberController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _positionController = TextEditingController();
@@ -112,7 +113,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   @override
   void dispose() {
     _nameController.dispose();
-    _phoneController.dispose();
+    _codeNumberController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _positionController.dispose();
@@ -124,7 +125,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     final user = widget.initialUser;
     if (user == null) {
       _nameController.clear();
-      _phoneController.clear();
+      _codeNumberController.text = AccountCodeNumber.format(AccountCodeNumber.generate());
       _emailController.clear();
       _positionController.clear();
       _passwordController.text = FiveDigitPasswordGenerator.generate();
@@ -142,7 +143,12 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       return;
     }
     _nameController.text = user.name;
-    _phoneController.text = user.phone;
+    final existingCode = AccountCodeNumber.normalize(user.codeNumber);
+    _codeNumberController.text = AccountCodeNumber.format(
+      AccountCodeNumber.isValid(existingCode)
+          ? existingCode
+          : AccountCodeNumber.generate(),
+    );
     _emailController.text = user.email.split('@').first;
     _passwordController.text = user.password;
     _positionController.text = user.position ?? '';
@@ -221,11 +227,12 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   }
 
   bool get _nameOk => _nameController.text.trim().isNotEmpty;
-  bool get _phoneOk =>
-      RegExp(r'^\d{9,}$').hasMatch(_phoneController.text.trim());
+  bool get _codeNumberOk => isEditMode
+      ? AccountCodeNumber.isValid(_codeNumberController.text)
+      : AccountCodeNumber.isGeneratedCode(_codeNumberController.text);
   bool get _emailOk => _emailController.text.trim().isNotEmpty &&
       _isValidEmailLocalPart(_emailController.text);
-  bool get _identityOk => _nameOk && _phoneOk && _emailOk;
+  bool get _identityOk => _nameOk && _codeNumberOk && _emailOk;
   bool get _permissionOk => _selectedModes.isNotEmpty;
   bool get _passwordOk => RegExp(r'^\d{5}$').hasMatch(_passwordController.text);
 
@@ -292,7 +299,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   UserSettingsDraft _currentDraft() {
     return UserSettingsDraft(
       name: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
+      codeNumber: AccountCodeNumber.normalize(_codeNumberController.text),
       emailLocal: _emailController.text.trim(),
       position: _positionController.text.trim(),
       password: _passwordController.text.trim(),
@@ -313,7 +320,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       switch (section) {
         case UserSettingsSection.identity:
           _nameController.text = draft.name;
-          _phoneController.text = draft.phone;
+          _codeNumberController.text = AccountCodeNumber.format(draft.codeNumber);
           _emailController.text = draft.emailLocal;
           break;
         case UserSettingsSection.permission:
@@ -531,11 +538,8 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     return '${trimmed.substring(0, 1)}${List<String>.filled(trimmed.length - 1, '*').join()}';
   }
 
-  String _maskPhone(String value) {
-    final digits = value.replaceAll(RegExp(r'\D'), '');
-    if (digits.length < 7) return '***';
-    final tail = digits.substring(digits.length - 4);
-    return '${digits.substring(0, digits.length >= 10 ? 3 : 2)}-****-$tail';
+  String _maskCodeNumber(String value) {
+    return AccountCodeNumber.mask(value);
   }
 
   String _friendlySaveError(String message) {
@@ -607,7 +611,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
 
     try {
       trace.log(
-        '입력값 검증 통과: 사용자 ${_maskName(_nameController.text)}, 전화 ${_maskPhone(_phoneController.text)}, 허용 모드 ${normalizedModes.length}개',
+        '입력값 검증 통과: 사용자 ${_maskName(_nameController.text)}, 코드번호 ${_maskCodeNumber(_codeNumberController.text)}, 허용 모드 ${normalizedModes.length}개',
         progress: 0.12,
       );
       final englishName =
@@ -617,6 +621,27 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         progress: 0.28,
       );
 
+      final requiresCodeAllocation = !isEditMode ||
+          !AccountCodeNumber.isValid(initialUser?.codeNumber ?? '');
+      if (requiresCodeAllocation) {
+        var normalizedCode = AccountCodeNumber.normalize(_codeNumberController.text);
+        var existing = await repository.getUserByAccountCode(normalizedCode);
+        var attempts = 0;
+        while (existing != null && attempts < 8) {
+          attempts += 1;
+          normalizedCode = AccountCodeNumber.generate();
+          _codeNumberController.text = AccountCodeNumber.format(normalizedCode);
+          trace.log(
+            '코드번호 중복 감지 후 재발급: attempt=$attempts code=${AccountCodeNumber.mask(normalizedCode)}',
+            progress: 0.34,
+          );
+          existing = await repository.getUserByAccountCode(normalizedCode);
+        }
+        if (existing != null) {
+          throw StateError('CODE_NUMBER_GENERATION_FAILED');
+        }
+      }
+
       final normalizedBreakDays = _normalizedBreakDays();
       final workingDays = _workingDaySet().toList(growable: false);
       trace.log(
@@ -625,9 +650,12 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       );
 
       final user = UserModel(
-        id: initialUser?.id ?? '${_phoneController.text.trim()}-$area',
+        id: AccountCodeNumber.documentId(
+          codeNumber: _codeNumberController.text,
+          area: area,
+        ),
         name: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
+        codeNumber: AccountCodeNumber.normalize(_codeNumberController.text),
         email: '${_emailController.text.trim()}@gmail.com',
         role: _selectedRole.name,
         modes: normalizedModes,
@@ -650,9 +678,10 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       trace.log('계정 모델 구성 완료: Firestore 저장을 요청합니다.', progress: 0.58);
       String? saveError;
       bool saved = true;
-      if (isEditMode) {
+      if (isEditMode && initialUser != null) {
         saved = await userState.updateUserCardAsAdmin(
           user,
+          previousId: initialUser.id,
           onError: (message) {
             saveError = message;
           },
@@ -857,8 +886,8 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   }
 
   String _identitySummary() {
-    if (!_identityOk) return '이름 · 전화번호 · 이메일 입력 필요';
-    return '${_maskName(_nameController.text)} · ${_maskPhone(_phoneController.text)} · ${_maskEmailLocal(_emailController.text)}';
+    if (!_identityOk) return '이름 · 코드번호 · 이메일 입력 필요';
+    return '${_maskName(_nameController.text)} · ${_maskCodeNumber(_codeNumberController.text)} · ${_maskEmailLocal(_emailController.text)}';
   }
 
   String _permissionSummary() {

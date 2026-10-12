@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../shared/auth/account_code_diagnostics.dart';
+import '../../../../shared/auth/account_code_number.dart';
+
 import '../../../../app/di/routes.dart';
 
 import '../../../../app/init/work_schedule_prefs.dart';
@@ -27,11 +30,11 @@ class ServiceLoginController {
   final VoidCallback? onLoginSucceeded;
 
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController codeNumberController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
   final FocusNode nameFocus = FocusNode();
-  final FocusNode phoneFocus = FocusNode();
+  final FocusNode codeNumberFocus = FocusNode();
   final FocusNode passwordFocus = FocusNode();
 
   bool isLoading = false;
@@ -73,24 +76,36 @@ class ServiceLoginController {
 
   Future<void> login(StateSetter setState) async {
     final name = nameController.text.trim();
-    final phone = phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
+    final codeNumber = AccountCodeNumber.normalize(codeNumberController.text);
     final password = passwordController.text.trim();
+    AccountCodeDiagnostics.record(
+      'service',
+      'login_attempt',
+      meta: <String, Object?>{
+        'codeNumber': AccountCodeNumber.mask(codeNumber),
+        'nameLength': name.length,
+        'passwordLength': password.length,
+      },
+    );
 
-    if (name.isEmpty && phone.isEmpty && password == '00000') {
+    if (name.isEmpty && codeNumber.isEmpty && password == '00000') {
       debugPrint('[LOGIN-SERVICE][${_ts()}] backdoor bypass');
       return;
     }
 
-    final phoneError = ServiceLoginValidate.validatePhone(phone);
+    final codeNumberError = ServiceLoginValidate.validateCodeNumber(codeNumber);
     final passwordError = ServiceLoginValidate.validatePassword(password);
 
-    if (name.isEmpty) {
-      return;
-    }
-    if (phoneError != null) {
-      return;
-    }
-    if (passwordError != null) {
+    if (name.isEmpty || codeNumberError != null || passwordError != null) {
+      AccountCodeDiagnostics.record(
+        'service',
+        'validation_failed',
+        meta: <String, Object?>{
+          'nameEmpty': name.isEmpty,
+          'codeNumberError': codeNumberError,
+          'passwordError': passwordError,
+        },
+      );
       return;
     }
 
@@ -105,14 +120,19 @@ class ServiceLoginController {
 
     try {
       final userRepository = context.read<UserRepository>();
-      final user = await userRepository.getUserByPhone(phone);
+      final user = await userRepository.getUserByAccountCode(codeNumber);
+      AccountCodeDiagnostics.record(
+        'service',
+        user == null ? 'account_not_found' : 'account_loaded',
+        meta: <String, Object?>{'codeNumber': AccountCodeNumber.mask(codeNumber)},
+      );
 
       if (context.mounted) {
         debugPrint(
-            '[LOGIN-SERVICE][${_ts()}] 입력값 name="$name" phone="$phone" pwLen=${password.length}');
+            '[LOGIN-SERVICE][${_ts()}] 입력값 name="$name" codeNumber="${AccountCodeNumber.mask(codeNumber)}" pwLen=${password.length}');
         if (user != null) {
           debugPrint(
-              '[LOGIN-SERVICE][${_ts()}] DB 유저: name=${user.name}, phone=${user.phone}');
+              '[LOGIN-SERVICE][${_ts()}] DB 유저: name=${user.name}, codeNumber=${AccountCodeNumber.mask(user.codeNumber)}');
         } else {
           debugPrint('[LOGIN-SERVICE][${_ts()}] DB에서 사용자 정보 없음');
         }
@@ -140,10 +160,15 @@ class ServiceLoginController {
         );
         debugPrint('[LOGIN-SERVICE][${_ts()}] AreaRecord 서버 강제 동기화 완료: $divisionToSet/$areaToSet');
         await userState.updateLoginUser(updatedUser);
+        AccountCodeDiagnostics.record(
+          'service',
+          'login_success',
+          meta: <String, Object?>{'codeNumber': AccountCodeNumber.mask(codeNumber)},
+        );
         debugPrint('[LOGIN-SERVICE][${_ts()}] userState.updateLoginUser done');
 
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('phone', updatedUser.phone);
+        await prefs.setString('codeNumber', updatedUser.codeNumber);
         await prefs.setString('selectedArea', updatedUser.selectedArea ?? '');
         await prefs.setString(
             'division', updatedUser.divisions.firstOrNull ?? '');
@@ -170,7 +195,7 @@ class ServiceLoginController {
           '[LOGIN-SERVICE][${_ts()}] work session sync area=${workSession.currentArea} mode=${workSession.mode} foreground=${workSession.foregroundServiceRunning} appFallback=${workSession.appFallbackListening}',
         );
         debugPrint(
-          '[LOGIN-SERVICE][${_ts()}] SharedPreferences 저장 완료: phone=${prefs.getString('phone')}',
+          '[LOGIN-SERVICE][${_ts()}] SharedPreferences 저장 완료: codeNumber=${prefs.getString('codeNumber')}',
         );
 
         if (context.mounted) {
@@ -202,20 +227,10 @@ class ServiceLoginController {
     obscurePassword = !obscurePassword;
   }
 
-  void formatPhoneNumber(String value, StateSetter setState) {
-    final numbersOnly = value.replaceAll(RegExp(r'\D'), '');
-    String formatted = numbersOnly;
-
-    if (numbersOnly.length >= 11) {
-      formatted =
-          '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 7)}-${numbersOnly.substring(7, 11)}';
-    } else if (numbersOnly.length >= 10) {
-      formatted =
-          '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 6)}-${numbersOnly.substring(6, 10)}';
-    }
-
+  void formatCodeNumber(String value, StateSetter setState) {
+    final formatted = AccountCodeNumber.format(value);
     setState(() {
-      phoneController.value = TextEditingValue(
+      codeNumberController.value = TextEditingValue(
         text: formatted,
         selection: TextSelection.collapsed(offset: formatted.length),
       );
@@ -263,10 +278,10 @@ class ServiceLoginController {
 
   void dispose() {
     nameController.dispose();
-    phoneController.dispose();
+    codeNumberController.dispose();
     passwordController.dispose();
     nameFocus.dispose();
-    phoneFocus.dispose();
+    codeNumberFocus.dispose();
     passwordFocus.dispose();
   }
 }

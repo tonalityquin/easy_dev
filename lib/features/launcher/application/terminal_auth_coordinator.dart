@@ -17,6 +17,7 @@ import '../../tablet/applications/tablet_pad_mode_state.dart';
 import '../../dev/application/area_state.dart';
 import '../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../headquarter/application/headquarter_dashboard_context.dart';
+import '../../../shared/auth/account_code_number.dart';
 import '../../../shared/work_session/application/work_area_session_coordinator.dart';
 import 'app_mode_definition.dart';
 import 'app_mode_registry.dart';
@@ -398,14 +399,18 @@ class TerminalAuthCoordinator {
     TerminalSessionPersistence persistence =
         TerminalSessionPersistence.persistent,
   }) async {
-    final normalizedPhone = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    final maskedPhone = _maskPhone(normalizedPhone);
+    final accountIdentifier = kind == TerminalAccountKind.user
+        ? AccountCodeNumber.normalize(phone)
+        : phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final maskedAccountIdentifier = kind == TerminalAccountKind.user
+        ? AccountCodeNumber.mask(accountIdentifier)
+        : _maskPhone(accountIdentifier);
     LauncherDiagnostics.record(
       'auth_account_manual_start',
       meta: <String, Object?>{
         'accountKind': accountKindId(kind),
         'nameLength': name.trim().length,
-        'phoneMasked': maskedPhone,
+        'accountIdentifierMasked': maskedAccountIdentifier,
         'passwordLength': password.length,
         'sessionPersistence': sessionPersistenceId(persistence),
       },
@@ -425,8 +430,8 @@ class TerminalAuthCoordinator {
               message: '네트워크 연결을 확인하세요.',
             );
           }
-          final user = await context.read<UserRepository>().getUserByPhone(
-                normalizedPhone,
+          final user = await context.read<UserRepository>().getUserByAccountCode(
+                accountIdentifier,
               );
           if (user == null ||
               user.name != name.trim() ||
@@ -451,7 +456,7 @@ class TerminalAuthCoordinator {
             'auth_account_manual_success',
             meta: <String, Object?>{
               'accountKind': accountKindId(kind),
-              'phoneMasked': maskedPhone,
+              'accountIdentifierMasked': maskedAccountIdentifier,
               'supportedModes': modes.map((mode) => mode.id).join(','),
               'firebaseCredentialQueries': 1,
               'firebaseSupportedModeQueries': 0,
@@ -467,7 +472,7 @@ class TerminalAuthCoordinator {
           final controller = PersonalLoginController(context);
           try {
             controller.nameController.text = name;
-            controller.phoneController.text = normalizedPhone;
+            controller.phoneController.text = accountIdentifier;
             controller.passwordController.text = password;
             final result = await controller.authenticateCredentials(
               stateSetter,
@@ -487,7 +492,7 @@ class TerminalAuthCoordinator {
               'auth_account_manual_success',
               meta: <String, Object?>{
                 'accountKind': accountKindId(kind),
-                'phoneMasked': maskedPhone,
+                'accountIdentifierMasked': maskedAccountIdentifier,
                 'supportedModes': 'personal',
                 'firebaseSupportedModeQueries': 0,
                 'deferredActivation': true,
@@ -518,7 +523,7 @@ class TerminalAuthCoordinator {
           );
           try {
             controller.nameController.text = name;
-            controller.phoneController.text = normalizedPhone;
+            controller.phoneController.text = accountIdentifier;
             controller.passwordController.text = password;
             final result = await controller.authenticateCredentials(
               stateSetter,
@@ -537,7 +542,7 @@ class TerminalAuthCoordinator {
               'auth_account_manual_success',
               meta: <String, Object?>{
                 'accountKind': accountKindId(kind),
-                'phoneMasked': maskedPhone,
+                'accountIdentifierMasked': maskedAccountIdentifier,
                 'supportedModes': 'tablet',
                 'firebaseSupportedModeQueries': 0,
                 'deferredActivation': true,
@@ -566,7 +571,7 @@ class TerminalAuthCoordinator {
         'auth_account_manual_error',
         meta: <String, Object?>{
           'accountKind': accountKindId(kind),
-          'phoneMasked': maskedPhone,
+          'accountIdentifierMasked': maskedAccountIdentifier,
           'sessionPersistence': sessionPersistenceId(persistence),
           'error': error,
           'stack': stackTrace,
@@ -711,7 +716,7 @@ class TerminalAuthCoordinator {
       } else {
         await userState.updateLoginUser(updatedUser);
       }
-      await prefs.setString('phone', updatedUser.phone);
+      await prefs.setString('codeNumber', updatedUser.codeNumber);
       await prefs.setString('selectedArea', areaToSet);
       await prefs.setString(
         'division',
@@ -956,7 +961,7 @@ class TerminalAuthCoordinator {
         } else {
           await userState.updateLoginUser(updatedUser);
         }
-        await prefs.setString('phone', updatedUser.phone);
+        await prefs.setString('codeNumber', updatedUser.codeNumber);
         await prefs.setString('selectedArea', areaToSet);
         await prefs.setString(
           'division',

@@ -17,6 +17,7 @@ import '../../../../features/account/domain/repositories/user_repository.dart';
 import '../../../../features/commute/domain/repositories/commute_log_repository.dart';
 import '../../../dashboard/applications/common/calendar_selection_state.dart';
 import '../../../selector/application/dev_auth.dart';
+import '../../../../shared/auth/account_code_number.dart';
 import 'mail_recipient_settings.dart';
 import 'utils/calendar_excel_mailer.dart';
 import 'widgets/bulk_time_editor.dart';
@@ -144,9 +145,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final presetUser = calendarState.selectedUser;
     if (presetUser != null) {
       _selectedUser = presetUser;
-      final area = presetUser.selectedArea?.trim() ?? '';
-      _userInputCtrl.text =
-          area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
+      _userInputCtrl.text = AccountCodeNumber.format(presetUser.codeNumber);
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -426,24 +425,9 @@ class _BreakCalendarState extends State<BreakCalendar> {
   }
 
   Future<List<UserModel>> _findUsersByInput(String input) async {
-    final raw = input.trim();
-    if (raw.isEmpty) return <UserModel>[];
-
-    String phone = raw;
-    String? area;
-    final dashIdx = raw.indexOf('-');
-    if (dashIdx != -1) {
-      phone = raw.substring(0, dashIdx).trim();
-      area = raw.substring(dashIdx + 1).trim();
-    }
-
-    final repo = context.read<UserRepository>();
-    if (area != null && area.isNotEmpty) {
-      final docId = '$phone-$area';
-      final user = await repo.getUserById(docId);
-      if (user != null) return <UserModel>[user];
-    }
-    return repo.searchUsersByPhone(phone);
+    final codeNumber = AccountCodeNumber.normalize(input);
+    if (!AccountCodeNumber.isValid(codeNumber)) return <UserModel>[];
+    return context.read<UserRepository>().searchUsersByAccountCode(codeNumber);
   }
 
   Future<void> _onSearchUserPressed() async {
@@ -502,8 +486,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
       _dockView = _BreakDockView.main;
       _searchMessage = null;
       _searchError = null;
-      final area = user.selectedArea?.trim() ?? '';
-      _userInputCtrl.text = area.isEmpty ? user.phone : '${user.phone}-$area';
+      _userInputCtrl.text = AccountCodeNumber.format(user.codeNumber);
     });
     _userInputFocus.unfocus();
     await _loadBreakTimes(user, reason: 'user_select');
@@ -511,7 +494,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
   String _userIdOf(UserModel user) {
     final area = (user.selectedArea ?? '').trim();
-    return '${user.phone}-$area';
+    return AccountCodeNumber.documentId(codeNumber: user.codeNumber, area: area);
   }
 
   String _cacheKey(String userId) =>
@@ -991,7 +974,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
               final division =
                   user.divisions.isNotEmpty ? user.divisions.first : '';
               final meta = <String>[
-                user.phone,
+                AccountCodeNumber.format(user.codeNumber),
                 if (area.isNotEmpty) area,
                 if (division.isNotEmpty) division,
               ].join(' · ');
@@ -1237,7 +1220,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
       final area = user.selectedArea?.trim() ?? '';
       final division = user.divisions.isNotEmpty ? user.divisions.first : '';
       final meta = <String>[
-        user.phone,
+        AccountCodeNumber.format(user.codeNumber),
         if (area.isNotEmpty) area,
         if (division.isNotEmpty) division,
       ].join(' · ');
@@ -1303,7 +1286,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
             onSubmitted: (_) => unawaited(_onSearchUserPressed()),
             decoration: InputDecoration(
               isDense: true,
-              labelText: '전화번호 혹은 코드번호',
+              labelText: '코드번호',
               prefixIcon: const Icon(Icons.person_search_rounded),
               enabledBorder: UnderlineInputBorder(
                 borderSide: BorderSide(color: tokens.borderSubtle),

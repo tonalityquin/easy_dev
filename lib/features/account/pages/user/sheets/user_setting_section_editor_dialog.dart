@@ -6,6 +6,7 @@ import '../../../../../app/utils/snackbar_helper.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../../shared/auth/account_code_number.dart';
 import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
@@ -44,7 +45,7 @@ class _UserSettingSectionEditorDialogState
   ];
 
   late final TextEditingController _nameController;
-  late final TextEditingController _phoneController;
+  late final TextEditingController _codeNumberController;
   late final TextEditingController _emailController;
   late final TextEditingController _positionController;
   late final TextEditingController _passwordController;
@@ -61,7 +62,7 @@ class _UserSettingSectionEditorDialogState
     super.initState();
     final draft = widget.initialDraft;
     _nameController = TextEditingController(text: draft.name);
-    _phoneController = TextEditingController(text: draft.phone);
+    _codeNumberController = TextEditingController(text: AccountCodeNumber.format(draft.codeNumber));
     _emailController = TextEditingController(text: draft.emailLocal);
     _positionController = TextEditingController(text: draft.position);
     _passwordController = TextEditingController(text: draft.password);
@@ -82,7 +83,7 @@ class _UserSettingSectionEditorDialogState
   @override
   void dispose() {
     _nameController.dispose();
-    _phoneController.dispose();
+    _codeNumberController.dispose();
     _emailController.dispose();
     _positionController.dispose();
     _passwordController.dispose();
@@ -134,10 +135,13 @@ class _UserSettingSectionEditorDialogState
 
   bool get _identityOk {
     final name = _nameController.text.trim();
-    final phone = _phoneController.text.trim();
+    final codeNumber = _codeNumberController.text.trim();
     final email = _emailController.text.trim();
+    final codeNumberOk = widget.isEditMode
+        ? AccountCodeNumber.isValid(codeNumber)
+        : AccountCodeNumber.isGeneratedCode(codeNumber);
     return name.isNotEmpty &&
-        RegExp(r'^\d{9,}$').hasMatch(phone) &&
+        codeNumberOk &&
         email.isNotEmpty &&
         _isValidEmailLocalPart(email);
   }
@@ -195,7 +199,7 @@ class _UserSettingSectionEditorDialogState
       case UserSettingsSection.identity:
         return base.copyWith(
           name: _nameController.text.trim(),
-          phone: _phoneController.text.trim(),
+          codeNumber: AccountCodeNumber.normalize(_codeNumberController.text),
           emailLocal: _emailController.text.trim(),
         );
       case UserSettingsSection.permission:
@@ -271,6 +275,25 @@ class _UserSettingSectionEditorDialogState
     final next = FiveDigitPasswordGenerator.generate();
     setState(() => _passwordController.text = next);
     widget.trace.log('비밀번호 재생성: length=${next.length}');
+  }
+
+  Future<void> _copyCodeNumber() async {
+    final codeNumber = AccountCodeNumber.normalize(_codeNumberController.text);
+    await Clipboard.setData(ClipboardData(text: AccountCodeNumber.format(codeNumber)));
+    widget.trace.log('코드번호 클립보드 복사: code=${AccountCodeNumber.mask(codeNumber)}');
+    if (!mounted) return;
+    showSelectedSnackbar(
+      context,
+      '코드번호를 복사했습니다.',
+      useCommonUi: true,
+    );
+  }
+
+  void _regenerateCodeNumber() {
+    if (widget.isEditMode) return;
+    final next = AccountCodeNumber.generate();
+    setState(() => _codeNumberController.text = AccountCodeNumber.format(next));
+    widget.trace.log('코드번호 재생성: code=${AccountCodeNumber.mask(next)}');
   }
 
   Future<void> _pickTime({required String day, required bool isStart}) async {
@@ -387,28 +410,48 @@ class _UserSettingSectionEditorDialogState
           ),
         ),
         const SizedBox(height: 10),
-        TextField(
-          controller: _phoneController,
-          readOnly: widget.isEditMode,
-          textInputAction: TextInputAction.next,
-          keyboardType: TextInputType.phone,
-          onChanged: (_) {
-            if (_submitted) setState(() {});
+        AnimatedSwitcher(
+          duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          switchInCurve: Curves.easeOutBack,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(scale: animation, child: child),
+            );
           },
-          autofillHints: const <String>[AutofillHints.telephoneNumber],
-          inputFormatters: <TextInputFormatter>[
-            FilteringTextInputFormatter.digitsOnly,
-          ],
-          decoration: opsInputDecoration(
-            context,
-            label: '전화번호',
-            prefixIcon: const Icon(Icons.phone_rounded),
-            locked: widget.isEditMode,
-            errorText: _submitted &&
-                    !RegExp(r'^\d{9,}$')
-                        .hasMatch(_phoneController.text.trim())
-                ? '전화번호를 다시 확인하세요.'
-                : null,
+          child: TextField(
+            key: ValueKey<String>(_codeNumberController.text),
+            controller: _codeNumberController,
+            readOnly: true,
+            enableInteractiveSelection: true,
+            textInputAction: TextInputAction.next,
+            decoration: opsInputDecoration(
+              context,
+              label: '코드번호',
+              prefixIcon: const Icon(Icons.tag_rounded),
+              locked: true,
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    onPressed: _copyCodeNumber,
+                    icon: const Icon(Icons.copy_rounded),
+                  ),
+                  if (!widget.isEditMode)
+                    IconButton(
+                      onPressed: _regenerateCodeNumber,
+                      icon: const Icon(Icons.refresh_rounded),
+                    ),
+                ],
+              ),
+              errorText: _submitted &&
+                      !(widget.isEditMode
+                          ? AccountCodeNumber.isValid(_codeNumberController.text)
+                          : AccountCodeNumber.isGeneratedCode(_codeNumberController.text))
+                  ? '코드번호를 다시 생성하세요.'
+                  : null,
+            ),
           ),
         ),
         const SizedBox(height: 10),

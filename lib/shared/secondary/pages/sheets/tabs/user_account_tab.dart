@@ -2,11 +2,14 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../../app/utils/status_dialog.dart';
 import '../../../data/services/dev_user_write_service.dart';
 import '../../../../../features/account/domain/models/user/user_model.dart';
+import '../../../../../shared/auth/account_code_number.dart';
+import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
@@ -137,7 +140,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                     : '';
     return <String, dynamic>{
       'name': d['name'] ?? '',
-      'phone': d['phone'] ?? '',
+      'codeNumber': d['codeNumber'] ?? d['phone'] ?? '',
       'email': d['email'] ?? '',
       'password': d['password'] ?? '',
       'divisions': divisions,
@@ -327,7 +330,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       await StatusDialog.showFailure(
         context,
         title: '동일 계정이 이미 존재합니다',
-        description: '같은 계정 ID 또는 동일 지역 projection이 이미 존재합니다. 전화번호와 현재 지역을 확인하세요.',
+        description: '같은 계정 ID 또는 동일 지역 projection이 이미 존재합니다. 코드번호와 현재 지역을 확인하세요.',
         useCommonUi: true,
       );
       return;
@@ -407,11 +410,22 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         throw StateError('PRIMARY_AREA_NOT_IN_DIVISION');
       }
 
-      final phone = (oldData['phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '').trim();
-      if (phone.isEmpty) {
-        throw StateError('PHONE_REQUIRED');
+      var codeNumber = AccountCodeNumber.normalize(
+        (oldData['codeNumber'] ?? oldData['phone'] ?? '').toString(),
+      );
+      if (!AccountCodeNumber.isValid(codeNumber)) {
+        codeNumber = AccountCodeNumber.generate();
+        trace.log(
+          '유효하지 않은 기존 식별값을 새 코드번호로 교체합니다. code=${AccountCodeNumber.mask(codeNumber)}',
+          progress: 0.12,
+        );
       }
-      final newId = '$phone-$primaryArea';
+      final newId = AccountCodeNumber.documentId(
+        codeNumber: codeNumber,
+        area: primaryArea,
+      );
+      newData['codeNumber'] = codeNumber;
+      newData.remove('phone');
       final englishName = await _fetchEnglishNameByArea(primaryDivision, primaryArea) ?? primaryArea;
       final normalizedNewData = Map<String, dynamic>.from(newData);
       normalizedNewData['divisions'] = _withPrimaryFirst(
@@ -549,7 +563,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         isWorking: false,
         name: draft.name,
         password: draft.password,
-        phone: draft.phone,
+        codeNumber: draft.codeNumber,
         position: draft.position,
         role: draft.role,
         selectedArea: draft.area,
@@ -1381,7 +1395,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 class _CreateUserAccountDraft {
   _CreateUserAccountDraft({
     required this.name,
-    required this.phone,
+    required this.codeNumber,
     required this.email,
     required this.password,
     required this.division,
@@ -1397,7 +1411,7 @@ class _CreateUserAccountDraft {
   static const List<String> weekdays = <String>['월', '화', '수', '목', '금', '토', '일'];
 
   final String name;
-  final String phone;
+  final String codeNumber;
   final String email;
   final String password;
   final String division;
@@ -1409,7 +1423,7 @@ class _CreateUserAccountDraft {
   final Map<String, TimeOfDay?> endTimeByWeekday;
   final Set<String> breakDays;
 
-  String get documentId => '$phone-$area';
+  String get documentId => AccountCodeNumber.documentId(codeNumber: codeNumber, area: area);
 
 
 }
@@ -1438,7 +1452,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   static const List<String> _availableModes = <String>['single', 'double', 'triple', 'minor'];
 
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _codeNumberController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _positionController = TextEditingController();
@@ -1463,7 +1477,8 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     _selectedRole = widget.roleList.contains('fieldCommon')
         ? 'fieldCommon'
         : (widget.roleList.isNotEmpty ? widget.roleList.last : 'fieldCommon');
-    _passwordController.text = _generateRandomPassword();
+    _codeNumberController.text = AccountCodeNumber.format(AccountCodeNumber.generate());
+    _passwordController.text = FiveDigitPasswordGenerator.generate();
     _startByDay = <String, TimeOfDay?>{
       for (final day in _days) day: null,
     };
@@ -1477,25 +1492,20 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   @override
   void dispose() {
     _nameController.dispose();
-    _phoneController.dispose();
+    _codeNumberController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _positionController.dispose();
     super.dispose();
   }
 
-  String _generateRandomPassword() {
-    final random = math.Random();
-    return (10000 + random.nextInt(90000)).toString();
-  }
-
-  String _normalizedPhone() => _phoneController.text.replaceAll(RegExp(r'\D'), '').trim();
+  String _normalizedCodeNumber() => AccountCodeNumber.normalize(_codeNumberController.text);
 
   String _documentIdPreview() {
-    final phone = _normalizedPhone();
+    final codeNumber = _normalizedCodeNumber();
     final area = (_selectedArea ?? '').trim();
-    if (phone.isEmpty || area.isEmpty) return '-';
-    return '$phone-$area';
+    if (!AccountCodeNumber.isGeneratedCode(codeNumber) || area.isEmpty) return '-';
+    return AccountCodeNumber.documentId(codeNumber: codeNumber, area: area);
   }
 
   bool _isValidEmailLocalPart(String input) {
@@ -1579,12 +1589,12 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
 
   String? _validate() {
     final name = _nameController.text.trim();
-    final phone = _normalizedPhone();
+    final codeNumber = _normalizedCodeNumber();
     final emailLocal = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
     if (name.isEmpty) return '이름을 입력하세요';
-    if (!RegExp(r'^\d{9,}$').hasMatch(phone)) return '전화번호를 숫자 9자리 이상으로 입력하세요';
+    if (!AccountCodeNumber.isGeneratedCode(codeNumber)) return '코드번호를 다시 생성하세요';
     if (emailLocal.isEmpty || !_isValidEmailLocalPart(emailLocal)) return '이메일을 다시 확인하세요';
     if (password.isEmpty) return '비밀번호를 입력하세요';
     if ((_selectedDivision ?? '').trim().isEmpty) return '회사를 선택하세요';
@@ -1617,7 +1627,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     Navigator.of(context).pop(
       _CreateUserAccountDraft(
         name: _nameController.text.trim(),
-        phone: _normalizedPhone(),
+        codeNumber: _normalizedCodeNumber(),
         email: '${_emailController.text.trim()}@gmail.com',
         password: _passwordController.text.trim(),
         division: _selectedDivision!.trim(),
@@ -1633,6 +1643,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   }
 
   Widget _buildTextField({
+    Key? key,
     required TextEditingController controller,
     required String label,
     TextInputType? keyboardType,
@@ -1641,6 +1652,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     ValueChanged<String>? onChanged,
   }) {
     return TextField(
+      key: key,
       controller: controller,
       keyboardType: keyboardType,
       readOnly: readOnly,
@@ -1859,11 +1871,44 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                         onChanged: (_) => setState(() => _errorText = null),
                       ),
                       const SizedBox(height: 12),
-                      _buildTextField(
-                        controller: _phoneController,
-                        label: '전화번호',
-                        keyboardType: TextInputType.phone,
-                        onChanged: (_) => setState(() => _errorText = null),
+                      AnimatedSwitcher(
+                        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                        switchInCurve: Curves.easeOutBack,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(scale: animation, child: child),
+                          );
+                        },
+                        child: _buildTextField(
+                          key: ValueKey<String>(_codeNumberController.text),
+                          controller: _codeNumberController,
+                          label: '코드번호',
+                          readOnly: true,
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                onPressed: () async {
+                                  await Clipboard.setData(
+                                    ClipboardData(text: _codeNumberController.text),
+                                  );
+                                },
+                                icon: const Icon(Icons.copy_rounded),
+                              ),
+                              IconButton(
+                                onPressed: () => setState(() {
+                                  _errorText = null;
+                                  _codeNumberController.text = AccountCodeNumber.format(
+                                    AccountCodeNumber.generate(),
+                                  );
+                                }),
+                                icon: const Icon(Icons.refresh_rounded),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       _buildTextField(
@@ -1879,7 +1924,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                         suffixIcon: IconButton(
                           tooltip: '비밀번호 재생성',
                           onPressed: () => setState(
-                            () => _passwordController.text = _generateRandomPassword(),
+                            () => _passwordController.text = FiveDigitPasswordGenerator.generate(),
                           ),
                           icon: const Icon(Icons.refresh_rounded),
                         ),

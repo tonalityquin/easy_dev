@@ -5,7 +5,7 @@ import '../widgets/user_role_type_section.dart';
 class UserSettingsDraft {
   UserSettingsDraft({
     required this.name,
-    required this.phone,
+    required this.codeNumber,
     required this.emailLocal,
     required this.position,
     required this.password,
@@ -20,7 +20,7 @@ class UserSettingsDraft {
         breakDays = Set<String>.unmodifiable(breakDays);
 
   final String name;
-  final String phone;
+  final String codeNumber;
   final String emailLocal;
   final String position;
   final String password;
@@ -32,7 +32,7 @@ class UserSettingsDraft {
 
   UserSettingsDraft copyWith({
     String? name,
-    String? phone,
+    String? codeNumber,
     String? emailLocal,
     String? position,
     String? password,
@@ -44,7 +44,7 @@ class UserSettingsDraft {
   }) {
     return UserSettingsDraft(
       name: name ?? this.name,
-      phone: phone ?? this.phone,
+      codeNumber: codeNumber ?? this.codeNumber,
       emailLocal: emailLocal ?? this.emailLocal,
       position: position ?? this.position,
       password: password ?? this.password,
@@ -59,7 +59,7 @@ class UserSettingsDraft {
   UserSettingsDraft detached() {
     return UserSettingsDraft(
       name: name,
-      phone: phone,
+      codeNumber: codeNumber,
       emailLocal: emailLocal,
       position: position,
       password: password,

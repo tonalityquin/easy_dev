@@ -76,6 +76,7 @@ class UserState extends ChangeNotifier {
   static const String _prefsKeyCachedUser = 'cachedUserJson';
 
   static const Set<String> _userSensitiveKeys = <String>{
+    'codeNumber',
     'phone',
     'handle',
     'tabletPhone',
@@ -118,7 +119,9 @@ class UserState extends ChangeNotifier {
 
   String get name => _session?.displayName ?? '';
 
-  String get phone => _user?.phone ?? _tablet?.phone ?? '';
+  String get codeNumber => _user?.codeNumber ?? '';
+
+  String get phone => _isTablet ? (_tablet?.phone ?? '') : (_user?.codeNumber ?? '');
 
   String get password => _user?.password ?? _tablet?.password ?? '';
 
@@ -257,7 +260,7 @@ class UserState extends ChangeNotifier {
 
     if (_user == null || _user!.isWorking == isWorking) return;
     await _repository.updateWorkingUserStatus(
-      _user!.phone,
+      _user!.codeNumber,
       _user!.areas.firstOrNull ?? '',
       isWorking: isWorking,
     );
@@ -590,7 +593,7 @@ class UserState extends ChangeNotifier {
     _userList = _replaceItem(_userList, updatedUser);
     await _repository.updateUsersCache(area, _userList);
 
-    await saveCardToUserPhone(updatedUser);
+    await saveCardToUserCodeNumber(updatedUser);
     debugPrint(
       '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser complete userId=${updatedUser.id} localCacheArea=$area',
     );
@@ -612,7 +615,7 @@ class UserState extends ChangeNotifier {
     debugPrint(
         '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUserLocalOnly firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}');
 
-    await saveCardToUserPhone(updatedUser);
+    await saveCardToUserCodeNumber(updatedUser);
   }
 
   void applyEphemeralLoginUser(UserModel updatedUser) {
@@ -640,7 +643,7 @@ class UserState extends ChangeNotifier {
     _userList = _replaceItem(_userList, updatedUser);
     notifyListeners();
 
-    await saveCardToUserPhone(updatedUser);
+    await saveCardToUserCodeNumber(updatedUser);
     final prefs = await SharedPreferences.getInstance();
     await WorkSchedulePrefs.refreshReminderFromPrefs(prefs);
   }
@@ -721,7 +724,7 @@ class UserState extends ChangeNotifier {
       isWorking: current.isWorking,
       name: current.name,
       password: current.password,
-      phone: current.phone,
+      codeNumber: current.codeNumber,
       position: current.position,
       role: current.role,
       selectedArea: current.selectedArea,
@@ -901,13 +904,22 @@ class UserState extends ChangeNotifier {
 
   Future<bool> updateUserCardAsAdmin(
     UserModel updatedUser, {
+    String? previousId,
     void Function(String)? onError,
   }) async {
     try {
-      await _repository.updateUser(updatedUser);
+      await _repository.updateUser(updatedUser, previousId: previousId);
 
       final area = _areaState.currentArea.trim();
-      _userList = _replaceItem(_userList, updatedUser);
+      final previous = (previousId ?? '').trim();
+      if (previous.isNotEmpty && previous != updatedUser.id) {
+        _userList = _userList
+            .where((user) => user.id != previous && user.id != updatedUser.id)
+            .toList(growable: true)
+          ..add(updatedUser);
+      } else {
+        _userList = _replaceItem(_userList, updatedUser);
+      }
       await _repository.updateUsersCache(area, _userList);
 
       notifyListeners();
@@ -1015,7 +1027,7 @@ class UserState extends ChangeNotifier {
           );
         } else {
           await _repository.updateLogOutUserStatus(
-            _user!.phone,
+            _user!.codeNumber,
             _user!.areas.firstOrNull ?? '',
             isWorking: false,
             isSaved: false,
@@ -1233,9 +1245,10 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> saveCardToUserPhone(UserModel user) async {
+  Future<void> saveCardToUserCodeNumber(UserModel user) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('phone', user.phone);
+    await prefs.setString('codeNumber', user.codeNumber);
+    await prefs.remove('phone');
     await prefs.setString('selectedArea', user.selectedArea ?? '');
     await prefs.setString('division', user.divisions.firstOrNull ?? '');
     await prefs.setString('role', user.role);
@@ -1255,7 +1268,7 @@ class UserState extends ChangeNotifier {
         },
       );
     } catch (e, st) {
-      debugPrint('saveCardToUserPhone cachedUserJson 저장 실패: $e\n$st');
+      debugPrint('saveCardToUserCodeNumber cachedUserJson 저장 실패: $e\n$st');
     }
   }
 
@@ -1281,7 +1294,7 @@ class UserState extends ChangeNotifier {
   Future<void> loadUserToLogInLocalOnly() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final phone = prefs.getString('phone')?.trim();
+      final codeNumber = (prefs.getString('codeNumber') ?? prefs.getString('phone'))?.trim();
       final selectedArea = prefs.getString('selectedArea')?.trim();
       final storedDivision = prefs.getString('division')?.trim();
       final role = prefs.getString('role')?.trim();
@@ -1295,7 +1308,7 @@ class UserState extends ChangeNotifier {
       final cachedJson = prefs.getString(_prefsKeyCachedUser);
       final localIsWorking = prefs.getBool('isWorking') ?? false;
 
-      if (phone == null || selectedArea == null || cachedJson == null) {
+      if (codeNumber == null || codeNumber.isEmpty || selectedArea == null || cachedJson == null) {
         return;
       }
 
@@ -1304,7 +1317,7 @@ class UserState extends ChangeNotifier {
       debugPrint(
           '[USER-STATE][${DateTime.now().toIso8601String()}] loadUserToLogInLocalOnly firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}');
 
-      final userId = "$phone-$selectedArea";
+      final userId = "$codeNumber-$selectedArea";
       final decoded = jsonDecode(cachedJson) as Map<String, dynamic>;
       var userData = UserModel.fromMap(userId, decoded);
       final restoredIsWorking = userData.isWorking;
@@ -1374,7 +1387,7 @@ class UserState extends ChangeNotifier {
   Future<void> loadUserToLogIn() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final phone = prefs.getString('phone')?.trim();
+      final codeNumber = (prefs.getString('codeNumber') ?? prefs.getString('phone'))?.trim();
       final selectedArea = prefs.getString('selectedArea')?.trim();
       final division = prefs.getString('division')?.trim();
       final role = prefs.getString('role')?.trim();
@@ -1387,14 +1400,14 @@ class UserState extends ChangeNotifier {
       final position = prefs.getString('position');
       final localIsWorking = prefs.getBool('isWorking') ?? false;
 
-      if (phone == null || selectedArea == null) return;
+      if (codeNumber == null || codeNumber.isEmpty || selectedArea == null) return;
 
       final firebaseOk = await FirebaseGoogleAuthBridge.instance
           .ensureSignedInFromGoogleSession(interactive: false);
       debugPrint(
           '[USER-STATE][${DateTime.now().toIso8601String()}] loadUserToLogIn firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}');
 
-      final userId = "$phone-$selectedArea";
+      final userId = "$codeNumber-$selectedArea";
       var userData = await _repository.getUserById(userId);
       if (userData == null) return;
       final restoredIsWorking = userData.isWorking;
@@ -1442,7 +1455,7 @@ class UserState extends ChangeNotifier {
       debugPrint(
         '[USER-STATE][${DateTime.now().toIso8601String()}] loadUserToLogIn AreaRecord 서버 강제 동기화 완료: $loginDivision/$trimmedArea',
       );
-      await _repository.updateLoadCurrentArea(phone, trimmedArea, trimmedArea);
+      await _repository.updateLoadCurrentArea(codeNumber, trimmedArea, trimmedArea);
 
       await WorkSchedulePrefs.saveUserSchedule(prefs: prefs, user: userData);
 
@@ -1759,7 +1772,7 @@ class UserState extends ChangeNotifier {
 
     try {
       await _repository.areaPickerCurrentArea(
-        _user!.phone.trim(),
+        _user!.codeNumber.trim(),
         selectedArea.trim().isNotEmpty
             ? selectedArea.trim()
             : (_user!.areas.firstOrNull ?? ''),

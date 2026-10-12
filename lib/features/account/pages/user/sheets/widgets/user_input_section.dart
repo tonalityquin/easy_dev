@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
+import '../../../../../../shared/auth/account_code_number.dart';
 
 class UserInputSection extends StatelessWidget {
   final TextEditingController nameController;
-  final TextEditingController phoneController;
+  final TextEditingController codeNumberController;
   final TextEditingController emailController;
 
   final FocusNode nameFocus;
-  final FocusNode phoneFocus;
+  final FocusNode codeNumberFocus;
   final FocusNode emailFocus;
 
   
@@ -20,24 +21,26 @@ class UserInputSection extends StatelessWidget {
   final bool Function(String input)? emailLocalPartValidator;
 
   
-  final bool lockNameAndPhone;
+  final bool lockNameAndCodeNumber;
 
   const UserInputSection({
     super.key,
     required this.nameController,
-    required this.phoneController,
+    required this.codeNumberController,
     required this.emailController,
     required this.nameFocus,
-    required this.phoneFocus,
+    required this.codeNumberFocus,
     required this.emailFocus,
     required this.errorMessage,
     this.onEdited,
     this.emailLocalPartValidator,
-    this.lockNameAndPhone = false,
+    this.lockNameAndCodeNumber = false,
   });
 
   bool _isNameOk(String v) => v.trim().isNotEmpty;
-  bool _isPhoneOk(String v) => RegExp(r'^\d{9,}$').hasMatch(v.trim());
+  bool _isCodeNumberOk(String v) => lockNameAndCodeNumber
+      ? AccountCodeNumber.isValid(v)
+      : AccountCodeNumber.isGeneratedCode(v);
 
   bool _isEmailOk(String v) {
     final t = v.trim();
@@ -50,7 +53,6 @@ class UserInputSection extends StatelessWidget {
       BuildContext context, {
         required ColorScheme cs,
         required String label,
-        required String helperText,
         String? errorText,
         String? suffixText,
         bool showDoneIcon = false,
@@ -61,7 +63,6 @@ class UserInputSection extends StatelessWidget {
 
     return InputDecoration(
       labelText: label,
-      helperText: helperText,
       floatingLabelStyle: TextStyle(
         color: cs.primary,
         fontWeight: FontWeight.w700,
@@ -109,11 +110,9 @@ class UserInputSection extends StatelessWidget {
 
     
     final nameError = errorMessage == '이름을 다시 입력하세요' ? errorMessage : null;
-    final phoneError = errorMessage == '전화번호를 다시 입력하세요' ? errorMessage : null;
+    final codeNumberError = errorMessage == '코드번호를 다시 확인하세요' ? errorMessage : null;
     final emailError =
     (errorMessage == '이메일을 입력하세요' || errorMessage == '이메일을 다시 확인하세요') ? errorMessage : null;
-
-    const lockedHelper = '수정 모드에서는 변경할 수 없습니다.';
 
     return Column(
       children: [
@@ -121,9 +120,9 @@ class UserInputSection extends StatelessWidget {
         TextField(
           controller: nameController,
           focusNode: nameFocus,
-          readOnly: lockNameAndPhone,
+          readOnly: lockNameAndCodeNumber,
           enableInteractiveSelection: true,
-          onChanged: lockNameAndPhone ? null : (_) => onEdited?.call(),
+          onChanged: lockNameAndCodeNumber ? null : (_) => onEdited?.call(),
           textInputAction: TextInputAction.next,
           onSubmitted: (_) => FocusScope.of(context).nextFocus(),
           textCapitalization: TextCapitalization.words,
@@ -133,42 +132,33 @@ class UserInputSection extends StatelessWidget {
             context,
             cs: cs,
             label: '이름',
-            helperText: lockNameAndPhone ? lockedHelper : '예: 홍길동',
             errorText: nameError,
-            showDoneIcon: !lockNameAndPhone,
+            showDoneIcon: !lockNameAndCodeNumber,
             done: _isNameOk(nameController.text),
-            locked: lockNameAndPhone,
+            locked: lockNameAndCodeNumber,
           ),
         ),
         const SizedBox(height: 16),
 
         
         TextField(
-          controller: phoneController,
-          focusNode: phoneFocus,
-          readOnly: lockNameAndPhone,
+          controller: codeNumberController,
+          focusNode: codeNumberFocus,
+          readOnly: true,
           enableInteractiveSelection: true,
-          onChanged: lockNameAndPhone ? null : (_) => onEdited?.call(),
+          onChanged: null,
           textInputAction: TextInputAction.next,
           onSubmitted: (_) => FocusScope.of(context).nextFocus(),
-          keyboardType: TextInputType.phone,
-          autofillHints: const [AutofillHints.telephoneNumber],
-          inputFormatters: lockNameAndPhone
-              ? null
-              : [
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(11),
-          ],
+          keyboardType: TextInputType.text,
           style: TextStyle(color: cs.onSurface),
           decoration: _decoration(
             context,
             cs: cs,
-            label: '전화번호',
-            helperText: lockNameAndPhone ? lockedHelper : '숫자만 입력 (최소 9자리)',
-            errorText: phoneError,
-            showDoneIcon: !lockNameAndPhone,
-            done: _isPhoneOk(phoneController.text),
-            locked: lockNameAndPhone,
+            label: '코드번호',
+            errorText: codeNumberError,
+            showDoneIcon: false,
+            done: _isCodeNumberOk(codeNumberController.text),
+            locked: true,
           ),
         ),
         const SizedBox(height: 16),
@@ -186,7 +176,6 @@ class UserInputSection extends StatelessWidget {
             context,
             cs: cs,
             label: '이메일(구글)',
-            helperText: '영문/숫자/._- 만 입력 가능',
             suffixText: '@gmail.com',
             errorText: emailError,
             showDoneIcon: true,

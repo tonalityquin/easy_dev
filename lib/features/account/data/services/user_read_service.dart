@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../applications/tablet_account_diagnostics.dart';
+import '../../../../shared/auth/account_code_number.dart';
 import '../../../../shared/auth/tablet_phone.dart';
 import '../../domain/models/tablet/tablet_model.dart';
 import '../../domain/models/user/user_model.dart';
@@ -60,40 +61,65 @@ class UserReadService {
     }
   }
 
-  Future<UserModel?> getUserByPhone(String phone) async {
-    debugPrint('getUserByPhone, 조회 시작 - phone: $phone');
-    try {
-      final querySnapshot = await _getUserCollectionRef()
-          .where('phone', isEqualTo: phone)
-          .limit(1)
-          .get();
+  Future<UserModel?> getUserByAccountCode(String accountCode) async {
+    final normalized = AccountCodeNumber.normalize(accountCode);
+    if (!AccountCodeNumber.isValid(normalized)) return null;
 
-      if (querySnapshot.docs.isNotEmpty) {
-        final doc = querySnapshot.docs.first;
-        return UserModel.fromMap(doc.id, doc.data());
+    debugPrint(
+      'getUserByAccountCode, 조회 시작 - accountCode: ${AccountCodeNumber.mask(normalized)}',
+    );
+    try {
+      final results = await Future.wait([
+        _getUserCollectionRef()
+            .where('codeNumber', isEqualTo: normalized)
+            .limit(10)
+            .get(),
+        _getUserCollectionRef()
+            .where('phone', isEqualTo: normalized)
+            .limit(10)
+            .get(),
+      ]);
+      final found = <String, UserModel>{};
+      for (final snapshot in results) {
+        for (final doc in snapshot.docs) {
+          found[doc.id] = UserModel.fromMap(doc.id, doc.data());
+        }
       }
+      if (found.isEmpty) return null;
+      return found.values.first;
     } on FirebaseException {
       return null;
     } catch (e) {
       debugPrint('DB 조회 중 예외 발생: $e');
+      return null;
     }
-    return null;
   }
 
-  Future<List<UserModel>> searchUsersByPhone(String phone) async {
-    final trimmed = phone.trim();
-    if (trimmed.isEmpty) return <UserModel>[];
+  Future<List<UserModel>> searchUsersByAccountCode(String accountCode) async {
+    final normalized = AccountCodeNumber.normalize(accountCode);
+    if (!AccountCodeNumber.isValid(normalized)) return <UserModel>[];
 
-    debugPrint('searchUsersByPhone, 조회 시작 - phone: $trimmed');
+    debugPrint(
+      'searchUsersByAccountCode, 조회 시작 - accountCode: ${AccountCodeNumber.mask(normalized)}',
+    );
     try {
-      final querySnapshot = await _getUserCollectionRef()
-          .where('phone', isEqualTo: trimmed)
-          .limit(10)
-          .get();
-
-      return querySnapshot.docs
-          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-          .toList(growable: false);
+      final results = await Future.wait([
+        _getUserCollectionRef()
+            .where('codeNumber', isEqualTo: normalized)
+            .limit(10)
+            .get(),
+        _getUserCollectionRef()
+            .where('phone', isEqualTo: normalized)
+            .limit(10)
+            .get(),
+      ]);
+      final found = <String, UserModel>{};
+      for (final snapshot in results) {
+        for (final doc in snapshot.docs) {
+          found[doc.id] = UserModel.fromMap(doc.id, doc.data());
+        }
+      }
+      return found.values.toList(growable: false);
     } on FirebaseException {
       return <UserModel>[];
     } catch (e) {
@@ -110,6 +136,12 @@ class UserReadService {
           .where('handle', isEqualTo: h)
           .limit(1)
           .get();
+      if (qs.docs.isEmpty) {
+        qs = await _getUserCollectionRef()
+            .where('codeNumber', isEqualTo: h)
+            .limit(1)
+            .get();
+      }
       if (qs.docs.isEmpty) {
         qs = await _getUserCollectionRef()
             .where('phone', isEqualTo: h)

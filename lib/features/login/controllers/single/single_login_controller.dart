@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../shared/auth/account_code_diagnostics.dart';
+import '../../../../shared/auth/account_code_number.dart';
+
 import '../../../../app/di/routes.dart';
 
 import '../../../../app/init/work_schedule_prefs.dart';
@@ -30,13 +33,13 @@ enum _LocalAreaRefreshResult {
 class _SingleCachedCredentials {
   const _SingleCachedCredentials({
     required this.name,
-    required this.phone,
+    required this.codeNumber,
     required this.password,
     required this.modes,
   });
 
   final String name;
-  final String phone;
+  final String codeNumber;
   final String password;
   final List<String> modes;
 }
@@ -53,11 +56,11 @@ class SingleLoginController {
   final VoidCallback? onLoginSucceeded;
 
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController codeNumberController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
   final FocusNode nameFocus = FocusNode();
-  final FocusNode phoneFocus = FocusNode();
+  final FocusNode codeNumberFocus = FocusNode();
   final FocusNode passwordFocus = FocusNode();
 
   bool isLoading = false;
@@ -152,12 +155,12 @@ class SingleLoginController {
     try {
       final decoded = jsonDecode(cachedJson) as Map<String, dynamic>;
       final cachedName = (decoded['name'] as String?)?.trim() ?? '';
-      final cachedPhoneRaw = (decoded['phone'] as String?)?.trim() ?? '';
-      final cachedPhone = cachedPhoneRaw.replaceAll(RegExp(r'\D'), '');
+      final cachedCodeNumberRaw = (decoded['codeNumber'] ?? decoded['phone'] ?? '').toString().trim();
+      final cachedCodeNumber = AccountCodeNumber.normalize(cachedCodeNumberRaw);
       final cachedPassword = (decoded['password'] as String?) ?? '';
       return _SingleCachedCredentials(
         name: cachedName,
-        phone: cachedPhone,
+        codeNumber: cachedCodeNumber,
         password: cachedPassword,
         modes: _extractModes(decoded['modes']),
       );
@@ -266,7 +269,7 @@ class SingleLoginController {
   Future<bool> _loginFromFirestoreCredentials({
     required SharedPreferences prefs,
     required String name,
-    required String phone,
+    required String codeNumber,
     required String password,
     required String operationLabel,
   }) async {
@@ -278,14 +281,19 @@ class SingleLoginController {
 
     try {
       final userRepository = context.read<UserRepository>();
-      final user = await userRepository.getUserByPhone(phone);
+      final user = await userRepository.getUserByAccountCode(codeNumber);
+      AccountCodeDiagnostics.record(
+        'single',
+        user == null ? 'account_not_found' : 'account_loaded',
+        meta: <String, Object?>{'codeNumber': AccountCodeNumber.mask(codeNumber)},
+      );
 
       debugPrint(
-        '[LOGIN-SINGLE][${_ts()}] $operationLabel 입력값 name="$name" phone="$phone" pwLen=${password.length}',
+        '[LOGIN-SINGLE][${_ts()}] $operationLabel 입력값 name="$name" codeNumber="${AccountCodeNumber.mask(codeNumber)}" pwLen=${password.length}',
       );
       if (user != null) {
         debugPrint(
-          '[LOGIN-SINGLE][${_ts()}] $operationLabel DB 유저: name=${user.name}, phone=${user.phone}',
+          '[LOGIN-SINGLE][${_ts()}] $operationLabel DB 유저: name=${user.name}, codeNumber=${AccountCodeNumber.mask(user.codeNumber)}',
         );
       } else {
         debugPrint(
@@ -329,7 +337,7 @@ class SingleLoginController {
         '[LOGIN-SINGLE][${_ts()}] $operationLabel userState.updateLoginUser done',
       );
 
-      await prefs.setString('phone', updatedUser.phone);
+      await prefs.setString('codeNumber', updatedUser.codeNumber);
       await prefs.setString('selectedArea', updatedUser.selectedArea ?? '');
       await prefs.setString(
         'division',
@@ -344,10 +352,15 @@ class SingleLoginController {
       await WorkSchedulePrefs.refreshReminderFromPrefs(prefs);
       await prefs.setString('mode', 'single');
       debugPrint(
-        '[LOGIN-SINGLE][${_ts()}] $operationLabel SharedPreferences 저장 완료: phone=${prefs.getString('phone')}',
+        '[LOGIN-SINGLE][${_ts()}] $operationLabel SharedPreferences 저장 완료: codeNumber=${prefs.getString('codeNumber')}',
       );
 
       await _syncWorkAreaSession(source: 'legacy_single_firestore_login');
+      AccountCodeDiagnostics.record(
+        'single',
+        'login_success',
+        meta: <String, Object?>{'codeNumber': AccountCodeNumber.mask(codeNumber)},
+      );
       _navigateAfterLogin();
       return true;
     } catch (error, stackTrace) {
@@ -409,7 +422,7 @@ class SingleLoginController {
         return await _loginFromFirestoreCredentials(
           prefs: prefs,
           name: cachedCredentials.name,
-          phone: cachedCredentials.phone,
+          codeNumber: cachedCredentials.codeNumber,
           password: cachedCredentials.password,
           operationLabel: 'single-auto-legacy-fallback',
         );
@@ -433,18 +446,36 @@ class SingleLoginController {
     }
 
     final name = nameController.text.trim();
-    final phone = phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
+    final codeNumber = AccountCodeNumber.normalize(codeNumberController.text);
     final password = passwordController.text.trim();
+    AccountCodeDiagnostics.record(
+      'single',
+      'login_attempt',
+      meta: <String, Object?>{
+        'codeNumber': AccountCodeNumber.mask(codeNumber),
+        'nameLength': name.length,
+        'passwordLength': password.length,
+      },
+    );
 
-    if (name.isEmpty && phone.isEmpty && password == '00000') {
+    if (name.isEmpty && codeNumber.isEmpty && password == '00000') {
       debugPrint('[LOGIN-SINGLE][${_ts()}] backdoor bypass');
       return true;
     }
 
-    final phoneError = SingleLoginValidate.validatePhone(phone);
+    final codeNumberError = SingleLoginValidate.validateCodeNumber(codeNumber);
     final passwordError = SingleLoginValidate.validatePassword(password);
 
-    if (name.isEmpty || phoneError != null || passwordError != null) {
+    if (name.isEmpty || codeNumberError != null || passwordError != null) {
+      AccountCodeDiagnostics.record(
+        'single',
+        'validation_failed',
+        meta: <String, Object?>{
+          'nameEmpty': name.isEmpty,
+          'codeNumberError': codeNumberError,
+          'passwordError': passwordError,
+        },
+      );
       return false;
     }
 
@@ -461,7 +492,7 @@ class SingleLoginController {
 
       if (cachedCredentials != null &&
           cachedCredentials.name == name &&
-          cachedCredentials.phone == phone &&
+          cachedCredentials.codeNumber == codeNumber &&
           cachedCredentials.password == password) {
         final allowed =
             _hasModeAccessFromList(cachedCredentials.modes, _requiredMode);
@@ -516,7 +547,7 @@ class SingleLoginController {
       return await _loginFromFirestoreCredentials(
         prefs: prefs,
         name: name,
-        phone: phone,
+        codeNumber: codeNumber,
         password: password,
         operationLabel: 'single',
       );
@@ -529,20 +560,10 @@ class SingleLoginController {
     obscurePassword = !obscurePassword;
   }
 
-  void formatPhoneNumber(String value, StateSetter setState) {
-    final numbersOnly = value.replaceAll(RegExp(r'\D'), '');
-    String formatted = numbersOnly;
-
-    if (numbersOnly.length >= 11) {
-      formatted =
-          '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 7)}-${numbersOnly.substring(7, 11)}';
-    } else if (numbersOnly.length >= 10) {
-      formatted =
-          '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 6)}-${numbersOnly.substring(6, 10)}';
-    }
-
+  void formatCodeNumber(String value, StateSetter setState) {
+    final formatted = AccountCodeNumber.format(value);
     setState(() {
-      phoneController.value = TextEditingValue(
+      codeNumberController.value = TextEditingValue(
         text: formatted,
         selection: TextSelection.collapsed(offset: formatted.length),
       );
@@ -591,10 +612,10 @@ class SingleLoginController {
   void dispose() {
     _stateListener = null;
     nameController.dispose();
-    phoneController.dispose();
+    codeNumberController.dispose();
     passwordController.dispose();
     nameFocus.dispose();
-    phoneFocus.dispose();
+    codeNumberFocus.dispose();
     passwordFocus.dispose();
   }
 }

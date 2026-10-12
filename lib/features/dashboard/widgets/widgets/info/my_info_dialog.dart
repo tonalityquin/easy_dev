@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../dev/application/area_state.dart';
+import '../../../../../shared/auth/account_code_number.dart';
 
 enum MyInfoEntrySource {
   hqDashboard,
@@ -66,7 +67,7 @@ class MyInfoDialog extends StatefulWidget {
 class _MyInfoDialogState extends State<MyInfoDialog> {
   bool _loading = true;
   String _name = '';
-  String _phone = '';
+  String _codeNumber = '';
   String _area = '';
   String _division = '';
   String _role = '';
@@ -149,16 +150,16 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     final currentArea = context.read<AreaState>().currentArea.trim();
     final prefs = await SharedPreferences.getInstance();
     final cached = _decodeJsonMap(prefs.getString('cachedUserJson') ?? '');
-    final prefsPhone = (prefs.getString('phone') ?? '').trim();
+    final prefsCodeNumber = (prefs.getString('codeNumber') ?? prefs.getString('phone') ?? '').trim();
     final prefsArea = (prefs.getString('selectedArea') ?? '').trim();
     final effectiveArea = currentArea.isNotEmpty ? currentArea : prefsArea;
     final name = ((cached['name'] as String?) ?? '').trim();
-    final phoneFromCached = ((cached['phone'] as String?) ?? '').trim();
+    final codeNumberFromCached = (cached['codeNumber'] ?? cached['phone'] ?? '').toString().trim();
 
     if (!mounted) return;
     setState(() {
       _name = name;
-      _phone = prefsPhone.isNotEmpty ? prefsPhone : phoneFromCached;
+      _codeNumber = prefsCodeNumber.isNotEmpty ? prefsCodeNumber : codeNumberFromCached;
       _area = effectiveArea;
       _division = (prefs.getString('division') ?? '').trim();
       _role = (prefs.getString('role') ?? '').trim();
@@ -236,7 +237,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
             name: _name,
             position: _position,
             role: _role,
-            phone: _phone,
+            codeNumber: _codeNumber,
             area: _area,
             division: _division,
           ),
@@ -483,7 +484,7 @@ class _UserInfoCard extends StatelessWidget {
     required this.name,
     required this.position,
     required this.role,
-    required this.phone,
+    required this.codeNumber,
     required this.area,
     required this.division,
   });
@@ -491,7 +492,7 @@ class _UserInfoCard extends StatelessWidget {
   final String name;
   final String position;
   final String role;
-  final String phone;
+  final String codeNumber;
   final String area;
   final String division;
 
@@ -571,9 +572,9 @@ class _UserInfoCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _InfoPill(
-                icon: Icons.phone_rounded,
-                label: '연락처',
-                value: _safeText(phone),
+                icon: Icons.tag_rounded,
+                label: '코드번호',
+                value: _safeText(AccountCodeNumber.format(codeNumber)),
                 expanded: true,
               ),
               _InfoPill(

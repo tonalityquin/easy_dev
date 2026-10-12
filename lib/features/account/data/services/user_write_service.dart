@@ -384,12 +384,18 @@ class UserWriteService {
     }
   }
 
-  Future<void> updateUser(UserModel user) async {
-    final userDocRef = _getUserCollectionRef().doc(user.id);
+  Future<void> updateUser(
+    UserModel user, {
+    String? previousId,
+  }) async {
+    final previousUserId = (previousId ?? user.id).trim();
+    final nextUserId = user.id.trim();
+    final previousUserDocRef = _getUserCollectionRef().doc(previousUserId);
+    final nextUserDocRef = _getUserCollectionRef().doc(nextUserId);
 
     UserModel? prevUser;
     try {
-      final prevSnap = await userDocRef.get();
+      final prevSnap = await previousUserDocRef.get();
       if (prevSnap.exists && prevSnap.data() != null) {
         prevUser = UserModel.fromMap(prevSnap.id, prevSnap.data()!);
       }
@@ -398,18 +404,16 @@ class UserWriteService {
     final newDivision = _divisionOfUser(user);
     final newArea = _areaOfUser(user);
     final newShowId = _showDocId(newDivision, newArea);
-
     final oldDivision = prevUser != null ? _divisionOfUser(prevUser) : newDivision;
     final oldArea = prevUser != null ? _areaOfUser(prevUser) : newArea;
     final oldShowId = _showDocId(oldDivision, oldArea);
-
-    final moved = prevUser != null && oldShowId != newShowId;
+    final identityMoved = previousUserId != nextUserId;
+    final showMoved = oldShowId != newShowId;
 
     final newShowDocRef = _getUserShowCollectionRef().doc(newShowId);
-    final newShowUserDocRef = newShowDocRef.collection('users').doc(user.id);
-
+    final newShowUserDocRef = newShowDocRef.collection('users').doc(nextUserId);
     final oldShowDocRef = _getUserShowCollectionRef().doc(oldShowId);
-    final oldShowUserDocRef = oldShowDocRef.collection('users').doc(user.id);
+    final oldShowUserDocRef = oldShowDocRef.collection('users').doc(previousUserId);
 
     await _ensureOrSyncAccountCounts(
       showDocRef: newShowDocRef,
@@ -417,7 +421,7 @@ class UserWriteService {
       area: newArea,
       strict: true,
     );
-    if (moved) {
+    if (showMoved) {
       await _ensureOrSyncAccountCounts(
         showDocRef: oldShowDocRef,
         division: oldDivision,
@@ -433,45 +437,125 @@ class UserWriteService {
         final newActiveLimit = _normalizeLimit(newShowData['activeLimit']);
         final newTotalLimit = _normalizeLimit(newShowData['totalLimit']);
         final newCounts0 = _countsFromMeta(newShowData);
-
         final userMap = _removeLegacyScheduleFields(user.toMap());
         userMap.remove('isActive');
         userMap.remove('disabledAt');
         userMap['updatedAt'] = FieldValue.serverTimestamp();
 
-        if (!moved) {
+        if (!identityMoved && !showMoved) {
           final currentShowUserSnap = await tx.get(newShowUserDocRef);
           var counts1 = newCounts0;
           if (!currentShowUserSnap.exists) {
             final wantActive = user.isActive;
             final activeDelta = wantActive ? 1 : 0;
             final inactiveDelta = wantActive ? 0 : 1;
-            _assertTotalLimit(counts: newCounts0, totalDelta: 1, limit: newTotalLimit);
-            _assertActiveLimit(counts: newCounts0, activeDelta: activeDelta, limit: newActiveLimit);
+            _assertTotalLimit(
+              counts: newCounts0,
+              totalDelta: 1,
+              limit: newTotalLimit,
+            );
+            _assertActiveLimit(
+              counts: newCounts0,
+              activeDelta: activeDelta,
+              limit: newActiveLimit,
+            );
             counts1 = newCounts0.applyDeltas(
               activeDelta: activeDelta,
               inactiveDelta: inactiveDelta,
             );
             userMap['isActive'] = wantActive;
-            userMap['disabledAt'] = wantActive ? FieldValue.delete() : FieldValue.serverTimestamp();
+            userMap['disabledAt'] = wantActive
+                ? FieldValue.delete()
+                : FieldValue.serverTimestamp();
           }
 
-          tx.set(userDocRef, _toUserAccountsMap(user));
+          tx.set(nextUserDocRef, _toUserAccountsMap(user));
           tx.set(
             newShowDocRef,
-            _showMetaPayload(division: newDivision, area: newArea, counts: counts1),
+            _showMetaPayload(
+              division: newDivision,
+              area: newArea,
+              counts: counts1,
+            ),
             SetOptions(merge: true),
           );
           tx.set(newShowUserDocRef, userMap, SetOptions(merge: true));
           return;
         }
 
+        if (identityMoved && !showMoved) {
+          final nextRootSnap = await tx.get(nextUserDocRef);
+          if (nextRootSnap.exists) {
+            throw StateError('USER_ALREADY_EXISTS:$nextUserId');
+          }
+          final oldShowUserSnap = await tx.get(oldShowUserDocRef);
+          final nextShowUserSnap = await tx.get(newShowUserDocRef);
+          if (nextShowUserSnap.exists) {
+            throw StateError('USER_ALREADY_EXISTS:$nextUserId');
+          }
+
+          final oldShowData = oldShowUserSnap.data() ?? <String, dynamic>{};
+          final oldExists = oldShowUserSnap.exists;
+          final targetActive = oldExists
+              ? ((oldShowData['isActive'] as bool?) ?? user.isActive)
+              : user.isActive;
+          final disabledAtValue = oldShowData['disabledAt'];
+          var counts1 = newCounts0;
+          if (!oldExists) {
+            final activeDelta = targetActive ? 1 : 0;
+            final inactiveDelta = targetActive ? 0 : 1;
+            _assertTotalLimit(
+              counts: newCounts0,
+              totalDelta: 1,
+              limit: newTotalLimit,
+            );
+            _assertActiveLimit(
+              counts: newCounts0,
+              activeDelta: activeDelta,
+              limit: newActiveLimit,
+            );
+            counts1 = newCounts0.applyDeltas(
+              activeDelta: activeDelta,
+              inactiveDelta: inactiveDelta,
+            );
+          }
+
+          final movedUserMap = <String, dynamic>{
+            ...userMap,
+            'isActive': targetActive,
+            if (targetActive) 'disabledAt': FieldValue.delete(),
+            if (!targetActive)
+              'disabledAt': disabledAtValue ?? FieldValue.serverTimestamp(),
+          };
+          tx.set(nextUserDocRef, _toUserAccountsMap(user));
+          tx.delete(previousUserDocRef);
+          if (oldExists) {
+            tx.delete(oldShowUserDocRef);
+          }
+          tx.set(newShowUserDocRef, movedUserMap, SetOptions(merge: true));
+          tx.set(
+            newShowDocRef,
+            _showMetaPayload(
+              division: newDivision,
+              area: newArea,
+              counts: counts1,
+            ),
+            SetOptions(merge: true),
+          );
+          return;
+        }
+
         final oldShowSnap = await tx.get(oldShowDocRef);
         final oldShowData = oldShowSnap.data() ?? <String, dynamic>{};
         final oldCounts0 = _countsFromMeta(oldShowData);
-
         final oldUserSnap = await tx.get(oldShowUserDocRef);
         final newUserSnap = await tx.get(newShowUserDocRef);
+        if (identityMoved) {
+          final nextRootSnap = await tx.get(nextUserDocRef);
+          if (nextRootSnap.exists || newUserSnap.exists) {
+            throw StateError('USER_ALREADY_EXISTS:$nextUserId');
+          }
+        }
 
         final oldExists = oldUserSnap.exists;
         final newExists = newUserSnap.exists;
@@ -479,9 +563,12 @@ class UserWriteService {
         final newData = newUserSnap.data() ?? <String, dynamic>{};
         final oldActive = (oldData['isActive'] as bool?) ?? false;
         final newActive = (newData['isActive'] as bool?) ?? false;
-        final targetActive = oldExists ? oldActive : (newExists ? newActive : user.isActive);
-        final disabledAtValue = oldExists ? oldData['disabledAt'] : newData['disabledAt'];
-
+        final targetActive = oldExists
+            ? oldActive
+            : (newExists ? newActive : user.isActive);
+        final disabledAtValue = oldExists
+            ? oldData['disabledAt']
+            : newData['disabledAt'];
         final oldActiveDelta = oldExists && oldActive ? -1 : 0;
         final oldInactiveDelta = oldExists && !oldActive ? -1 : 0;
         final newActiveDelta = targetActive
@@ -492,8 +579,16 @@ class UserWriteService {
             : (newExists && !newActive ? 0 : 1);
         final newTotalDelta = newExists ? 0 : 1;
 
-        _assertTotalLimit(counts: newCounts0, totalDelta: newTotalDelta, limit: newTotalLimit);
-        _assertActiveLimit(counts: newCounts0, activeDelta: newActiveDelta, limit: newActiveLimit);
+        _assertTotalLimit(
+          counts: newCounts0,
+          totalDelta: newTotalDelta,
+          limit: newTotalLimit,
+        );
+        _assertActiveLimit(
+          counts: newCounts0,
+          activeDelta: newActiveDelta,
+          limit: newActiveLimit,
+        );
 
         final oldCounts1 = oldCounts0.applyDeltas(
           activeDelta: oldActiveDelta,
@@ -504,7 +599,10 @@ class UserWriteService {
           inactiveDelta: newInactiveDelta,
         );
 
-        tx.set(userDocRef, _toUserAccountsMap(user));
+        tx.set(nextUserDocRef, _toUserAccountsMap(user));
+        if (identityMoved) {
+          tx.delete(previousUserDocRef);
+        }
         if (oldExists) {
           tx.delete(oldShowUserDocRef);
         }
@@ -513,18 +611,26 @@ class UserWriteService {
           ...userMap,
           'isActive': targetActive,
           if (targetActive) 'disabledAt': FieldValue.delete(),
-          if (!targetActive) 'disabledAt': disabledAtValue ?? FieldValue.serverTimestamp(),
+          if (!targetActive)
+            'disabledAt': disabledAtValue ?? FieldValue.serverTimestamp(),
         };
         tx.set(newShowUserDocRef, movedUserMap, SetOptions(merge: true));
-
         tx.set(
           newShowDocRef,
-          _showMetaPayload(division: newDivision, area: newArea, counts: newCounts1),
+          _showMetaPayload(
+            division: newDivision,
+            area: newArea,
+            counts: newCounts1,
+          ),
           SetOptions(merge: true),
         );
         tx.set(
           oldShowDocRef,
-          _showMetaPayload(division: oldDivision, area: oldArea, counts: oldCounts1),
+          _showMetaPayload(
+            division: oldDivision,
+            area: oldArea,
+            counts: oldCounts1,
+          ),
           SetOptions(merge: true),
         );
       });

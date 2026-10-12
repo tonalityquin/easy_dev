@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../../shared/auth/account_code_number.dart';
+
 import '../../../../app/di/routes.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../controllers/single/single_login_controller.dart';
+import '../common/code_number_debug_action.dart';
 import '../common/common_login_ui.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 
@@ -105,18 +108,25 @@ class _SingleLoginFormState extends State<SingleLoginForm> {
       spec: CommonLoginModeSpec.single,
       onTopLogoPressed: _onTopCompanyLogoTapped,
       onFooterLogoPressed: _onFooterLogoTapped,
+      topTrailing: const CodeNumberDebugAction(
+        scope: 'single',
+        title: '코드번호 로그인 로그',
+      ),
       fields: CommonLoginFields(
         nameController: _controller.nameController,
         nameFocus: _controller.nameFocus,
-        accountController: _controller.phoneController,
-        accountFocus: _controller.phoneFocus,
+        accountController: _controller.codeNumberController,
+        accountFocus: _controller.codeNumberFocus,
         passwordController: _controller.passwordController,
         passwordFocus: _controller.passwordFocus,
-        accountLabel: '전화번호',
-        accountIcon: Icons.phone_rounded,
-        accountKeyboardType: TextInputType.phone,
+        accountLabel: '코드번호',
+        accountIcon: Icons.tag_rounded,
+        accountKeyboardType: TextInputType.text,
+        accountInputFormatters: const [
+          AccountCodeNumberInputFormatter(),
+        ],
         onAccountChanged: (value) =>
-            _controller.formatPhoneNumber(value, setState),
+            _controller.formatCodeNumber(value, setState),
         obscurePassword: _controller.obscurePassword,
         onTogglePassword: () =>
             setState(() => _controller.togglePassword()),

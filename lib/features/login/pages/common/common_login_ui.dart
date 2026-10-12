@@ -574,6 +574,7 @@ class CommonLoginFields extends StatelessWidget {
     this.accountTextCapitalization = TextCapitalization.none,
     this.accountAutocorrect = false,
     this.accountEnableSuggestions = false,
+    this.accountInputFormatters,
   });
 
   final TextEditingController nameController;
@@ -596,6 +597,7 @@ class CommonLoginFields extends StatelessWidget {
   final TextCapitalization accountTextCapitalization;
   final bool accountAutocorrect;
   final bool accountEnableSuggestions;
+  final List<TextInputFormatter>? accountInputFormatters;
 
   @override
   Widget build(BuildContext context) {
@@ -628,6 +630,7 @@ class CommonLoginFields extends StatelessWidget {
             textCapitalization: accountTextCapitalization,
             autocorrect: accountAutocorrect,
             enableSuggestions: accountEnableSuggestions,
+            inputFormatters: accountInputFormatters,
             textInputAction: TextInputAction.next,
             onChanged: onAccountChanged,
             onSubmitted: (_) =>

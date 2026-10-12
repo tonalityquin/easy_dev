@@ -11,6 +11,7 @@ import '../../../features/launcher/application/terminal_auth_coordinator.dart';
 import '../../auth/gmail_sender_auth.dart';
 import '../../config/email_config.dart';
 import '../../../features/selector/application/dev_auth.dart';
+import '../../../shared/auth/account_code_number.dart';
 import '../../../features/dev/presentation/debug_caution_surface.dart';
 import '../../command/application/app_command_registry.dart';
 import '../../command/application/terminal_line.dart';
@@ -1235,6 +1236,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     await _showLauncherDialog(
       builder: (dialogContext) => _LauncherAccountDialog(
         accountKind: _launcherController!.selectedAccountKindLabel,
+        usesCodeNumber: _launcherController!.accountIdentifierUsesCodeNumber,
         initialName: _launcherController!.enteredName,
         initialPhone: _launcherController!.enteredPhone,
         reduceMotion: _reduceMotion,
@@ -1256,7 +1258,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       context: _contextLabel,
       meta: <String, Object?>{
         'nameLength': name.trim().length,
-        'phoneLength': phone.replaceAll(RegExp(r'[^0-9]'), '').length,
+        'accountIdentifierLength': _launcherController!.accountIdentifierUsesCodeNumber ? AccountCodeNumber.normalize(phone).length : phone.replaceAll(RegExp(r'[^0-9]'), '').length,
         'passwordLength': password.length,
       },
     );
@@ -1277,7 +1279,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         meta: <String, Object?>{
           'stage': _launcherController!.loginStage.name,
           'nameLength': name.trim().length,
-          'phoneLength': phone.replaceAll(RegExp(r'[^0-9]'), '').length,
+          'accountIdentifierLength': _launcherController!.accountIdentifierUsesCodeNumber ? AccountCodeNumber.normalize(phone).length : phone.replaceAll(RegExp(r'[^0-9]'), '').length,
           'hasTargetRoute': result.flowResult.targetRoute != null,
         },
       );
@@ -4993,6 +4995,7 @@ class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
 class _LauncherAccountDialog extends StatefulWidget {
   const _LauncherAccountDialog({
     required this.accountKind,
+    required this.usesCodeNumber,
     required this.initialName,
     required this.initialPhone,
     required this.reduceMotion,
@@ -5003,6 +5006,7 @@ class _LauncherAccountDialog extends StatefulWidget {
   });
 
   final String accountKind;
+  final bool usesCodeNumber;
   final String initialName;
   final String initialPhone;
   final bool reduceMotion;
@@ -5059,7 +5063,9 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
   Future<void> _authenticate() async {
     if (_busy) return;
     final name = _nameController.text.trim();
-    final phone = _phoneController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final phone = widget.usesCodeNumber
+        ? AccountCodeNumber.normalize(_phoneController.text)
+        : _phoneController.text.replaceAll(RegExp(r'[^0-9]'), '');
     final password = _passwordController.text;
     setState(() {
       _nameError = name.isEmpty ? '입력해 주세요.' : null;
@@ -5163,16 +5169,24 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
             ),
             const SizedBox(height: 12),
             _TerminalDialogField(
-              label: ModeLauncherController.phoneDisplayLabel,
+              label: widget.usesCodeNumber
+                  ? ModeLauncherController.codeNumberDisplayLabel
+                  : ModeLauncherController.phoneDisplayLabel,
               controller: _phoneController,
               focusNode: _phoneFocus,
               enabled: !_busy,
               errorText: _phoneError,
-              keyboardType: TextInputType.phone,
+              keyboardType: widget.usesCodeNumber
+                  ? TextInputType.text
+                  : TextInputType.phone,
               textInputAction: TextInputAction.next,
-              inputFormatters: <TextInputFormatter>[
-                FilteringTextInputFormatter.digitsOnly,
-              ],
+              inputFormatters: widget.usesCodeNumber
+                  ? const <TextInputFormatter>[
+                      AccountCodeNumberInputFormatter(),
+                    ]
+                  : <TextInputFormatter>[
+                      FilteringTextInputFormatter.digitsOnly,
+                    ],
               onSubmitted: (_) => _passwordFocus.requestFocus(),
             ),
             const SizedBox(height: 12),

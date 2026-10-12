@@ -3,8 +3,8 @@ import '../models/tablet/tablet_model.dart';
 import '../models/user/user_model.dart';
 
 abstract class UserRepository {
-  Future<UserModel?> getUserByPhone(String phone);
-  Future<List<UserModel>> searchUsersByPhone(String phone);
+  Future<UserModel?> getUserByAccountCode(String accountCode);
+  Future<List<UserModel>> searchUsersByAccountCode(String accountCode);
   Future<UserModel?> getUserById(String userId);
   Future<UserModel?> getUserByHandle(String handle);
   Future<TabletModel?> getTabletByHandle(String handle);
@@ -13,10 +13,10 @@ abstract class UserRepository {
   Future<TabletModel?> getTabletByPhoneAndAreaName(String phone, String areaName);
   Future<TabletModel?> getTabletByHandleAndAreaName(String handle, String areaName);
 
-  Future<void> updateLoadCurrentArea(String phone, String area, String currentArea);
-  Future<void> areaPickerCurrentArea(String phone, String area, String currentArea);
-  Future<void> updateLogOutUserStatus(String phone, String area, {bool? isWorking, bool? isSaved});
-  Future<void> updateWorkingUserStatus(String phone, String area, {bool? isWorking, bool? isSaved});
+  Future<void> updateLoadCurrentArea(String codeNumber, String area, String currentArea);
+  Future<void> areaPickerCurrentArea(String codeNumber, String area, String currentArea);
+  Future<void> updateLogOutUserStatus(String codeNumber, String area, {bool? isWorking, bool? isSaved});
+  Future<void> updateWorkingUserStatus(String codeNumber, String area, {bool? isWorking, bool? isSaved});
   Future<void> updateLoginSession({
     required String userId,
     required bool isSaved,
@@ -33,7 +33,7 @@ abstract class UserRepository {
 
   Future<void> addUserCard(UserModel user);
   Future<void> addTabletCard(TabletModel tablet);
-  Future<void> updateUser(UserModel user);
+  Future<void> updateUser(UserModel user, {String? previousId});
   Future<void> updateTablet(TabletModel tablet, {String? previousId});
   Future<void> deleteUsers(List<String> ids);
   Future<void> deleteTablets(List<String> ids);
