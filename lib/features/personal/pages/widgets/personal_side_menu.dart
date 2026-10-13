@@ -180,6 +180,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
 
       await prefs.remove('mode');
       await prefs.remove('phone');
+      await prefs.remove('codeNumber');
       await prefs.remove('selectedArea');
       await prefs.remove('division');
       await prefs.remove('role');
@@ -187,6 +188,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
       await prefs.remove('personalAccountId');
       await prefs.remove('personalName');
       await prefs.remove('personalPhone');
+      await prefs.remove('personalCodeNumber');
       await prefs.remove('personalEmail');
       trace.log('개인형 로컬 로그인 정보 제거가 완료되었습니다.', progress: 0.68);
 

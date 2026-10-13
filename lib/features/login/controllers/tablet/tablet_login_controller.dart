@@ -9,7 +9,7 @@ import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/account/domain/models/tablet/tablet_model.dart';
 import '../../../../features/account/domain/repositories/user_repository.dart';
 import '../../../../features/tablet/applications/tablet_pad_mode_state.dart';
-import '../../../../shared/auth/tablet_phone.dart';
+import '../../../../shared/auth/account_code_number.dart';
 import '../../../../shared/work_session/application/work_area_session_coordinator.dart';
 import '../../../dev/application/area_state.dart';
 import '../area_login_session_refresher.dart';
@@ -41,11 +41,11 @@ class TabletLoginController {
   final VoidCallback? onLoginSucceeded;
 
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController codeNumberController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
   final FocusNode nameFocus = FocusNode();
-  final FocusNode phoneFocus = FocusNode();
+  final FocusNode codeNumberFocus = FocusNode();
   final FocusNode passwordFocus = FocusNode();
 
   bool isLoading = false;
@@ -90,9 +90,35 @@ class TabletLoginController {
   Future<TabletCredentialAuthenticationResult> authenticateCredentials(
     StateSetter setState,
   ) async {
+    TabletAccountDiagnostics.clear();
+    TabletAccountDiagnostics.record(
+      'authentication_start',
+      meta: <String, Object?>{
+        'codeNumber': AccountCodeNumber.mask(
+          AccountCodeNumber.normalize(codeNumberController.text),
+        ),
+        'nameLength': nameController.text.trim().length,
+      },
+    );
     setState(() => isLoading = true);
     try {
-      return await _authenticateCredentialsCore();
+      final result = await _authenticateCredentialsCore();
+      TabletAccountDiagnostics.record(
+        'authentication_complete',
+        meta: <String, Object?>{
+          'success': result.success,
+          'message': result.message,
+        },
+      );
+      if (context.mounted) {
+        await TabletAccountDiagnostics.showStatusDialog(
+          context,
+          title: '태블릿 계정 인증 상태',
+          description: result.message,
+          failure: !result.success,
+        );
+      }
+      return result;
     } finally {
       if (context.mounted) {
         setState(() => isLoading = false);
@@ -103,17 +129,17 @@ class TabletLoginController {
   Future<TabletCredentialAuthenticationResult>
       _authenticateCredentialsCore() async {
     final name = nameController.text.trim();
-    final phone = TabletPhone.normalize(phoneController.text);
+    final codeNumber = AccountCodeNumber.normalize(codeNumberController.text);
     final password = passwordController.text.trim();
 
-    if (name.isEmpty && phone.isEmpty && password == '00000') {
+    if (name.isEmpty && codeNumber.isEmpty && password == '00000') {
       return const TabletCredentialAuthenticationResult(
         success: true,
         message: '태블릿형 개발자 인증을 통과했습니다.',
       );
     }
 
-    final phoneError = TabletLoginValidate.validatePhone(phone);
+    final codeNumberError = TabletLoginValidate.validateCodeNumber(codeNumber);
     final passwordError = TabletLoginValidate.validatePassword(password);
 
     if (name.isEmpty) {
@@ -122,10 +148,10 @@ class TabletLoginController {
         message: '이름을 다시 확인하세요.',
       );
     }
-    if (phoneError != null) {
+    if (codeNumberError != null) {
       return TabletCredentialAuthenticationResult(
         success: false,
-        message: phoneError,
+        message: codeNumberError,
       );
     }
     if (passwordError != null) {
@@ -146,7 +172,7 @@ class TabletLoginController {
 
     try {
       final repo = context.read<UserRepository>();
-      final candidates = await repo.searchTabletsByPhone(phone);
+      final candidates = await repo.searchTabletsByCodeNumber(codeNumber);
       final matches = candidates
           .where(
             (tablet) =>
@@ -157,18 +183,18 @@ class TabletLoginController {
       TabletAccountDiagnostics.record(
         'manual_login_candidates_resolved',
         meta: <String, Object?>{
-          'phone': TabletPhone.mask(phone),
+          'codeNumber': AccountCodeNumber.mask(codeNumber),
           'candidateCount': candidates.length,
           'credentialMatchCount': matches.length,
           'documentIds': candidates
-              .map((tablet) => TabletPhone.maskDocumentId(tablet.id))
+              .map((tablet) => AccountCodeNumber.maskDocumentId(tablet.id))
               .join(','),
         },
       );
 
       if (context.mounted) {
         debugPrint(
-          '[LOGIN-TABLET][${_ts()}] input nameLength=${name.length} phone=${TabletPhone.mask(phone)} pwLen=${password.length} candidates=${candidates.length} matches=${matches.length}',
+          '[LOGIN-TABLET][${_ts()}] input nameLength=${name.length} codeNumber=${AccountCodeNumber.mask(codeNumber)} pwLen=${password.length} candidates=${candidates.length} matches=${matches.length}',
         );
       }
 
@@ -188,10 +214,10 @@ class TabletLoginController {
         TabletAccountDiagnostics.record(
           'manual_login_ambiguous',
           meta: <String, Object?>{
-            'phone': TabletPhone.mask(phone),
+            'codeNumber': AccountCodeNumber.mask(codeNumber),
             'matchCount': matches.length,
             'documentIds': matches
-                .map((tablet) => TabletPhone.maskDocumentId(tablet.id))
+                .map((tablet) => AccountCodeNumber.maskDocumentId(tablet.id))
                 .join(','),
           },
         );
@@ -229,7 +255,7 @@ class TabletLoginController {
         error: e,
         stackTrace: st,
         details: <String, Object?>{
-          'phone': TabletPhone.mask(phone),
+          'codeNumber': AccountCodeNumber.mask(codeNumber),
           'nameLength': name.length,
           'passwordLength': password.length,
           'targetMode': _savedMode,
@@ -248,7 +274,7 @@ class TabletLoginController {
     bool persistSession = true,
   }) async {
     try {
-      final phone = TabletPhone.normalize(tablet.phone);
+      final codeNumber = AccountCodeNumber.normalize(tablet.codeNumber);
       final userState = context.read<UserState>();
       final areaState = context.read<AreaState>();
       final areaName = (tablet.selectedArea ??
@@ -258,8 +284,8 @@ class TabletLoginController {
       if (areaName.isEmpty) return false;
 
       final englishAreaName = tablet.englishSelectedAreaName ?? areaName;
-      final canonicalId = TabletPhone.documentId(
-        phone: phone,
+      final canonicalId = AccountCodeNumber.documentId(
+        codeNumber: codeNumber,
         area: areaName,
       );
       final sourceId = tablet.id;
@@ -273,8 +299,8 @@ class TabletLoginController {
       TabletAccountDiagnostics.record(
         'authenticated_document_id_resolved',
         meta: <String, Object?>{
-          'sourceId': TabletPhone.maskDocumentId(sourceId),
-          'documentId': TabletPhone.maskDocumentId(sessionTablet.id),
+          'sourceId': AccountCodeNumber.maskDocumentId(sourceId),
+          'documentId': AccountCodeNumber.maskDocumentId(sessionTablet.id),
           'migrationRequired': sourceId != sessionTablet.id,
           'persistSession': persistSession,
         },
@@ -292,13 +318,15 @@ class TabletLoginController {
       );
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('tabletPhone', phone);
+      await prefs.setString('tabletCodeNumber', codeNumber);
+      await prefs.remove('tabletPhone');
+      await prefs.remove('phone');
       await prefs.remove('handle');
       await prefs.setString('selectedArea', areaName);
       await prefs.setString('englishSelectedAreaName', englishAreaName);
       await prefs.setString('mode', _savedMode);
       debugPrint(
-        '[LOGIN-TABLET][${_ts()}] prefs saved (tabletPhone/selectedArea/englishSelectedAreaName/mode=$_savedMode)',
+        '[LOGIN-TABLET][${_ts()}] prefs saved (tabletCodeNumber/selectedArea/englishSelectedAreaName/mode=$_savedMode)',
       );
 
       if (persistSession) {
@@ -348,7 +376,7 @@ class TabletLoginController {
         stackTrace: st,
         details: <String, Object?>{
           'tabletId': tablet.id,
-          'phone': TabletPhone.mask(tablet.phone),
+          'codeNumber': AccountCodeNumber.mask(tablet.codeNumber),
           'nameLength': tablet.name.length,
           'targetMode': _savedMode,
           'controller': 'TabletLoginController',
@@ -361,24 +389,75 @@ class TabletLoginController {
 
   Future<bool> login(StateSetter setState) async {
     final name = nameController.text.trim();
-    final phone = TabletPhone.normalize(phoneController.text);
+    final codeNumber = AccountCodeNumber.normalize(codeNumberController.text);
     final password = passwordController.text.trim();
 
-    if (name.isEmpty && phone.isEmpty && password == '00000') {
+    if (name.isEmpty && codeNumber.isEmpty && password == '00000') {
       debugPrint('[LOGIN-TABLET][${_ts()}] backdoor bypass');
       return true;
     }
 
+    TabletAccountDiagnostics.clear();
+    TabletAccountDiagnostics.record(
+      'login_start',
+      meta: <String, Object?>{
+        'codeNumber': AccountCodeNumber.mask(codeNumber),
+        'nameLength': name.length,
+      },
+    );
     setState(() => isLoading = true);
     try {
       final credential = await _authenticateCredentialsCore();
       final tablet = credential.tablet;
       if (!credential.success || tablet == null) {
+        TabletAccountDiagnostics.record(
+          'login_failure',
+          meta: <String, Object?>{'message': credential.message},
+        );
+        if (context.mounted) {
+          await TabletAccountDiagnostics.showStatusDialog(
+            context,
+            title: '태블릿 로그인 상태',
+            description: credential.message,
+            failure: true,
+          );
+        }
         return false;
       }
 
       final activated = await activateAuthenticatedTablet(tablet);
-      if (!activated) return false;
+      if (!activated) {
+        TabletAccountDiagnostics.record(
+          'login_activation_failure',
+          meta: <String, Object?>{
+            'documentId': AccountCodeNumber.maskDocumentId(tablet.id),
+          },
+        );
+        if (context.mounted) {
+          await TabletAccountDiagnostics.showStatusDialog(
+            context,
+            title: '태블릿 로그인 상태',
+            description: '태블릿 로그인 세션을 활성화하지 못했습니다.',
+            failure: true,
+          );
+        }
+        return false;
+      }
+
+      TabletAccountDiagnostics.record(
+        'login_success',
+        meta: <String, Object?>{
+          'documentId': AccountCodeNumber.maskDocumentId(tablet.id),
+          'codeNumber': AccountCodeNumber.mask(tablet.codeNumber),
+        },
+      );
+      if (context.mounted) {
+        await TabletAccountDiagnostics.showStatusDialog(
+          context,
+          title: '태블릿 로그인 상태',
+          description: credential.message,
+        );
+      }
 
       if (context.mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -406,18 +485,10 @@ class TabletLoginController {
     obscurePassword = !obscurePassword;
   }
 
-  void formatPhoneNumber(String value, StateSetter setState) {
-    final numbersOnly = value.replaceAll(RegExp(r'[^0-9]'), '');
-    String formatted = numbersOnly;
-    if (numbersOnly.length >= 11) {
-      formatted =
-          '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 7)}-${numbersOnly.substring(7, 11)}';
-    } else if (numbersOnly.length >= 10) {
-      formatted =
-          '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 6)}-${numbersOnly.substring(6, 10)}';
-    }
+  void formatCodeNumber(String value, StateSetter setState) {
+    final formatted = AccountCodeNumber.format(value);
     setState(() {
-      phoneController.value = TextEditingValue(
+      codeNumberController.value = TextEditingValue(
         text: formatted,
         selection: TextSelection.collapsed(offset: formatted.length),
       );
@@ -473,10 +544,10 @@ class TabletLoginController {
 
   void dispose() {
     nameController.dispose();
-    phoneController.dispose();
+    codeNumberController.dispose();
     passwordController.dispose();
     nameFocus.dispose();
-    phoneFocus.dispose();
+    codeNumberFocus.dispose();
     passwordFocus.dispose();
   }
 }

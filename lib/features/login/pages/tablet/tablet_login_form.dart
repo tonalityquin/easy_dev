@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/di/routes.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../shared/auth/account_code_number.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../controllers/tablet/tablet_login_controller.dart';
 import '../common/common_login_ui.dart';
@@ -93,15 +94,16 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
       fields: CommonLoginFields(
         nameController: _controller.nameController,
         nameFocus: _controller.nameFocus,
-        accountController: _controller.phoneController,
-        accountFocus: _controller.phoneFocus,
+        accountController: _controller.codeNumberController,
+        accountFocus: _controller.codeNumberFocus,
         passwordController: _controller.passwordController,
         passwordFocus: _controller.passwordFocus,
-        accountLabel: '전화번호',
-        accountIcon: Icons.phone_rounded,
-        accountKeyboardType: TextInputType.phone,
+        accountLabel: '코드번호',
+        accountIcon: Icons.badge_rounded,
+        accountKeyboardType: TextInputType.text,
+        accountInputFormatters: const [AccountCodeNumberInputFormatter()],
         onAccountChanged: (value) =>
-            _controller.formatPhoneNumber(value, setState),
+            _controller.formatCodeNumber(value, setState),
         obscurePassword: _controller.obscurePassword,
         onTogglePassword: () =>
             setState(() => _controller.togglePassword()),

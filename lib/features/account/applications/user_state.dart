@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../app/init/work_schedule_prefs.dart';
 import '../../../app/utils/area_context_debug_trace.dart';
 import '../../../app/utils/dev_firebase_debug_dialog.dart';
-import '../../../shared/auth/tablet_phone.dart';
+import '../../../shared/auth/account_code_number.dart';
 import '../../../shared/tts/services/plate/plate_tts_listener_service.dart';
 import '../../commute/domain/repositories/commute_log_repository.dart';
 import '../../mode_single/application/att_brk_repository.dart';
@@ -80,6 +80,7 @@ class UserState extends ChangeNotifier {
     'phone',
     'handle',
     'tabletPhone',
+    'tabletCodeNumber',
     'role',
     'division',
     'position',
@@ -119,9 +120,9 @@ class UserState extends ChangeNotifier {
 
   String get name => _session?.displayName ?? '';
 
-  String get codeNumber => _user?.codeNumber ?? '';
+  String get codeNumber => _user?.codeNumber ?? _tablet?.codeNumber ?? '';
 
-  String get phone => _isTablet ? (_tablet?.phone ?? '') : (_user?.codeNumber ?? '');
+  String get phone => codeNumber;
 
   String get password => _user?.password ?? _tablet?.password ?? '';
 
@@ -871,8 +872,8 @@ class UserState extends ChangeNotifier {
       meta: <String, Object?>{
         'previousId': (previousId ?? '').trim().isEmpty
             ? '-'
-            : TabletPhone.maskDocumentId(previousId!),
-        'documentId': TabletPhone.maskDocumentId(updatedTablet.id),
+            : AccountCodeNumber.maskDocumentId(previousId!),
+        'documentId': AccountCodeNumber.maskDocumentId(updatedTablet.id),
       },
     );
     await _repository.updateTablet(
@@ -1274,14 +1275,16 @@ class UserState extends ChangeNotifier {
 
   Future<void> _saveTabletPrefs(TabletModel tablet) async {
     final prefs = await SharedPreferences.getInstance();
-    final phone = TabletPhone.normalize(tablet.phone);
+    final codeNumber = AccountCodeNumber.normalize(tablet.codeNumber);
     final areaName = (tablet.selectedArea ??
             tablet.currentArea ??
             tablet.areas.firstOrNull ??
             '')
         .trim();
 
-    await prefs.setString('tabletPhone', phone);
+    await prefs.setString('tabletCodeNumber', codeNumber);
+    await prefs.remove('tabletPhone');
+    await prefs.remove('phone');
     await prefs.remove('handle');
     await prefs.setString('selectedArea', areaName);
     await prefs.setString(
@@ -1475,10 +1478,9 @@ class UserState extends ChangeNotifier {
   Future<void> loadTabletToLogIn() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final tabletPhone = TabletPhone.normalize(
-        prefs.getString('tabletPhone') ?? '',
+      final tabletCodeNumber = AccountCodeNumber.normalize(
+        prefs.getString('tabletCodeNumber') ?? '',
       );
-      final legacyHandle = prefs.getString('handle')?.trim().toLowerCase();
       final selectedArea = prefs.getString('selectedArea')?.trim();
       final division = prefs.getString('division')?.trim();
       final role = prefs.getString('role')?.trim();
@@ -1496,26 +1498,20 @@ class UserState extends ChangeNotifier {
       );
 
       TabletModel? tablet;
-      if (tabletPhone.isNotEmpty) {
+      if (tabletCodeNumber.isNotEmpty) {
         TabletAccountDiagnostics.record(
-          'auto_login_phone_area_lookup_start',
+          'auto_login_code_number_area_lookup_start',
           meta: <String, Object?>{
-            'documentId': TabletPhone.maskDocumentId(
-              TabletPhone.documentId(
-                phone: tabletPhone,
+            'documentId': AccountCodeNumber.maskDocumentId(
+              AccountCodeNumber.documentId(
+                codeNumber: tabletCodeNumber,
                 area: selectedArea,
               ),
             ),
           },
         );
-        tablet = await _repository.getTabletByPhoneAndAreaName(
-          tabletPhone,
-          selectedArea,
-        );
-      }
-      if (tablet == null && legacyHandle != null && legacyHandle.isNotEmpty) {
-        tablet = await _repository.getTabletByHandleAndAreaName(
-          legacyHandle,
+        tablet = await _repository.getTabletByCodeNumberAndAreaName(
+          tabletCodeNumber,
           selectedArea,
         );
       }
@@ -1523,15 +1519,15 @@ class UserState extends ChangeNotifier {
         TabletAccountDiagnostics.record(
           'auto_login_lookup_miss',
           meta: <String, Object?>{
-            'phone': TabletPhone.mask(tabletPhone),
+            'codeNumber': AccountCodeNumber.mask(tabletCodeNumber),
             'area': selectedArea,
           },
         );
         return;
       }
 
-      final canonicalId = TabletPhone.documentId(
-        phone: tablet.phone,
+      final canonicalId = AccountCodeNumber.documentId(
+        codeNumber: tablet.codeNumber,
         area: selectedArea,
       );
       final sourceId = tablet.id;
@@ -1565,8 +1561,8 @@ class UserState extends ChangeNotifier {
         TabletAccountDiagnostics.record(
           'legacy_document_migration_start',
           meta: <String, Object?>{
-            'sourceId': TabletPhone.maskDocumentId(sourceId),
-            'documentId': TabletPhone.maskDocumentId(canonicalId),
+            'sourceId': AccountCodeNumber.maskDocumentId(sourceId),
+            'documentId': AccountCodeNumber.maskDocumentId(canonicalId),
             'source': 'auto_login',
           },
         );
@@ -1577,8 +1573,8 @@ class UserState extends ChangeNotifier {
         TabletAccountDiagnostics.record(
           'legacy_document_migration_complete',
           meta: <String, Object?>{
-            'sourceId': TabletPhone.maskDocumentId(sourceId),
-            'documentId': TabletPhone.maskDocumentId(canonicalId),
+            'sourceId': AccountCodeNumber.maskDocumentId(sourceId),
+            'documentId': AccountCodeNumber.maskDocumentId(canonicalId),
             'source': 'auto_login',
           },
         );
@@ -1590,7 +1586,7 @@ class UserState extends ChangeNotifier {
         division: loginDivision,
       );
       debugPrint(
-        '[USER-STATE][${DateTime.now().toIso8601String()}] loadTabletToLogIn AreaRecord 서버 강제 동기화 완료: $loginDivision/$selectedArea phone=${TabletPhone.mask(tabletData.phone)}',
+        '[USER-STATE][${DateTime.now().toIso8601String()}] loadTabletToLogIn AreaRecord 서버 강제 동기화 완료: $loginDivision/$selectedArea codeNumber=${AccountCodeNumber.mask(tabletData.codeNumber)}',
       );
 
       _isTablet = true;

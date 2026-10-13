@@ -28,11 +28,10 @@ import '../application/download/headquarter_area_master_download_workflow.dart';
 import '../application/headquarter_dashboard_context.dart';
 import '../application/headquarter_side_dock_launcher_controller.dart';
 import '../application/headquarter_support_actions.dart';
+import '../application/hr_time_management_dock_coordinator.dart';
 import '../application/navigation/headquarter_context_navigation_coordinator.dart';
 import '../page/sheets/head_memo.dart';
 import 'headquarter_quick_work_context.dart';
-import 'hr/attendance_calendar.dart' as hr_att;
-import 'hr/break_calendar.dart' as hr_break;
 import 'mgmt/field.dart' as mgmt;
 import 'mgmt/statistics.dart' as mgmt_stats;
 
@@ -472,8 +471,9 @@ class _HeadquarterQuickActionsPanelState
         color: tokens.infoContainer,
         foreground: tokens.onInfoContainer,
         onTap: (rootContext) async {
-          await hr_att.AttendanceCalendar.showAsLeftSideDock<dynamic>(
+          await HrTimeManagementDockCoordinator.show(
             rootContext,
+            initialTarget: HrTimeDockTarget.attendance,
             useRootNavigator: true,
           );
         },
@@ -487,8 +487,9 @@ class _HeadquarterQuickActionsPanelState
         color: tokens.warningContainer,
         foreground: tokens.onWarningContainer,
         onTap: (rootContext) async {
-          await hr_break.BreakCalendar.showAsLeftSideDock<dynamic>(
+          await HrTimeManagementDockCoordinator.show(
             rootContext,
+            initialTarget: HrTimeDockTarget.breakTime,
             useRootNavigator: true,
           );
         },

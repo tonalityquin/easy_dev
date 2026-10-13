@@ -394,17 +394,13 @@ class TerminalAuthCoordinator {
     BuildContext context, {
     required TerminalAccountKind kind,
     required String name,
-    required String phone,
+    required String codeNumber,
     required String password,
     TerminalSessionPersistence persistence =
         TerminalSessionPersistence.persistent,
   }) async {
-    final accountIdentifier = kind == TerminalAccountKind.user
-        ? AccountCodeNumber.normalize(phone)
-        : phone.replaceAll(RegExp(r'[^0-9]'), '');
-    final maskedAccountIdentifier = kind == TerminalAccountKind.user
-        ? AccountCodeNumber.mask(accountIdentifier)
-        : _maskPhone(accountIdentifier);
+    final accountIdentifier = AccountCodeNumber.normalize(codeNumber);
+    final maskedAccountIdentifier = AccountCodeNumber.mask(accountIdentifier);
     LauncherDiagnostics.record(
       'auth_account_manual_start',
       meta: <String, Object?>{
@@ -472,7 +468,7 @@ class TerminalAuthCoordinator {
           final controller = PersonalLoginController(context);
           try {
             controller.nameController.text = name;
-            controller.phoneController.text = accountIdentifier;
+            controller.codeNumberController.text = accountIdentifier;
             controller.passwordController.text = password;
             final result = await controller.authenticateCredentials(
               stateSetter,
@@ -523,7 +519,7 @@ class TerminalAuthCoordinator {
           );
           try {
             controller.nameController.text = name;
-            controller.phoneController.text = accountIdentifier;
+            controller.codeNumberController.text = accountIdentifier;
             controller.passwordController.text = password;
             final result = await controller.authenticateCredentials(
               stateSetter,
@@ -1150,12 +1146,5 @@ class TerminalAuthCoordinator {
     }
   }
 
-  static String _maskPhone(String value) {
-    if (value.length < 7) {
-      return List<String>.filled(value.length, '*').join();
-    }
-    final start = value.substring(0, 3);
-    final end = value.substring(value.length - 4);
-    return '$start****$end';
-  }
+
 }

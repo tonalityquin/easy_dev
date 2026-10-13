@@ -1,6 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+import '../../../app/utils/status_dialog.dart';
+import '../../selector/application/dev_auth.dart';
 
 class TabletAccountDiagnostics {
   const TabletAccountDiagnostics._();
@@ -8,6 +12,10 @@ class TabletAccountDiagnostics {
   static final List<String> _lines = <String>[];
 
   static List<String> get lines => List<String>.unmodifiable(_lines);
+
+  static void clear() {
+    _lines.clear();
+  }
 
   static void record(
     String event, {
@@ -36,5 +44,38 @@ class TabletAccountDiagnostics {
     return _lines
         .map((line) => 'debugPrint(${jsonEncode(line)});')
         .join('\n');
+  }
+
+  static Future<void> showStatusDialog(
+    BuildContext context, {
+    required String title,
+    required String description,
+    bool failure = false,
+  }) async {
+    final developerMode = await DevAuth.isDevModeEnabled();
+    if (!developerMode || !context.mounted) return;
+    if (failure) {
+      await StatusDialog.showFailure(
+        context,
+        title: title,
+        description: description,
+        copyText: debugPrintCode,
+        copyButtonLabel: 'debugPrint 코드 복사',
+        visibleDuration: Duration.zero,
+        useCommonUi: true,
+        awaitManualClose: true,
+      );
+      return;
+    }
+    await StatusDialog.showSuccess(
+      context,
+      title: title,
+      description: description,
+      copyText: debugPrintCode,
+      copyButtonLabel: 'debugPrint 코드 복사',
+      visibleDuration: Duration.zero,
+      useCommonUi: true,
+      awaitManualClose: true,
+    );
   }
 }

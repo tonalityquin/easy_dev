@@ -1236,9 +1236,8 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     await _showLauncherDialog(
       builder: (dialogContext) => _LauncherAccountDialog(
         accountKind: _launcherController!.selectedAccountKindLabel,
-        usesCodeNumber: _launcherController!.accountIdentifierUsesCodeNumber,
         initialName: _launcherController!.enteredName,
-        initialPhone: _launcherController!.enteredPhone,
+        initialAccountIdentifier: _launcherController!.enteredCodeNumber,
         reduceMotion: _reduceMotion,
         onStatus: _showDeveloperStatus,
         onOpened: _handleLauncherDialogOpened,
@@ -1250,7 +1249,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
 
   Future<LauncherCredentialSubmitResult> _authenticateLauncherAccount(
     String name,
-    String phone,
+    String accountIdentifier,
     String password,
   ) async {
     ParkinWorkinTerminalDiagnostics.record(
@@ -1258,14 +1257,14 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       context: _contextLabel,
       meta: <String, Object?>{
         'nameLength': name.trim().length,
-        'accountIdentifierLength': _launcherController!.accountIdentifierUsesCodeNumber ? AccountCodeNumber.normalize(phone).length : phone.replaceAll(RegExp(r'[^0-9]'), '').length,
+        'accountIdentifierLength': AccountCodeNumber.normalize(accountIdentifier).length,
         'passwordLength': password.length,
       },
     );
     final result = await _launcherController!.authenticateCredentials(
       context,
       name: name,
-      phone: phone,
+      codeNumber: accountIdentifier,
       password: password,
       reduceMotion: _reduceMotion,
     );
@@ -1279,7 +1278,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         meta: <String, Object?>{
           'stage': _launcherController!.loginStage.name,
           'nameLength': name.trim().length,
-          'accountIdentifierLength': _launcherController!.accountIdentifierUsesCodeNumber ? AccountCodeNumber.normalize(phone).length : phone.replaceAll(RegExp(r'[^0-9]'), '').length,
+          'accountIdentifierLength': AccountCodeNumber.normalize(accountIdentifier).length,
           'hasTargetRoute': result.flowResult.targetRoute != null,
         },
       );
@@ -1290,7 +1289,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         meta: <String, Object?>{
           'stage': _launcherController!.loginStage.name,
           'nameError': result.nameError != null,
-          'phoneError': result.phoneError != null,
+          'codeNumberError': result.codeNumberError != null,
           'passwordError': result.passwordError != null,
           'authenticationError': result.authenticationError != null,
         },
@@ -4992,12 +4991,17 @@ class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
   }
 }
 
+enum _LauncherPasteField {
+  name,
+  codeNumber,
+  password,
+}
+
 class _LauncherAccountDialog extends StatefulWidget {
   const _LauncherAccountDialog({
     required this.accountKind,
-    required this.usesCodeNumber,
     required this.initialName,
-    required this.initialPhone,
+    required this.initialAccountIdentifier,
     required this.reduceMotion,
     required this.onStatus,
     required this.onOpened,
@@ -5006,16 +5010,15 @@ class _LauncherAccountDialog extends StatefulWidget {
   });
 
   final String accountKind;
-  final bool usesCodeNumber;
   final String initialName;
-  final String initialPhone;
+  final String initialAccountIdentifier;
   final bool reduceMotion;
   final VoidCallback onStatus;
   final VoidCallback onOpened;
   final VoidCallback onClosing;
   final Future<LauncherCredentialSubmitResult> Function(
     String name,
-    String phone,
+    String accountIdentifier,
     String password,
   ) onAuthenticate;
 
@@ -5025,16 +5028,16 @@ class _LauncherAccountDialog extends StatefulWidget {
 
 class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
   late final TextEditingController _nameController;
-  late final TextEditingController _phoneController;
+  late final TextEditingController _accountIdentifierController;
   late final TextEditingController _passwordController;
   final FocusNode _nameFocus = FocusNode();
-  final FocusNode _phoneFocus = FocusNode();
+  final FocusNode _accountIdentifierFocus = FocusNode();
   final FocusNode _passwordFocus = FocusNode();
   final GlobalKey<_MiniTerminalFrameState> _frameKey =
       GlobalKey<_MiniTerminalFrameState>();
   bool _busy = false;
   String? _nameError;
-  String? _phoneError;
+  String? _accountIdentifierError;
   String? _passwordError;
   String? _submitError;
 
@@ -5042,7 +5045,7 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.initialName);
-    _phoneController = TextEditingController(text: widget.initialPhone);
+    _accountIdentifierController = TextEditingController(text: widget.initialAccountIdentifier);
     _passwordController = TextEditingController();
   }
 
@@ -5052,33 +5055,206 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       if (!mounted || _busy) return;
       if (_nameController.text.isEmpty) {
         _nameFocus.requestFocus();
-      } else if (_phoneController.text.isEmpty) {
-        _phoneFocus.requestFocus();
+      } else if (_accountIdentifierController.text.isEmpty) {
+        _accountIdentifierFocus.requestFocus();
       } else {
         _passwordFocus.requestFocus();
       }
     });
   }
 
+  void _setControllerText(
+    TextEditingController controller,
+    String value,
+  ) {
+    controller.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+  }
+
+  String _pasteFieldLabel(_LauncherPasteField field) {
+    return switch (field) {
+      _LauncherPasteField.name => ModeLauncherController.nameDisplayLabel,
+      _LauncherPasteField.codeNumber =>
+        ModeLauncherController.codeNumberDisplayLabel,
+      _LauncherPasteField.password =>
+        ModeLauncherController.passwordDisplayLabel,
+    };
+  }
+
+  String _pasteStatusDescription({
+    required _LauncherPasteField field,
+    required bool applied,
+    required int rawLength,
+    String? maskedCodeNumber,
+  }) {
+    final lines = <String>[
+      'Account: ${widget.accountKind}',
+      'Field: ${_pasteFieldLabel(field)}',
+      'Clipboard: ${applied ? 'APPLIED' : 'EMPTY_OR_INVALID'}',
+      'Clipboard length: $rawLength',
+    ];
+    if (maskedCodeNumber != null) {
+      lines.add('Code number: $maskedCodeNumber');
+    }
+    if (field == _LauncherPasteField.password) {
+      lines.add('Password value: PROTECTED');
+    }
+    return lines.join('\n');
+  }
+
+  Future<void> _showPasteDeveloperStatus({
+    required _LauncherPasteField field,
+    required bool applied,
+    required int rawLength,
+    String? maskedCodeNumber,
+  }) async {
+    if (!mounted) return;
+    await LauncherDiagnostics.showStatus(
+      context,
+      title: 'Launcher Clipboard Status',
+      description: _pasteStatusDescription(
+        field: field,
+        applied: applied,
+        rawLength: rawLength,
+        maskedCodeNumber: maskedCodeNumber,
+      ),
+      scope: 'launcher_terminal_account_clipboard',
+    );
+  }
+
+  Future<void> _pasteFromClipboard(_LauncherPasteField field) async {
+    if (_busy) return;
+    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted || _busy) return;
+    final raw = clipboardData?.text ?? '';
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      LauncherDiagnostics.record(
+        'clipboard_paste_unavailable',
+        scope: 'launcher_terminal_account_clipboard',
+        meta: <String, Object?>{
+          'accountKind': widget.accountKind,
+          'field': field.name,
+          'clipboardLength': raw.length,
+        },
+      );
+      await HapticFeedback.mediumImpact();
+      await _showPasteDeveloperStatus(
+        field: field,
+        applied: false,
+        rawLength: raw.length,
+      );
+      return;
+    }
+
+    var value = '';
+    String? maskedCodeNumber;
+    switch (field) {
+      case _LauncherPasteField.name:
+        value = trimmed;
+        _setControllerText(_nameController, value);
+        _nameFocus.requestFocus();
+        setState(() {
+          _nameError = null;
+          _submitError = null;
+        });
+        break;
+      case _LauncherPasteField.codeNumber:
+        final normalized = AccountCodeNumber.normalize(trimmed);
+        if (normalized.isEmpty) {
+          LauncherDiagnostics.record(
+            'clipboard_paste_rejected',
+            scope: 'launcher_terminal_account_clipboard',
+            meta: <String, Object?>{
+              'accountKind': widget.accountKind,
+              'field': field.name,
+              'clipboardLength': raw.length,
+              'reason': 'normalized_empty',
+            },
+          );
+          await HapticFeedback.mediumImpact();
+          await _showPasteDeveloperStatus(
+            field: field,
+            applied: false,
+            rawLength: raw.length,
+          );
+          return;
+        }
+        final clipped = normalized.length > AccountCodeNumber.length
+            ? normalized.substring(0, AccountCodeNumber.length)
+            : normalized;
+        value = AccountCodeNumber.format(clipped);
+        maskedCodeNumber = AccountCodeNumber.mask(clipped);
+        _setControllerText(_accountIdentifierController, value);
+        _accountIdentifierFocus.requestFocus();
+        setState(() {
+          _accountIdentifierError = null;
+          _submitError = null;
+        });
+        break;
+      case _LauncherPasteField.password:
+        value = trimmed;
+        _setControllerText(_passwordController, value);
+        _passwordFocus.requestFocus();
+        setState(() {
+          _passwordError = null;
+          _submitError = null;
+        });
+        break;
+    }
+
+    final meta = <String, Object?>{
+      'accountKind': widget.accountKind,
+      'field': field.name,
+      'clipboardLength': raw.length,
+      'appliedLength': value.length,
+    };
+    if (maskedCodeNumber != null) {
+      meta['codeNumberMasked'] = maskedCodeNumber;
+    }
+    if (field == _LauncherPasteField.password) {
+      meta['passwordProtected'] = true;
+    }
+    LauncherDiagnostics.record(
+      'clipboard_paste_applied',
+      scope: 'launcher_terminal_account_clipboard',
+      meta: meta,
+    );
+    ParkinWorkinTerminalDiagnostics.record(
+      'account_clipboard_paste_applied',
+      context: 'launcher',
+      meta: meta,
+    );
+    await HapticFeedback.selectionClick();
+    await _showPasteDeveloperStatus(
+      field: field,
+      applied: true,
+      rawLength: raw.length,
+      maskedCodeNumber: maskedCodeNumber,
+    );
+  }
+
   Future<void> _authenticate() async {
     if (_busy) return;
     final name = _nameController.text.trim();
-    final phone = widget.usesCodeNumber
-        ? AccountCodeNumber.normalize(_phoneController.text)
-        : _phoneController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final accountIdentifier =
+        AccountCodeNumber.normalize(_accountIdentifierController.text);
     final password = _passwordController.text;
     setState(() {
       _nameError = name.isEmpty ? '입력해 주세요.' : null;
-      _phoneError = phone.isEmpty ? '입력해 주세요.' : null;
+      _accountIdentifierError =
+          accountIdentifier.isEmpty ? '입력해 주세요.' : null;
       _passwordError = password.isEmpty ? '입력해 주세요.' : null;
       _submitError = null;
     });
-    if (_nameError != null || _phoneError != null || _passwordError != null) {
+    if (_nameError != null || _accountIdentifierError != null || _passwordError != null) {
       await HapticFeedback.mediumImpact();
       if (_nameError != null) {
         _nameFocus.requestFocus();
-      } else if (_phoneError != null) {
-        _phoneFocus.requestFocus();
+      } else if (_accountIdentifierError != null) {
+        _accountIdentifierFocus.requestFocus();
       } else {
         _passwordFocus.requestFocus();
       }
@@ -5086,7 +5262,7 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
     }
     setState(() => _busy = true);
     await HapticFeedback.selectionClick();
-    final result = await widget.onAuthenticate(name, phone, password);
+    final result = await widget.onAuthenticate(name, accountIdentifier, password);
     if (!mounted) return;
     if (result.accepted) {
       await HapticFeedback.lightImpact();
@@ -5102,14 +5278,14 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
     setState(() {
       _busy = false;
       _nameError = result.nameError;
-      _phoneError = result.phoneError;
+      _accountIdentifierError = result.codeNumberError;
       _passwordError = result.passwordError;
       _submitError = result.authenticationError;
     });
     if (_nameError != null) {
       _nameFocus.requestFocus();
-    } else if (_phoneError != null) {
-      _phoneFocus.requestFocus();
+    } else if (_accountIdentifierError != null) {
+      _accountIdentifierFocus.requestFocus();
     } else if (_passwordError != null) {
       _passwordFocus.requestFocus();
     }
@@ -5165,28 +5341,25 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
               enabled: !_busy,
               errorText: _nameError,
               textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _phoneFocus.requestFocus(),
+              reduceMotion: widget.reduceMotion,
+              onPaste: () => _pasteFromClipboard(_LauncherPasteField.name),
+              onSubmitted: (_) => _accountIdentifierFocus.requestFocus(),
             ),
             const SizedBox(height: 12),
             _TerminalDialogField(
-              label: widget.usesCodeNumber
-                  ? ModeLauncherController.codeNumberDisplayLabel
-                  : ModeLauncherController.phoneDisplayLabel,
-              controller: _phoneController,
-              focusNode: _phoneFocus,
+              label: ModeLauncherController.codeNumberDisplayLabel,
+              controller: _accountIdentifierController,
+              focusNode: _accountIdentifierFocus,
               enabled: !_busy,
-              errorText: _phoneError,
-              keyboardType: widget.usesCodeNumber
-                  ? TextInputType.text
-                  : TextInputType.phone,
+              errorText: _accountIdentifierError,
+              keyboardType: TextInputType.text,
               textInputAction: TextInputAction.next,
-              inputFormatters: widget.usesCodeNumber
-                  ? const <TextInputFormatter>[
-                      AccountCodeNumberInputFormatter(),
-                    ]
-                  : <TextInputFormatter>[
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
+              inputFormatters: const <TextInputFormatter>[
+                AccountCodeNumberInputFormatter(),
+              ],
+              reduceMotion: widget.reduceMotion,
+              onPaste: () =>
+                  _pasteFromClipboard(_LauncherPasteField.codeNumber),
               onSubmitted: (_) => _passwordFocus.requestFocus(),
             ),
             const SizedBox(height: 12),
@@ -5198,6 +5371,8 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
               errorText: _passwordError,
               obscureText: true,
               textInputAction: TextInputAction.done,
+              reduceMotion: widget.reduceMotion,
+              onPaste: () => _pasteFromClipboard(_LauncherPasteField.password),
               onSubmitted: (_) => _authenticate(),
             ),
             AnimatedSwitcher(
@@ -5240,10 +5415,10 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
   @override
   void dispose() {
     _nameController.dispose();
-    _phoneController.dispose();
+    _accountIdentifierController.dispose();
     _passwordController.dispose();
     _nameFocus.dispose();
-    _phoneFocus.dispose();
+    _accountIdentifierFocus.dispose();
     _passwordFocus.dispose();
     super.dispose();
   }
@@ -5403,6 +5578,8 @@ class _TerminalDialogField extends StatelessWidget {
     this.keyboardType = TextInputType.text,
     this.obscureText = false,
     this.inputFormatters,
+    this.reduceMotion = false,
+    this.onPaste,
   });
 
   final String label;
@@ -5415,6 +5592,8 @@ class _TerminalDialogField extends StatelessWidget {
   final TextInputAction textInputAction;
   final List<TextInputFormatter>? inputFormatters;
   final ValueChanged<String> onSubmitted;
+  final bool reduceMotion;
+  final Future<void> Function()? onPaste;
 
   @override
   Widget build(BuildContext context) {
@@ -5442,46 +5621,102 @@ class _TerminalDialogField extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 140),
               curve: Curves.easeOutCubic,
               constraints: const BoxConstraints(minHeight: 42),
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: const EdgeInsets.only(left: 10, right: 6),
               decoration: BoxDecoration(
                 color: _terminalHeader.withOpacity(.58),
                 borderRadius: BorderRadius.circular(5),
                 border: Border.all(color: borderColor),
               ),
-              child: TextField(
-                controller: controller,
-                focusNode: focusNode,
-                enabled: enabled,
-                keyboardType: keyboardType,
-                obscureText: obscureText,
-                textInputAction: textInputAction,
-                inputFormatters: inputFormatters,
-                autocorrect: false,
-                enableSuggestions: false,
-                cursorColor: _terminalAccent,
-                cursorWidth: 2,
-                style: const TextStyle(
-                  color: _terminalText,
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  disabledBorder: InputBorder.none,
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(vertical: 11),
-                ),
-                onSubmitted: onSubmitted,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      enabled: enabled,
+                      keyboardType: keyboardType,
+                      obscureText: obscureText,
+                      textInputAction: textInputAction,
+                      inputFormatters: inputFormatters,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      cursorColor: _terminalAccent,
+                      cursorWidth: 2,
+                      style: const TextStyle(
+                        color: _terminalText,
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 11),
+                      ),
+                      onSubmitted: onSubmitted,
+                    ),
+                  ),
+                  AnimatedSwitcher(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 140),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      if (reduceMotion) return child;
+                      return FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: .82, end: 1).animate(
+                            animation,
+                          ),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: enabled && onPaste != null
+                        ? Semantics(
+                            key: const ValueKey<String>('paste-enabled'),
+                            button: true,
+                            label: '$label 붙여넣기',
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(5),
+                                onTap: () => unawaited(onPaste!()),
+                                child: const SizedBox(
+                                  width: 34,
+                                  height: 34,
+                                  child: Icon(
+                                    Icons.content_paste_go_rounded,
+                                    size: 18,
+                                    color: _terminalAccent,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        : const SizedBox(
+                            key: ValueKey<String>('paste-disabled'),
+                            width: 34,
+                            height: 34,
+                          ),
+                  ),
+                ],
               ),
             ),
             AnimatedSwitcher(
-              duration: const Duration(milliseconds: 140),
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 140),
               child: errorText == null
                   ? const SizedBox.shrink()
                   : Padding(

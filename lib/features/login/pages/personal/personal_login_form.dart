@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -6,7 +8,10 @@ import '../../../../app/init/logout_completion_exit_dialog.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../shared/auth/account_code_number.dart';
+import '../../../account/data/services/legacy_account_code_number_migration_service.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
+import '../../../selector/application/dev_auth.dart';
 import '../../controllers/personal/personal_login_controller.dart';
 import '../common/common_login_ui.dart';
 import 'personal_sign_up_dialog.dart';
@@ -22,11 +27,13 @@ class PersonalLoginForm extends StatefulWidget {
 
 class _PersonalLoginFormState extends State<PersonalLoginForm> {
   late final PersonalLoginController _controller;
+  bool _migratingLegacyAccounts = false;
 
   @override
   void initState() {
     super.initState();
     _controller = widget.controller;
+    unawaited(DevAuth.isDevModeEnabled());
   }
 
   void _trace(String name, {Map<String, dynamic>? meta}) {
@@ -86,34 +93,78 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
     );
 
     HapticFeedback.selectionClick();
-    final developerMode = await _controller.isDeveloperModeEnabled();
+    final created = await showCommonDialog<bool>(
+      context: context,
+      barrierDismissible: !_controller.isLoading,
+      builder: (_) => PersonalSignUpDialog(controller: _controller),
+    );
     if (!mounted) return;
+    if (created == true) {
+      setState(() {});
+      showCommonLoginSnack(
+        context,
+        message: '개인형 계정을 생성했습니다.',
+        success: true,
+      );
+    }
+  }
 
-    if (developerMode) {
-      final created = await showCommonDialog<bool>(
-        context: context,
-        barrierDismissible: !_controller.isLoading,
-        builder: (_) => PersonalSignUpDialog(controller: _controller),
+  Future<void> _migrateLegacyPersonalAccounts() async {
+    if (_migratingLegacyAccounts || _controller.isLoading) return;
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled || !mounted) return;
+    setState(() => _migratingLegacyAccounts = true);
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '개인형 계정 코드번호 전환',
+      initialMessage: '기존 전화번호 기반 개인형 계정 검사를 시작합니다.',
+      useCommonUi: true,
+      developerModeMessage:
+          '개발자 모드 ON: 계정 전환 결과와 debugPrint 코드를 Status Dialog에서 확인할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF: 계정 전환을 실행하지 않습니다.',
+      showDialogImmediately: false,
+    );
+    try {
+      final result =
+          await LegacyAccountCodeNumberMigrationService().migratePersonalAccounts(
+        onLog: (message, progress) => trace.log(message, progress: progress),
+      );
+      if (result.failed > 0) {
+        await trace.fail('일부 개인형 계정 전환에 실패했습니다. ${result.summary}');
+        if (!mounted) return;
+        await trace.showSnapshotStatusDialog(
+          context,
+          title: '개인형 계정 코드번호 전환',
+          description: result.summary,
+          failure: true,
+        );
+        return;
+      }
+      await trace.succeed('개인형 계정 코드번호 전환이 완료되었습니다. ${result.summary}');
+      if (!mounted) return;
+      await trace.showSnapshotStatusDialog(
+        context,
+        title: '개인형 계정 코드번호 전환',
+        description: result.summary,
+      );
+    } catch (error, stackTrace) {
+      await trace.fail(
+        '개인형 계정 코드번호 전환 중 예외가 발생했습니다.',
+        error: error,
+        stackTrace: stackTrace,
       );
       if (!mounted) return;
-      if (created == true) {
-        setState(() {});
-        showCommonLoginSnack(
-          context,
-          message: '개인형 계정을 생성했습니다.',
-          success: true,
-        );
+      await trace.showSnapshotStatusDialog(
+        context,
+        title: '개인형 계정 코드번호 전환',
+        description: '개인형 계정 코드번호 전환에 실패했습니다.',
+        failure: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _migratingLegacyAccounts = false);
       }
-      return;
     }
-
-    await _controller.openExternalSignUpForm();
-    if (!mounted) return;
-    showCommonLoginSnack(
-      context,
-      message: '개발자 모드가 아니어서 회원가입 Google Form을 열었습니다.',
-      success: true,
-    );
   }
 
   Future<void> _onLogoutPressed() async {
@@ -278,15 +329,16 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
       fields: CommonLoginFields(
         nameController: _controller.nameController,
         nameFocus: _controller.nameFocus,
-        accountController: _controller.phoneController,
-        accountFocus: _controller.phoneFocus,
+        accountController: _controller.codeNumberController,
+        accountFocus: _controller.codeNumberFocus,
         passwordController: _controller.passwordController,
         passwordFocus: _controller.passwordFocus,
-        accountLabel: '전화번호',
-        accountIcon: Icons.phone_rounded,
-        accountKeyboardType: TextInputType.phone,
+        accountLabel: '코드번호',
+        accountIcon: Icons.badge_rounded,
+        accountKeyboardType: TextInputType.text,
+        accountInputFormatters: const [AccountCodeNumberInputFormatter()],
         onAccountChanged: (value) =>
-            _controller.formatPhoneNumber(value, setState),
+            _controller.formatCodeNumber(value, setState),
         obscurePassword: _controller.obscurePassword,
         onTogglePassword: () =>
             setState(() => _controller.togglePassword()),
@@ -321,22 +373,75 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
 
           return CommonAnimatedReveal(
             delay: const Duration(milliseconds: 240),
-            child: compact
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      loginButton,
-                      const SizedBox(height: 10),
-                      signUpButton,
-                    ],
-                  )
-                : Row(
-                    children: <Widget>[
-                      Expanded(child: loginButton),
-                      const SizedBox(width: 10),
-                      Expanded(child: signUpButton),
-                    ],
-                  ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                compact
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          loginButton,
+                          const SizedBox(height: 10),
+                          signUpButton,
+                        ],
+                      )
+                    : Row(
+                        children: <Widget>[
+                          Expanded(child: loginButton),
+                          const SizedBox(width: 10),
+                          Expanded(child: signUpButton),
+                        ],
+                      ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: DevAuth.devModeEnabled,
+                  builder: (context, enabled, child) {
+                    final reduceMotion =
+                        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+                    return AnimatedSwitcher(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : CommonUiMotion.selection,
+                      switchInCurve: CommonUiMotion.enter,
+                      switchOutCurve: CommonUiMotion.exit,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SizeTransition(
+                          sizeFactor: animation,
+                          axisAlignment: -1,
+                          child: child,
+                        ),
+                      ),
+                      child: enabled
+                          ? Padding(
+                              key: const ValueKey<String>(
+                                'personal_legacy_migration',
+                              ),
+                              padding: const EdgeInsets.only(top: 10),
+                              child: CommonButton(
+                                label: _migratingLegacyAccounts
+                                    ? '기존 계정 전환 중'
+                                    : '기존 계정 코드번호 전환',
+                                icon: Icons.sync_alt_rounded,
+                                variant: CommonButtonVariant.secondary,
+                                expand: true,
+                                loading: _migratingLegacyAccounts,
+                                onPressed: _migratingLegacyAccounts ||
+                                        _controller.isLoading
+                                    ? null
+                                    : _migrateLegacyPersonalAccounts,
+                                haptic: CommonHaptic.selection,
+                              ),
+                            )
+                          : const SizedBox.shrink(
+                              key: ValueKey<String>(
+                                'personal_legacy_migration_hidden',
+                              ),
+                            ),
+                    );
+                  },
+                ),
+              ],
+            ),
           );
         },
       ),

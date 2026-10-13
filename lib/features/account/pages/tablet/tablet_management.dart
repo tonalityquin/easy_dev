@@ -8,12 +8,14 @@ import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../shared/auth/tablet_phone.dart';
+import '../../../../shared/auth/account_code_number.dart';
 import '../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../shared/secondary/application/secondary_tablet_workspace_state.dart';
 import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../dev/application/area_state.dart';
+import '../../../selector/application/dev_auth.dart';
+import '../../data/services/legacy_account_code_number_migration_service.dart';
 import '../../applications/user_state.dart';
 import '../../domain/models/tablet/tablet_model.dart';
 
@@ -33,6 +35,7 @@ class _TabletManagementState extends State<TabletManagement> {
   _TabletStatusFilter _statusFilter = _TabletStatusFilter.all;
   bool _refreshing = false;
   bool _selectionClearScheduled = false;
+  bool _migratingLegacyAccounts = false;
 
   void _log(String message) {
     final workspace = _workspaceState;
@@ -46,6 +49,7 @@ class _TabletManagementState extends State<TabletManagement> {
   @override
   void initState() {
     super.initState();
+    unawaited(DevAuth.isDevModeEnabled());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(_initialRefresh());
@@ -70,6 +74,7 @@ class _TabletManagementState extends State<TabletManagement> {
   Future<DeveloperOperationTrace> _startTrace({
     required String title,
     required String initialMessage,
+    bool showDialogImmediately = true,
   }) {
     final rootContext = Navigator.of(context, rootNavigator: true).context;
     return DeveloperOperationTrace.start(
@@ -81,6 +86,7 @@ class _TabletManagementState extends State<TabletManagement> {
           '개발자 모드 ON: 태블릿 작업 상태와 debugPrint 코드를 확인하고 복사할 수 있습니다.',
       standardModeMessage:
           '개발자 모드 OFF: 상태 다이얼로그 없이 작업 로그를 콘솔에 기록합니다.',
+      showDialogImmediately: showDialogImmediately,
     );
   }
 
@@ -219,15 +225,15 @@ class _TabletManagementState extends State<TabletManagement> {
     });
   }
 
-  String _maskedPhone(TabletModel tablet) => TabletPhone.mask(tablet.phone);
+  String _maskedCodeNumber(TabletModel tablet) => AccountCodeNumber.mask(tablet.codeNumber);
 
   bool _matchesSearch(TabletModel tablet) {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return true;
     final haystack = <String>[
       tablet.name,
-      tablet.phone,
-      TabletPhone.format(tablet.phone),
+      tablet.codeNumber,
+      AccountCodeNumber.format(tablet.codeNumber),
       tablet.role,
       tablet.position ?? '',
       tablet.areas.join(' '),
@@ -256,7 +262,7 @@ class _TabletManagementState extends State<TabletManagement> {
     final wasSelected = userState.selectedUserId == tablet.id;
     await userState.toggleUserCard(tablet.id);
     _log(
-      '${wasSelected ? 'tablet_deselected' : 'tablet_selected'} phone=${TabletPhone.mask(tablet.phone)} mode=${mode.name}',
+      '${wasSelected ? 'tablet_deselected' : 'tablet_selected'} codeNumber=${AccountCodeNumber.mask(tablet.codeNumber)} mode=${mode.name}',
     );
   }
 
@@ -296,10 +302,10 @@ class _TabletManagementState extends State<TabletManagement> {
     TabletModel selectedTablet,
   ) async {
     final userState = context.read<UserState>();
-    _log('delete_confirm_opened phone=${TabletPhone.mask(selectedTablet.phone)}');
+    _log('delete_confirm_opened codeNumber=${AccountCodeNumber.mask(selectedTablet.codeNumber)}');
     final ok = await _confirmDelete(context);
     if (!ok) {
-      _log('delete_cancelled phone=${TabletPhone.mask(selectedTablet.phone)}');
+      _log('delete_cancelled codeNumber=${AccountCodeNumber.mask(selectedTablet.codeNumber)}');
       return;
     }
 
@@ -308,7 +314,7 @@ class _TabletManagementState extends State<TabletManagement> {
       initialMessage: '태블릿 계정 삭제 요청을 시작합니다.',
     );
     try {
-      trace.log('삭제 대상 확인: phone=${TabletPhone.mask(selectedTablet.phone)}, id=${selectedTablet.id}', progress: .2);
+      trace.log('삭제 대상 확인: codeNumber=${AccountCodeNumber.mask(selectedTablet.codeNumber)}, id=${selectedTablet.id}', progress: .2);
       trace.log('태블릿 계정 삭제와 캐시 갱신을 요청합니다.', progress: .5);
       String? deleteError;
       await userState.deleteTabletCard(
@@ -331,7 +337,7 @@ class _TabletManagementState extends State<TabletManagement> {
       }
       trace.log('태블릿 삭제 및 캐시 반영 완료', progress: .92);
       await trace.succeed('태블릿 삭제가 완료되었습니다.');
-      _log('delete_completed phone=${TabletPhone.mask(selectedTablet.phone)}');
+      _log('delete_completed codeNumber=${AccountCodeNumber.mask(selectedTablet.codeNumber)}');
     } catch (error, stackTrace) {
       _log('delete_failed error=$error');
       await trace.fail(
@@ -349,6 +355,62 @@ class _TabletManagementState extends State<TabletManagement> {
     } finally {
       if (context.mounted) {
         _clearSelection(userState, reason: 'delete_finished');
+      }
+    }
+  }
+
+  Future<void> _migrateLegacyTabletAccounts() async {
+    if (_migratingLegacyAccounts || _refreshing) return;
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled || !mounted) return;
+    setState(() => _migratingLegacyAccounts = true);
+    final trace = await _startTrace(
+      title: '태블릿 계정 코드번호 전환',
+      initialMessage: '기존 전화번호 기반 태블릿 계정 검사를 시작합니다.',
+      showDialogImmediately: false,
+    );
+    try {
+      final result =
+          await LegacyAccountCodeNumberMigrationService().migrateTabletAccounts(
+        onLog: (message, progress) => trace.log(message, progress: progress),
+      );
+      if (mounted) {
+        await context.read<UserState>().refreshTabletsBySelectedAreaAndCacheStrict();
+      }
+      if (result.failed > 0) {
+        await trace.fail('일부 태블릿 계정 전환에 실패했습니다. ${result.summary}');
+        if (!mounted) return;
+        await trace.showSnapshotStatusDialog(
+          context,
+          title: '태블릿 계정 코드번호 전환',
+          description: result.summary,
+          failure: true,
+        );
+        return;
+      }
+      await trace.succeed('태블릿 계정 코드번호 전환이 완료되었습니다. ${result.summary}');
+      if (!mounted) return;
+      await trace.showSnapshotStatusDialog(
+        context,
+        title: '태블릿 계정 코드번호 전환',
+        description: result.summary,
+      );
+    } catch (error, stackTrace) {
+      await trace.fail(
+        '태블릿 계정 코드번호 전환 중 예외가 발생했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted) return;
+      await trace.showSnapshotStatusDialog(
+        context,
+        title: '태블릿 계정 코드번호 전환',
+        description: '태블릿 계정 코드번호 전환에 실패했습니다.',
+        failure: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _migratingLegacyAccounts = false);
       }
     }
   }
@@ -373,11 +435,56 @@ class _TabletManagementState extends State<TabletManagement> {
         CommonIconButton(
           icon: Icons.refresh_rounded,
           tooltip: '새로고침',
-          onPressed: refreshing ? null : _manualRefresh,
+          onPressed: refreshing || _migratingLegacyAccounts
+              ? null
+              : _manualRefresh,
           loading: refreshing,
           haptic: CommonHaptic.selection,
           size: 40,
           iconSize: 19,
+        ),
+        ValueListenableBuilder<bool>(
+          valueListenable: DevAuth.devModeEnabled,
+          builder: (context, enabled, child) {
+            final reduceMotion =
+                MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+            return AnimatedSwitcher(
+              duration:
+                  reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              switchInCurve: CommonUiMotion.enter,
+              switchOutCurve: CommonUiMotion.exit,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: .88, end: 1).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: enabled
+                  ? Padding(
+                      key: const ValueKey<String>(
+                        'tablet_legacy_migration',
+                      ),
+                      padding: const EdgeInsets.only(left: 4),
+                      child: CommonIconButton(
+                        icon: Icons.sync_alt_rounded,
+                        tooltip: '기존 계정 코드번호 전환',
+                        onPressed: refreshing || _migratingLegacyAccounts
+                            ? null
+                            : _migrateLegacyTabletAccounts,
+                        loading: _migratingLegacyAccounts,
+                        haptic: CommonHaptic.selection,
+                        size: 40,
+                        iconSize: 19,
+                      ),
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey<String>(
+                        'tablet_legacy_migration_hidden',
+                      ),
+                    ),
+            );
+          },
         ),
         const SizedBox(width: 4),
         AnimatedOpacity(
@@ -542,8 +649,8 @@ class _TabletManagementState extends State<TabletManagement> {
           final tablet = tablets[index];
           return _TabletDockRow(
             key: ValueKey<String>(tablet.id),
-            name: tablet.name.trim().isEmpty ? TabletPhone.mask(tablet.phone) : tablet.name,
-            phone: _maskedPhone(tablet),
+            name: tablet.name.trim().isEmpty ? AccountCodeNumber.mask(tablet.codeNumber) : tablet.name,
+            codeNumber: _maskedCodeNumber(tablet),
             role: tablet.role,
             division: tablet.divisions.join(', '),
             working: tablet.isWorking,
@@ -759,7 +866,7 @@ class _TabletDockRow extends StatelessWidget {
   const _TabletDockRow({
     super.key,
     required this.name,
-    required this.phone,
+    required this.codeNumber,
     required this.role,
     required this.division,
     required this.working,
@@ -769,7 +876,7 @@ class _TabletDockRow extends StatelessWidget {
   });
 
   final String name;
-  final String phone;
+  final String codeNumber;
   final String role;
   final String division;
   final bool working;
@@ -789,7 +896,7 @@ class _TabletDockRow extends StatelessWidget {
     final statusColor =
         working ? tokens.statusSynchronized : tokens.statusOffline;
     final statusLabel = working ? '운영 중' : '오프라인';
-    final displayPhone = phone.trim().isEmpty ? '전화번호 없음' : phone.trim();
+    final displayCodeNumber = codeNumber.trim().isEmpty ? '코드번호 없음' : codeNumber.trim();
     final displayRole = role.trim().isEmpty ? '역할 없음' : role.trim();
 
     return OpsDockSelectableRowSurface(
@@ -856,7 +963,7 @@ class _TabletDockRow extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           Text(
-            '$displayPhone · $displayRole',
+            '$displayCodeNumber · $displayRole',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: textTheme.bodySmall?.copyWith(
@@ -872,9 +979,9 @@ class _TabletDockRow extends StatelessWidget {
               color: tokens.borderSubtle,
             ),
             const SizedBox(height: 8),
-            if (phone.trim().isNotEmpty)
+            if (codeNumber.trim().isNotEmpty)
               Text(
-                phone,
+                codeNumber,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: textTheme.labelSmall?.copyWith(
@@ -882,7 +989,7 @@ class _TabletDockRow extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-            if (phone.trim().isNotEmpty && division.trim().isNotEmpty)
+            if (codeNumber.trim().isNotEmpty && division.trim().isNotEmpty)
               const SizedBox(height: 4),
             if (division.trim().isNotEmpty)
               Text(

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../shared/auth/account_code_number.dart';
 import '../../controllers/personal/personal_login_controller.dart';
 import '../common/common_login_ui.dart';
 
@@ -20,13 +21,13 @@ class PersonalSignUpDialog extends StatefulWidget {
 
 class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _codeNumberController = TextEditingController();
   final TextEditingController _gmailController = TextEditingController();
   final TextEditingController _areaController = TextEditingController();
   final TextEditingController _divisionController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _nameFocus = FocusNode();
-  final FocusNode _phoneFocus = FocusNode();
+  final FocusNode _codeNumberFocus = FocusNode();
   final FocusNode _gmailFocus = FocusNode();
   final FocusNode _areaFocus = FocusNode();
   final FocusNode _divisionFocus = FocusNode();
@@ -38,46 +39,39 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
   void initState() {
     super.initState();
     _passwordController.text = widget.controller.generatePersonalPassword();
+    _codeNumberController.text = AccountCodeNumber.format(
+      widget.controller.generatePersonalCodeNumber(),
+    );
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _phoneController.dispose();
+    _codeNumberController.dispose();
     _gmailController.dispose();
     _areaController.dispose();
     _divisionController.dispose();
     _passwordController.dispose();
     _nameFocus.dispose();
-    _phoneFocus.dispose();
+    _codeNumberFocus.dispose();
     _gmailFocus.dispose();
     _areaFocus.dispose();
     _divisionFocus.dispose();
     super.dispose();
   }
 
-  String _normalizePhone(String value) {
-    return value.replaceAll(RegExp(r'[^0-9]'), '');
+  String _normalizeCodeNumber(String value) {
+    return AccountCodeNumber.normalize(value);
   }
 
-  String _formatPhoneForDisplay(String digits) {
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 7) {
-      return '${digits.substring(0, 3)}-${digits.substring(3)}';
-    }
-    if (digits.length <= 10) {
-      return '${digits.substring(0, 3)}-${digits.substring(3, 6)}-${digits.substring(6)}';
-    }
-    final end = digits.length > 11 ? 11 : digits.length;
-    return '${digits.substring(0, 3)}-${digits.substring(3, 7)}-${digits.substring(7, end)}';
+  String _formatCodeNumberForDisplay(String value) {
+    return AccountCodeNumber.format(value);
   }
 
-  void _formatPhone(String value) {
-    final digits = _normalizePhone(value);
-    final limited = digits.length > 11 ? digits.substring(0, 11) : digits;
-    final formatted = _formatPhoneForDisplay(limited);
+  void _formatCodeNumber(String value) {
+    final formatted = _formatCodeNumberForDisplay(value);
     setState(() {
-      _phoneController.value = TextEditingValue(
+      _codeNumberController.value = TextEditingValue(
         text: formatted,
         selection: TextSelection.collapsed(offset: formatted.length),
       );
@@ -97,6 +91,30 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
       );
       _errorMessage = null;
     });
+  }
+
+  void _regenerateCodeNumber() {
+    if (_isSaving) return;
+    setState(() {
+      _codeNumberController.text = AccountCodeNumber.format(
+        widget.controller.generatePersonalCodeNumber(),
+      );
+      _errorMessage = null;
+    });
+  }
+
+  Future<void> _copyCodeNumber() async {
+    final codeNumber = _normalizeCodeNumber(_codeNumberController.text);
+    if (codeNumber.isEmpty) return;
+    await Clipboard.setData(
+      ClipboardData(text: AccountCodeNumber.format(codeNumber)),
+    );
+    if (!mounted) return;
+    showCommonLoginSnack(
+      context,
+      message: '코드번호를 복사했습니다.',
+      success: true,
+    );
   }
 
   void _regeneratePassword() {
@@ -123,7 +141,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
     FocusScope.of(context).unfocus();
     final error = widget.controller.validatePersonalAccountCreateInputs(
       name: _nameController.text,
-      phone: _phoneController.text,
+      codeNumber: _codeNumberController.text,
       gmail: _gmailController.text,
       password: _passwordController.text,
       area: _areaController.text,
@@ -141,7 +159,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
 
     final result = await widget.controller.createPersonalAccount(
       name: _nameController.text,
-      phone: _phoneController.text,
+      codeNumber: _codeNumberController.text,
       gmail: _gmailController.text,
       password: _passwordController.text,
       area: _areaController.text,
@@ -152,9 +170,12 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
     setState(() => _isSaving = false);
 
     if (result.success) {
+      final createdCodeNumber = result.codeNumber ??
+          _normalizeCodeNumber(_codeNumberController.text);
+      _codeNumberController.text = AccountCodeNumber.format(createdCodeNumber);
       widget.controller.fillLoginFields(
         name: _nameController.text,
-        phone: _phoneController.text,
+        codeNumber: createdCodeNumber,
         password: result.password ?? _passwordController.text,
       );
       HapticFeedback.selectionClick();
@@ -255,7 +276,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      '개발자 모드에서 개인형 계정을 생성하고 로그인 입력값에 연결합니다.',
+                      '개인형 계정을 생성하고 로그인 입력값에 연결합니다.',
                       style: textTheme.bodySmall?.copyWith(
                         color: tokens.textSecondary,
                       ),
@@ -290,20 +311,62 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                     textInputAction: TextInputAction.next,
                     onChanged: (_) => setState(() => _errorMessage = null),
                     onSubmitted: (_) =>
-                        FocusScope.of(context).requestFocus(_phoneFocus),
+                        FocusScope.of(context).requestFocus(_gmailFocus),
                   ),
                   const SizedBox(height: 12),
-                  _field(
-                    controller: _phoneController,
-                    focusNode: _phoneFocus,
-                    enabled: !_isSaving,
-                    label: '전화번호',
-                    icon: Icons.phone_rounded,
-                    keyboardType: TextInputType.phone,
-                    textInputAction: TextInputAction.next,
-                    onChanged: _formatPhone,
-                    onSubmitted: (_) =>
-                        FocusScope.of(context).requestFocus(_gmailFocus),
+                  AnimatedSwitcher(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : CommonUiMotion.selection,
+                    switchInCurve: CommonUiMotion.enter,
+                    switchOutCurve: CommonUiMotion.exit,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(begin: 0.985, end: 1).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: KeyedSubtree(
+                      key: ValueKey<String>(_codeNumberController.text),
+                      child: _field(
+                        controller: _codeNumberController,
+                        focusNode: _codeNumberFocus,
+                        enabled: !_isSaving,
+                        readOnly: true,
+                        label: '코드번호',
+                        icon: Icons.badge_rounded,
+                        keyboardType: TextInputType.text,
+                        inputFormatters: const <TextInputFormatter>[
+                          AccountCodeNumberInputFormatter(),
+                        ],
+                        textInputAction: TextInputAction.next,
+                        onChanged: _formatCodeNumber,
+                        onSubmitted: (_) =>
+                            FocusScope.of(context).requestFocus(_gmailFocus),
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            CommonIconButton(
+                              icon: Icons.refresh_rounded,
+                              tooltip: '코드번호 재생성',
+                              onPressed: _isSaving ? null : _regenerateCodeNumber,
+                              haptic: CommonHaptic.selection,
+                              size: 40,
+                              iconSize: 20,
+                            ),
+                            CommonIconButton(
+                              icon: Icons.copy_rounded,
+                              tooltip: '코드번호 복사',
+                              onPressed: _isSaving ? null : _copyCodeNumber,
+                              haptic: CommonHaptic.selection,
+                              size: 40,
+                              iconSize: 20,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   _field(
@@ -379,7 +442,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                   const SizedBox(height: 8),
                   _CommonSignUpInfo(
                     icon: Icons.folder_outlined,
-                    text: '계정 문서 ID는 전화번호와 지역을 조합해 생성됩니다.',
+                    text: '계정 문서 ID는 코드번호와 지역을 조합해 생성됩니다.',
                   ),
                   const SizedBox(height: 12),
                   _field(

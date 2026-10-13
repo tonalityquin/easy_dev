@@ -81,6 +81,19 @@ class AccountCodeNumber {
     return '${normalized.substring(0, 3)}-****-${normalized.substring(7)}';
   }
 
+  static String maskDocumentId(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) return '-';
+    final separator = normalized.indexOf('-');
+    if (separator <= 0 || separator >= normalized.length - 1) {
+      return mask(normalized);
+    }
+    final codeNumber = normalized.substring(0, separator);
+    final area = normalized.substring(separator + 1);
+    final masked = mask(codeNumber);
+    return area.isEmpty ? masked : '$masked-$area';
+  }
+
   static bool _isLetter(String value) => RegExp(r'^[a-z]$').hasMatch(value);
 
   static bool _isDigit(String value) => RegExp(r'^[0-9]$').hasMatch(value);

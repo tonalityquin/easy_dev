@@ -61,20 +61,20 @@ class LauncherCredentialSubmitResult {
   const LauncherCredentialSubmitResult({
     this.flowResult = const ModeLauncherSubmitResult(),
     this.nameError,
-    this.phoneError,
+    this.codeNumberError,
     this.passwordError,
     this.authenticationError,
   });
 
   final ModeLauncherSubmitResult flowResult;
   final String? nameError;
-  final String? phoneError;
+  final String? codeNumberError;
   final String? passwordError;
   final String? authenticationError;
 
   bool get accepted =>
       nameError == null &&
-      phoneError == null &&
+      codeNumberError == null &&
       passwordError == null &&
       authenticationError == null;
 }
@@ -100,7 +100,6 @@ class ModeLauncherController extends ChangeNotifier {
   };
   static const String nameDisplayLabel = 'NAME or Unique';
   static const String codeNumberDisplayLabel = '코드번호';
-  static const String phoneDisplayLabel = '전화번호';
   static const String passwordDisplayLabel = 'PW or Serial';
   static const String _credentialRequiredMessage = '계정 인증이 필요합니다.';
   static const String _accountTypeSelectionMessage = '계정 유형 선택이 필요합니다.';
@@ -108,7 +107,6 @@ class ModeLauncherController extends ChangeNotifier {
   static const String _modeSelectionMessage = '업무 모드 선택이 필요합니다.';
   static const String _nameError = '이름 혹은 유니크 명을 다시 확인하세요.';
   static const String _codeNumberError = '코드번호를 다시 확인하세요.';
-  static const String _phoneError = '전화번호를 다시 확인하세요.';
   static const String _passwordError = '비밀번호 혹은 시리얼 넘버를 다시 확인하세요.';
 
   ModeLauncherController({StartupReport? startupReport})
@@ -161,7 +159,7 @@ class ModeLauncherController extends ChangeNotifier {
   bool? _foregroundRunning;
   TerminalLoginStage _loginStage = TerminalLoginStage.command;
   String _enteredName = '';
-  String _enteredPhone = '';
+  String _enteredCodeNumber = '';
   String _enteredPassword = '';
   TerminalCommandPath _commandPath = TerminalCommandPath.root;
   late final LauncherStartupSetupCoordinator _startupSetupCoordinator =
@@ -206,12 +204,8 @@ class ModeLauncherController extends ChangeNotifier {
   AppModeDefinition? get assignedMode => _assignedMode;
   AppModeDefinition? get selectedMode => _selectedMode;
   TerminalAccountKind? get selectedAccountKind => _selectedAccountKind;
-  String get accountIdentifierDisplayLabel =>
-      _selectedAccountKind == TerminalAccountKind.user
-          ? codeNumberDisplayLabel
-          : phoneDisplayLabel;
-  bool get accountIdentifierUsesCodeNumber =>
-      _selectedAccountKind == TerminalAccountKind.user;
+  String get accountIdentifierDisplayLabel => codeNumberDisplayLabel;
+  bool get accountIdentifierUsesCodeNumber => _selectedAccountKind != null;
   String get selectedAccountKindLabel => _selectedAccountKind == null
       ? ''
       : TerminalAuthCoordinator.accountKindLabel(_selectedAccountKind!);
@@ -223,7 +217,7 @@ class ModeLauncherController extends ChangeNotifier {
   StartupReport? get startupReport => _startupReport;
   TerminalLoginStage get loginStage => _loginStage;
   String get enteredName => _enteredName;
-  String get enteredPhone => _enteredPhone;
+  String get enteredCodeNumber => _enteredCodeNumber;
   bool get showAuthSummary =>
       _selectedAccountKind != null ||
       _selectedMode != null ||
@@ -609,7 +603,7 @@ class ModeLauncherController extends ChangeNotifier {
       scope: 'auth_presentation',
       meta: <String, Object?>{
         'nameLabel': nameDisplayLabel,
-        'phoneLabel': phoneDisplayLabel,
+        'codeNumberLabel': codeNumberDisplayLabel,
         'passwordLabel': passwordDisplayLabel,
         'credentialSurface': 'dialog',
         'credentialStage': 'credentials',
@@ -1098,7 +1092,7 @@ class ModeLauncherController extends ChangeNotifier {
       'Work area display: name_only',
       'Mode display: name_only',
       'Name display: $nameDisplayLabel',
-      'Phone display: $phoneDisplayLabel',
+      'Code number display: $codeNumberDisplayLabel',
       'Password display: $passwordDisplayLabel',
       'Credential surface: dialog',
       'Credential stage: credentials',
@@ -1141,7 +1135,7 @@ class ModeLauncherController extends ChangeNotifier {
       'Terminal path: ${_commandPath.terminalPath}',
       'Email edit mode: ${_commandPath.isEmailEdit}',
       'Name length: ${_enteredName.length}',
-      'Phone: ${_maskPhone(_enteredPhone)}',
+      'Code number: ${AccountCodeNumber.mask(_enteredCodeNumber)}',
       'Password length: ${_enteredPassword.length}',
       'Developer authorized: $_devAuthorized',
       'Developer mode: $_devModeEnabled',
@@ -1407,7 +1401,7 @@ class ModeLauncherController extends ChangeNotifier {
     _supportedModes = <AppModeDefinition>[];
     _selectedMode = null;
     _enteredName = '';
-    _enteredPhone = '';
+    _enteredCodeNumber = '';
     _enteredPassword = '';
     _accountKindAutoSelected = false;
     _debugAccountKindOverride = true;
@@ -1622,7 +1616,7 @@ class ModeLauncherController extends ChangeNotifier {
       _supportedModes = <AppModeDefinition>[];
       _selectedMode = null;
       _enteredName = '';
-      _enteredPhone = '';
+      _enteredCodeNumber = '';
       _enteredPassword = '';
       _loginStage = TerminalLoginStage.credentials;
       _append(
@@ -1657,7 +1651,7 @@ class ModeLauncherController extends ChangeNotifier {
     _supportedModes = <AppModeDefinition>[];
     _selectedMode = null;
     _enteredName = '';
-    _enteredPhone = '';
+    _enteredCodeNumber = '';
     _enteredPassword = '';
     _debugAccountKindOverride = _debugOverrideSnapshotActive;
     _sessionPersistence = _debugOverrideSnapshotActive
@@ -2347,7 +2341,7 @@ class ModeLauncherController extends ChangeNotifier {
         _availableWorkAreas = <LauncherWorkAreaOption>[];
         _selectedWorkArea = null;
         _enteredName = account.displayName;
-        _enteredPhone = '';
+        _enteredCodeNumber = '';
         _enteredPassword = '';
         _append(
           TerminalLineType.success,
@@ -2590,7 +2584,7 @@ class ModeLauncherController extends ChangeNotifier {
       _supportedModes = <AppModeDefinition>[];
       _selectedMode = null;
       _enteredName = '';
-      _enteredPhone = '';
+      _enteredCodeNumber = '';
       _enteredPassword = '';
       _append(
         TerminalLineType.system,
@@ -2953,7 +2947,7 @@ class ModeLauncherController extends ChangeNotifier {
     _selectedAccountKind = kind;
     if (kindChanged) {
       _enteredName = '';
-      _enteredPhone = '';
+      _enteredCodeNumber = '';
       _enteredPassword = '';
       _authenticatedAccount = null;
       _availableWorkAreas = <LauncherWorkAreaOption>[];
@@ -3321,7 +3315,7 @@ class ModeLauncherController extends ChangeNotifier {
     _supportedModes = <AppModeDefinition>[];
     _selectedMode = null;
     _enteredName = '';
-    _enteredPhone = '';
+    _enteredCodeNumber = '';
     _enteredPassword = '';
     _accountKindAutoSelected = false;
     if (!_debugAccountKindOverride) {
@@ -3567,7 +3561,7 @@ class ModeLauncherController extends ChangeNotifier {
   Future<LauncherCredentialSubmitResult> authenticateCredentials(
     BuildContext context, {
     required String name,
-    required String phone,
+    required String codeNumber,
     required String password,
     required bool reduceMotion,
   }) async {
@@ -3585,50 +3579,43 @@ class ModeLauncherController extends ChangeNotifier {
     }
 
     final normalizedName = name.trim();
-    final accountIdentifier = kind == TerminalAccountKind.user
-        ? AccountCodeNumber.normalize(phone)
-        : phone.replaceAll(RegExp(r'[^0-9]'), '');
-    final validAccountIdentifier = kind == TerminalAccountKind.user
-        ? AccountCodeNumber.isValid(accountIdentifier)
-        : kind == TerminalAccountKind.personal
-            ? RegExp(r'^\d{9,11}$').hasMatch(accountIdentifier)
-            : RegExp(r'^\d{10,11}$').hasMatch(accountIdentifier);
+    final accountIdentifier = AccountCodeNumber.normalize(codeNumber);
+    final legacyNumericAccountIdentifier =
+        RegExp(r'^\d{10,11}$').hasMatch(accountIdentifier);
+    final validAccountIdentifier = AccountCodeNumber.isValid(accountIdentifier);
     final validPassword = kind == TerminalAccountKind.personal
         ? RegExp(r'^\d{5}$').hasMatch(password)
         : password.length >= 5;
 
     final nameError = normalizedName.isEmpty ? _nameError : null;
-    final phoneError = validAccountIdentifier
-        ? null
-        : kind == TerminalAccountKind.user
-            ? _codeNumberError
-            : _phoneError;
+    final codeNumberError = validAccountIdentifier ? null : _codeNumberError;
     final passwordError = validPassword ? null : _passwordError;
 
-    if (nameError != null || phoneError != null || passwordError != null) {
+    if (nameError != null || codeNumberError != null || passwordError != null) {
       LauncherDiagnostics.record(
         'auth_credentials_rejected',
         meta: <String, Object?>{
           'accountKind': TerminalAuthCoordinator.accountKindId(kind),
           'nameValid': nameError == null,
-          'phoneValid': phoneError == null,
+          'codeNumberValid': codeNumberError == null,
           'passwordValid': passwordError == null,
           'nameLength': normalizedName.length,
-          'accountIdentifierMasked': kind == TerminalAccountKind.user ? AccountCodeNumber.mask(accountIdentifier) : _maskPhone(accountIdentifier),
+          'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
+          'legacyNumericAccountIdentifier': legacyNumericAccountIdentifier,
           'passwordLength': password.length,
         },
       );
       return LauncherCredentialSubmitResult(
         nameError: nameError,
-        phoneError: phoneError,
+        codeNumberError: codeNumberError,
         passwordError: passwordError,
       );
     }
 
     final changed =
-        _enteredName != normalizedName || _enteredPhone != accountIdentifier;
+        _enteredName != normalizedName || _enteredCodeNumber != accountIdentifier;
     _enteredName = normalizedName;
-    _enteredPhone = accountIdentifier;
+    _enteredCodeNumber = accountIdentifier;
     _enteredPassword = password;
     if (changed) {
       _authenticatedAccount = null;
@@ -3643,7 +3630,8 @@ class ModeLauncherController extends ChangeNotifier {
       meta: <String, Object?>{
         'accountKind': TerminalAuthCoordinator.accountKindId(kind),
         'nameLength': normalizedName.length,
-        'accountIdentifierMasked': kind == TerminalAccountKind.user ? AccountCodeNumber.mask(accountIdentifier) : _maskPhone(accountIdentifier),
+        'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
+        'legacyNumericAccountIdentifier': legacyNumericAccountIdentifier,
         'passwordLength': password.length,
         'sessionPersistence': TerminalAuthCoordinator.sessionPersistenceId(
           _sessionPersistence,
@@ -3656,7 +3644,8 @@ class ModeLauncherController extends ChangeNotifier {
       meta: <String, Object?>{
         'accountKind': TerminalAuthCoordinator.accountKindId(kind),
         'nameLength': normalizedName.length,
-        'accountIdentifierMasked': kind == TerminalAccountKind.user ? AccountCodeNumber.mask(accountIdentifier) : _maskPhone(accountIdentifier),
+        'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
+        'legacyNumericAccountIdentifier': legacyNumericAccountIdentifier,
         'passwordLength': password.length,
       },
     );
@@ -3680,7 +3669,7 @@ class ModeLauncherController extends ChangeNotifier {
       context,
       kind: kind,
       name: _enteredName,
-      phone: _enteredPhone,
+      codeNumber: _enteredCodeNumber,
       password: _enteredPassword,
       persistence: _sessionPersistence,
     );
@@ -3690,6 +3679,32 @@ class ModeLauncherController extends ChangeNotifier {
       return const LauncherCredentialSubmitResult(
         authenticationError: '계정 인증을 완료하지 못했습니다.',
       );
+    }
+
+    if (legacyNumericAccountIdentifier &&
+        kind == TerminalAccountKind.user) {
+      LauncherDiagnostics.record(
+        'legacy_numeric_user_authentication_result',
+        scope: 'legacy_numeric_auth',
+        meta: <String, Object?>{
+          'success': result.success && result.account != null,
+          'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
+          'message': result.message,
+        },
+      );
+      await LauncherDiagnostics.showStatus(
+        context,
+        title: '기존 숫자 계정 인증 상태',
+        description: result.message,
+        scope: 'legacy_numeric_auth',
+      );
+      if (_disposed || !context.mounted) {
+        _busy = false;
+        _runningCommand = '';
+        return const LauncherCredentialSubmitResult(
+          authenticationError: '계정 인증을 완료하지 못했습니다.',
+        );
+      }
     }
 
     final account = result.account;
@@ -3705,7 +3720,7 @@ class ModeLauncherController extends ChangeNotifier {
         meta: <String, Object?>{
           'accountKind': TerminalAuthCoordinator.accountKindId(kind),
           'message': result.message,
-          'accountIdentifierMasked': kind == TerminalAccountKind.user ? AccountCodeNumber.mask(accountIdentifier) : _maskPhone(accountIdentifier),
+          'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
         },
       );
       notifyListeners();
@@ -4257,12 +4272,6 @@ class ModeLauncherController extends ChangeNotifier {
         'loginStage': _loginStage.name,
       },
     );
-  }
-
-  String _maskPhone(String value) {
-    if (value.isEmpty) return '-';
-    if (value.length < 7) return List<String>.filled(value.length, '*').join();
-    return '${value.substring(0, 3)}****${value.substring(value.length - 4)}';
   }
 
   @override

@@ -11,7 +11,7 @@ import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_origin_morph_dialog.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../shared/auth/five_digit_password_generator.dart';
-import '../../../../../shared/auth/tablet_phone.dart';
+import '../../../../../shared/auth/account_code_number.dart';
 import '../../../../../shared/secondary/application/secondary_tablet_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../../dev/application/area_state.dart';
@@ -37,7 +37,7 @@ class TabletSettingWorkspace extends StatefulWidget {
 
 class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _codeNumberController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _scrollViewportKey = GlobalKey();
@@ -98,7 +98,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
   @override
   void dispose() {
     _nameController.dispose();
-    _phoneController.dispose();
+    _codeNumberController.dispose();
     _passwordController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -108,20 +108,22 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
     final tablet = _initialTabletSnapshot;
     if (tablet == null) {
       _nameController.clear();
-      _phoneController.clear();
+      _codeNumberController.text = AccountCodeNumber.format(
+        AccountCodeNumber.generate(),
+      );
       _passwordController.text = FiveDigitPasswordGenerator.generate();
       _selectedRole = TabletRoleType.lowField;
       return;
     }
     _nameController.text = tablet.name;
-    _phoneController.text = TabletPhone.format(tablet.phone);
+    _codeNumberController.text = AccountCodeNumber.format(tablet.codeNumber);
     _passwordController.text = tablet.password;
     _selectedRole = TabletRoleType.fromName(tablet.role);
   }
 
   bool get _nameOk => _nameController.text.trim().isNotEmpty;
-  bool get _phoneOk => TabletPhone.isValid(_phoneController.text);
-  bool get _identityOk => _nameOk && _phoneOk;
+  bool get _codeNumberOk => AccountCodeNumber.isGeneratedCode(_codeNumberController.text);
+  bool get _identityOk => _nameOk && _codeNumberOk;
   bool get _passwordOk =>
       RegExp(r'^\d{5}$').hasMatch(_passwordController.text.trim());
 
@@ -154,7 +156,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
   TabletSettingsDraft _currentDraft() {
     return TabletSettingsDraft(
       name: _nameController.text.trim(),
-      phone: TabletPhone.normalize(_phoneController.text),
+      codeNumber: AccountCodeNumber.normalize(_codeNumberController.text),
       role: _selectedRole,
       password: _passwordController.text.trim(),
     );
@@ -168,7 +170,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
       switch (section) {
         case TabletSettingsSection.identity:
           _nameController.text = draft.name;
-          _phoneController.text = TabletPhone.format(draft.phone);
+          _codeNumberController.text = AccountCodeNumber.format(draft.codeNumber);
           break;
         case TabletSettingsSection.permission:
           _selectedRole = draft.role;
@@ -259,6 +261,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
             section: section,
             initialDraft: _currentDraft().detached(),
             trace: trace,
+            isEditMode: isEditMode,
             onApply: (draft) => _applyEditorDraft(section, draft),
           );
         },
@@ -361,8 +364,8 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
   }
 
   String _identitySummary() {
-    if (!_identityOk) return '태블릿 이름 · 전화번호 입력 필요';
-    return '${_maskName(_nameController.text)} · ${TabletPhone.mask(_phoneController.text)}';
+    if (!_identityOk) return '태블릿 이름 · 코드번호 입력 필요';
+    return '${_maskName(_nameController.text)} · ${AccountCodeNumber.mask(_codeNumberController.text)}';
   }
 
   String _permissionSummary() => _selectedRole.label;
@@ -410,7 +413,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
     setState(() => _saving = true);
     workspace?.setSettingsSaving(true, source: 'submit_started');
     workspace?.log(
-      'settings_submit_started mode=${isEditMode ? 'edit' : 'create'} nameLength=${_nameController.text.trim().length} phone=${TabletPhone.mask(_phoneController.text)}',
+      'settings_submit_started mode=${isEditMode ? 'edit' : 'create'} nameLength=${_nameController.text.trim().length} codeNumber=${AccountCodeNumber.mask(_codeNumberController.text)}',
     );
 
     final trace = await DeveloperOperationTrace.start(
@@ -428,7 +431,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
         throw StateError('현재 지역 정보가 없습니다.');
       }
       trace.log(
-        '입력값 검증 통과: nameLength=${_nameController.text.trim().length}, phone=${TabletPhone.mask(_phoneController.text)}, role=${_selectedRole.name}',
+        '입력값 검증 통과: nameLength=${_nameController.text.trim().length}, codeNumber=${AccountCodeNumber.mask(_codeNumberController.text)}, role=${_selectedRole.name}',
         progress: .14,
       );
       final englishName = await repository.getEnglishNameByArea(area, division);
@@ -437,29 +440,49 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
         progress: .32,
       );
 
-      final phone = TabletPhone.normalize(_phoneController.text);
-      final documentId = TabletPhone.documentId(phone: phone, area: area);
+      var codeNumber = AccountCodeNumber.normalize(_codeNumberController.text);
+      if (!isEditMode) {
+        var existing = await repository.getTabletByCodeNumber(codeNumber);
+        var attempts = 0;
+        while (existing != null && attempts < 8) {
+          attempts += 1;
+          codeNumber = AccountCodeNumber.generate();
+          _codeNumberController.text = AccountCodeNumber.format(codeNumber);
+          existing = await repository.getTabletByCodeNumber(codeNumber);
+          trace.log(
+            '코드번호 중복으로 재발급했습니다: attempt=$attempts codeNumber=${AccountCodeNumber.mask(codeNumber)}',
+            progress: .4,
+          );
+        }
+        if (existing != null) {
+          throw StateError('CODE_NUMBER_GENERATION_FAILED');
+        }
+      }
+      final documentId = AccountCodeNumber.documentId(
+        codeNumber: codeNumber,
+        area: area,
+      );
       if (documentId.isEmpty) {
         throw StateError('태블릿 문서 ID를 만들 수 없습니다.');
       }
       trace.log(
-        '문서 ID 구성 완료: policy=phone-area, documentId=${TabletPhone.maskDocumentId(documentId)}',
+        '문서 ID 구성 완료: policy=codeNumber-area, documentId=${AccountCodeNumber.maskDocumentId(documentId)}',
         progress: .46,
       );
       TabletAccountDiagnostics.record(
         'settings_document_id_prepared',
         meta: <String, Object?>{
           'mode': isEditMode ? 'edit' : 'create',
-          'documentId': TabletPhone.maskDocumentId(documentId),
+          'documentId': AccountCodeNumber.maskDocumentId(documentId),
           'previousId': initialTablet == null
               ? '-'
-              : TabletPhone.maskDocumentId(initialTablet.id),
-          'policy': 'phone-area',
+              : AccountCodeNumber.maskDocumentId(initialTablet.id),
+          'policy': 'codeNumber-area',
         },
       );
       if (initialTablet != null && initialTablet.id != documentId) {
         trace.log(
-          '문서 ID 이동 준비: ${TabletPhone.maskDocumentId(initialTablet.id)} → ${TabletPhone.maskDocumentId(documentId)}',
+          '문서 ID 이동 준비: ${AccountCodeNumber.maskDocumentId(initialTablet.id)} → ${AccountCodeNumber.maskDocumentId(documentId)}',
           progress: .5,
         );
       }
@@ -467,7 +490,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
           ? TabletModel(
               id: documentId,
               name: _nameController.text.trim(),
-              phone: phone,
+              codeNumber: codeNumber,
               role: _selectedRole.name,
               password: _passwordController.text.trim(),
               position: null,
@@ -483,8 +506,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
           : initialTablet.copyWith(
               id: documentId,
               name: _nameController.text.trim(),
-              phone: phone,
-              handle: '',
+              codeNumber: codeNumber,
               email: '',
               role: _selectedRole.name,
               password: _passwordController.text.trim(),
@@ -537,7 +559,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
         return;
       }
 
-      trace.log('Firestore 및 태블릿 캐시 반영 완료: documentId=${TabletPhone.maskDocumentId(documentId)}', progress: .92);
+      trace.log('Firestore 및 태블릿 캐시 반영 완료: documentId=${AccountCodeNumber.maskDocumentId(documentId)}', progress: .92);
       await trace.succeed('$operationTitle이 완료되었습니다.');
       if (!mounted) return;
       workspace?.setSettingsDirty(false, source: 'submit_success');

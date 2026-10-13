@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -396,30 +397,57 @@ class _PlateTile extends StatelessWidget {
       height: 1,
       fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
     );
+    final textScaler = MediaQuery.textScalerOf(context);
     final painter = TextPainter(
       text: TextSpan(text: tail4, style: numberStyle),
       maxLines: 1,
       textDirection: Directionality.of(context),
+      textScaler: textScaler,
     )..layout();
     final hasStatusIcon = completed || inProgress;
-    final hasSecondary = (completed && timeLabel != null) || inProgress;
+    final secondaryText = completed && timeLabel != null
+        ? '완료 $timeLabel'
+        : inProgress
+            ? '출차 중'
+            : '';
+    final hasSecondary = secondaryText.isNotEmpty;
+    final secondaryStyle = (textTheme.labelSmall ?? const TextStyle()).copyWith(
+      color: foreground,
+      fontWeight: FontWeight.w600,
+      fontFeatures: completed
+          ? const <FontFeature>[FontFeature.tabularFigures()]
+          : null,
+    );
+    final secondaryPainter = hasSecondary
+        ? (TextPainter(
+            text: TextSpan(text: secondaryText, style: secondaryStyle),
+            maxLines: 1,
+            textDirection: Directionality.of(context),
+            textScaler: textScaler,
+          )..layout())
+        : null;
     final horizontalPadding = (fontSize * 0.44).clamp(11.0, 18.0).toDouble();
     final verticalPadding = (fontSize * 0.30).clamp(8.0, 14.0).toDouble();
     final iconSize = (fontSize * 0.58).clamp(16.0, 23.0).toDouble();
     final iconGap = hasStatusIcon ? 6.0 : 0.0;
-    final cardWidth = (painter.width +
-            horizontalPadding * 2 +
-            (hasStatusIcon ? iconSize + iconGap : 0))
-        .clamp(fontSize * 3.25, fontSize * 5.4)
-        .toDouble();
-    final secondaryHeight = hasSecondary ? 18.0 : 0.0;
+    final primaryWidth =
+        painter.width + (hasStatusIcon ? iconSize + iconGap : 0);
+    final primaryHeight =
+        math.max(painter.height, hasStatusIcon ? iconSize : 0.0);
+    final secondaryWidth = secondaryPainter?.width ?? 0.0;
+    final secondaryHeight = secondaryPainter?.height ?? 0.0;
     final secondaryGap = hasSecondary ? 5.0 : 0.0;
-    final cardHeight = (fontSize +
-            verticalPadding * 2 +
-            secondaryHeight +
-            secondaryGap)
-        .clamp(fontSize * 1.65, fontSize * 2.35)
-        .toDouble();
+    const layoutSlack = 1.0;
+    final contentWidth = math.max(primaryWidth, secondaryWidth);
+    final requiredWidth =
+        contentWidth + horizontalPadding * 2 + layoutSlack;
+    final requiredHeight = primaryHeight +
+        verticalPadding * 2 +
+        secondaryHeight +
+        secondaryGap +
+        layoutSlack;
+    final cardWidth = math.max(fontSize * 3.25, requiredWidth);
+    final cardHeight = math.max(fontSize * 1.65, requiredHeight);
 
     return AnimatedContainer(
       duration: duration,
@@ -442,65 +470,64 @@ class _PlateTile extends StatelessWidget {
         horizontal: horizontalPadding,
         vertical: verticalPadding,
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              if (hasStatusIcon) ...<Widget>[
-                AnimatedScale(
+      child: AnimatedSize(
+        duration: duration,
+        curve: CommonUiMotion.standard,
+        alignment: Alignment.centerLeft,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (hasStatusIcon) ...<Widget>[
+                  AnimatedScale(
+                    duration: duration,
+                    curve: CommonUiMotion.standard,
+                    scale: inProgress ? 1.06 : 1,
+                    child: Icon(
+                      completed
+                          ? Icons.check_circle_outline_rounded
+                          : Icons.directions_car_filled_rounded,
+                      color: tone,
+                      size: iconSize,
+                    ),
+                  ),
+                  SizedBox(width: iconGap),
+                ],
+                AnimatedDefaultTextStyle(
                   duration: duration,
                   curve: CommonUiMotion.standard,
-                  scale: inProgress ? 1.06 : 1,
-                  child: Icon(
-                    completed
-                        ? Icons.check_circle_outline_rounded
-                        : Icons.directions_car_filled_rounded,
-                    color: tone,
-                    size: iconSize,
+                  style: numberStyle,
+                  child: Text(
+                    tail4,
+                    maxLines: 1,
+                    softWrap: false,
                   ),
                 ),
-                SizedBox(width: iconGap),
               ],
-              AnimatedDefaultTextStyle(
-                duration: duration,
-                curve: CommonUiMotion.standard,
-                style: numberStyle,
-                child: Text(
-                  tail4,
-                  maxLines: 1,
-                  softWrap: false,
-                ),
+            ),
+            if (completed && timeLabel != null) ...<Widget>[
+              SizedBox(height: secondaryGap),
+              Text(
+                '완료 $timeLabel',
+                maxLines: 1,
+                overflow: TextOverflow.clip,
+                style: secondaryStyle,
+              ),
+            ] else if (inProgress) ...<Widget>[
+              SizedBox(height: secondaryGap),
+              Text(
+                '출차 중',
+                maxLines: 1,
+                overflow: TextOverflow.clip,
+                style: secondaryStyle,
               ),
             ],
-          ),
-          if (completed && timeLabel != null) ...<Widget>[
-            SizedBox(height: secondaryGap),
-            Text(
-              '완료 $timeLabel',
-              maxLines: 1,
-              overflow: TextOverflow.clip,
-              style: textTheme.labelSmall?.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.w600,
-                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-              ),
-            ),
-          ] else if (inProgress) ...<Widget>[
-            SizedBox(height: secondaryGap),
-            Text(
-              '출차 중',
-              maxLines: 1,
-              overflow: TextOverflow.clip,
-              style: textTheme.labelSmall?.copyWith(
-                color: foreground,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
           ],
-        ],
+        ),
       ),
     );
   }

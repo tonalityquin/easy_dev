@@ -1,29 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-import '../../../../../../shared/auth/tablet_phone.dart';
+import '../../../../../../design_system/common_ui/common_ui_theme.dart';
+import '../../../../../../shared/auth/account_code_number.dart';
 
 class TabletInputSection extends StatelessWidget {
   const TabletInputSection({
     super.key,
     required this.nameController,
-    required this.phoneController,
+    required this.codeNumberController,
     required this.nameFocus,
-    required this.phoneFocus,
+    required this.codeNumberFocus,
     required this.errorMessage,
     this.onEdited,
+    this.isEditMode = false,
   });
 
   final TextEditingController nameController;
-  final TextEditingController phoneController;
+  final TextEditingController codeNumberController;
   final FocusNode nameFocus;
-  final FocusNode phoneFocus;
+  final FocusNode codeNumberFocus;
   final String? errorMessage;
   final VoidCallback? onEdited;
+  final bool isEditMode;
 
   bool _isNameOk(String value) => value.trim().isNotEmpty;
 
-  bool _isPhoneOk(String value) => TabletPhone.isValid(value);
+  bool _isCodeNumberOk(String value) =>
+      AccountCodeNumber.isGeneratedCode(value);
 
   InputDecoration _decoration(
     BuildContext context, {
@@ -73,21 +76,13 @@ class TabletInputSection extends StatelessWidget {
     );
   }
 
-  void _formatPhone(String value) {
-    final formatted = TabletPhone.format(value);
-    if (formatted == value) return;
-    phoneController.value = TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final nameError =
         errorMessage == '태블릿 이름을 입력하세요.' ? errorMessage : null;
-    final phoneError = errorMessage == '전화번호를 다시 확인하세요.'
+    final codeNumberError = errorMessage == '코드번호를 다시 확인하세요.'
         ? errorMessage
         : null;
 
@@ -110,27 +105,30 @@ class TabletInputSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        TextField(
-          controller: phoneController,
-          focusNode: phoneFocus,
-          onChanged: (value) {
-            _formatPhone(value);
-            onEdited?.call();
-          },
-          textInputAction: TextInputAction.done,
-          keyboardType: TextInputType.phone,
-          inputFormatters: <TextInputFormatter>[
-            FilteringTextInputFormatter.allow(RegExp(r'[0-9-]')),
-            LengthLimitingTextInputFormatter(13),
-          ],
-          style: TextStyle(color: colorScheme.onSurface),
-          decoration: _decoration(
-            context,
-            colorScheme: colorScheme,
-            label: '전화번호',
-            errorText: phoneError,
-            prefixIcon: Icons.phone_rounded,
-            done: _isPhoneOk(phoneController.text),
+        AnimatedSwitcher(
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          switchInCurve: Curves.easeOutBack,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(scale: animation, child: child),
+          ),
+          child: TextField(
+            key: ValueKey<String>(codeNumberController.text),
+            controller: codeNumberController,
+            focusNode: codeNumberFocus,
+            readOnly: true,
+            enableInteractiveSelection: true,
+            textInputAction: TextInputAction.done,
+            style: TextStyle(color: colorScheme.onSurface),
+            decoration: _decoration(
+              context,
+              colorScheme: colorScheme,
+              label: '코드번호',
+              errorText: codeNumberError,
+              prefixIcon: Icons.tag_rounded,
+              done: _isCodeNumberOk(codeNumberController.text),
+            ),
           ),
         ),
       ],

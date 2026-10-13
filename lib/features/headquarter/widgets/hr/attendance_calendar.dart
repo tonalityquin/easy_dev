@@ -19,6 +19,7 @@ import '../../../../features/commute/domain/repositories/commute_log_repository.
 import '../../../dashboard/applications/common/calendar_selection_state.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../../../shared/auth/account_code_number.dart';
+import 'hr_time_dock_navigation.dart';
 import 'mail_recipient_settings.dart';
 import 'utils/calendar_excel_mailer.dart';
 import 'widgets/bulk_time_editor.dart';
@@ -47,13 +48,16 @@ class AttendanceCalendar extends StatefulWidget {
   const AttendanceCalendar({
     super.key,
     this.presentation = AttendanceCalendarPresentation.page,
+    this.initialMonth,
   });
 
   final AttendanceCalendarPresentation presentation;
+  final DateTime? initialMonth;
 
   static Future<T?> showAsLeftSideDock<T>(
     BuildContext context, {
     bool useRootNavigator = false,
+    DateTime? initialMonth,
   }) async {
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
@@ -68,8 +72,9 @@ class AttendanceCalendar extends StatefulWidget {
         maxWidth: 360,
         widthFactor: 0.92,
         barrierDismissible: true,
-        builder: (_) => const AttendanceCalendar(
+        builder: (_) => AttendanceCalendar(
           presentation: AttendanceCalendarPresentation.leftSideDock,
+          initialMonth: initialMonth,
         ),
       );
     } finally {
@@ -107,6 +112,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   bool _isLoadingMonth = false;
   bool _editDialogOpen = false;
   bool _developerMode = false;
+  bool _allowPop = false;
+  bool _navigationPromptOpen = false;
   _AttendanceDockView _dockView = _AttendanceDockView.main;
   int _monthDirection = 1;
   Object? _monthLoadError;
@@ -150,6 +157,10 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   @override
   void initState() {
     super.initState();
+    final initialMonth = widget.initialMonth;
+    if (initialMonth != null) {
+      _focusedDay = normalizeHrTimeMonth(initialMonth);
+    }
     _developerMode = DevAuth.devModeEnabled.value;
     DevAuth.devModeEnabled.addListener(_handleDeveloperModeChanged);
     _userInputCtrl.addListener(_handleInputChanged);
@@ -265,14 +276,25 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       'searching=$_isSearching, searchError=${_searchError ?? '-'}, searchMessage=${_searchMessage ?? '-'}, candidates=${_candidateUsers.length}, view=${_dockView.name}, bulkGeneratedIn=${_bulkGeneratedClockIns.length}, bulkGeneratedOut=${_bulkGeneratedClockOuts.length}, editDialogOpen=$_editDialogOpen, saveState=${_saveState.name}, sendingMail=$_isSendingMail, reduceMotion=${media?.disableAnimations ?? false}',
       progress: 0.58,
     );
+    final coordinatorSnapshot = HrTimeDockDebugLog.snapshot();
+    trace.log(
+      'coordinatorLogs=${coordinatorSnapshot.length}',
+      progress: 0.62,
+    );
+    for (var i = 0; i < coordinatorSnapshot.length; i++) {
+      trace.log(
+        coordinatorSnapshot[i],
+        progress: 0.62 + ((i + 1) / coordinatorSnapshot.length) * 0.12,
+      );
+    }
     final snapshot = List<String>.of(_debugLines);
     if (snapshot.isEmpty) {
-      trace.log('기록된 출·퇴근 관리 로그가 없습니다.', progress: 0.88);
+      trace.log('기록된 출·퇴근 관리 로그가 없습니다.', progress: 0.90);
     } else {
       for (var i = 0; i < snapshot.length; i++) {
         trace.log(
           snapshot[i],
-          progress: 0.58 + ((i + 1) / snapshot.length) * 0.36,
+          progress: 0.74 + ((i + 1) / snapshot.length) * 0.22,
         );
       }
     }
@@ -499,9 +521,16 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   }
 
   Future<List<UserModel>> _findUsersByInput(String input) async {
-    final codeNumber = AccountCodeNumber.normalize(input);
-    if (!AccountCodeNumber.isValid(codeNumber)) return <UserModel>[];
-    return context.read<UserRepository>().searchUsersByAccountCode(codeNumber);
+    final value = input.trim();
+    if (value.isEmpty) return <UserModel>[];
+    final codeNumber = AccountCodeNumber.normalize(value);
+    final repository = context.read<UserRepository>();
+    if (AccountCodeNumber.isValid(codeNumber)) {
+      _recordDebug('user_search_mode=codeNumber inputLength=${value.length}');
+      return repository.searchUsersByCodeNumber(codeNumber);
+    }
+    _recordDebug('user_search_mode=name inputLength=${value.length}');
+    return repository.searchUsersByName(value);
   }
 
   Future<void> _onSearchUserPressed() async {
@@ -862,6 +891,175 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     await _loadAttendanceTimes(user, reason: 'retry');
   }
 
+  Future<bool> _resolvePendingNavigation(String actionLabel) async {
+    final dirty = _dirtyDayCount;
+    if (dirty == 0) return true;
+    if (_navigationPromptOpen || !mounted) return false;
+    _navigationPromptOpen = true;
+    _recordDebug('pending_changes_prompt_open dirty=$dirty action=$actionLabel');
+    final decision = await showHrTimePendingChangesDialog(
+      context,
+      dirtyCount: dirty,
+      actionLabel: actionLabel,
+    );
+    _navigationPromptOpen = false;
+    if (!mounted) return false;
+    _recordDebug('pending_changes_prompt_result decision=${decision?.name ?? 'dismissed'} action=$actionLabel');
+    switch (decision) {
+      case HrTimePendingDecision.discard:
+        return true;
+      case HrTimePendingDecision.save:
+        if (_saveState == _SaveVisualState.saving) return false;
+        setState(() => _saveState = _SaveVisualState.saving);
+        final saved = await _persistAllChangesToFirestore();
+        if (!mounted) return false;
+        if (!saved) {
+          HapticFeedback.mediumImpact();
+          setState(() => _saveState = _SaveVisualState.failure);
+          _recordDebug('pending_changes_save_failure action=$actionLabel');
+          return false;
+        }
+        HapticFeedback.lightImpact();
+        setState(() => _saveState = _SaveVisualState.success);
+        _recordDebug('pending_changes_save_success action=$actionLabel');
+        return true;
+      case HrTimePendingDecision.cancel:
+      case null:
+        return false;
+    }
+  }
+
+  Future<void> _popDock([HrTimeDockSwitchRequest? result]) async {
+    if (!mounted) return;
+    setState(() => _allowPop = true);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    Navigator.of(context).pop(result);
+  }
+
+  Future<void> _requestClose({required String source}) async {
+    if (_navigationPromptOpen || _saveState == _SaveVisualState.saving) return;
+    _recordDebug('side_dock_close_request source=$source dirty=$_dirtyDayCount');
+    final canLeave = await _resolvePendingNavigation('닫기');
+    if (!canLeave || !mounted) {
+      _recordDebug('side_dock_close_cancelled source=$source');
+      return;
+    }
+    HapticFeedback.lightImpact();
+    _recordDebug('side_dock_close_confirmed source=$source');
+    await _popDock();
+  }
+
+  Future<void> _requestModeSwitch(HrTimeDockTarget target) async {
+    if (widget.presentation != AttendanceCalendarPresentation.leftSideDock ||
+        target == HrTimeDockTarget.attendance ||
+        _navigationPromptOpen ||
+        _saveState == _SaveVisualState.saving) {
+      return;
+    }
+    _recordDebug(
+      'mode_switch_request from=attendance to=${target.name} month=${_monthKey(_focusedDay)} dirty=$_dirtyDayCount',
+    );
+    final canLeave = await _resolvePendingNavigation('휴게 관리로 이동');
+    if (!canLeave || !mounted) {
+      _recordDebug('mode_switch_cancelled from=attendance to=${target.name}');
+      return;
+    }
+    HapticFeedback.selectionClick();
+    _recordDebug('mode_switch_confirmed from=attendance to=${target.name}');
+    await _popDock(
+      HrTimeDockSwitchRequest(
+        target: target,
+        focusedMonth: normalizeHrTimeMonth(_focusedDay),
+      ),
+    );
+  }
+
+  Widget _buildTimeModeSwitch(BuildContext context) {
+    final tokens = CommonUiTheme.of(context);
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    Widget item({
+      required HrTimeDockTarget target,
+      required IconData icon,
+      required String label,
+      required bool active,
+    }) {
+      return Expanded(
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: AnimatedContainer(
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+            curve: CommonUiMotion.enter,
+            decoration: BoxDecoration(
+              color: active ? tokens.accentContainer : tokens.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: active ? tokens.accent : tokens.borderSubtle,
+              ),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: active ? null : () => unawaited(_requestModeSwitch(target)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AnimatedScale(
+                      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                      scale: active ? 1 : .92,
+                      curve: CommonUiMotion.enter,
+                      child: Icon(
+                        icon,
+                        size: 17,
+                        color: active ? tokens.accent : tokens.iconSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: active ? tokens.accent : tokens.textSecondary,
+                              fontWeight: active ? FontWeight.w800 : FontWeight.w700,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return CommonAnimatedReveal(
+      offset: const Offset(0, -0.025),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+        child: Row(
+          children: [
+            item(
+              target: HrTimeDockTarget.attendance,
+              icon: Icons.how_to_reg_rounded,
+              label: '출퇴근',
+              active: true,
+            ),
+            item(
+              target: HrTimeDockTarget.breakTime,
+              icon: Icons.free_breakfast_rounded,
+              label: '휴게',
+              active: false,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDockHeader(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
@@ -983,9 +1181,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
             IconButton(
               tooltip: '출·퇴근 관리 닫기',
               onPressed: () {
-                HapticFeedback.lightImpact();
-                _recordDebug('side_dock_close source=header');
-                Navigator.of(context).maybePop();
+                unawaited(_requestClose(source: 'header'));
               },
               icon: Icon(
                 Icons.close_rounded,
@@ -1425,7 +1621,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
             onSubmitted: (_) => unawaited(_onSearchUserPressed()),
             decoration: InputDecoration(
               isDense: true,
-              labelText: '코드번호',
+              labelText: '이름 또는 코드번호',
               prefixIcon: const Icon(Icons.person_search_rounded),
               enabledBorder: UnderlineInputBorder(
                 borderSide: BorderSide(color: tokens.borderSubtle),
@@ -2052,14 +2248,22 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       );
     }
 
-    return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildDockHeader(context),
-          Divider(height: 1, color: _tokens.borderSubtle),
-          Expanded(child: content),
-        ],
+    return PopScope(
+      canPop: _allowPop || _dirtyDayCount == 0,
+      onPopInvoked: (didPop) {
+        if (didPop || _allowPop) return;
+        unawaited(_requestClose(source: 'system_or_scrim'));
+      },
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildDockHeader(context),
+            _buildTimeModeSwitch(context),
+            Divider(height: 1, color: _tokens.borderSubtle),
+            Expanded(child: content),
+          ],
+        ),
       ),
     );
   }

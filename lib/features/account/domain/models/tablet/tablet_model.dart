@@ -1,4 +1,4 @@
-import '../../../../../shared/auth/tablet_phone.dart';
+import '../../../../../shared/auth/account_code_number.dart';
 
 class TabletModel {
   final String id;
@@ -12,8 +12,7 @@ class TabletModel {
   final bool isWorking;
   final String name;
   final String password;
-  final String phone;
-  final String handle;
+  final String codeNumber;
   final String? position;
   final String role;
   final String? selectedArea;
@@ -30,8 +29,7 @@ class TabletModel {
     required this.isWorking,
     required this.name,
     required this.password,
-    required this.phone,
-    this.handle = '',
+    required this.codeNumber,
     this.position,
     required this.role,
     this.selectedArea,
@@ -49,8 +47,7 @@ class TabletModel {
     bool? isWorking,
     String? name,
     String? password,
-    String? phone,
-    String? handle,
+    String? codeNumber,
     String? position,
     String? role,
     String? selectedArea,
@@ -68,8 +65,7 @@ class TabletModel {
       isWorking: isWorking ?? this.isWorking,
       name: name ?? this.name,
       password: password ?? this.password,
-      phone: phone ?? this.phone,
-      handle: handle ?? this.handle,
+      codeNumber: codeNumber ?? this.codeNumber,
       position: position ?? this.position,
       role: role ?? this.role,
       selectedArea: selectedArea ?? this.selectedArea,
@@ -77,11 +73,14 @@ class TabletModel {
   }
 
   factory TabletModel.fromMap(String id, Map<String, dynamic> data) {
-    final rawPhone = (data['phone'] ?? '').toString();
-    final legacyHandle = (data['handle'] ?? '').toString();
-    final normalizedPhone = TabletPhone.normalize(
-      rawPhone.isNotEmpty ? rawPhone : legacyHandle,
-    );
+    final rawCodeNumber = <Object?>[
+      data['codeNumber'],
+      data['phone'],
+      data['handle'],
+    ]
+        .map((value) => (value ?? '').toString().trim())
+        .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+    final normalizedCodeNumber = AccountCodeNumber.normalize(rawCodeNumber);
     return TabletModel(
       id: id,
       areas: List<String>.from(data['areas'] ?? const <String>[]),
@@ -95,8 +94,7 @@ class TabletModel {
       isWorking: data['isWorking'] ?? false,
       name: data['name'] ?? '',
       password: data['password'] ?? '',
-      phone: normalizedPhone,
-      handle: legacyHandle,
+      codeNumber: normalizedCodeNumber,
       position: data['position'],
       role: data['role'] ?? '',
       selectedArea: data['selectedArea'],
@@ -114,8 +112,7 @@ class TabletModel {
       'isWorking': isWorking,
       'name': name,
       'password': password,
-      'phone': TabletPhone.normalize(phone),
-      if (handle.trim().isNotEmpty) 'handle': handle.trim().toLowerCase(),
+      'codeNumber': AccountCodeNumber.normalize(codeNumber),
       if (email.trim().isNotEmpty) 'email': email.trim(),
       'position': position,
       'role': role,

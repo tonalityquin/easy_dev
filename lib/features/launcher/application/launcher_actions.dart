@@ -54,22 +54,16 @@ class LauncherActions {
     }
   }
 
-
   static Future<void> openPersonalSignup(BuildContext context) async {
     LauncherDiagnostics.record('open_personal_signup');
     final controller = PersonalLoginController(context);
     try {
-      final developerMode = await controller.isDeveloperModeEnabled();
       if (!context.mounted) return;
-      if (developerMode) {
-        await showCommonDialog<bool>(
-          context: context,
-          barrierDismissible: !controller.isLoading,
-          builder: (_) => PersonalSignUpDialog(controller: controller),
-        );
-        return;
-      }
-      await controller.openExternalSignUpForm();
+      await showCommonDialog<bool>(
+        context: context,
+        barrierDismissible: !controller.isLoading,
+        builder: (_) => PersonalSignUpDialog(controller: controller),
+      );
     } finally {
       controller.dispose();
     }

@@ -3,14 +3,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/di/routes.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/tablet/applications/tablet_pad_mode_state.dart';
+import '../../../../shared/auth/account_code_number.dart';
 import '../../../../shared/auth/five_digit_password_generator.dart';
-import '../../../selector/application/dev_auth.dart';
+import 'personal_account_diagnostics.dart';
 import '../../applications/tablet/tablet_login_network_service.dart';
 import '../area_login_session_refresher.dart';
 
@@ -34,7 +34,7 @@ class PersonalAuthenticatedAccount {
     required this.documentId,
     required this.data,
     required this.name,
-    required this.phone,
+    required this.codeNumber,
     required this.selectedArea,
     required this.division,
   });
@@ -42,7 +42,7 @@ class PersonalAuthenticatedAccount {
   final String documentId;
   final Map<String, dynamic> data;
   final String name;
-  final String phone;
+  final String codeNumber;
   final String selectedArea;
   final String division;
 }
@@ -66,11 +66,13 @@ class PersonalAccountCreateResult {
     required this.success,
     required this.message,
     this.password,
+    this.codeNumber,
   });
 
   final bool success;
   final String message;
   final String? password;
+  final String? codeNumber;
 }
 
 class PersonalLoginController {
@@ -80,11 +82,11 @@ class PersonalLoginController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   final TextEditingController nameController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController codeNumberController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
   final FocusNode nameFocus = FocusNode();
-  final FocusNode phoneFocus = FocusNode();
+  final FocusNode codeNumberFocus = FocusNode();
   final FocusNode passwordFocus = FocusNode();
 
   bool isLoading = false;
@@ -110,22 +112,22 @@ class PersonalLoginController {
 
   Future<bool> tryRestoreSession({bool navigateOnSuccess = true}) async {
     var mode = '';
-    var phone = '';
+    var codeNumber = '';
     var selectedArea = '';
     var accountId = '';
 
     try {
       final prefs = await SharedPreferences.getInstance();
       mode = (prefs.getString('mode') ?? '').trim().toLowerCase();
-      phone = _normalizePhone(
-        prefs.getString('phone') ?? prefs.getString('personalPhone') ?? '',
+      codeNumber = _normalizeCodeNumber(
+        prefs.getString('personalCodeNumber') ?? prefs.getString('codeNumber') ?? '',
       );
       selectedArea = (prefs.getString('selectedArea') ?? '').trim();
-      if (mode != _savedMode || phone.isEmpty || selectedArea.isEmpty) {
+      if (mode != _savedMode || codeNumber.isEmpty || selectedArea.isEmpty) {
         return false;
       }
 
-      accountId = _accountDocId(phone: phone, area: selectedArea);
+      accountId = _accountDocId(codeNumber: codeNumber, area: selectedArea);
       if (accountId.isEmpty) return false;
 
       final snap = await _personalAccountsRef.doc(accountId).get();
@@ -133,9 +135,9 @@ class PersonalLoginController {
       final active = (data?['isActive'] as bool?) ?? true;
       if (!snap.exists || data == null || !active) return false;
 
-      final storedPhone = _normalizePhone((data['phone'] ?? phone).toString());
+      final storedCodeNumber = _codeNumberFromData(data, fallback: codeNumber);
       final storedSelectedArea = _selectedAreaFromData(data);
-      if (storedPhone != phone || storedSelectedArea != selectedArea) {
+      if (storedCodeNumber != codeNumber || storedSelectedArea != selectedArea) {
         return false;
       }
 
@@ -156,7 +158,7 @@ class PersonalLoginController {
       loggedInName =
           (data['name'] ?? prefs.getString('personalName') ?? '').toString();
       nameController.text = loggedInName ?? '';
-      phoneController.text = _formatPhoneForDisplay(storedPhone);
+      codeNumberController.text = _formatCodeNumberForDisplay(storedCodeNumber);
       context.read<TabletPadModeState>().setMode(_targetPadMode);
       if (navigateOnSuccess) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -181,7 +183,7 @@ class PersonalLoginController {
           'collection': 'personal_accounts',
           'docId': accountId,
           'mode': mode,
-          'phone': phone,
+          'codeNumber': AccountCodeNumber.mask(codeNumber),
           'selectedArea': selectedArea,
           'read': 'doc($accountId).get()',
           'queryShape': 'direct-document-read',
@@ -192,20 +194,12 @@ class PersonalLoginController {
     }
   }
 
-  String _normalizePhone(String value) {
-    return value.replaceAll(RegExp(r'[^0-9]'), '');
+  String _normalizeCodeNumber(String value) {
+    return AccountCodeNumber.normalize(value);
   }
 
-  String _formatPhoneForDisplay(String digits) {
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 7) {
-      return '${digits.substring(0, 3)}-${digits.substring(3)}';
-    }
-    if (digits.length <= 10) {
-      return '${digits.substring(0, 3)}-${digits.substring(3, 6)}-${digits.substring(6)}';
-    }
-    final end = digits.length > 11 ? 11 : digits.length;
-    return '${digits.substring(0, 3)}-${digits.substring(3, 7)}-${digits.substring(7, end)}';
+  String _formatCodeNumberForDisplay(String value) {
+    return AccountCodeNumber.format(value);
   }
 
   String _normalizeGmail(String value) {
@@ -220,10 +214,95 @@ class PersonalLoginController {
   }
 
   String _accountDocId({
-    required String phone,
+    required String codeNumber,
     required String area,
   }) {
-    return '${_normalizePhone(phone)}-${_normalizeArea(area)}'.replaceAll('/', '_');
+    final normalized = _normalizeCodeNumber(codeNumber);
+    final normalizedArea = _normalizeArea(area);
+    if (!AccountCodeNumber.isValid(normalized) || normalizedArea.isEmpty) {
+      return '';
+    }
+    return AccountCodeNumber.documentId(
+      codeNumber: normalized,
+      area: normalizedArea,
+    );
+  }
+
+  bool _isLegacyNumericCodeNumber(String value) {
+    return RegExp(r'^\d{10,11}$').hasMatch(_normalizeCodeNumber(value));
+  }
+
+  String _codeNumberFromData(
+    Map<String, dynamic> data, {
+    String fallback = '',
+  }) {
+    final candidates = <Object?>[
+      data['codeNumber'],
+      data['phone'],
+      data['personalPhone'],
+      data['handle'],
+      fallback,
+    ];
+    for (final candidate in candidates) {
+      final normalized = _normalizeCodeNumber((candidate ?? '').toString());
+      if (AccountCodeNumber.isValid(normalized)) return normalized;
+    }
+    for (final candidate in candidates) {
+      final normalized = _normalizeCodeNumber((candidate ?? '').toString());
+      if (normalized.isNotEmpty) return normalized;
+    }
+    return '';
+  }
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      _findPersonalAccountCandidates(String codeNumber) async {
+    final normalized = _normalizeCodeNumber(codeNumber);
+    if (!AccountCodeNumber.isValid(normalized)) {
+      return <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    }
+    final legacyNumeric = _isLegacyNumericCodeNumber(normalized);
+    final fields = <String>[
+      'codeNumber',
+      if (legacyNumeric) 'phone',
+      if (legacyNumeric) 'personalPhone',
+      if (legacyNumeric) 'handle',
+    ];
+    PersonalAccountDiagnostics.record(
+      'credential_candidates_lookup_start',
+      meta: <String, Object?>{
+        'codeNumber': AccountCodeNumber.mask(normalized),
+        'legacyNumeric': legacyNumeric,
+        'fields': fields.join(','),
+      },
+    );
+    final snapshots = await Future.wait(
+      fields.map(
+        (field) => _personalAccountsRef
+            .where(field, isEqualTo: normalized)
+            .limit(20)
+            .get(),
+      ),
+    );
+    final byId =
+        <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    for (final snapshot in snapshots) {
+      for (final doc in snapshot.docs) {
+        byId[doc.id] = doc;
+      }
+    }
+    final result = byId.values.toList(growable: false);
+    PersonalAccountDiagnostics.record(
+      'credential_candidates_lookup_complete',
+      meta: <String, Object?>{
+        'codeNumber': AccountCodeNumber.mask(normalized),
+        'legacyNumeric': legacyNumeric,
+        'count': result.length,
+        'documentIds': result
+            .map((doc) => AccountCodeNumber.maskDocumentId(doc.id))
+            .join(','),
+      },
+    );
+    return result;
   }
 
   List<String> _stringListFromDynamic(dynamic value) {
@@ -256,10 +335,21 @@ class PersonalLoginController {
     return null;
   }
 
-  String? _validatePhone(String phone) {
-    final digits = _normalizePhone(phone);
-    if (digits.isEmpty) return '전화번호를 입력하세요.';
-    if (!RegExp(r'^\d{9,11}$').hasMatch(digits)) return '전화번호를 다시 확인하세요.';
+  String? _validateLoginCodeNumber(String codeNumber) {
+    final normalized = _normalizeCodeNumber(codeNumber);
+    if (normalized.isEmpty) return '코드번호를 입력하세요.';
+    if (!AccountCodeNumber.isValid(normalized)) {
+      return '유효한 코드번호를 입력하세요.';
+    }
+    return null;
+  }
+
+  String? _validateGeneratedCodeNumber(String codeNumber) {
+    final normalized = _normalizeCodeNumber(codeNumber);
+    if (normalized.isEmpty) return '코드번호를 입력하세요.';
+    if (!AccountCodeNumber.isGeneratedCode(normalized)) {
+      return '신규 코드번호 형식을 확인하세요.';
+    }
     return null;
   }
 
@@ -290,10 +380,10 @@ class PersonalLoginController {
 
   String? validatePersonalInputs({
     required String name,
-    required String phone,
+    required String codeNumber,
     String? password,
   }) {
-    final basicError = _validateName(name) ?? _validatePhone(phone);
+    final basicError = _validateName(name) ?? _validateLoginCodeNumber(codeNumber);
     if (basicError != null) return basicError;
     if (password != null) return _validatePassword(password);
     return null;
@@ -301,17 +391,15 @@ class PersonalLoginController {
 
   String? validatePersonalAccountCreateInputs({
     required String name,
-    required String phone,
+    required String codeNumber,
     required String gmail,
     required String password,
     required String area,
     required String division,
   }) {
-    return validatePersonalInputs(
-          name: name,
-          phone: phone,
-          password: password,
-        ) ??
+    return _validateName(name) ??
+        _validateGeneratedCodeNumber(codeNumber) ??
+        _validatePassword(password) ??
         _validateGmail(gmail) ??
         _validateArea(area) ??
         _validateDivision(division);
@@ -323,12 +411,12 @@ class PersonalLoginController {
     StackTrace? stackTrace,
   }) {
     final inputName = nameController.text.trim();
-    final inputPhone = _normalizePhone(phoneController.text);
+    final inputCodeNumber = _normalizeCodeNumber(codeNumberController.text);
     final inputPassword = passwordController.text.trim();
     final inputSelectedArea = '';
-    final docId = inputPhone.isEmpty || inputSelectedArea.isEmpty
+    final docId = inputCodeNumber.isEmpty || inputSelectedArea.isEmpty
         ? ''
-        : _accountDocId(phone: inputPhone, area: inputSelectedArea);
+        : _accountDocId(codeNumber: inputCodeNumber, area: inputSelectedArea);
     final lines = <String>[
       '개인형 로그인 실패',
       '시간: ${DateTime.now().toIso8601String()}',
@@ -336,7 +424,7 @@ class PersonalLoginController {
       '컬렉션: personal_accounts',
       if (docId.isNotEmpty) '문서 ID: $docId',
       '입력 이름: $inputName',
-      '입력 전화번호: $inputPhone',
+      '입력 코드번호: ${AccountCodeNumber.mask(inputCodeNumber)}',
       '입력 비밀번호 길이: ${inputPassword.length}',
       if (inputSelectedArea.isNotEmpty) '입력 지역: $inputSelectedArea',
       if (error != null) '오류: $error',
@@ -363,18 +451,18 @@ class PersonalLoginController {
 
   Map<String, dynamic> _newPersonalAccountMap({
     required String name,
-    required String phone,
+    required String codeNumber,
     required String email,
     required String password,
     required String area,
     required String division,
   }) {
-    final digits = _normalizePhone(phone);
+    final normalizedCodeNumber = _normalizeCodeNumber(codeNumber);
     final normalizedArea = _normalizeArea(area);
     final normalizedDivision = division.trim();
     return <String, dynamic>{
       'name': name.trim(),
-      'phone': digits,
+      'codeNumber': normalizedCodeNumber,
       'email': _normalizeGmail(email),
       'gmail': _normalizeGmail(email),
       'password': password.trim(),
@@ -393,17 +481,17 @@ class PersonalLoginController {
     };
   }
 
-  Future<bool> isDeveloperModeEnabled() async {
-    return DevAuth.isDeveloperLoggedIn();
-  }
-
   String generatePersonalPassword() {
     return FiveDigitPasswordGenerator.generate();
   }
 
+  String generatePersonalCodeNumber() {
+    return AccountCodeNumber.generate();
+  }
+
   Future<PersonalAccountCreateResult> createPersonalAccount({
     required String name,
-    required String phone,
+    required String codeNumber,
     required String gmail,
     required String password,
     required String area,
@@ -411,7 +499,7 @@ class PersonalLoginController {
   }) async {
     final error = validatePersonalAccountCreateInputs(
       name: name,
-      phone: phone,
+      codeNumber: codeNumber,
       gmail: gmail,
       password: password,
       area: area,
@@ -419,11 +507,6 @@ class PersonalLoginController {
     );
     if (error != null) {
       return PersonalAccountCreateResult(success: false, message: error);
-    }
-
-    final passwordError = _validatePassword(password);
-    if (passwordError != null) {
-      return PersonalAccountCreateResult(success: false, message: passwordError);
     }
 
     final isConn = await TabletLoginNetworkService().isConnected();
@@ -434,38 +517,96 @@ class PersonalLoginController {
       );
     }
 
-    final phoneDigits = _normalizePhone(phone);
     final email = _normalizeGmail(gmail);
     final normalizedArea = _normalizeArea(area);
-    final docId = _accountDocId(phone: phoneDigits, area: normalizedArea);
+    var normalizedCodeNumber = _normalizeCodeNumber(codeNumber);
+    PersonalAccountDiagnostics.clear();
+    PersonalAccountDiagnostics.record(
+      'create_start',
+      meta: <String, Object?>{
+        'codeNumber': AccountCodeNumber.mask(normalizedCodeNumber),
+        'area': normalizedArea,
+        'division': division.trim(),
+      },
+    );
 
     try {
-      final docRef = _personalAccountsRef.doc(docId);
-      final snap = await docRef.get();
-      if (snap.exists) {
-        return const PersonalAccountCreateResult(
-          success: false,
-          message: '이미 등록된 전화번호/지역 개인형 계정입니다.',
+      var attempts = 0;
+      while (attempts < 8) {
+        final duplicate = await _personalAccountsRef
+            .where('codeNumber', isEqualTo: normalizedCodeNumber)
+            .limit(1)
+            .get();
+        if (duplicate.docs.isEmpty) break;
+        attempts += 1;
+        normalizedCodeNumber = AccountCodeNumber.generate();
+        PersonalAccountDiagnostics.record(
+          'create_code_regenerated',
+          meta: <String, Object?>{
+            'attempt': attempts,
+            'codeNumber': AccountCodeNumber.mask(normalizedCodeNumber),
+          },
         );
+      }
+
+      final duplicate = await _personalAccountsRef
+          .where('codeNumber', isEqualTo: normalizedCodeNumber)
+          .limit(1)
+          .get();
+      if (duplicate.docs.isNotEmpty) {
+        throw StateError('CODE_NUMBER_GENERATION_FAILED');
+      }
+
+      final docId = _accountDocId(
+        codeNumber: normalizedCodeNumber,
+        area: normalizedArea,
+      );
+      if (docId.isEmpty) {
+        throw StateError('INVALID_PERSONAL_DOCUMENT_ID');
+      }
+      final docRef = _personalAccountsRef.doc(docId);
+      final existingDoc = await docRef.get();
+      if (existingDoc.exists) {
+        throw StateError('PERSONAL_DOCUMENT_ID_CONFLICT');
       }
 
       await docRef.set(
         _newPersonalAccountMap(
           name: name,
-          phone: phoneDigits,
+          codeNumber: normalizedCodeNumber,
           email: email,
           password: password.trim(),
           area: normalizedArea,
           division: division,
         ),
       );
-      debugPrint('[LOGIN-PERSONAL][${_ts()}] personal account created: $docId');
+      PersonalAccountDiagnostics.record(
+        'create_success',
+        meta: <String, Object?>{
+          'documentId': AccountCodeNumber.maskDocumentId(docId),
+          'codeNumber': AccountCodeNumber.mask(normalizedCodeNumber),
+        },
+      );
+      await PersonalAccountDiagnostics.showStatusDialog(
+        context,
+        title: '개인형 계정 생성 상태',
+        description: '개인형 계정 생성이 완료되었습니다.',
+      );
       return PersonalAccountCreateResult(
         success: true,
         message: '개인형 계정을 생성했습니다.',
         password: password.trim(),
+        codeNumber: normalizedCodeNumber,
       );
     } catch (e, st) {
+      PersonalAccountDiagnostics.record(
+        'create_failure',
+        meta: <String, Object?>{
+          'error': e,
+          'codeNumber': AccountCodeNumber.mask(normalizedCodeNumber),
+          'area': normalizedArea,
+        },
+      );
       debugPrint('[LOGIN-PERSONAL][${_ts()}] create personal account error: $e\n$st');
       await DevFirebaseDebugDialog.show(
         context: context,
@@ -474,17 +615,17 @@ class PersonalLoginController {
         stackTrace: st,
         details: <String, Object?>{
           'collection': 'personal_accounts',
-          'docId': docId,
-          'phone': phoneDigits,
+          'codeNumber': AccountCodeNumber.mask(normalizedCodeNumber),
           'email': email,
           'area': normalizedArea,
           'division': division,
-          'phase': 'exists-check-or-create-set',
-          'read': 'doc($docId).get()',
-          'write': 'doc($docId).set(newPersonalAccountMap)',
-          'queryShape': 'direct-document-read-and-write',
-          'compositeIndex': 'not-required',
         },
+      );
+      await PersonalAccountDiagnostics.showStatusDialog(
+        context,
+        title: '개인형 계정 생성 상태',
+        description: '개인형 계정을 생성하지 못했습니다.',
+        failure: true,
       );
       return const PersonalAccountCreateResult(
         success: false,
@@ -496,9 +637,35 @@ class PersonalLoginController {
   Future<PersonalCredentialAuthenticationResult> authenticateCredentials(
     StateSetter setState,
   ) async {
+    PersonalAccountDiagnostics.clear();
+    PersonalAccountDiagnostics.record(
+      'authentication_start',
+      meta: <String, Object?>{
+        'codeNumber': AccountCodeNumber.mask(
+          _normalizeCodeNumber(codeNumberController.text),
+        ),
+        'nameLength': nameController.text.trim().length,
+      },
+    );
     setState(() => isLoading = true);
     try {
-      return await _authenticateCredentialsCore();
+      final result = await _authenticateCredentialsCore();
+      PersonalAccountDiagnostics.record(
+        'authentication_complete',
+        meta: <String, Object?>{
+          'success': result.success,
+          'message': result.message,
+        },
+      );
+      if (context.mounted) {
+        await PersonalAccountDiagnostics.showStatusDialog(
+          context,
+          title: '개인형 계정 인증 상태',
+          description: result.message,
+          failure: !result.success,
+        );
+      }
+      return result;
     } finally {
       if (context.mounted) {
         setState(() => isLoading = false);
@@ -509,12 +676,12 @@ class PersonalLoginController {
   Future<PersonalCredentialAuthenticationResult>
       _authenticateCredentialsCore() async {
     final name = nameController.text.trim();
-    final phoneDigits = _normalizePhone(phoneController.text);
+    final codeNumber = _normalizeCodeNumber(codeNumberController.text);
     final password = passwordController.text.trim();
 
     final error = validatePersonalInputs(
       name: name,
-      phone: phoneDigits,
+      codeNumber: codeNumber,
       password: password,
     );
     if (error != null) {
@@ -537,24 +704,21 @@ class PersonalLoginController {
     }
 
     try {
-      final query = await _personalAccountsRef
-          .where('phone', isEqualTo: phoneDigits)
-          .limit(20)
-          .get();
+      final candidates = await _findPersonalAccountCandidates(codeNumber);
 
       QueryDocumentSnapshot<Map<String, dynamic>>? matchedDoc;
       Map<String, dynamic>? matchedData;
       var profileMatched = false;
       var passwordMissingForMatchedProfile = false;
 
-      for (final doc in query.docs) {
+      for (final doc in candidates) {
         final data = doc.data();
         final active = (data['isActive'] as bool?) ?? true;
         if (!active) continue;
 
         final storedName = (data['name'] ?? '').toString().trim();
-        final storedPhone = _normalizePhone((data['phone'] ?? '').toString());
-        final profileMatches = storedName == name && storedPhone == phoneDigits;
+        final storedCodeNumber = _codeNumberFromData(data);
+        final profileMatches = storedName == name && storedCodeNumber == codeNumber;
         if (!profileMatches) continue;
 
         profileMatched = true;
@@ -579,11 +743,11 @@ class PersonalLoginController {
         );
       }
 
-      if (query.docs.isEmpty) {
+      if (candidates.isEmpty) {
         return failureResult('개인형 계정을 찾을 수 없습니다.');
       }
 
-      final hasInactiveOnly = query.docs.every((doc) {
+      final hasInactiveOnly = candidates.every((doc) {
         final data = doc.data();
         return ((data['isActive'] as bool?) ?? true) == false;
       });
@@ -604,8 +768,7 @@ class PersonalLoginController {
       }
 
       final storedName = (matchedData['name'] ?? '').toString().trim();
-      final storedPhone =
-          _normalizePhone((matchedData['phone'] ?? '').toString());
+      final storedCodeNumber = _codeNumberFromData(matchedData);
       final selectedArea = _selectedAreaFromData(matchedData);
       final division = _divisionFromData(matchedData);
       if (selectedArea.isEmpty) {
@@ -613,12 +776,12 @@ class PersonalLoginController {
       }
 
       final expectedDocId = _accountDocId(
-        phone: storedPhone,
+        codeNumber: storedCodeNumber,
         area: selectedArea,
       );
       if (matchedDoc.id != expectedDocId) {
         return failureResult(
-          '개인형 계정 문서 ID가 전화번호-지역 구조와 일치하지 않습니다.',
+          '개인형 계정 문서 ID가 코드번호-지역 구조와 일치하지 않습니다.',
         );
       }
 
@@ -629,7 +792,7 @@ class PersonalLoginController {
           documentId: matchedDoc.id,
           data: Map<String, dynamic>.from(matchedData),
           name: storedName,
-          phone: storedPhone,
+          codeNumber: storedCodeNumber,
           selectedArea: selectedArea,
           division: division,
         ),
@@ -643,11 +806,17 @@ class PersonalLoginController {
         details: <String, Object?>{
           'collection': 'personal_accounts',
           'inputName': name,
-          'inputPhone': phoneDigits,
+          'inputCodeNumber': AccountCodeNumber.mask(codeNumber),
           'inputPasswordLength': password.length,
-          'query': 'where(phone == $phoneDigits).limit(20)',
-          'queryShape': 'single-field-equality-with-limit',
-          'filters': 'phone == $phoneDigits',
+          'query': _isLegacyNumericCodeNumber(codeNumber)
+              ? 'where(codeNumber|phone|personalPhone|handle == masked).limit(20)'
+              : 'where(codeNumber == masked).limit(20)',
+          'queryShape': _isLegacyNumericCodeNumber(codeNumber)
+              ? 'legacy-compatible-multi-single-field-equality'
+              : 'single-field-equality-with-limit',
+          'filters': _isLegacyNumericCodeNumber(codeNumber)
+              ? 'codeNumber|phone|personalPhone|handle'
+              : 'codeNumber',
           'orderBy': 'none',
           'limit': 20,
           'compositeIndex':
@@ -693,7 +862,7 @@ class PersonalLoginController {
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('mode', _savedMode);
-      await prefs.setString('phone', account.phone);
+      await prefs.setString('codeNumber', account.codeNumber);
       await prefs.setString('selectedArea', account.selectedArea);
       await prefs.setString('division', account.division);
       await prefs.setString(
@@ -706,7 +875,9 @@ class PersonalLoginController {
       );
       await prefs.setString('personalAccountId', account.documentId);
       await prefs.setString('personalName', account.name);
-      await prefs.setString('personalPhone', account.phone);
+      await prefs.setString('personalCodeNumber', account.codeNumber);
+      await prefs.remove('phone');
+      await prefs.remove('personalPhone');
 
       if (persistSession) {
         await _personalAccountsRef.doc(account.documentId).set(
@@ -743,7 +914,7 @@ class PersonalLoginController {
         details: <String, Object?>{
           'collection': 'personal_accounts',
           'accountId': account.documentId,
-          'phone': account.phone,
+          'codeNumber': AccountCodeNumber.mask(account.codeNumber),
           'area': account.selectedArea,
           'division': account.division,
           'write': persistSession
@@ -761,18 +932,59 @@ class PersonalLoginController {
   }
 
   Future<PersonalLoginResult> login(StateSetter setState) async {
+    PersonalAccountDiagnostics.clear();
+    PersonalAccountDiagnostics.record(
+      'login_start',
+      meta: <String, Object?>{
+        'codeNumber': AccountCodeNumber.mask(
+          _normalizeCodeNumber(codeNumberController.text),
+        ),
+        'nameLength': nameController.text.trim().length,
+      },
+    );
     setState(() => isLoading = true);
     try {
       final credential = await _authenticateCredentialsCore();
       final account = credential.account;
       if (!credential.success || account == null) {
-        return PersonalLoginResult(
+        final result = PersonalLoginResult(
           success: false,
           message: credential.message,
           copyText: credential.copyText,
         );
+        PersonalAccountDiagnostics.record(
+          'login_failure',
+          meta: <String, Object?>{'message': result.message},
+        );
+        if (context.mounted) {
+          await PersonalAccountDiagnostics.showStatusDialog(
+            context,
+            title: '개인형 로그인 상태',
+            description: result.message,
+            failure: true,
+          );
+        }
+        return result;
       }
-      return activateAuthenticatedAccount(account);
+
+      final result = await activateAuthenticatedAccount(account);
+      PersonalAccountDiagnostics.record(
+        result.success ? 'login_success' : 'login_activation_failure',
+        meta: <String, Object?>{
+          'message': result.message,
+          'documentId': AccountCodeNumber.maskDocumentId(account.documentId),
+          'codeNumber': AccountCodeNumber.mask(account.codeNumber),
+        },
+      );
+      if (context.mounted) {
+        await PersonalAccountDiagnostics.showStatusDialog(
+          context,
+          title: '개인형 로그인 상태',
+          description: result.message,
+          failure: !result.success,
+        );
+      }
+      return result;
     } finally {
       if (context.mounted) {
         setState(() => isLoading = false);
@@ -796,14 +1008,14 @@ class PersonalLoginController {
         );
       }
       await prefs.remove('mode');
-      await prefs.remove('phone');
+      await prefs.remove('codeNumber');
       await prefs.remove('selectedArea');
       await prefs.remove('division');
       await prefs.remove('role');
       await prefs.remove('position');
       await prefs.remove('personalAccountId');
       await prefs.remove('personalName');
-      await prefs.remove('personalPhone');
+      await prefs.remove('personalCodeNumber');
       await prefs.remove('personalEmail');
 
       passwordController.clear();
@@ -839,26 +1051,23 @@ class PersonalLoginController {
     obscurePassword = !obscurePassword;
   }
 
-  void formatPhoneNumber(String value, StateSetter setState) {
-    final digits = _normalizePhone(value);
-    final limited = digits.length > 11 ? digits.substring(0, 11) : digits;
-    final formatted = _formatPhoneForDisplay(limited);
+  void formatCodeNumber(String value, StateSetter setState) {
+    final formatted = AccountCodeNumber.format(value);
     setState(() {
-      phoneController.value = TextEditingValue(
+      codeNumberController.value = TextEditingValue(
         text: formatted,
         selection: TextSelection.collapsed(offset: formatted.length),
       );
     });
   }
 
-
   void fillLoginFields({
     required String name,
-    required String phone,
+    required String codeNumber,
     String? password,
   }) {
     nameController.text = name.trim();
-    phoneController.text = _formatPhoneForDisplay(_normalizePhone(phone));
+    codeNumberController.text = _formatCodeNumberForDisplay(_normalizeCodeNumber(codeNumber));
     if (password != null) {
       passwordController.text = password.trim();
     }
@@ -911,23 +1120,13 @@ class PersonalLoginController {
     );
   }
 
-  Future<void> openExternalSignUpForm() async {
-    final uri = Uri.parse('https://forms.gle/ZjHEC4QrtAvHs5TQ8');
-    var opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!opened) {
-      opened = await launchUrl(uri, mode: LaunchMode.platformDefault);
-    }
-    if (!opened) {
-      debugPrint('[LOGIN-PERSONAL][${_ts()}] signUpForm open failed');
-    }
-  }
 
   void dispose() {
     nameController.dispose();
-    phoneController.dispose();
+    codeNumberController.dispose();
     passwordController.dispose();
     nameFocus.dispose();
-    phoneFocus.dispose();
+    codeNumberFocus.dispose();
     passwordFocus.dispose();
   }
 }

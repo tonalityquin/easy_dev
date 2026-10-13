@@ -17,21 +17,22 @@ class TerminalRestoreHint {
     final selectedArea = (prefs.getString('selectedArea') ?? '').trim();
     final codeNumber = (prefs.getString('codeNumber') ?? '').trim();
     final legacyPhone = (prefs.getString('phone') ?? '').trim();
-    final personalPhone = (prefs.getString('personalPhone') ?? '').trim();
+    final personalCodeNumber =
+        (prefs.getString('personalCodeNumber') ?? '').trim();
     final personalAccountId =
         (prefs.getString('personalAccountId') ?? '').trim();
-    final tabletPhone = (prefs.getString('tabletPhone') ?? '').trim();
-    final handle = (prefs.getString('handle') ?? '').trim();
+    final tabletCodeNumber =
+        (prefs.getString('tabletCodeNumber') ?? '').trim();
     final cachedUser = (prefs.getString('cachedUserJson') ?? '').trim();
     final hasUser =
         (codeNumber.isNotEmpty || legacyPhone.isNotEmpty) &&
         selectedArea.isNotEmpty &&
         cachedUser.isNotEmpty;
     final hasPersonal = selectedArea.isNotEmpty &&
-        (personalPhone.isNotEmpty ||
-            (personalAccountId.isNotEmpty && legacyPhone.isNotEmpty));
+        personalAccountId.isNotEmpty &&
+        personalCodeNumber.isNotEmpty;
     final hasTablet =
-        selectedArea.isNotEmpty && (tabletPhone.isNotEmpty || handle.isNotEmpty);
+        selectedArea.isNotEmpty && tabletCodeNumber.isNotEmpty;
 
     bool available(String kind) {
       return switch (kind) {

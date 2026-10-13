@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../application/headquarter_support_actions.dart';
+import '../application/hr_time_management_dock_coordinator.dart';
 import '../widgets/headquarter_work_status_header_indicator.dart';
-import '../widgets/hr/attendance_calendar.dart' as hr_att;
-import '../widgets/hr/break_calendar.dart' as hr_break;
 import '../widgets/mgmt/field.dart' as mgmt;
 import '../widgets/mgmt/statistics.dart' as mgmt_stats;
 import 'sheets/head_memo.dart';
@@ -69,14 +68,20 @@ class HeadStubPage extends StatelessWidget {
         title: '출/퇴근',
         color: cs.secondary,
         foreground: cs.onSecondary,
-        onTap: () => hr_att.AttendanceCalendar.showAsLeftSideDock(context),
+        onTap: () => HrTimeManagementDockCoordinator.show(
+          context,
+          initialTarget: HrTimeDockTarget.attendance,
+        ),
       ),
       _HeadHubAction(
         icon: Icons.free_breakfast_rounded,
         title: '휴게 관리',
         color: cs.tertiary,
         foreground: cs.onTertiary,
-        onTap: () => hr_break.BreakCalendar.showAsLeftSideDock(context),
+        onTap: () => HrTimeManagementDockCoordinator.show(
+          context,
+          initialTarget: HrTimeDockTarget.breakTime,
+        ),
       ),
       _HeadHubAction(
         icon: Icons.edit_note_rounded,

@@ -4,14 +4,13 @@ import '../models/user/user_model.dart';
 
 abstract class UserRepository {
   Future<UserModel?> getUserByAccountCode(String accountCode);
-  Future<List<UserModel>> searchUsersByAccountCode(String accountCode);
+  Future<List<UserModel>> searchUsersByCodeNumber(String codeNumber);
+  Future<List<UserModel>> searchUsersByName(String name);
   Future<UserModel?> getUserById(String userId);
   Future<UserModel?> getUserByHandle(String handle);
-  Future<TabletModel?> getTabletByHandle(String handle);
-  Future<TabletModel?> getTabletByPhone(String phone);
-  Future<List<TabletModel>> searchTabletsByPhone(String phone);
-  Future<TabletModel?> getTabletByPhoneAndAreaName(String phone, String areaName);
-  Future<TabletModel?> getTabletByHandleAndAreaName(String handle, String areaName);
+  Future<TabletModel?> getTabletByCodeNumber(String codeNumber);
+  Future<List<TabletModel>> searchTabletsByCodeNumber(String codeNumber);
+  Future<TabletModel?> getTabletByCodeNumberAndAreaName(String codeNumber, String areaName);
 
   Future<void> updateLoadCurrentArea(String codeNumber, String area, String currentArea);
   Future<void> areaPickerCurrentArea(String codeNumber, String area, String currentArea);

@@ -17,29 +17,26 @@ class FirestoreUserRepository implements UserRepository {
       _readService.getUserByAccountCode(accountCode);
 
   @override
-  Future<List<UserModel>> searchUsersByAccountCode(String accountCode) =>
-      _readService.searchUsersByAccountCode(accountCode);
+  Future<List<UserModel>> searchUsersByCodeNumber(String codeNumber) =>
+      _readService.searchUsersByCodeNumber(codeNumber);
+
+  @override
+  Future<List<UserModel>> searchUsersByName(String name) =>
+      _readService.searchUsersByName(name);
 
   @override
   Future<UserModel?> getUserByHandle(String handle) => _readService.getUserByHandle(handle);
 
   @override
-  Future<TabletModel?> getTabletByHandle(String handle) => _readService.getTabletByHandle(handle);
+  Future<TabletModel?> getTabletByCodeNumber(String codeNumber) => _readService.getTabletByCodeNumber(codeNumber);
 
   @override
-  Future<TabletModel?> getTabletByPhone(String phone) => _readService.getTabletByPhone(phone);
+  Future<List<TabletModel>> searchTabletsByCodeNumber(String codeNumber) =>
+      _readService.searchTabletsByCodeNumber(codeNumber);
 
   @override
-  Future<List<TabletModel>> searchTabletsByPhone(String phone) =>
-      _readService.searchTabletsByPhone(phone);
-
-  @override
-  Future<TabletModel?> getTabletByPhoneAndAreaName(String phone, String areaName) =>
-      _readService.getTabletByPhoneAndAreaName(phone, areaName);
-
-  @override
-  Future<TabletModel?> getTabletByHandleAndAreaName(String handle, String areaName) =>
-      _readService.getTabletByHandleAndAreaName(handle, areaName);
+  Future<TabletModel?> getTabletByCodeNumberAndAreaName(String codeNumber, String areaName) =>
+      _readService.getTabletByCodeNumberAndAreaName(codeNumber, areaName);
 
   @override
   Future<List<UserModel>> getUsersByAreaOnceWithCache(String selectedArea) =>

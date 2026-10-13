@@ -1,9 +1,12 @@
+import '../../../../shared/auth/account_code_number.dart';
+
 class TabletLoginValidate {
-  static String? validatePhone(String phone) {
-    final trimmed = phone.trim();
-    final regex = RegExp(r'^[0-9]{10,11}$');
-    if (trimmed.isEmpty) return '전화번호를 입력해주세요.';
-    if (!regex.hasMatch(trimmed)) return '유효한 전화번호를 입력해주세요.';
+  static String? validateCodeNumber(String codeNumber) {
+    final normalized = AccountCodeNumber.normalize(codeNumber);
+    if (normalized.isEmpty) return '코드번호를 입력해주세요.';
+    if (!AccountCodeNumber.isValid(normalized)) {
+      return '유효한 코드번호를 입력해주세요.';
+    }
     return null;
   }
 
