@@ -673,6 +673,159 @@ class PersonalLoginController {
     }
   }
 
+  Future<PersonalCredentialAuthenticationResult> resolveIdentity({
+    String? name,
+    String? codeNumber,
+  }) async {
+    final resolvedName = (name ?? nameController.text).trim();
+    final resolvedCodeNumber = _normalizeCodeNumber(
+      codeNumber ?? codeNumberController.text,
+    );
+
+    final error = validatePersonalInputs(
+      name: resolvedName,
+      codeNumber: resolvedCodeNumber,
+    );
+    if (error != null) {
+      final failure = _loginFailureResult(error);
+      return PersonalCredentialAuthenticationResult(
+        success: false,
+        message: failure.message,
+        copyText: failure.copyText,
+      );
+    }
+
+    final isConn = await TabletLoginNetworkService().isConnected();
+    if (!isConn) {
+      final failure = _loginFailureResult('네트워크 연결을 확인하세요.');
+      return PersonalCredentialAuthenticationResult(
+        success: false,
+        message: failure.message,
+        copyText: failure.copyText,
+      );
+    }
+
+    try {
+      final candidates =
+          await _findPersonalAccountCandidates(resolvedCodeNumber);
+
+      PersonalCredentialAuthenticationResult failureResult(String message) {
+        final failure = _loginFailureResult(message);
+        return PersonalCredentialAuthenticationResult(
+          success: false,
+          message: failure.message,
+          copyText: failure.copyText,
+        );
+      }
+
+      if (candidates.isEmpty) {
+        return failureResult('개인형 계정을 찾을 수 없습니다.');
+      }
+
+      final activeCandidates = candidates.where((doc) {
+        final data = doc.data();
+        return (data['isActive'] as bool?) ?? true;
+      }).toList(growable: false);
+      if (activeCandidates.isEmpty) {
+        return failureResult('비활성화된 개인형 계정입니다.');
+      }
+
+      final matches = activeCandidates.where((doc) {
+        final data = doc.data();
+        final storedName = (data['name'] ?? '').toString().trim();
+        final storedCodeNumber = _codeNumberFromData(data);
+        return storedName == resolvedName &&
+            storedCodeNumber == resolvedCodeNumber;
+      }).toList(growable: false);
+
+      PersonalAccountDiagnostics.record(
+        'manual_identity_candidates_resolved',
+        meta: <String, Object?>{
+          'codeNumber': AccountCodeNumber.mask(resolvedCodeNumber),
+          'candidateCount': candidates.length,
+          'activeCandidateCount': activeCandidates.length,
+          'identityMatchCount': matches.length,
+        },
+      );
+      if (matches.isEmpty) {
+        return failureResult('입력한 계정 정보가 일치하지 않습니다.');
+      }
+      if (matches.length > 1) {
+        return failureResult('같은 계정 정보의 개인형 계정이 여러 업무 지역에 존재합니다.');
+      }
+
+      final matchedDoc = matches.single;
+      final matchedData = matchedDoc.data();
+      final storedPassword = (matchedData['password'] ?? '').toString().trim();
+      if (storedPassword.isEmpty) {
+        return failureResult(
+          '개인형 계정에 비밀번호가 없습니다. 개발자 모드에서 비밀번호가 포함된 계정으로 다시 생성하세요.',
+        );
+      }
+
+      final storedName = (matchedData['name'] ?? '').toString().trim();
+      final storedCodeNumber = _codeNumberFromData(matchedData);
+      final selectedArea = _selectedAreaFromData(matchedData);
+      final division = _divisionFromData(matchedData);
+      if (selectedArea.isEmpty) {
+        return failureResult('개인형 계정의 지역 정보가 없습니다.');
+      }
+
+      final expectedDocId = _accountDocId(
+        codeNumber: storedCodeNumber,
+        area: selectedArea,
+      );
+      if (matchedDoc.id != expectedDocId) {
+        return failureResult(
+          '개인형 계정 문서 ID가 코드번호-지역 구조와 일치하지 않습니다.',
+        );
+      }
+
+      return PersonalCredentialAuthenticationResult(
+        success: true,
+        message: '$storedName님의 개인형 계정 정보를 확인했습니다.',
+        account: PersonalAuthenticatedAccount(
+          documentId: matchedDoc.id,
+          data: Map<String, dynamic>.from(matchedData),
+          name: storedName,
+          codeNumber: storedCodeNumber,
+          selectedArea: selectedArea,
+          division: division,
+        ),
+      );
+    } catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'personal_accounts.resolveIdentity',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'personal_accounts',
+          'inputNameLength': resolvedName.length,
+          'inputCodeNumber': AccountCodeNumber.mask(resolvedCodeNumber),
+          'query': _isLegacyNumericCodeNumber(resolvedCodeNumber)
+              ? 'where(codeNumber|phone|personalPhone|handle == masked).limit(20)'
+              : 'where(codeNumber == masked).limit(20)',
+          'queryShape': _isLegacyNumericCodeNumber(resolvedCodeNumber)
+              ? 'legacy-compatible-multi-single-field-equality'
+              : 'single-field-equality-with-limit',
+          'orderBy': 'none',
+          'limit': 20,
+        },
+      );
+      final failure = _loginFailureResult(
+        '계정 확인 중 오류가 발생했습니다.',
+        error: e,
+        stackTrace: st,
+      );
+      return PersonalCredentialAuthenticationResult(
+        success: false,
+        message: failure.message,
+        copyText: failure.copyText,
+      );
+    }
+  }
+
   Future<PersonalCredentialAuthenticationResult>
       _authenticateCredentialsCore() async {
     final name = nameController.text.trim();

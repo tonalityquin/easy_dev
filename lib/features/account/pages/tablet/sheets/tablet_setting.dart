@@ -38,6 +38,7 @@ class TabletSettingWorkspace extends StatefulWidget {
 class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _codeNumberController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _scrollViewportKey = GlobalKey();
@@ -99,6 +100,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
   void dispose() {
     _nameController.dispose();
     _codeNumberController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -111,19 +113,30 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
       _codeNumberController.text = AccountCodeNumber.format(
         AccountCodeNumber.generate(),
       );
+      _emailController.clear();
       _passwordController.text = FiveDigitPasswordGenerator.generate();
       _selectedRole = TabletRoleType.lowField;
       return;
     }
     _nameController.text = tablet.name;
     _codeNumberController.text = AccountCodeNumber.format(tablet.codeNumber);
+    _emailController.text = tablet.email.split('@').first;
     _passwordController.text = tablet.password;
     _selectedRole = TabletRoleType.fromName(tablet.role);
   }
 
   bool get _nameOk => _nameController.text.trim().isNotEmpty;
   bool get _codeNumberOk => AccountCodeNumber.isGeneratedCode(_codeNumberController.text);
-  bool get _identityOk => _nameOk && _codeNumberOk;
+
+  bool _isValidEmailLocalPart(String value) {
+    return RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(value.trim());
+  }
+
+  bool get _emailOk =>
+      _emailController.text.trim().isNotEmpty &&
+      _isValidEmailLocalPart(_emailController.text);
+
+  bool get _identityOk => _nameOk && _codeNumberOk && _emailOk;
   bool get _passwordOk =>
       RegExp(r'^\d{5}$').hasMatch(_passwordController.text.trim());
 
@@ -157,6 +170,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
     return TabletSettingsDraft(
       name: _nameController.text.trim(),
       codeNumber: AccountCodeNumber.normalize(_codeNumberController.text),
+      emailLocal: _emailController.text.trim(),
       role: _selectedRole,
       password: _passwordController.text.trim(),
     );
@@ -171,6 +185,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
         case TabletSettingsSection.identity:
           _nameController.text = draft.name;
           _codeNumberController.text = AccountCodeNumber.format(draft.codeNumber);
+          _emailController.text = draft.emailLocal;
           break;
         case TabletSettingsSection.permission:
           _selectedRole = draft.role;
@@ -200,7 +215,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
   Size _editorTargetSize(TabletSettingsSection section) {
     switch (section) {
       case TabletSettingsSection.identity:
-        return const Size(500, 390);
+        return const Size(500, 460);
       case TabletSettingsSection.permission:
         return const Size(460, 320);
       case TabletSettingsSection.password:
@@ -363,9 +378,16 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
     return '${trimmed.substring(0, 1)}${List<String>.filled(trimmed.length - 1, '*').join()}';
   }
 
+  String _maskEmailLocal(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '이메일 입력 필요';
+    if (trimmed.length == 1) return '*@gmail.com';
+    return '${trimmed.substring(0, 1)}${List<String>.filled(trimmed.length - 1, '*').join()}@gmail.com';
+  }
+
   String _identitySummary() {
-    if (!_identityOk) return '태블릿 이름 · 코드번호 입력 필요';
-    return '${_maskName(_nameController.text)} · ${AccountCodeNumber.mask(_codeNumberController.text)}';
+    if (!_identityOk) return '태블릿 이름 · 코드번호 · 이메일 입력 필요';
+    return '${_maskName(_nameController.text)} · ${AccountCodeNumber.mask(_codeNumberController.text)} · ${_maskEmailLocal(_emailController.text)}';
   }
 
   String _permissionSummary() => _selectedRole.label;
@@ -413,7 +435,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
     setState(() => _saving = true);
     workspace?.setSettingsSaving(true, source: 'submit_started');
     workspace?.log(
-      'settings_submit_started mode=${isEditMode ? 'edit' : 'create'} nameLength=${_nameController.text.trim().length} codeNumber=${AccountCodeNumber.mask(_codeNumberController.text)}',
+      'settings_submit_started mode=${isEditMode ? 'edit' : 'create'} nameLength=${_nameController.text.trim().length} codeNumber=${AccountCodeNumber.mask(_codeNumberController.text)} emailSet=${_emailController.text.trim().isNotEmpty}',
     );
 
     final trace = await DeveloperOperationTrace.start(
@@ -431,7 +453,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
         throw StateError('현재 지역 정보가 없습니다.');
       }
       trace.log(
-        '입력값 검증 통과: nameLength=${_nameController.text.trim().length}, codeNumber=${AccountCodeNumber.mask(_codeNumberController.text)}, role=${_selectedRole.name}',
+        '입력값 검증 통과: nameLength=${_nameController.text.trim().length}, codeNumber=${AccountCodeNumber.mask(_codeNumberController.text)}, emailSet=${_emailController.text.trim().isNotEmpty}, emailDomain=gmail.com, role=${_selectedRole.name}',
         progress: .14,
       );
       final englishName = await repository.getEnglishNameByArea(area, division);
@@ -486,11 +508,17 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
           progress: .5,
         );
       }
+      final email = '${_emailController.text.trim()}@gmail.com';
+      trace.log(
+        'Gmail 저장값 준비 완료: emailSet=${_emailController.text.trim().isNotEmpty}, domain=gmail.com',
+        progress: .54,
+      );
       final nextTablet = initialTablet == null
           ? TabletModel(
               id: documentId,
               name: _nameController.text.trim(),
               codeNumber: codeNumber,
+              email: email,
               role: _selectedRole.name,
               password: _passwordController.text.trim(),
               position: null,
@@ -507,7 +535,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
               id: documentId,
               name: _nameController.text.trim(),
               codeNumber: codeNumber,
-              email: '',
+              email: email,
               role: _selectedRole.name,
               password: _passwordController.text.trim(),
               areas: <String>[area],

@@ -126,6 +126,120 @@ class TabletLoginController {
     }
   }
 
+  Future<TabletCredentialAuthenticationResult> resolveIdentity({
+    String? name,
+    String? codeNumber,
+  }) async {
+    final resolvedName = (name ?? nameController.text).trim();
+    final resolvedCodeNumber = AccountCodeNumber.normalize(
+      codeNumber ?? codeNumberController.text,
+    );
+
+    if (resolvedName.isEmpty) {
+      return const TabletCredentialAuthenticationResult(
+        success: false,
+        message: '이름을 다시 확인하세요.',
+      );
+    }
+
+    final codeNumberError =
+        TabletLoginValidate.validateCodeNumber(resolvedCodeNumber);
+    if (codeNumberError != null) {
+      return TabletCredentialAuthenticationResult(
+        success: false,
+        message: codeNumberError,
+      );
+    }
+
+    final isConn = await TabletLoginNetworkService().isConnected();
+    if (!isConn) {
+      return const TabletCredentialAuthenticationResult(
+        success: false,
+        message: '네트워크 연결을 확인하세요.',
+      );
+    }
+
+    try {
+      final repo = context.read<UserRepository>();
+      final candidates =
+          await repo.searchTabletsByCodeNumber(resolvedCodeNumber);
+      final matches = candidates
+          .where((tablet) => tablet.name == resolvedName)
+          .toList(growable: false);
+
+      TabletAccountDiagnostics.record(
+        'manual_identity_candidates_resolved',
+        meta: <String, Object?>{
+          'codeNumber': AccountCodeNumber.mask(resolvedCodeNumber),
+          'candidateCount': candidates.length,
+          'identityMatchCount': matches.length,
+          'documentIds': candidates
+              .map((tablet) => AccountCodeNumber.maskDocumentId(tablet.id))
+              .join(','),
+        },
+      );
+
+      if (matches.isEmpty) {
+        return const TabletCredentialAuthenticationResult(
+          success: false,
+          message: '입력한 계정 정보를 다시 확인하세요.',
+        );
+      }
+
+      if (matches.length > 1) {
+        TabletAccountDiagnostics.record(
+          'manual_identity_ambiguous',
+          meta: <String, Object?>{
+            'codeNumber': AccountCodeNumber.mask(resolvedCodeNumber),
+            'matchCount': matches.length,
+            'documentIds': matches
+                .map((tablet) => AccountCodeNumber.maskDocumentId(tablet.id))
+                .join(','),
+          },
+        );
+        return const TabletCredentialAuthenticationResult(
+          success: false,
+          message: '같은 계정 정보의 태블릿 계정이 여러 업무 지역에 존재합니다.',
+        );
+      }
+
+      final tablet = matches.single;
+      final areaName = (tablet.selectedArea ??
+              tablet.currentArea ??
+              (tablet.areas.isNotEmpty ? tablet.areas.first : ''))
+          .trim();
+      if (areaName.isEmpty) {
+        return const TabletCredentialAuthenticationResult(
+          success: false,
+          message: '태블릿 계정의 지역 정보가 없습니다.',
+        );
+      }
+
+      return TabletCredentialAuthenticationResult(
+        success: true,
+        message: '${tablet.name}님의 태블릿 계정 정보를 확인했습니다.',
+        tablet: tablet,
+      );
+    } catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'tablet.resolveIdentity',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'codeNumber': AccountCodeNumber.mask(resolvedCodeNumber),
+          'nameLength': resolvedName.length,
+          'targetMode': _savedMode,
+          'controller': 'TabletLoginController',
+        },
+      );
+      return const TabletCredentialAuthenticationResult(
+        success: false,
+        message: '태블릿형 계정 확인 중 오류가 발생했습니다.',
+      );
+    }
+  }
+
   Future<TabletCredentialAuthenticationResult>
       _authenticateCredentialsCore() async {
     final name = nameController.text.trim();

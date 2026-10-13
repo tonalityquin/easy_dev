@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../app/auth/google_auth_session.dart';
 import '../../../app/init/app_start_user_purpose.dart';
 import '../../../app/init/work_schedule_prefs.dart';
 import '../../account/applications/user_state.dart';
@@ -54,6 +55,19 @@ class TerminalAuthenticatedAccount {
   final PersonalAuthenticatedAccount? personalAccount;
   final TabletModel? tablet;
 
+  String get normalizedEmail {
+    final value = switch (kind) {
+      TerminalAccountKind.user => user?.email ?? '',
+      TerminalAccountKind.personal =>
+        (personalAccount?.data['email'] ??
+                personalAccount?.data['gmail'] ??
+                '')
+            .toString(),
+      TerminalAccountKind.tablet => tablet?.email ?? '',
+    };
+    return value.trim().toLowerCase();
+  }
+
   TerminalAuthenticatedAccount copyWith({
     bool? activated,
     UserModel? user,
@@ -86,6 +100,20 @@ class TerminalAccountAuthenticationResult {
   final String? copyText;
 }
 
+class TerminalAccountIdentityResolutionResult {
+  const TerminalAccountIdentityResolutionResult({
+    required this.success,
+    required this.message,
+    this.account,
+    this.copyText,
+  });
+
+  final bool success;
+  final String message;
+  final TerminalAuthenticatedAccount? account;
+  final String? copyText;
+}
+
 class TerminalModeActivationResult {
   const TerminalModeActivationResult({
     required this.success,
@@ -105,6 +133,8 @@ class TerminalAuthCoordinator {
 
   static const String accountKindPrefsKey =
       TerminalRestoreHint.accountKindPrefsKey;
+  static const String accountVerificationFailureMessage =
+      '입력한 정보와 로그인하는 정보가 일치하지 않습니다. 담당자에게 문의하세요.';
 
   static TerminalAccountKind? parseAccountKind(String? raw) {
     final value = (raw ?? '').trim().toLowerCase();
@@ -390,38 +420,30 @@ class TerminalAuthCoordinator {
     }
   }
 
-  static Future<TerminalAccountAuthenticationResult> authenticateAccount(
+  static Future<TerminalAccountIdentityResolutionResult> resolveAccountIdentity(
     BuildContext context, {
     required TerminalAccountKind kind,
     required String name,
     required String codeNumber,
-    required String password,
-    TerminalSessionPersistence persistence =
-        TerminalSessionPersistence.persistent,
   }) async {
     final accountIdentifier = AccountCodeNumber.normalize(codeNumber);
+    final normalizedName = name.trim();
     final maskedAccountIdentifier = AccountCodeNumber.mask(accountIdentifier);
     LauncherDiagnostics.record(
-      'auth_account_manual_start',
+      'auth_account_identity_start',
       meta: <String, Object?>{
         'accountKind': accountKindId(kind),
-        'nameLength': name.trim().length,
+        'nameLength': normalizedName.length,
         'accountIdentifierMasked': maskedAccountIdentifier,
-        'passwordLength': password.length,
-        'sessionPersistence': sessionPersistenceId(persistence),
       },
     );
-
-    void stateSetter(VoidCallback callback) {
-      callback();
-    }
 
     try {
       switch (kind) {
         case TerminalAccountKind.user:
           final connected = await DoubleLoginNetworkService().isConnected();
           if (!connected) {
-            return const TerminalAccountAuthenticationResult(
+            return const TerminalAccountIdentityResolutionResult(
               success: false,
               message: '네트워크 연결을 확인하세요.',
             );
@@ -429,18 +451,13 @@ class TerminalAuthCoordinator {
           final user = await context.read<UserRepository>().getUserByAccountCode(
                 accountIdentifier,
               );
-          if (user == null ||
-              user.name != name.trim() ||
-              user.password != password.trim()) {
-            return const TerminalAccountAuthenticationResult(
+          if (user == null || user.name != normalizedName) {
+            return const TerminalAccountIdentityResolutionResult(
               success: false,
-              message: '입력한 로그인 정보를 다시 확인하세요.',
+              message: '입력한 계정 정보를 다시 확인하세요.',
             );
           }
           final modes = _userSupportedModes(user.modes);
-          if (persistence == TerminalSessionPersistence.persistent) {
-            await persistAccountKind(kind);
-          }
           final account = TerminalAuthenticatedAccount(
             kind: kind,
             displayName: user.name,
@@ -449,64 +466,57 @@ class TerminalAuthCoordinator {
             user: user,
           );
           LauncherDiagnostics.record(
-            'auth_account_manual_success',
+            'auth_account_identity_success',
             meta: <String, Object?>{
               'accountKind': accountKindId(kind),
               'accountIdentifierMasked': maskedAccountIdentifier,
               'supportedModes': modes.map((mode) => mode.id).join(','),
-              'firebaseCredentialQueries': 1,
-              'firebaseSupportedModeQueries': 0,
-              'sessionPersistence': sessionPersistenceId(persistence),
+              'firebaseIdentityQueries': 1,
             },
           );
-          return TerminalAccountAuthenticationResult(
+          return TerminalAccountIdentityResolutionResult(
             success: true,
-            message: '${user.name}님, 로그인에 성공했습니다.',
+            message: '${user.name}님의 계정 정보를 확인했습니다.',
             account: account,
           );
         case TerminalAccountKind.personal:
           final controller = PersonalLoginController(context);
           try {
-            controller.nameController.text = name;
+            controller.nameController.text = normalizedName;
             controller.codeNumberController.text = accountIdentifier;
-            controller.passwordController.text = password;
-            final result = await controller.authenticateCredentials(
-              stateSetter,
+            final result = await controller.resolveIdentity(
+              name: normalizedName,
+              codeNumber: accountIdentifier,
             );
             final personalAccount = result.account;
             if (!result.success || personalAccount == null) {
-              return TerminalAccountAuthenticationResult(
+              return TerminalAccountIdentityResolutionResult(
                 success: false,
                 message: result.message,
                 copyText: result.copyText,
               );
             }
-            if (persistence == TerminalSessionPersistence.persistent) {
-              await persistAccountKind(kind);
-            }
+            final account = TerminalAuthenticatedAccount(
+              kind: kind,
+              displayName: personalAccount.name,
+              supportedModes: <AppModeDefinition>[
+                AppModeRegistry.byId('personal')!,
+              ],
+              activated: false,
+              personalAccount: personalAccount,
+            );
             LauncherDiagnostics.record(
-              'auth_account_manual_success',
+              'auth_account_identity_success',
               meta: <String, Object?>{
                 'accountKind': accountKindId(kind),
                 'accountIdentifierMasked': maskedAccountIdentifier,
                 'supportedModes': 'personal',
-                'firebaseSupportedModeQueries': 0,
-                'deferredActivation': true,
-                'sessionPersistence': sessionPersistenceId(persistence),
               },
             );
-            return TerminalAccountAuthenticationResult(
+            return TerminalAccountIdentityResolutionResult(
               success: true,
               message: result.message,
-              account: TerminalAuthenticatedAccount(
-                kind: kind,
-                displayName: personalAccount.name,
-                supportedModes: <AppModeDefinition>[
-                  AppModeRegistry.byId('personal')!,
-                ],
-                activated: false,
-                personalAccount: personalAccount,
-              ),
+              account: account,
               copyText: result.copyText,
             );
           } finally {
@@ -518,45 +528,40 @@ class TerminalAuthCoordinator {
             onLoginSucceeded: () {},
           );
           try {
-            controller.nameController.text = name;
+            controller.nameController.text = normalizedName;
             controller.codeNumberController.text = accountIdentifier;
-            controller.passwordController.text = password;
-            final result = await controller.authenticateCredentials(
-              stateSetter,
+            final result = await controller.resolveIdentity(
+              name: normalizedName,
+              codeNumber: accountIdentifier,
             );
             final tablet = result.tablet;
             if (!result.success || tablet == null) {
-              return TerminalAccountAuthenticationResult(
+              return TerminalAccountIdentityResolutionResult(
                 success: false,
                 message: result.message,
               );
             }
-            if (persistence == TerminalSessionPersistence.persistent) {
-              await persistAccountKind(kind);
-            }
+            final account = TerminalAuthenticatedAccount(
+              kind: kind,
+              displayName: tablet.name,
+              supportedModes: <AppModeDefinition>[
+                AppModeRegistry.byId('tablet')!,
+              ],
+              activated: false,
+              tablet: tablet,
+            );
             LauncherDiagnostics.record(
-              'auth_account_manual_success',
+              'auth_account_identity_success',
               meta: <String, Object?>{
                 'accountKind': accountKindId(kind),
                 'accountIdentifierMasked': maskedAccountIdentifier,
                 'supportedModes': 'tablet',
-                'firebaseSupportedModeQueries': 0,
-                'deferredActivation': true,
-                'sessionPersistence': sessionPersistenceId(persistence),
               },
             );
-            return TerminalAccountAuthenticationResult(
+            return TerminalAccountIdentityResolutionResult(
               success: true,
               message: result.message,
-              account: TerminalAuthenticatedAccount(
-                kind: kind,
-                displayName: tablet.name,
-                supportedModes: <AppModeDefinition>[
-                  AppModeRegistry.byId('tablet')!,
-                ],
-                activated: false,
-                tablet: tablet,
-              ),
+              account: account,
             );
           } finally {
             controller.dispose();
@@ -564,20 +569,226 @@ class TerminalAuthCoordinator {
       }
     } catch (error, stackTrace) {
       LauncherDiagnostics.record(
-        'auth_account_manual_error',
+        'auth_account_identity_error',
         meta: <String, Object?>{
           'accountKind': accountKindId(kind),
           'accountIdentifierMasked': maskedAccountIdentifier,
-          'sessionPersistence': sessionPersistenceId(persistence),
           'error': error,
           'stack': stackTrace,
         },
       );
-      return const TerminalAccountAuthenticationResult(
+      return const TerminalAccountIdentityResolutionResult(
         success: false,
-        message: '로그인 처리 중 오류가 발생했습니다.',
+        message: '계정 확인 중 오류가 발생했습니다.',
       );
     }
+  }
+
+  static Future<TerminalAccountAuthenticationResult>
+      verifyResolvedAccountPassword({
+    required TerminalAuthenticatedAccount account,
+    required String password,
+    TerminalSessionPersistence persistence =
+        TerminalSessionPersistence.persistent,
+  }) async {
+    final normalizedPassword = password.trim();
+    final storedPassword = switch (account.kind) {
+      TerminalAccountKind.user => account.user?.password.trim() ?? '',
+      TerminalAccountKind.personal =>
+        (account.personalAccount?.data['password'] ?? '').toString().trim(),
+      TerminalAccountKind.tablet => account.tablet?.password.trim() ?? '',
+    };
+    LauncherDiagnostics.record(
+      'auth_account_password_verify_start',
+      meta: <String, Object?>{
+        'accountKind': accountKindId(account.kind),
+        'displayNameLength': account.displayName.length,
+        'passwordLength': normalizedPassword.length,
+        'passwordProtected': true,
+        'firebaseReads': 0,
+      },
+    );
+
+    if (storedPassword.isEmpty || storedPassword != normalizedPassword) {
+      LauncherDiagnostics.record(
+        'auth_account_password_verify_failed',
+        meta: <String, Object?>{
+          'accountKind': accountKindId(account.kind),
+          'passwordLength': normalizedPassword.length,
+          'passwordProtected': true,
+          'firebaseReads': 0,
+        },
+      );
+      return const TerminalAccountAuthenticationResult(
+        success: false,
+        message: '비밀번호를 다시 확인하세요.',
+      );
+    }
+
+    if (persistence == TerminalSessionPersistence.persistent) {
+      await persistAccountKind(account.kind);
+    }
+    LauncherDiagnostics.record(
+      'auth_account_manual_success',
+      meta: <String, Object?>{
+        'accountKind': accountKindId(account.kind),
+        'supportedModes': account.supportedModes.map((mode) => mode.id).join(','),
+        'firebasePasswordReads': 0,
+        'sessionPersistence': sessionPersistenceId(persistence),
+      },
+    );
+    return TerminalAccountAuthenticationResult(
+      success: true,
+      message: '${account.displayName}님, 로그인에 성공했습니다.',
+      account: account,
+    );
+  }
+
+  static Future<TerminalAccountAuthenticationResult>
+      verifyResolvedAccountGoogleIdentity({
+    required TerminalAuthenticatedAccount account,
+    TerminalSessionPersistence persistence =
+        TerminalSessionPersistence.persistent,
+  }) async {
+    final expectedEmail = account.normalizedEmail;
+    LauncherDiagnostics.record(
+      'auth_google_start',
+      meta: <String, Object?>{
+        'accountKind': accountKindId(account.kind),
+        'accountEmailSet': expectedEmail.isNotEmpty,
+        'firebaseReads': 0,
+        'firebaseWrites': 0,
+      },
+    );
+
+    if (expectedEmail.isEmpty) {
+      LauncherDiagnostics.record(
+        'auth_google_account_email_missing',
+        meta: <String, Object?>{
+          'accountKind': accountKindId(account.kind),
+          'accountEmailSet': false,
+          'firebaseReads': 0,
+          'firebaseWrites': 0,
+        },
+      );
+      return const TerminalAccountAuthenticationResult(
+        success: false,
+        message: accountVerificationFailureMessage,
+      );
+    }
+
+    try {
+      final identity = await GoogleAuthSession.instance.verifyLoginIdentity(
+        expectedEmail: expectedEmail,
+        bridgeFirebase: true,
+      );
+      final matched = identity.normalizedEmail == expectedEmail;
+      if (!matched) {
+        return const TerminalAccountAuthenticationResult(
+          success: false,
+          message: accountVerificationFailureMessage,
+        );
+      }
+      if (persistence == TerminalSessionPersistence.persistent) {
+        await persistAccountKind(account.kind);
+      }
+      LauncherDiagnostics.record(
+        'auth_google_success',
+        meta: <String, Object?>{
+          'accountKind': accountKindId(account.kind),
+          'accountEmailSet': true,
+          'googleEmailSet': identity.email.trim().isNotEmpty,
+          'emailMatched': true,
+          'firebaseBridgeVerified': true,
+          'firebaseReads': 0,
+          'firebaseWrites': 0,
+          'sessionPersistence': sessionPersistenceId(persistence),
+        },
+      );
+      return TerminalAccountAuthenticationResult(
+        success: true,
+        message: '${account.displayName}님, 계정 인증에 성공했습니다.',
+        account: account,
+      );
+    } on GoogleAccountMismatchException {
+      LauncherDiagnostics.record(
+        'auth_google_email_mismatch',
+        meta: <String, Object?>{
+          'accountKind': accountKindId(account.kind),
+          'accountEmailSet': true,
+          'googleEmailSet': GoogleAuthSession.instance.currentIdentity?.email
+                  .trim()
+                  .isNotEmpty ==
+              true,
+          'emailMatched': false,
+          'firebaseReads': 0,
+          'firebaseWrites': 0,
+        },
+      );
+      return const TerminalAccountAuthenticationResult(
+        success: false,
+        message: accountVerificationFailureMessage,
+      );
+    } on GoogleSessionBlockedException {
+      LauncherDiagnostics.record(
+        'auth_google_blocked',
+        meta: <String, Object?>{
+          'accountKind': accountKindId(account.kind),
+          'firebaseReads': 0,
+          'firebaseWrites': 0,
+        },
+      );
+      return const TerminalAccountAuthenticationResult(
+        success: false,
+        message: accountVerificationFailureMessage,
+      );
+    } catch (error, stackTrace) {
+      LauncherDiagnostics.record(
+        'auth_google_failed',
+        meta: <String, Object?>{
+          'accountKind': accountKindId(account.kind),
+          'accountEmailSet': true,
+          'errorType': error.runtimeType.toString(),
+          'stack': stackTrace,
+          'firebaseReads': 0,
+          'firebaseWrites': 0,
+        },
+      );
+      return const TerminalAccountAuthenticationResult(
+        success: false,
+        message: accountVerificationFailureMessage,
+      );
+    }
+  }
+
+  static Future<TerminalAccountAuthenticationResult> authenticateAccount(
+    BuildContext context, {
+    required TerminalAccountKind kind,
+    required String name,
+    required String codeNumber,
+    required String password,
+    TerminalSessionPersistence persistence =
+        TerminalSessionPersistence.persistent,
+  }) async {
+    final identity = await resolveAccountIdentity(
+      context,
+      kind: kind,
+      name: name,
+      codeNumber: codeNumber,
+    );
+    final account = identity.account;
+    if (!identity.success || account == null) {
+      return TerminalAccountAuthenticationResult(
+        success: false,
+        message: identity.message,
+        copyText: identity.copyText,
+      );
+    }
+    return verifyResolvedAccountPassword(
+      account: account,
+      password: password,
+      persistence: persistence,
+    );
   }
 
   static Future<TerminalModeActivationResult> activateHeadquarterContext(

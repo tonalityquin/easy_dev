@@ -113,7 +113,7 @@ class TabletModel {
       'name': name,
       'password': password,
       'codeNumber': AccountCodeNumber.normalize(codeNumber),
-      if (email.trim().isNotEmpty) 'email': email.trim(),
+      'email': email.trim(),
       'position': position,
       'role': role,
       'selectedArea': selectedArea,

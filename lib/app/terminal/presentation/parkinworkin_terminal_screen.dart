@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../utils/motion_timing_diagnostics.dart';
+import '../../../features/launcher/application/launcher_actions.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
 import '../../../features/launcher/application/mode_launcher_controller.dart';
 import '../../../features/launcher/application/terminal_auth_coordinator.dart';
@@ -1233,6 +1234,8 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         'accountKind': _launcherController!.selectedAccountKindLabel,
       },
     );
+    var openDeveloperPassword = false;
+    var openGoogleVerification = false;
     await _showLauncherDialog(
       builder: (dialogContext) => _LauncherAccountDialog(
         accountKind: _launcherController!.selectedAccountKindLabel,
@@ -1242,29 +1245,201 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         onStatus: _showDeveloperStatus,
         onOpened: _handleLauncherDialogOpened,
         onClosing: _handleLauncherDialogClosing,
-        onAuthenticate: _authenticateLauncherAccount,
+        onResolveIdentity: (name, accountIdentifier, developerPasswordMode) async {
+          final result = await _resolveLauncherAccount(
+            name,
+            accountIdentifier,
+            developerPasswordMode: developerPasswordMode,
+          );
+          if (result.accepted) {
+            openDeveloperPassword = developerPasswordMode;
+            openGoogleVerification = !developerPasswordMode;
+          }
+          return result;
+        },
+      ),
+    );
+    if (!mounted) return;
+    if (openDeveloperPassword) {
+      await _showLauncherPasswordDialog();
+      return;
+    }
+    if (openGoogleVerification) {
+      await _showLauncherGoogleVerificationDialog();
+    }
+  }
+
+  Future<LauncherCredentialSubmitResult> _resolveLauncherAccount(
+    String name,
+    String accountIdentifier, {
+    required bool developerPasswordMode,
+  }) async {
+    ParkinWorkinTerminalDiagnostics.record(
+      developerPasswordMode
+          ? 'launcher_developer_identity_submit'
+          : 'launcher_google_identity_submit',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'nameLength': name.trim().length,
+        'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
+        'developerPasswordMode': developerPasswordMode,
+      },
+    );
+    final result = await _launcherController!.resolveCredentials(
+      context,
+      name: name,
+      codeNumber: accountIdentifier,
+      reduceMotion: _reduceMotion,
+    );
+    if (!mounted) return result;
+    _syncPlayback();
+    ParkinWorkinTerminalDiagnostics.record(
+      result.accepted
+          ? developerPasswordMode
+              ? 'launcher_developer_identity_complete'
+              : 'launcher_google_identity_complete'
+          : developerPasswordMode
+              ? 'launcher_developer_identity_rejected'
+              : 'launcher_google_identity_rejected',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'nameError': result.nameError != null,
+        'codeNumberError': result.codeNumberError != null,
+        'authenticationError': result.authenticationError != null,
+        'developerPasswordMode': developerPasswordMode,
+      },
+    );
+    return result;
+  }
+
+  Future<void> _showLauncherGoogleVerificationDialog() async {
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_google_verification_dialog_open',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'accountKind': _launcherController!.selectedAccountKindLabel,
+      },
+    );
+    await _showLauncherDialog(
+      builder: (dialogContext) => _LauncherGoogleVerificationDialog(
+        accountKind: _launcherController!.selectedAccountKindLabel,
+        reduceMotion: _reduceMotion,
+        onStatus: _showDeveloperStatus,
+        onOpened: _handleLauncherDialogOpened,
+        onClosing: _handleLauncherDialogClosing,
+        onAuthenticate: _authenticateLauncherGoogleIdentity,
+        onExit: _exitLauncherFromAccountVerification,
       ),
     );
   }
 
-  Future<LauncherCredentialSubmitResult> _authenticateLauncherAccount(
-    String name,
-    String accountIdentifier,
+  Future<LauncherCredentialSubmitResult> _authenticateLauncherGoogleIdentity() async {
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_google_verification_submit',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'accountKind': _launcherController!.selectedAccountKindLabel,
+        'emailProtected': true,
+      },
+    );
+    final result = await _launcherController!.authenticateResolvedGoogleIdentity(
+      context,
+      reduceMotion: _reduceMotion,
+    );
+    if (!mounted) return result;
+    _syncPlayback();
+    if (result.accepted) {
+      _deferredLauncherResult = result.flowResult;
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_google_verification_complete',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'stage': _launcherController!.loginStage.name,
+          'hasTargetRoute': result.flowResult.targetRoute != null,
+          'emailProtected': true,
+        },
+      );
+    } else {
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_google_verification_rejected',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'authenticationError': result.authenticationError != null,
+          'emailProtected': true,
+        },
+      );
+    }
+    return result;
+  }
+
+
+  Future<void> _exitLauncherFromAccountVerification() async {
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_account_verification_exit_requested',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'accountKind': _launcherController!.selectedAccountKindLabel,
+        'workNotificationRunning':
+            WorkStatusNotificationController.status.value.serviceRunning,
+        'workNotificationPersistent':
+            WorkStatusNotificationController.status.value.notificationPersistent,
+      },
+    );
+    LauncherDiagnostics.record(
+      'account_verification_exit_requested',
+      scope: 'launcher_terminal_manual_auth',
+      meta: <String, Object?>{
+        'accountKind': _launcherController!.selectedAccountKindLabel,
+        'workNotificationRunning':
+            WorkStatusNotificationController.status.value.serviceRunning,
+      },
+    );
+    await LauncherActions.exitApp(context);
+    if (!mounted) return;
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_account_verification_exit_returned',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'workNotificationRunning':
+            WorkStatusNotificationController.status.value.serviceRunning,
+        'appExitShutdown': WorkStatusNotificationController.appExitShutdown,
+      },
+    );
+  }
+
+  Future<void> _showLauncherPasswordDialog() async {
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_developer_password_dialog_open',
+      context: _contextLabel,
+      meta: <String, Object?>{
+        'accountKind': _launcherController!.selectedAccountKindLabel,
+      },
+    );
+    await _showLauncherDialog(
+      builder: (dialogContext) => _LauncherPasswordDialog(
+        accountKind: _launcherController!.selectedAccountKindLabel,
+        reduceMotion: _reduceMotion,
+        onStatus: _showDeveloperStatus,
+        onOpened: _handleLauncherDialogOpened,
+        onClosing: _handleLauncherDialogClosing,
+        onAuthenticate: _authenticateLauncherDeveloperPassword,
+      ),
+    );
+  }
+
+  Future<LauncherCredentialSubmitResult> _authenticateLauncherDeveloperPassword(
     String password,
   ) async {
     ParkinWorkinTerminalDiagnostics.record(
-      'launcher_account_dialog_submit',
+      'launcher_developer_password_submit',
       context: _contextLabel,
       meta: <String, Object?>{
-        'nameLength': name.trim().length,
-        'accountIdentifierLength': AccountCodeNumber.normalize(accountIdentifier).length,
         'passwordLength': password.length,
+        'passwordProtected': true,
       },
     );
-    final result = await _launcherController!.authenticateCredentials(
+    final result = await _launcherController!.authenticateResolvedPassword(
       context,
-      name: name,
-      codeNumber: accountIdentifier,
       password: password,
       reduceMotion: _reduceMotion,
     );
@@ -1273,25 +1448,21 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     if (result.accepted) {
       _deferredLauncherResult = result.flowResult;
       ParkinWorkinTerminalDiagnostics.record(
-        'launcher_account_dialog_complete',
+        'launcher_developer_password_complete',
         context: _contextLabel,
         meta: <String, Object?>{
           'stage': _launcherController!.loginStage.name,
-          'nameLength': name.trim().length,
-          'accountIdentifierLength': AccountCodeNumber.normalize(accountIdentifier).length,
           'hasTargetRoute': result.flowResult.targetRoute != null,
         },
       );
     } else {
       ParkinWorkinTerminalDiagnostics.record(
-        'launcher_account_dialog_rejected',
+        'launcher_developer_password_rejected',
         context: _contextLabel,
         meta: <String, Object?>{
-          'stage': _launcherController!.loginStage.name,
-          'nameError': result.nameError != null,
-          'codeNumberError': result.codeNumberError != null,
           'passwordError': result.passwordError != null,
           'authenticationError': result.authenticationError != null,
+          'passwordProtected': true,
         },
       );
     }
@@ -5006,7 +5177,7 @@ class _LauncherAccountDialog extends StatefulWidget {
     required this.onStatus,
     required this.onOpened,
     required this.onClosing,
-    required this.onAuthenticate,
+    required this.onResolveIdentity,
   });
 
   final String accountKind;
@@ -5019,8 +5190,8 @@ class _LauncherAccountDialog extends StatefulWidget {
   final Future<LauncherCredentialSubmitResult> Function(
     String name,
     String accountIdentifier,
-    String password,
-  ) onAuthenticate;
+    bool developerPasswordMode,
+  ) onResolveIdentity;
 
   @override
   State<_LauncherAccountDialog> createState() => _LauncherAccountDialogState();
@@ -5029,24 +5200,25 @@ class _LauncherAccountDialog extends StatefulWidget {
 class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _accountIdentifierController;
-  late final TextEditingController _passwordController;
   final FocusNode _nameFocus = FocusNode();
   final FocusNode _accountIdentifierFocus = FocusNode();
-  final FocusNode _passwordFocus = FocusNode();
   final GlobalKey<_MiniTerminalFrameState> _frameKey =
       GlobalKey<_MiniTerminalFrameState>();
   bool _busy = false;
+  bool _developerPasswordMode = false;
+  int _emptySubmitCount = 0;
   String? _nameError;
   String? _accountIdentifierError;
-  String? _passwordError;
   String? _submitError;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.initialName);
-    _accountIdentifierController = TextEditingController(text: widget.initialAccountIdentifier);
-    _passwordController = TextEditingController();
+    _accountIdentifierController =
+        TextEditingController(text: widget.initialAccountIdentifier);
+    _nameController.addListener(_handleInputChanged);
+    _accountIdentifierController.addListener(_handleInputChanged);
   }
 
   void _handleOpened() {
@@ -5055,12 +5227,23 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       if (!mounted || _busy) return;
       if (_nameController.text.isEmpty) {
         _nameFocus.requestFocus();
-      } else if (_accountIdentifierController.text.isEmpty) {
-        _accountIdentifierFocus.requestFocus();
       } else {
-        _passwordFocus.requestFocus();
+        _accountIdentifierFocus.requestFocus();
       }
     });
+  }
+
+  void _handleInputChanged() {
+    if (_emptySubmitCount == 0 || _developerPasswordMode || !mounted) return;
+    setState(() => _emptySubmitCount = 0);
+    LauncherDiagnostics.record(
+      'developer_password_hidden_tap_reset',
+      scope: 'launcher_terminal_manual_auth',
+      meta: <String, Object?>{
+        'accountKind': widget.accountKind,
+        'reason': 'identity_input_changed',
+      },
+    );
   }
 
   void _setControllerText(
@@ -5083,27 +5266,6 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
     };
   }
 
-  String _pasteStatusDescription({
-    required _LauncherPasteField field,
-    required bool applied,
-    required int rawLength,
-    String? maskedCodeNumber,
-  }) {
-    final lines = <String>[
-      'Account: ${widget.accountKind}',
-      'Field: ${_pasteFieldLabel(field)}',
-      'Clipboard: ${applied ? 'APPLIED' : 'EMPTY_OR_INVALID'}',
-      'Clipboard length: $rawLength',
-    ];
-    if (maskedCodeNumber != null) {
-      lines.add('Code number: $maskedCodeNumber');
-    }
-    if (field == _LauncherPasteField.password) {
-      lines.add('Password value: PROTECTED');
-    }
-    return lines.join('\n');
-  }
-
   Future<void> _showPasteDeveloperStatus({
     required _LauncherPasteField field,
     required bool applied,
@@ -5111,21 +5273,23 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
     String? maskedCodeNumber,
   }) async {
     if (!mounted) return;
+    final lines = <String>[
+      'Account: ${widget.accountKind}',
+      'Field: ${_pasteFieldLabel(field)}',
+      'Clipboard: ${applied ? 'APPLIED' : 'EMPTY_OR_INVALID'}',
+      'Clipboard length: $rawLength',
+      if (maskedCodeNumber != null) 'Code number: $maskedCodeNumber',
+    ];
     await LauncherDiagnostics.showStatus(
       context,
       title: 'Launcher Clipboard Status',
-      description: _pasteStatusDescription(
-        field: field,
-        applied: applied,
-        rawLength: rawLength,
-        maskedCodeNumber: maskedCodeNumber,
-      ),
+      description: lines.join('\n'),
       scope: 'launcher_terminal_account_clipboard',
     );
   }
 
   Future<void> _pasteFromClipboard(_LauncherPasteField field) async {
-    if (_busy) return;
+    if (_busy || field == _LauncherPasteField.password) return;
     final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
     if (!mounted || _busy) return;
     final raw = clipboardData?.text ?? '';
@@ -5151,58 +5315,46 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
 
     var value = '';
     String? maskedCodeNumber;
-    switch (field) {
-      case _LauncherPasteField.name:
-        value = trimmed;
-        _setControllerText(_nameController, value);
-        _nameFocus.requestFocus();
-        setState(() {
-          _nameError = null;
-          _submitError = null;
-        });
-        break;
-      case _LauncherPasteField.codeNumber:
-        final normalized = AccountCodeNumber.normalize(trimmed);
-        if (normalized.isEmpty) {
-          LauncherDiagnostics.record(
-            'clipboard_paste_rejected',
-            scope: 'launcher_terminal_account_clipboard',
-            meta: <String, Object?>{
-              'accountKind': widget.accountKind,
-              'field': field.name,
-              'clipboardLength': raw.length,
-              'reason': 'normalized_empty',
-            },
-          );
-          await HapticFeedback.mediumImpact();
-          await _showPasteDeveloperStatus(
-            field: field,
-            applied: false,
-            rawLength: raw.length,
-          );
-          return;
-        }
-        final clipped = normalized.length > AccountCodeNumber.length
-            ? normalized.substring(0, AccountCodeNumber.length)
-            : normalized;
-        value = AccountCodeNumber.format(clipped);
-        maskedCodeNumber = AccountCodeNumber.mask(clipped);
-        _setControllerText(_accountIdentifierController, value);
-        _accountIdentifierFocus.requestFocus();
-        setState(() {
-          _accountIdentifierError = null;
-          _submitError = null;
-        });
-        break;
-      case _LauncherPasteField.password:
-        value = trimmed;
-        _setControllerText(_passwordController, value);
-        _passwordFocus.requestFocus();
-        setState(() {
-          _passwordError = null;
-          _submitError = null;
-        });
-        break;
+    if (field == _LauncherPasteField.name) {
+      value = trimmed;
+      _setControllerText(_nameController, value);
+      _nameFocus.requestFocus();
+      setState(() {
+        _nameError = null;
+        _submitError = null;
+      });
+    } else {
+      final normalized = AccountCodeNumber.normalize(trimmed);
+      if (normalized.isEmpty) {
+        LauncherDiagnostics.record(
+          'clipboard_paste_rejected',
+          scope: 'launcher_terminal_account_clipboard',
+          meta: <String, Object?>{
+            'accountKind': widget.accountKind,
+            'field': field.name,
+            'clipboardLength': raw.length,
+            'reason': 'normalized_empty',
+          },
+        );
+        await HapticFeedback.mediumImpact();
+        await _showPasteDeveloperStatus(
+          field: field,
+          applied: false,
+          rawLength: raw.length,
+        );
+        return;
+      }
+      final clipped = normalized.length > AccountCodeNumber.length
+          ? normalized.substring(0, AccountCodeNumber.length)
+          : normalized;
+      value = AccountCodeNumber.format(clipped);
+      maskedCodeNumber = AccountCodeNumber.mask(clipped);
+      _setControllerText(_accountIdentifierController, value);
+      _accountIdentifierFocus.requestFocus();
+      setState(() {
+        _accountIdentifierError = null;
+        _submitError = null;
+      });
     }
 
     final meta = <String, Object?>{
@@ -5210,13 +5362,8 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       'field': field.name,
       'clipboardLength': raw.length,
       'appliedLength': value.length,
+      if (maskedCodeNumber != null) 'codeNumberMasked': maskedCodeNumber,
     };
-    if (maskedCodeNumber != null) {
-      meta['codeNumberMasked'] = maskedCodeNumber;
-    }
-    if (field == _LauncherPasteField.password) {
-      meta['passwordProtected'] = true;
-    }
     LauncherDiagnostics.record(
       'clipboard_paste_applied',
       scope: 'launcher_terminal_account_clipboard',
@@ -5236,33 +5383,109 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
     );
   }
 
-  Future<void> _authenticate() async {
+  Future<void> _registerEmptyDeveloperTap() async {
+    if (_busy || _developerPasswordMode) return;
+    final next = _emptySubmitCount + 1;
+    LauncherDiagnostics.record(
+      'developer_password_hidden_tap',
+      scope: 'launcher_terminal_manual_auth',
+      meta: <String, Object?>{
+        'accountKind': widget.accountKind,
+        'count': next,
+        'required': 5,
+        'firebaseReads': 0,
+        'firebaseWrites': 0,
+      },
+    );
+    if (next < 5) {
+      setState(() {
+        _emptySubmitCount = next;
+        _nameError = null;
+        _accountIdentifierError = null;
+        _submitError = null;
+      });
+      await HapticFeedback.selectionClick();
+      return;
+    }
+
+    setState(() {
+      _emptySubmitCount = 0;
+      _developerPasswordMode = true;
+      _nameError = null;
+      _accountIdentifierError = null;
+      _submitError = null;
+    });
+    await HapticFeedback.heavyImpact();
+    LauncherDiagnostics.record(
+      'developer_password_mode_enabled',
+      scope: 'launcher_terminal_manual_auth',
+      meta: <String, Object?>{
+        'accountKind': widget.accountKind,
+        'firebaseReads': 0,
+        'firebaseWrites': 0,
+      },
+    );
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_developer_password_mode_enabled',
+      context: 'launcher',
+      meta: <String, Object?>{'accountKind': widget.accountKind},
+    );
+    await LauncherDiagnostics.showStatus(
+      context,
+      title: '개발자 비밀번호 인증',
+      description: '개발자용 기존 비밀번호 인증 경로가 활성화되었습니다.',
+      scope: 'launcher_terminal_manual_auth',
+    );
+    if (!mounted) return;
+    _nameFocus.requestFocus();
+  }
+
+  Future<void> _submit() async {
     if (_busy) return;
     final name = _nameController.text.trim();
     final accountIdentifier =
         AccountCodeNumber.normalize(_accountIdentifierController.text);
-    final password = _passwordController.text;
+
+    if (!_developerPasswordMode && name.isEmpty && accountIdentifier.isEmpty) {
+      await _registerEmptyDeveloperTap();
+      return;
+    }
+
     setState(() {
       _nameError = name.isEmpty ? '입력해 주세요.' : null;
       _accountIdentifierError =
           accountIdentifier.isEmpty ? '입력해 주세요.' : null;
-      _passwordError = password.isEmpty ? '입력해 주세요.' : null;
       _submitError = null;
     });
-    if (_nameError != null || _accountIdentifierError != null || _passwordError != null) {
+    if (_nameError != null || _accountIdentifierError != null) {
       await HapticFeedback.mediumImpact();
       if (_nameError != null) {
         _nameFocus.requestFocus();
-      } else if (_accountIdentifierError != null) {
-        _accountIdentifierFocus.requestFocus();
       } else {
-        _passwordFocus.requestFocus();
+        _accountIdentifierFocus.requestFocus();
       }
       return;
     }
+
     setState(() => _busy = true);
     await HapticFeedback.selectionClick();
-    final result = await widget.onAuthenticate(name, accountIdentifier, password);
+    LauncherDiagnostics.record(
+      _developerPasswordMode
+          ? 'developer_manual_identity_submit'
+          : 'user_google_identity_submit',
+      scope: 'launcher_terminal_manual_auth',
+      meta: <String, Object?>{
+        'accountKind': widget.accountKind,
+        'nameLength': name.length,
+        'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
+        'developerPasswordMode': _developerPasswordMode,
+      },
+    );
+    final result = await widget.onResolveIdentity(
+      name,
+      accountIdentifier,
+      _developerPasswordMode,
+    );
     if (!mounted) return;
     if (result.accepted) {
       await HapticFeedback.lightImpact();
@@ -5279,15 +5502,12 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       _busy = false;
       _nameError = result.nameError;
       _accountIdentifierError = result.codeNumberError;
-      _passwordError = result.passwordError;
       _submitError = result.authenticationError;
     });
     if (_nameError != null) {
       _nameFocus.requestFocus();
     } else if (_accountIdentifierError != null) {
       _accountIdentifierFocus.requestFocus();
-    } else if (_passwordError != null) {
-      _passwordFocus.requestFocus();
     }
   }
 
@@ -5297,7 +5517,7 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       canPop: false,
       child: _MiniTerminalFrame(
         key: _frameKey,
-        title: 'ACCOUNT AUTHENTICATION',
+        title: 'ACCOUNT VERIFICATION',
         reduceMotion: widget.reduceMotion,
         onStatus: widget.onStatus,
         onOpenCompleted: _handleOpened,
@@ -5334,6 +5554,65 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
               ),
               const SizedBox(height: 14),
             ],
+            AnimatedSwitcher(
+              duration: widget.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: .96, end: 1).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: _developerPasswordMode
+                  ? AnimatedContainer(
+                      key: const ValueKey<String>('developer_password_enabled'),
+                      duration: widget.reduceMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _terminalAccent.withOpacity(.08),
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(
+                          color: _terminalAccent.withOpacity(.7),
+                        ),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.developer_mode_rounded,
+                            size: 16,
+                            color: _terminalAccent,
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'DEVELOPER PASSWORD AUTH ENABLED',
+                              style: TextStyle(
+                                color: _terminalAccent,
+                                fontFamily: 'monospace',
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: .25,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey<String>('developer_password_disabled'),
+                    ),
+            ),
             _TerminalDialogField(
               label: ModeLauncherController.nameDisplayLabel,
               controller: _nameController,
@@ -5353,16 +5632,509 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
               enabled: !_busy,
               errorText: _accountIdentifierError,
               keyboardType: TextInputType.text,
-              textInputAction: TextInputAction.next,
+              textInputAction: TextInputAction.done,
               inputFormatters: const <TextInputFormatter>[
                 AccountCodeNumberInputFormatter(),
               ],
               reduceMotion: widget.reduceMotion,
               onPaste: () =>
                   _pasteFromClipboard(_LauncherPasteField.codeNumber),
-              onSubmitted: (_) => _passwordFocus.requestFocus(),
+              onSubmitted: (_) => _submit(),
+            ),
+            AnimatedSwitcher(
+              duration: widget.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 160),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: _submitError == null
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      key: ValueKey<String>(_submitError!),
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        _submitError!,
+                        style: const TextStyle(
+                          color: _terminalError,
+                          fontFamily: 'monospace',
+                          fontSize: 10.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: _TerminalDialogActionButton(
+                label: _developerPasswordMode ? '계정 확인' : '로그인',
+                busy: _busy,
+                enabled: !_busy,
+                reduceMotion: widget.reduceMotion,
+                onPressed: _submit,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.removeListener(_handleInputChanged);
+    _accountIdentifierController.removeListener(_handleInputChanged);
+    _nameController.dispose();
+    _accountIdentifierController.dispose();
+    _nameFocus.dispose();
+    _accountIdentifierFocus.dispose();
+    super.dispose();
+  }
+}
+
+class _LauncherGoogleVerificationDialog extends StatefulWidget {
+  const _LauncherGoogleVerificationDialog({
+    required this.accountKind,
+    required this.reduceMotion,
+    required this.onStatus,
+    required this.onOpened,
+    required this.onClosing,
+    required this.onAuthenticate,
+    required this.onExit,
+  });
+
+  final String accountKind;
+  final bool reduceMotion;
+  final VoidCallback onStatus;
+  final VoidCallback onOpened;
+  final VoidCallback onClosing;
+  final Future<LauncherCredentialSubmitResult> Function() onAuthenticate;
+  final Future<void> Function() onExit;
+
+  @override
+  State<_LauncherGoogleVerificationDialog> createState() =>
+      _LauncherGoogleVerificationDialogState();
+}
+
+class _LauncherGoogleVerificationDialogState
+    extends State<_LauncherGoogleVerificationDialog> {
+  final GlobalKey<_MiniTerminalFrameState> _frameKey =
+      GlobalKey<_MiniTerminalFrameState>();
+  bool _busy = false;
+  bool _exiting = false;
+  String? _submitError;
+
+  void _handleOpened() {
+    widget.onOpened();
+    LauncherDiagnostics.record(
+      'google_verification_dialog_ready',
+      scope: 'launcher_terminal_manual_auth',
+      meta: <String, Object?>{
+        'accountKind': widget.accountKind,
+        'emailProtected': true,
+      },
+    );
+  }
+
+  Future<void> _authenticate() async {
+    if (_busy || _exiting) return;
+    setState(() {
+      _busy = true;
+      _submitError = null;
+    });
+    await HapticFeedback.selectionClick();
+    final result = await widget.onAuthenticate();
+    if (!mounted) return;
+    if (result.accepted) {
+      await HapticFeedback.lightImpact();
+      widget.onClosing();
+      await WidgetsBinding.instance.endOfFrame;
+      await _frameKey.currentState?.close();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      return;
+    }
+    await HapticFeedback.mediumImpact();
+    setState(() {
+      _busy = false;
+      _submitError = result.authenticationError;
+    });
+  }
+
+  Future<void> _exitApp() async {
+    if (_busy || _exiting) return;
+    setState(() {
+      _exiting = true;
+      _submitError = null;
+    });
+    WorkStatusNotificationController.beginAppExitSuppression(
+      source: 'launcher_account_verification_exit',
+    );
+    LauncherDiagnostics.record(
+      'account_verification_exit_pressed',
+      scope: 'launcher_terminal_manual_auth',
+      meta: <String, Object?>{
+        'accountKind': widget.accountKind,
+        'workNotificationRunning':
+            WorkStatusNotificationController.status.value.serviceRunning,
+        'workNotificationPersistent':
+            WorkStatusNotificationController.status.value.notificationPersistent,
+      },
+    );
+    await HapticFeedback.mediumImpact();
+    widget.onClosing();
+    await WidgetsBinding.instance.endOfFrame;
+    await _frameKey.currentState?.close();
+    if (!mounted) return;
+    final onExit = widget.onExit;
+    Navigator.of(context).pop();
+    await onExit();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: _MiniTerminalFrame(
+        key: _frameKey,
+        title: 'ACCOUNT VERIFICATION',
+        reduceMotion: widget.reduceMotion,
+        onStatus: widget.onStatus,
+        onOpenCompleted: _handleOpened,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AnimatedContainer(
+              duration: widget.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+              decoration: BoxDecoration(
+                color: _terminalAccent.withOpacity(_busy || _exiting ? .12 : .08),
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(
+                  color: _terminalAccent.withOpacity(_busy || _exiting ? .9 : .7),
+                ),
+              ),
+              child: Row(
+                children: [
+                  AnimatedSwitcher(
+                    duration: widget.reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 160),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(begin: .9, end: 1).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: Icon(
+                      _exiting
+                          ? Icons.power_settings_new_rounded
+                          : _busy
+                              ? Icons.sync_rounded
+                              : Icons.verified_user_rounded,
+                      key: ValueKey<String>(
+                        _exiting ? 'exiting' : _busy ? 'busy' : 'ready',
+                      ),
+                      size: 18,
+                      color: _terminalAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: widget.reduceMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 160),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: Text(
+                        _exiting
+                            ? 'ENDING SESSION'
+                            : _busy
+                                ? 'VERIFYING ACCOUNT'
+                                : widget.accountKind.isEmpty
+                                    ? 'ACCOUNT IDENTITY'
+                                    : '${widget.accountKind} · ACCOUNT IDENTITY',
+                        key: ValueKey<String>(
+                          _exiting ? 'exiting' : _busy ? 'busy' : 'ready',
+                        ),
+                        style: const TextStyle(
+                          color: _terminalAccent,
+                          fontFamily: 'monospace',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
+            const Text(
+              '로그인한 계정에 대한 인증 정보를 확인합니다.',
+              style: TextStyle(
+                color: _terminalMuted,
+                fontFamily: 'monospace',
+                fontSize: 10.5,
+                height: 1.4,
+              ),
+            ),
+            AnimatedSwitcher(
+              duration: widget.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 160),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: _submitError == null
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      key: ValueKey<String>(_submitError!),
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        _submitError!,
+                        style: const TextStyle(
+                          color: _terminalError,
+                          fontFamily: 'monospace',
+                          fontSize: 10.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _TerminalDialogActionButton(
+                  label: '종료',
+                  busy: _exiting,
+                  enabled: !_busy && !_exiting,
+                  reduceMotion: widget.reduceMotion,
+                  onPressed: _exitApp,
+                ),
+                const SizedBox(width: 8),
+                _TerminalDialogActionButton(
+                  label: '인증',
+                  busy: _busy,
+                  enabled: !_busy && !_exiting,
+                  reduceMotion: widget.reduceMotion,
+                  onPressed: _authenticate,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LauncherPasswordDialog extends StatefulWidget {
+  const _LauncherPasswordDialog({
+    required this.accountKind,
+    required this.reduceMotion,
+    required this.onStatus,
+    required this.onOpened,
+    required this.onClosing,
+    required this.onAuthenticate,
+  });
+
+  final String accountKind;
+  final bool reduceMotion;
+  final VoidCallback onStatus;
+  final VoidCallback onOpened;
+  final VoidCallback onClosing;
+  final Future<LauncherCredentialSubmitResult> Function(String password)
+      onAuthenticate;
+
+  @override
+  State<_LauncherPasswordDialog> createState() => _LauncherPasswordDialogState();
+}
+
+class _LauncherPasswordDialogState extends State<_LauncherPasswordDialog> {
+  final TextEditingController _passwordController = TextEditingController();
+  final FocusNode _passwordFocus = FocusNode();
+  final GlobalKey<_MiniTerminalFrameState> _frameKey =
+      GlobalKey<_MiniTerminalFrameState>();
+  bool _busy = false;
+  String? _passwordError;
+  String? _submitError;
+
+  void _handleOpened() {
+    widget.onOpened();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _busy) return;
+      _passwordFocus.requestFocus();
+    });
+  }
+
+  void _setControllerText(String value) {
+    _passwordController.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+  }
+
+  Future<void> _showPasteDeveloperStatus({
+    required bool applied,
+    required int rawLength,
+  }) async {
+    if (!mounted) return;
+    await LauncherDiagnostics.showStatus(
+      context,
+      title: 'Launcher Clipboard Status',
+      description: <String>[
+        'Account: ${widget.accountKind}',
+        'Field: ${ModeLauncherController.passwordDisplayLabel}',
+        'Clipboard: ${applied ? 'APPLIED' : 'EMPTY_OR_INVALID'}',
+        'Clipboard length: $rawLength',
+        'Password value: PROTECTED',
+      ].join('\n'),
+      scope: 'launcher_terminal_account_clipboard',
+    );
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    if (_busy) return;
+    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!mounted || _busy) return;
+    final raw = clipboardData?.text ?? '';
+    final value = raw.trim();
+    if (value.isEmpty) {
+      LauncherDiagnostics.record(
+        'clipboard_paste_unavailable',
+        scope: 'launcher_terminal_account_clipboard',
+        meta: <String, Object?>{
+          'accountKind': widget.accountKind,
+          'field': _LauncherPasteField.password.name,
+          'clipboardLength': raw.length,
+          'passwordProtected': true,
+        },
+      );
+      await HapticFeedback.mediumImpact();
+      await _showPasteDeveloperStatus(
+        applied: false,
+        rawLength: raw.length,
+      );
+      return;
+    }
+    _setControllerText(value);
+    _passwordFocus.requestFocus();
+    setState(() {
+      _passwordError = null;
+      _submitError = null;
+    });
+    LauncherDiagnostics.record(
+      'clipboard_paste_applied',
+      scope: 'launcher_terminal_account_clipboard',
+      meta: <String, Object?>{
+        'accountKind': widget.accountKind,
+        'field': _LauncherPasteField.password.name,
+        'clipboardLength': raw.length,
+        'appliedLength': value.length,
+        'passwordProtected': true,
+      },
+    );
+    await HapticFeedback.selectionClick();
+    await _showPasteDeveloperStatus(
+      applied: true,
+      rawLength: raw.length,
+    );
+  }
+
+  Future<void> _authenticate() async {
+    if (_busy) return;
+    final password = _passwordController.text;
+    setState(() {
+      _passwordError = password.isEmpty ? '입력해 주세요.' : null;
+      _submitError = null;
+    });
+    if (_passwordError != null) {
+      await HapticFeedback.mediumImpact();
+      _passwordFocus.requestFocus();
+      return;
+    }
+    setState(() => _busy = true);
+    await HapticFeedback.selectionClick();
+    final result = await widget.onAuthenticate(password);
+    if (!mounted) return;
+    if (result.accepted) {
+      await HapticFeedback.lightImpact();
+      FocusManager.instance.primaryFocus?.unfocus();
+      widget.onClosing();
+      await WidgetsBinding.instance.endOfFrame;
+      await _frameKey.currentState?.close();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      return;
+    }
+    await HapticFeedback.mediumImpact();
+    setState(() {
+      _busy = false;
+      _passwordError = result.passwordError;
+      _submitError = result.authenticationError;
+    });
+    _passwordFocus.requestFocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: _MiniTerminalFrame(
+        key: _frameKey,
+        title: 'PASSWORD AUTHENTICATION',
+        reduceMotion: widget.reduceMotion,
+        onStatus: widget.onStatus,
+        onOpenCompleted: _handleOpened,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AnimatedContainer(
+              duration: widget.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              decoration: BoxDecoration(
+                color: _terminalAccent.withOpacity(.08),
+                borderRadius: BorderRadius.circular(5),
+                border: Border.all(color: _terminalAccent.withOpacity(.7)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.developer_mode_rounded,
+                    size: 16,
+                    color: _terminalAccent,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.accountKind.isEmpty
+                          ? 'DEVELOPER PASSWORD AUTH'
+                          : '${widget.accountKind} · DEVELOPER PASSWORD AUTH',
+                      style: const TextStyle(
+                        color: _terminalAccent,
+                        fontFamily: 'monospace',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
             _TerminalDialogField(
               label: ModeLauncherController.passwordDisplayLabel,
               controller: _passwordController,
@@ -5372,13 +6144,15 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
               obscureText: true,
               textInputAction: TextInputAction.done,
               reduceMotion: widget.reduceMotion,
-              onPaste: () => _pasteFromClipboard(_LauncherPasteField.password),
+              onPaste: _pasteFromClipboard,
               onSubmitted: (_) => _authenticate(),
             ),
             AnimatedSwitcher(
               duration: widget.reduceMotion
                   ? Duration.zero
                   : const Duration(milliseconds: 160),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
               child: _submitError == null
                   ? const SizedBox.shrink()
                   : Padding(
@@ -5414,11 +6188,7 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _accountIdentifierController.dispose();
     _passwordController.dispose();
-    _nameFocus.dispose();
-    _accountIdentifierFocus.dispose();
     _passwordFocus.dispose();
     super.dispose();
   }

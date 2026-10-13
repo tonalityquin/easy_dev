@@ -37,6 +37,7 @@ class _TabletSettingSectionEditorDialogState
     extends State<TabletSettingSectionEditorDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _codeNumberController;
+  late final TextEditingController _emailController;
   late final TextEditingController _passwordController;
   late TabletRoleType _role;
   bool _submitted = false;
@@ -48,6 +49,7 @@ class _TabletSettingSectionEditorDialogState
     final draft = widget.initialDraft;
     _nameController = TextEditingController(text: draft.name);
     _codeNumberController = TextEditingController(text: AccountCodeNumber.format(draft.codeNumber));
+    _emailController = TextEditingController(text: draft.emailLocal);
     _passwordController = TextEditingController(text: draft.password);
     _role = draft.role;
     widget.trace.log('편집 화면이 열렸습니다: section=${widget.section.name}');
@@ -63,6 +65,7 @@ class _TabletSettingSectionEditorDialogState
   void dispose() {
     _nameController.dispose();
     _codeNumberController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -91,7 +94,16 @@ class _TabletSettingSectionEditorDialogState
 
   bool get _nameOk => _nameController.text.trim().isNotEmpty;
   bool get _codeNumberOk => AccountCodeNumber.isGeneratedCode(_codeNumberController.text);
-  bool get _identityOk => _nameOk && _codeNumberOk;
+
+  bool _isValidEmailLocalPart(String value) {
+    return RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(value.trim());
+  }
+
+  bool get _emailOk =>
+      _emailController.text.trim().isNotEmpty &&
+      _isValidEmailLocalPart(_emailController.text);
+
+  bool get _identityOk => _nameOk && _codeNumberOk && _emailOk;
   bool get _passwordOk =>
       RegExp(r'^\d{5}$').hasMatch(_passwordController.text.trim());
 
@@ -113,6 +125,7 @@ class _TabletSettingSectionEditorDialogState
         return base.copyWith(
           name: _nameController.text.trim(),
           codeNumber: AccountCodeNumber.normalize(_codeNumberController.text),
+          emailLocal: _emailController.text.trim(),
         );
       case TabletSettingsSection.permission:
         return base.copyWith(role: _role);
@@ -124,13 +137,15 @@ class _TabletSettingSectionEditorDialogState
   Future<void> _apply() async {
     setState(() => _submitted = true);
     if (!_validate()) {
-      widget.trace.log('입력 검증 실패: section=${widget.section.name}');
+      widget.trace.log(
+        '입력 검증 실패: section=${widget.section.name} emailSet=${_emailController.text.trim().isNotEmpty} emailValid=$_emailOk domain=gmail.com',
+      );
       await HapticFeedback.mediumImpact();
       return;
     }
     final result = _resultDraft();
     widget.trace.log(
-      '편집 적용: section=${widget.section.name} nameLength=${result.name.length} codeNumber=${AccountCodeNumber.mask(result.codeNumber)} role=${result.role.name} passwordLength=${result.password.length}',
+      '편집 적용: section=${widget.section.name} nameLength=${result.name.length} codeNumber=${AccountCodeNumber.mask(result.codeNumber)} emailSet=${result.emailLocal.isNotEmpty} emailDomain=gmail.com role=${result.role.name} passwordLength=${result.password.length}',
     );
     widget.onApply(result);
     if (!mounted) return;
@@ -220,7 +235,7 @@ class _TabletSettingSectionEditorDialogState
         const SizedBox(height: 12),
         AnimatedSwitcher(
           duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
-          switchInCurve: Curves.easeOutBack,
+          switchInCurve: Curves.easeOutCubic,
           switchOutCurve: Curves.easeInCubic,
           transitionBuilder: (child, animation) {
             return FadeTransition(
@@ -255,6 +270,50 @@ class _TabletSettingSectionEditorDialogState
               ),
               errorText: _submitted && !_codeNumberOk
                   ? '코드번호를 다시 생성하세요.'
+                  : null,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        AnimatedSize(
+          duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.enter,
+          alignment: Alignment.topCenter,
+          child: TextField(
+            controller: _emailController,
+            textInputAction: TextInputAction.done,
+            keyboardType: TextInputType.emailAddress,
+            onChanged: (_) => setState(() {}),
+            autofillHints: const <String>[AutofillHints.username],
+            inputFormatters: <TextInputFormatter>[
+              FilteringTextInputFormatter.deny(RegExp(r'\s')),
+            ],
+            decoration: opsInputDecoration(
+              context,
+              label: '이메일',
+              suffixText: '@gmail.com',
+              prefixIcon: AnimatedSwitcher(
+                duration: _reduceMotion
+                    ? Duration.zero
+                    : CommonUiMotion.selection,
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: .88, end: 1).animate(animation),
+                      child: child,
+                    ),
+                  );
+                },
+                child: Icon(
+                  _emailOk ? Icons.mark_email_read_rounded : Icons.mail_rounded,
+                  key: ValueKey<bool>(_emailOk),
+                ),
+              ),
+              errorText: _submitted && !_emailOk
+                  ? '이메일을 다시 확인하세요.'
                   : null,
             ),
           ),

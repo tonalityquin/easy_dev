@@ -234,6 +234,7 @@ class _TabletManagementState extends State<TabletManagement> {
       tablet.name,
       tablet.codeNumber,
       AccountCodeNumber.format(tablet.codeNumber),
+      tablet.email,
       tablet.role,
       tablet.position ?? '',
       tablet.areas.join(' '),

@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/selector/application/dev_auth.dart';
 import '../../shared/notification/work_status_notification_protocol.dart';
 import '../utils/status_dialog.dart';
+import 'app_exit_flag.dart';
 import 'app_navigator.dart';
 import '../live_work_diagnostics.dart';
 import '../live_work_overdue_notification_service.dart';
@@ -204,6 +205,10 @@ class WorkStatusNotificationController {
   static int _forcedNotificationRecoveryCount = 0;
   static DateTime? _lastForcedNotificationRecoveryAt;
   static bool? _lastNotificationFound;
+  static bool _appExitShutdown = false;
+  static DateTime? _lastAppExitShutdownAt;
+  static String _lastAppExitShutdownSource = '-';
+  static bool? _lastAppExitShutdownVerified;
 
   static List<String> get debugLines =>
       List<String>.unmodifiable(_debugLines);
@@ -226,6 +231,113 @@ class WorkStatusNotificationController {
     return _debugLines
         .map((line) => 'debugPrint(${jsonEncode(line)});')
         .join('\n');
+  }
+
+  static bool get appExitShutdown => _appExitShutdown;
+
+  static bool get _isAppExitSuppressed =>
+      _appExitShutdown || AppExitFlag.isExiting;
+
+  static void beginAppExitSuppression({
+    String source = 'app_exit',
+  }) {
+    _appExitShutdown = true;
+    _refreshQueued = false;
+    _queuedSource = 'app_exit_suppressed';
+    _lastAppExitShutdownAt = DateTime.now();
+    _lastAppExitShutdownSource = source;
+    _lastAppExitShutdownVerified = null;
+    _lastLifecycleAction = 'app_exit_recovery_suppressed';
+    _log(
+      'work_notification_app_exit_recovery_suppressed source=$source refreshInFlight=$_refreshInFlight dismissRestoreInFlight=$_dismissRestoreInFlight',
+    );
+  }
+
+  static Future<bool> shutdownForAppExit({
+    String source = 'app_exit',
+  }) async {
+    initializeForegroundTask();
+    beginAppExitSuppression(source: source);
+    _lastLifecycleAction = 'app_exit_shutdown_start';
+    final runningBefore = await _safeIsRunningService();
+    _log(
+      'work_notification_app_exit_shutdown_start source=$source runningBefore=$runningBefore working=${status.value.isWorking}',
+    );
+    var runningAfter = runningBefore;
+    try {
+      if (runningBefore) {
+        final stopped = await FlutterForegroundTask.stopService();
+        _log(
+          'work_notification_app_exit_stop_requested source=$source pluginResult=$stopped',
+        );
+      }
+      for (var attempt = 1; attempt <= 6; attempt++) {
+        runningAfter = await _safeIsRunningService();
+        _log(
+          'work_notification_app_exit_stop_verify source=$source attempt=$attempt running=$runningAfter',
+        );
+        if (!runningAfter) break;
+        if (attempt < 6) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
+      }
+      status.value = status.value.copyWith(
+        serviceRunning: runningAfter,
+        notificationPersistent:
+            runningAfter ? status.value.notificationPersistent : false,
+        source: '${source}_app_exit_shutdown',
+        updatedAt: DateTime.now(),
+      );
+      _lastAppExitShutdownVerified = !runningAfter;
+      _lastLifecycleAction = runningAfter
+          ? 'app_exit_shutdown_stop_failed'
+          : 'app_exit_shutdown_complete';
+      _log(
+        'work_notification_app_exit_shutdown_complete source=$source stopped=${!runningAfter} workingPreserved=${status.value.isWorking}',
+      );
+      return !runningAfter;
+    } catch (error, stackTrace) {
+      runningAfter = await _safeIsRunningService();
+      status.value = status.value.copyWith(
+        serviceRunning: runningAfter,
+        notificationPersistent:
+            runningAfter ? status.value.notificationPersistent : false,
+        source: '${source}_app_exit_shutdown_error',
+        updatedAt: DateTime.now(),
+      );
+      _lastAppExitShutdownVerified = !runningAfter;
+      _lastLifecycleAction = runningAfter
+          ? 'app_exit_shutdown_error_running'
+          : 'app_exit_shutdown_error_stopped';
+      _log(
+        'work_notification_app_exit_shutdown_error source=$source error=$error runningAfter=$runningAfter',
+      );
+      _log(
+        'work_notification_app_exit_shutdown_stack source=$source stack=$stackTrace',
+      );
+      return !runningAfter;
+    }
+  }
+
+  static Future<void> resumeAfterFailedAppExit({
+    String source = 'app_exit_failed',
+  }) async {
+    _appExitShutdown = false;
+    _lastLifecycleAction = 'app_exit_suppression_released';
+    _log(
+      'work_notification_app_exit_suppression_released source=$source appExitFlag=${AppExitFlag.isExiting}',
+    );
+    if (AppExitFlag.isExiting) return;
+    try {
+      await refresh(source: '${source}_resume');
+    } catch (error, stackTrace) {
+      _log(
+        'work_notification_app_exit_resume_error source=$source error=$error',
+      );
+      _log(
+        'work_notification_app_exit_resume_stack source=$source stack=$stackTrace',
+      );
+    }
   }
 
   static void initializeForegroundTask() {
@@ -390,7 +502,35 @@ class WorkStatusNotificationController {
     String source = 'ensure_service',
   }) async {
     initializeForegroundTask();
+    if (_isAppExitSuppressed) {
+      final running = await _safeIsRunningService();
+      _lastEnsureStartedNow = false;
+      _lastEnsureSource = source;
+      _lastLifecycleAction = 'service_ensure_app_exit_suppressed';
+      _log(
+        'service_ensure_suppressed_app_exit source=$source running=$running appExitShutdown=$_appExitShutdown appExitFlag=${AppExitFlag.isExiting}',
+      );
+      return ForegroundServiceEnsureResult(
+        running: running,
+        startedNow: false,
+        source: source,
+      );
+    }
     final presentation = await _loadPresentation();
+    if (_isAppExitSuppressed) {
+      final running = await _safeIsRunningService();
+      _lastEnsureStartedNow = false;
+      _lastEnsureSource = source;
+      _lastLifecycleAction = 'service_ensure_loaded_app_exit_suppressed';
+      _log(
+        'service_ensure_loaded_suppressed_app_exit source=$source running=$running',
+      );
+      return ForegroundServiceEnsureResult(
+        running: running,
+        startedNow: false,
+        source: source,
+      );
+    }
     final running = await _safeIsRunningService();
     _publish(
       presentation,
@@ -458,6 +598,16 @@ class WorkStatusNotificationController {
       _log(
         'service_start_requested source=$source working=${presentation.isWorking} serviceTypes=$foregroundServiceTypeLabel title=${jsonEncode(presentation.title)} text=${jsonEncode(presentation.text)}',
       );
+      if (_isAppExitSuppressed) {
+        final stopped = await shutdownForAppExit(
+          source: '${source}_post_start_exit_race',
+        );
+        return ForegroundServiceEnsureResult(
+          running: !stopped,
+          startedNow: false,
+          source: source,
+        );
+      }
 
       for (var attempt = 1; attempt <= 4; attempt++) {
         final started = await _safeIsRunningService();
@@ -531,6 +681,14 @@ class WorkStatusNotificationController {
     String source = 'refresh',
   }) async {
     initializeForegroundTask();
+    if (_isAppExitSuppressed) {
+      _refreshQueued = false;
+      _lastLifecycleAction = 'refresh_app_exit_suppressed';
+      _log(
+        'refresh_suppressed_app_exit source=$source appExitShutdown=$_appExitShutdown appExitFlag=${AppExitFlag.isExiting}',
+      );
+      return true;
+    }
     if (_refreshInFlight) {
       _refreshQueued = true;
       _queuedSource = source;
@@ -544,7 +702,21 @@ class WorkStatusNotificationController {
       var activeSource = source;
       do {
         _refreshQueued = false;
+        if (_isAppExitSuppressed) {
+          _lastLifecycleAction = 'refresh_loop_app_exit_suppressed';
+          _log(
+            'refresh_loop_suppressed_app_exit source=$activeSource',
+          );
+          break;
+        }
         final presentation = await _loadPresentation();
+        if (_isAppExitSuppressed) {
+          _lastLifecycleAction = 'refresh_loaded_app_exit_suppressed';
+          _log(
+            'refresh_loaded_suppressed_app_exit source=$activeSource',
+          );
+          break;
+        }
         final running = await _safeIsRunningService();
         _publish(
           presentation,
@@ -635,7 +807,17 @@ class WorkStatusNotificationController {
     String source = 'app_lifecycle_resumed',
   }) async {
     initializeForegroundTask();
+    if (_isAppExitSuppressed) {
+      _lastLifecycleAction = 'resume_reconcile_app_exit_suppressed';
+      _log('resume_reconcile_suppressed_app_exit source=$source');
+      return;
+    }
     final presentation = await _loadPresentation();
+    if (_isAppExitSuppressed) {
+      _lastLifecycleAction = 'resume_reconcile_loaded_app_exit_suppressed';
+      _log('resume_reconcile_loaded_suppressed_app_exit source=$source');
+      return;
+    }
     if (!presentation.isWorking) {
       _log('resume_reconcile_skipped source=$source reason=not_working');
       await _showBreakActionDeveloperStatusIfPossible();
@@ -690,6 +872,11 @@ class WorkStatusNotificationController {
       'working=${current.isWorking}',
       'serviceRunning=$serviceRunning',
       'notificationPersistent=${current.notificationPersistent}',
+      'appExitShutdown=$_appExitShutdown',
+      'appExitFlag=${AppExitFlag.isExiting}',
+      'lastAppExitShutdownAt=${_lastAppExitShutdownAt?.toIso8601String() ?? '-'}',
+      'lastAppExitShutdownSource=$_lastAppExitShutdownSource',
+      'lastAppExitShutdownVerified=${_lastAppExitShutdownVerified ?? '-'}',
       'foregroundTaskInitialized=$_foregroundTaskInitialized',
       'channel=$notificationChannelId',
       'serviceTypes=$foregroundServiceTypeLabel',
@@ -862,7 +1049,17 @@ class WorkStatusNotificationController {
   static Future<bool> _recoverService({
     required String source,
   }) async {
+    if (_isAppExitSuppressed) {
+      _lastLifecycleAction = 'service_recovery_app_exit_suppressed';
+      _log('service_recovery_suppressed_app_exit source=$source');
+      return true;
+    }
     final presentation = await _loadPresentation();
+    if (_isAppExitSuppressed) {
+      _lastLifecycleAction = 'service_recovery_loaded_app_exit_suppressed';
+      _log('service_recovery_loaded_suppressed_app_exit source=$source');
+      return true;
+    }
     if (!presentation.isWorking) {
       _lastLifecycleAction = 'recovery_skipped_not_working';
       _log('service_recovery_skipped_not_working source=$source');
@@ -973,8 +1170,20 @@ class WorkStatusNotificationController {
     required String source,
     required _WorkStatusPresentation presentation,
   }) async {
+    if (_isAppExitSuppressed) {
+      _lastPersistenceAction = 'pin_app_exit_suppressed';
+      _log('notification_pin_suppressed_app_exit source=$source');
+      return false;
+    }
     _notificationPinAttempts++;
     for (var attempt = 1; attempt <= 4; attempt++) {
+      if (_isAppExitSuppressed) {
+        _lastPersistenceAction = 'pin_loop_app_exit_suppressed';
+        _log(
+          'notification_pin_loop_suppressed_app_exit source=$source attempt=$attempt',
+        );
+        return false;
+      }
       try {
         final result =
             await _notificationControlChannel.invokeMapMethod<String, dynamic>(
@@ -985,6 +1194,13 @@ class WorkStatusNotificationController {
           },
         );
         final pinned = result?['pinned'] == true;
+        if (_isAppExitSuppressed) {
+          _lastPersistenceAction = 'pin_result_app_exit_suppressed';
+          _log(
+            'notification_pin_result_suppressed_app_exit source=$source attempt=$attempt pinned=$pinned',
+          );
+          return false;
+        }
         _lastNotificationFound = result?['notificationFound'] == true;
         final pinnedId = result?['notificationId'];
         if (pinnedId is int) {
@@ -1023,6 +1239,11 @@ class WorkStatusNotificationController {
   }
 
   static Future<void> _restoreDismissedNotification() async {
+    if (_isAppExitSuppressed) {
+      _lastPersistenceAction = 'restore_app_exit_suppressed';
+      _log('notification_restore_suppressed_app_exit');
+      return;
+    }
     if (_dismissRestoreInFlight) {
       _log('notification_restore_ignored reason=already_in_flight');
       return;
@@ -1030,6 +1251,11 @@ class WorkStatusNotificationController {
     _dismissRestoreInFlight = true;
     try {
       final presentation = await _loadPresentation();
+      if (_isAppExitSuppressed) {
+        _lastPersistenceAction = 'restore_loaded_app_exit_suppressed';
+        _log('notification_restore_loaded_suppressed_app_exit');
+        return;
+      }
       if (!presentation.isWorking) {
         _lastPersistenceAction = 'restore_skipped_not_working';
         _log('notification_restore_skipped_not_working');
@@ -1068,6 +1294,11 @@ class WorkStatusNotificationController {
         source: 'notification_dismissed_task_restore',
         presentation: presentation,
       );
+      if (_isAppExitSuppressed) {
+        _lastPersistenceAction = 'restore_pin_app_exit_suppressed';
+        _log('notification_restore_pin_suppressed_app_exit');
+        return;
+      }
       if (!pinned) {
         _lastNotificationRecoveryStage = 'update_service';
         await FlutterForegroundTask.updateService(
@@ -1081,6 +1312,11 @@ class WorkStatusNotificationController {
           source: 'notification_dismissed_main_restore',
           presentation: presentation,
         );
+      }
+      if (_isAppExitSuppressed) {
+        _lastPersistenceAction = 'restore_update_app_exit_suppressed';
+        _log('notification_restore_update_suppressed_app_exit');
+        return;
       }
       if (!pinned && _lastNotificationFound == false) {
         _lastNotificationRecoveryStage = 'forced_recreate';
@@ -1125,6 +1361,11 @@ class WorkStatusNotificationController {
   static Future<bool> _forceRecreateWorkNotification({
     required String source,
   }) async {
+    if (_isAppExitSuppressed) {
+      _lastNotificationRecoveryResult = 'forced_recreate_app_exit_suppressed';
+      _log('notification_forced_recreate_suppressed_app_exit source=$source');
+      return false;
+    }
     final now = DateTime.now();
     final lastForcedAt = _lastForcedNotificationRecoveryAt;
     if (lastForcedAt != null &&
@@ -1182,6 +1423,14 @@ class WorkStatusNotificationController {
       }
 
       final beforeStart = await _loadPresentation();
+      if (_isAppExitSuppressed) {
+        _lastNotificationRecoveryResult =
+            'forced_recreate_before_start_app_exit_suppressed';
+        _log(
+          'notification_forced_recreate_before_start_suppressed_app_exit source=$source',
+        );
+        return false;
+      }
       if (!beforeStart.isWorking) {
         _lastNotificationRecoveryResult = 'forced_recreate_cancelled_not_working';
         _log('notification_forced_recreate_cancelled source=$source reason=not_working_before_start');
@@ -1420,6 +1669,13 @@ class WorkStatusNotificationController {
         source: event,
         updatedAt: DateTime.now(),
       );
+      if (_isAppExitSuppressed) {
+        _lastPersistenceAction = 'dismissed_app_exit_suppressed';
+        _log(
+          'notification_dismiss_recovery_suppressed_app_exit event=$event',
+        );
+        return;
+      }
       unawaited(_restoreDismissedNotification());
       return;
     }
@@ -1439,6 +1695,13 @@ class WorkStatusNotificationController {
       );
       if (event == WorkStatusNotificationProtocol.serviceDestroyedEvent ||
           event == WorkStatusNotificationProtocol.serviceTimeoutEvent) {
+        if (_isAppExitSuppressed) {
+          _lastLifecycleAction = 'service_destroyed_app_exit_suppressed';
+          _log(
+            'service_recovery_suppressed_app_exit event=$event source=task_event',
+          );
+          return;
+        }
         _notificationRecoveryCount++;
         _lastNotificationRecoveryReason = event;
         _lastNotificationRecoveryAt = DateTime.now();

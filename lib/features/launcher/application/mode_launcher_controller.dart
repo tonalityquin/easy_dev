@@ -151,6 +151,7 @@ class ModeLauncherController extends ChangeNotifier {
   AppModeDefinition? _selectedMode;
   TerminalAccountKind? _selectedAccountKind;
   TerminalAuthenticatedAccount? _authenticatedAccount;
+  TerminalAuthenticatedAccount? _pendingManualAccount;
   List<LauncherWorkAreaOption> _availableWorkAreas = <LauncherWorkAreaOption>[];
   LauncherWorkAreaOption? _selectedWorkArea;
   List<AppModeDefinition> _supportedModes = <AppModeDefinition>[];
@@ -1396,6 +1397,7 @@ class ModeLauncherController extends ChangeNotifier {
     }
     _selectedAccountKind = null;
     _authenticatedAccount = null;
+    _pendingManualAccount = null;
     _availableWorkAreas = <LauncherWorkAreaOption>[];
     _selectedWorkArea = null;
     _supportedModes = <AppModeDefinition>[];
@@ -1499,6 +1501,7 @@ class ModeLauncherController extends ChangeNotifier {
           return const ModeLauncherSubmitResult();
         }
         _authenticatedAccount = null;
+        _pendingManualAccount = null;
         _availableWorkAreas = <LauncherWorkAreaOption>[];
         _selectedWorkArea = null;
         _supportedModes = <AppModeDefinition>[];
@@ -1551,6 +1554,7 @@ class ModeLauncherController extends ChangeNotifier {
           return const ModeLauncherSubmitResult();
         }
         _authenticatedAccount = null;
+        _pendingManualAccount = null;
         _availableWorkAreas = <LauncherWorkAreaOption>[];
         _selectedWorkArea = null;
         _supportedModes = <AppModeDefinition>[];
@@ -1611,6 +1615,7 @@ class ModeLauncherController extends ChangeNotifier {
     }
     if (_accountKindAutoSelected && _selectedAccountKind != null) {
       _authenticatedAccount = null;
+      _pendingManualAccount = null;
       _availableWorkAreas = <LauncherWorkAreaOption>[];
       _selectedWorkArea = null;
       _supportedModes = <AppModeDefinition>[];
@@ -1646,6 +1651,7 @@ class ModeLauncherController extends ChangeNotifier {
     }
     _selectedAccountKind = null;
     _authenticatedAccount = null;
+    _pendingManualAccount = null;
     _availableWorkAreas = <LauncherWorkAreaOption>[];
     _selectedWorkArea = null;
     _supportedModes = <AppModeDefinition>[];
@@ -2950,6 +2956,7 @@ class ModeLauncherController extends ChangeNotifier {
       _enteredCodeNumber = '';
       _enteredPassword = '';
       _authenticatedAccount = null;
+      _pendingManualAccount = null;
       _availableWorkAreas = <LauncherWorkAreaOption>[];
       _selectedWorkArea = null;
       _supportedModes = <AppModeDefinition>[];
@@ -3310,6 +3317,7 @@ class ModeLauncherController extends ChangeNotifier {
   void _resetAccountSelection() {
     _selectedAccountKind = null;
     _authenticatedAccount = null;
+    _pendingManualAccount = null;
     _availableWorkAreas = <LauncherWorkAreaOption>[];
     _selectedWorkArea = null;
     _supportedModes = <AppModeDefinition>[];
@@ -3558,6 +3566,354 @@ class ModeLauncherController extends ChangeNotifier {
     return ModeLauncherSubmitResult(targetRoute: targetRoute);
   }
 
+  Future<LauncherCredentialSubmitResult> resolveCredentials(
+    BuildContext context, {
+    required String name,
+    required String codeNumber,
+    required bool reduceMotion,
+  }) async {
+    if (_busy || _loginStage != TerminalLoginStage.credentials) {
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '계정 확인을 시작할 수 없습니다.',
+      );
+    }
+    final kind = _selectedAccountKind;
+    if (kind == null) {
+      _resetAccountSelection();
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '계정 유형을 확인할 수 없습니다.',
+      );
+    }
+
+    final normalizedName = name.trim();
+    final accountIdentifier = AccountCodeNumber.normalize(codeNumber);
+    final legacyNumericAccountIdentifier =
+        RegExp(r'^\d{10,11}$').hasMatch(accountIdentifier);
+    final nameError = normalizedName.isEmpty ? _nameError : null;
+    final codeNumberError = AccountCodeNumber.isValid(accountIdentifier)
+        ? null
+        : _codeNumberError;
+    if (nameError != null || codeNumberError != null) {
+      LauncherDiagnostics.record(
+        'auth_identity_rejected',
+        meta: <String, Object?>{
+          'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+          'nameValid': nameError == null,
+          'codeNumberValid': codeNumberError == null,
+          'nameLength': normalizedName.length,
+          'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
+          'legacyNumericAccountIdentifier': legacyNumericAccountIdentifier,
+          'firebaseReads': 0,
+        },
+      );
+      return LauncherCredentialSubmitResult(
+        nameError: nameError,
+        codeNumberError: codeNumberError,
+      );
+    }
+
+    final changed = _enteredName != normalizedName ||
+        _enteredCodeNumber != accountIdentifier;
+    _enteredName = normalizedName;
+    _enteredCodeNumber = accountIdentifier;
+    _enteredPassword = '';
+    if (changed) {
+      _authenticatedAccount = null;
+      _pendingManualAccount = null;
+      _availableWorkAreas = <LauncherWorkAreaOption>[];
+      _selectedWorkArea = null;
+      _supportedModes = <AppModeDefinition>[];
+      _selectedMode = null;
+    }
+
+    LauncherDiagnostics.record(
+      'auth_identity_submitted',
+      meta: <String, Object?>{
+        'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+        'nameLength': normalizedName.length,
+        'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
+        'legacyNumericAccountIdentifier': legacyNumericAccountIdentifier,
+      },
+    );
+    DebugSessionController.record(
+      'auth_identity_submitted',
+      source: 'mode_terminal',
+      meta: <String, Object?>{
+        'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+        'nameLength': normalizedName.length,
+        'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
+      },
+    );
+
+    _loginStage = TerminalLoginStage.authenticating;
+    _busy = true;
+    _runningCommand = 'IDENTITY';
+    _append(TerminalLineType.system, 'Account identity received');
+    _append(TerminalLineType.running, 'Resolving account identity');
+    notifyListeners();
+    await _commandDelay(reduceMotion);
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '계정 확인을 완료하지 못했습니다.',
+      );
+    }
+
+    final result = await TerminalAuthCoordinator.resolveAccountIdentity(
+      context,
+      kind: kind,
+      name: _enteredName,
+      codeNumber: _enteredCodeNumber,
+    );
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '계정 확인을 완료하지 못했습니다.',
+      );
+    }
+
+    final account = result.account;
+    _busy = false;
+    _runningCommand = '';
+    _loginStage = TerminalLoginStage.credentials;
+    if (!result.success || account == null) {
+      _pendingManualAccount = null;
+      _append(TerminalLineType.error, '[ERROR] Account identity failed');
+      _errorSerial += 1;
+      LauncherDiagnostics.record(
+        'auth_identity_failed',
+        meta: <String, Object?>{
+          'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+          'message': result.message,
+          'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
+        },
+      );
+      notifyListeners();
+      return LauncherCredentialSubmitResult(
+        authenticationError: result.message,
+      );
+    }
+
+    _pendingManualAccount = account;
+    _enteredName = account.displayName;
+    _append(TerminalLineType.success, '[ OK ] Account identity resolved');
+    LauncherDiagnostics.record(
+      'auth_identity_succeeded',
+      meta: <String, Object?>{
+        'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+        'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
+        'firebasePasswordReadsNextStep': 0,
+      },
+    );
+    notifyListeners();
+    return const LauncherCredentialSubmitResult();
+  }
+
+  Future<LauncherCredentialSubmitResult> authenticateResolvedPassword(
+    BuildContext context, {
+    required String password,
+    required bool reduceMotion,
+  }) async {
+    if (_busy || _loginStage != TerminalLoginStage.credentials) {
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '비밀번호 인증을 시작할 수 없습니다.',
+      );
+    }
+    final account = _pendingManualAccount;
+    if (account == null) {
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '먼저 이름과 코드번호를 확인하세요.',
+      );
+    }
+
+    final validPassword = account.kind == TerminalAccountKind.personal
+        ? RegExp(r'^\d{5}$').hasMatch(password)
+        : password.length >= 5;
+    if (!validPassword) {
+      LauncherDiagnostics.record(
+        'auth_password_rejected',
+        meta: <String, Object?>{
+          'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+          'passwordValid': false,
+          'passwordLength': password.length,
+          'passwordProtected': true,
+          'firebaseReads': 0,
+        },
+      );
+      return const LauncherCredentialSubmitResult(
+        passwordError: _passwordError,
+      );
+    }
+
+    _enteredPassword = password;
+    _loginStage = TerminalLoginStage.authenticating;
+    _busy = true;
+    _runningCommand = 'AUTH';
+    _append(TerminalLineType.running, 'Verifying developer password');
+    LauncherDiagnostics.record(
+      'auth_password_submitted',
+      meta: <String, Object?>{
+        'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+        'passwordLength': password.length,
+        'passwordProtected': true,
+        'firebaseReads': 0,
+      },
+    );
+    notifyListeners();
+    await _commandDelay(reduceMotion);
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      _enteredPassword = '';
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '비밀번호 인증을 완료하지 못했습니다.',
+      );
+    }
+
+    final result = await TerminalAuthCoordinator.verifyResolvedAccountPassword(
+      account: account,
+      password: password,
+      persistence: _sessionPersistence,
+    );
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      _enteredPassword = '';
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '비밀번호 인증을 완료하지 못했습니다.',
+      );
+    }
+
+    final authenticated = result.account;
+    if (!result.success || authenticated == null) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      _enteredPassword = '';
+      _errorSerial += 1;
+      LauncherDiagnostics.record(
+        'auth_password_failed',
+        meta: <String, Object?>{
+          'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+          'message': result.message,
+          'passwordProtected': true,
+          'firebaseReads': 0,
+        },
+      );
+      notifyListeners();
+      return LauncherCredentialSubmitResult(
+        passwordError: result.message,
+      );
+    }
+
+    _pendingManualAccount = null;
+    return _completeAuthenticatedManualAccount(
+      context,
+      account: authenticated,
+      reduceMotion: reduceMotion,
+    );
+  }
+
+  Future<LauncherCredentialSubmitResult> authenticateResolvedGoogleIdentity(
+    BuildContext context, {
+    required bool reduceMotion,
+  }) async {
+    if (_busy || _loginStage != TerminalLoginStage.credentials) {
+      return const LauncherCredentialSubmitResult(
+        authenticationError: TerminalAuthCoordinator.accountVerificationFailureMessage,
+      );
+    }
+    final account = _pendingManualAccount;
+    if (account == null) {
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '먼저 이름과 코드번호를 확인하세요.',
+      );
+    }
+
+    _enteredPassword = '';
+    _loginStage = TerminalLoginStage.authenticating;
+    _busy = true;
+    _runningCommand = 'VERIFY';
+    _append(TerminalLineType.running, 'Verifying account identity');
+    LauncherDiagnostics.record(
+      'auth_google_submitted',
+      meta: <String, Object?>{
+        'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+        'accountEmailSet': account.normalizedEmail.isNotEmpty,
+        'firebaseReads': 0,
+        'firebaseWrites': 0,
+      },
+    );
+    notifyListeners();
+    await _commandDelay(reduceMotion);
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      return const LauncherCredentialSubmitResult(
+        authenticationError: TerminalAuthCoordinator.accountVerificationFailureMessage,
+      );
+    }
+
+    final result =
+        await TerminalAuthCoordinator.verifyResolvedAccountGoogleIdentity(
+      account: account,
+      persistence: _sessionPersistence,
+    );
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      return const LauncherCredentialSubmitResult(
+        authenticationError: TerminalAuthCoordinator.accountVerificationFailureMessage,
+      );
+    }
+
+    final authenticated = result.account;
+    if (!result.success || authenticated == null) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      _errorSerial += 1;
+      LauncherDiagnostics.record(
+        'auth_google_rejected',
+        meta: <String, Object?>{
+          'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+          'message': result.message,
+          'accountEmailSet': account.normalizedEmail.isNotEmpty,
+          'firebaseReads': 0,
+          'firebaseWrites': 0,
+        },
+      );
+      notifyListeners();
+      return LauncherCredentialSubmitResult(
+        authenticationError: result.message,
+      );
+    }
+
+    _pendingManualAccount = null;
+    LauncherDiagnostics.record(
+      'auth_google_accepted',
+      meta: <String, Object?>{
+        'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+        'accountEmailSet': true,
+        'firebaseReads': 0,
+        'firebaseWrites': 0,
+      },
+    );
+    return _completeAuthenticatedManualAccount(
+      context,
+      account: authenticated,
+      reduceMotion: reduceMotion,
+    );
+  }
+
   Future<LauncherCredentialSubmitResult> authenticateCredentials(
     BuildContext context, {
     required String name,
@@ -3619,6 +3975,7 @@ class ModeLauncherController extends ChangeNotifier {
     _enteredPassword = password;
     if (changed) {
       _authenticatedAccount = null;
+      _pendingManualAccount = null;
       _availableWorkAreas = <LauncherWorkAreaOption>[];
       _selectedWorkArea = null;
       _supportedModes = <AppModeDefinition>[];
@@ -3729,6 +4086,18 @@ class ModeLauncherController extends ChangeNotifier {
       );
     }
 
+    return _completeAuthenticatedManualAccount(
+      context,
+      account: account,
+      reduceMotion: reduceMotion,
+    );
+  }
+
+  Future<LauncherCredentialSubmitResult> _completeAuthenticatedManualAccount(
+    BuildContext context, {
+    required TerminalAuthenticatedAccount account,
+    required bool reduceMotion,
+  }) async {
     _authenticatedAccount = account;
     _availableWorkAreas = <LauncherWorkAreaOption>[];
     _selectedWorkArea = null;
@@ -3868,7 +4237,7 @@ class ModeLauncherController extends ChangeNotifier {
     LauncherDiagnostics.record(
       'auth_mode_auto_selected',
       meta: <String, Object?>{
-        'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+        'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
         'supportedModeCount': _supportedModes.length,
         'mode': automaticMode.id,
         'reason': _supportedModes.length == 1

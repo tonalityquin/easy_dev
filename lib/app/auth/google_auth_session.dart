@@ -504,6 +504,66 @@ class GoogleAuthSession {
 
   Stream<GoogleAuthIdentity?> get identityChanges => _identityController.stream;
 
+  Future<GoogleAuthIdentity> verifyLoginIdentity({
+    required String expectedEmail,
+    bool bridgeFirebase = true,
+  }) async {
+    await _ensureBlockFlagLoaded();
+    _throwIfBlocked('verifyLoginIdentity');
+    if (!_initialized) await init();
+    final expected = _normalizeEmail(expectedEmail);
+    if (expected == null) {
+      throw StateError('google_login_email_required');
+    }
+
+    var user = _user;
+    if (user == null) {
+      user = await GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (user != null) {
+        _user = user;
+        _rememberIdentity(user);
+        _restoreCachedClientForCurrentUser();
+        _emitIdentity();
+      }
+    }
+
+    if (user == null) {
+      if (!GoogleSignIn.instance.supportsAuthenticate()) {
+        throw StateError('interactive_google_auth_not_supported');
+      }
+      user = await GoogleSignIn.instance.authenticate();
+      _user = user;
+      _client = null;
+      _lastAuthorizedAt = null;
+      _rememberIdentity(user);
+      _emitIdentity();
+    }
+
+    final identity = currentIdentity;
+    if (identity == null || identity.normalizedEmail != expected) {
+      throw GoogleAccountMismatchException(
+        expectedEmail: expected,
+        actualEmail: identity?.email ?? '',
+      );
+    }
+
+    if (bridgeFirebase) {
+      final firebaseOk = await FirebaseGoogleAuthBridge.instance
+          .ensureSignedInWithGoogleUser(user);
+      if (!firebaseOk) {
+        throw StateError('firebase_google_bridge_failed');
+      }
+      final firebaseEmail = FirebaseGoogleAuthBridge.instance.currentUser?.email
+          ?.trim()
+          .toLowerCase();
+      if (firebaseEmail == null || firebaseEmail != expected) {
+        throw StateError('firebase_google_email_mismatch');
+      }
+    }
+
+    return identity;
+  }
+
   Future<auth.AuthClient> safeClientFor({
     required String expectedEmail,
   }) async {

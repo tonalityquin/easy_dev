@@ -8,6 +8,7 @@ import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/community/application/game/game_quick_actions.dart';
 import '../../features/dashboard/widgets/utils/productivity_tools.dart';
 import 'app_exit_flag.dart';
+import 'work_status_notification.dart';
 
 class AppExitService {
   AppExitService._();
@@ -23,21 +24,33 @@ class AppExitService {
     AppExitFlag.beginExit();
 
     try {
+      await WorkStatusNotificationController.shutdownForAppExit(
+        source: 'app_exit_service_primary',
+      );
+
       try {
         await GameQuickActions.terminateSession();
       } catch (_) {}
 
       if (Platform.isAndroid) {
-        await _stopAndroidServices(
-          context,
-          useCommonUi: useCommonUi,
-        );
+        await _stopAndroidServices();
+      }
+
+      final workNotificationVerified =
+          await WorkStatusNotificationController.shutdownForAppExit(
+        source: 'app_exit_service_verify',
+      );
+      if (!workNotificationVerified) {
+        throw StateError('근무 세션 알림 종료를 확인하지 못했습니다.');
       }
 
       await ChillStore.instance.cancelProtectedSubmissionNotifications();
       await _closeApplication();
     } catch (e) {
       AppExitFlag.reset();
+      await WorkStatusNotificationController.resumeAfterFailedAppExit(
+        source: 'app_exit_service_failure',
+      );
       _showFailure(
         context,
         '앱 종료 실패: $e',
@@ -46,10 +59,7 @@ class AppExitService {
     }
   }
 
-  static Future<void> _stopAndroidServices(
-    BuildContext context, {
-    required bool useCommonUi,
-  }) async {
+  static Future<void> _stopAndroidServices() async {
     var running = false;
     try {
       running = await FlutterForegroundTask.isRunningService;
@@ -58,23 +68,20 @@ class AppExitService {
     if (!running) return;
 
     try {
-      final stopped = await FlutterForegroundTask.stopService();
-      if (stopped != true) {
-        _showFailure(
-          context,
-          '포그라운드 중지 실패(플러그인 반환값 false)',
-          useCommonUi: useCommonUi,
-        );
-      }
-    } catch (e) {
-      _showFailure(
-        context,
-        '포그라운드 중지 실패: $e',
-        useCommonUi: useCommonUi,
-      );
-    }
+      await FlutterForegroundTask.stopService();
+    } catch (_) {}
 
-    await Future<void>.delayed(const Duration(milliseconds: 150));
+    for (var attempt = 1; attempt <= 4; attempt++) {
+      try {
+        running = await FlutterForegroundTask.isRunningService;
+      } catch (_) {
+        running = true;
+      }
+      if (!running) return;
+      if (attempt < 4) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+    }
   }
 
   static Future<void> _closeApplication() async {

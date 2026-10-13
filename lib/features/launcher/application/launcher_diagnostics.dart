@@ -8,6 +8,7 @@ import '../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../app/auth/gmail_sender_diagnostics.dart';
 import '../../../app/init/app_start_debug_trace.dart';
 import '../../../app/init/startup_tasks.dart';
+import '../../../app/init/work_status_notification.dart';
 import '../../../app/utils/status_dialog.dart';
 import '../../attendance/application/attendance_diagnostics.dart';
 import '../../selector/application/dev_auth.dart';
@@ -24,6 +25,7 @@ class LauncherDiagnostics {
   static String get debugPrintCode {
     final merged = <String>[
       ...StartupTasks.debugLines,
+      ...WorkStatusNotificationController.debugLines,
       ...AppStartDebugTrace.lines,
       ...GmailSenderDiagnostics.lines,
       ...PlateTtsSessionDiagnostics.lines,
@@ -79,6 +81,8 @@ class LauncherDiagnostics {
       meta: <String, Object?>{
         'launcherLines': _lines.length,
         'startupLines': StartupTasks.debugLines.length,
+        'workStatusNotificationLines':
+            WorkStatusNotificationController.debugLines.length,
         'appStartLines': AppStartDebugTrace.lines.length,
         'gmailSenderLines': GmailSenderDiagnostics.lines.length,
         'plateTtsSessionLines': PlateTtsSessionDiagnostics.lines.length,
