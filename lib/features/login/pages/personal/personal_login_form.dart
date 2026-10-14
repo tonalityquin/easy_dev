@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../app/di/routes.dart';
 import '../../../../app/init/logout_completion_exit_dialog.dart';
+import '../../../../app/init/logout_helper.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
@@ -224,7 +225,31 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
       return;
     }
 
-    trace.log('개인형 로그인 세션 정리가 완료되었습니다.', progress: 0.88);
+    trace.log('개인형 로컬 로그인 세션 정리가 완료되었습니다.', progress: 0.64);
+
+    try {
+      await LogoutHelper.clearAuthenticationForLogout(
+        source: 'personal_login_form',
+        onDiagnostic: (message) {
+          trace.log(message, progress: 0.86);
+        },
+      );
+    } catch (error, stackTrace) {
+      await trace.fail(
+        'Google/Firebase 로그아웃에 실패했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted) return;
+      await trace.showSnapshotStatusDialog(
+        context,
+        title: '개인형 로그인 화면 로그아웃 상태',
+        description: '인증 로그아웃에 실패했습니다.',
+        failure: true,
+      );
+      return;
+    }
+
     trace.log(
       '개인형 로그아웃이 성공적으로 완료되었습니다. 앱 종료 Dialog를 표시합니다.',
       progress: 0.98,
@@ -281,7 +306,6 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
         border: Border.all(color: tokens.borderSubtle),
       ),
       child: PopupMenuButton<String>(
-        tooltip: '더보기',
         color: tokens.surfaceRaised,
         icon: Icon(Icons.more_vert_rounded, color: tokens.iconPrimary),
         onSelected: (value) {

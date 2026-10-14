@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../shared/auth/account_code_diagnostics.dart';
 import '../../../../shared/auth/account_code_number.dart';
+import '../../debug/login_debug_trace.dart';
 
 import '../../../../app/di/routes.dart';
 
@@ -17,6 +18,10 @@ import '../../applications/minor/minor_login_network_service.dart';
 import '../../applications/minor/minor_login_validate.dart';
 
 String _ts() => DateTime.now().toIso8601String();
+
+void _debug(Object? message) {
+  LoginDebugTrace.log('minor', message);
+}
 
 class MinorLoginController {
   MinorLoginController(
@@ -49,7 +54,7 @@ class MinorLoginController {
     Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
       final userState = Provider.of<UserState>(context, listen: false);
       final isLoggedIn = userState.isLoggedIn;
-      debugPrint(
+      _debug(
           '[LOGIN-MINOR][${_ts()}] autoLogin check → isLoggedIn=$isLoggedIn');
 
       if (!isLoggedIn || !context.mounted) return;
@@ -58,13 +63,13 @@ class MinorLoginController {
       final allowed =
           session != null && _hasModeAccess(session.modes, _requiredMode);
       if (!allowed) {
-        debugPrint(
+        _debug(
             '[LOGIN-MINOR][${_ts()}] autoLogin blocked: modes missing "$_requiredMode"');
         return;
       }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        debugPrint('[LOGIN-MINOR][${_ts()}] autoLogin → onLoginSucceeded()');
+        _debug('[LOGIN-MINOR][${_ts()}] autoLogin → onLoginSucceeded()');
         if (onLoginSucceeded != null) {
           onLoginSucceeded!();
         } else {
@@ -88,10 +93,6 @@ class MinorLoginController {
       },
     );
 
-    if (name.isEmpty && codeNumber.isEmpty && password == '00000') {
-      debugPrint('[LOGIN-MINOR][${_ts()}] backdoor bypass');
-      return true;
-    }
 
     final codeNumberError = MinorLoginValidate.validateCodeNumber(codeNumber);
     final passwordError = MinorLoginValidate.validatePassword(password);
@@ -109,7 +110,7 @@ class MinorLoginController {
     setState(() => isLoading = true);
 
     final isConn = await MinorLoginNetworkService().isConnected();
-    debugPrint('[LOGIN-MINOR][${_ts()}] isConnected=$isConn');
+    _debug('[LOGIN-MINOR][${_ts()}] isConnected=$isConn');
     if (!isConn) {
       if (context.mounted) {
         setState(() => isLoading = false);
@@ -127,20 +128,20 @@ class MinorLoginController {
       );
 
       if (context.mounted) {
-        debugPrint(
+        _debug(
             '[LOGIN-MINOR][${_ts()}] 입력값 name="$name" codeNumber="${AccountCodeNumber.mask(codeNumber)}" pwLen=${password.length}');
         if (user != null) {
-          debugPrint(
+          _debug(
               '[LOGIN-MINOR][${_ts()}] DB 유저: name=${user.name}, codeNumber=${AccountCodeNumber.mask(user.codeNumber)}');
         } else {
-          debugPrint('[LOGIN-MINOR][${_ts()}] DB에서 사용자 정보 없음');
+          _debug('[LOGIN-MINOR][${_ts()}] DB에서 사용자 정보 없음');
         }
       }
 
       if (user != null && user.name == name && user.password == password) {
         final allowed = _hasModeAccess(user.modes, _requiredMode);
         if (!allowed) {
-          debugPrint(
+          _debug(
               '[LOGIN-MINOR][${_ts()}] login blocked: modes missing "$_requiredMode"');
           return false;
         }
@@ -158,14 +159,14 @@ class MinorLoginController {
           area: areaToSet,
           operationLabel: 'minor',
         );
-        debugPrint('[LOGIN-MINOR][${_ts()}] AreaRecord 서버 강제 동기화 완료: $divisionToSet/$areaToSet');
+        _debug('[LOGIN-MINOR][${_ts()}] AreaRecord 서버 강제 동기화 완료: $divisionToSet/$areaToSet');
         await userState.updateLoginUser(updatedUser);
         AccountCodeDiagnostics.record(
           'minor',
           'login_success',
           meta: <String, Object?>{'codeNumber': AccountCodeNumber.mask(codeNumber)},
         );
-        debugPrint('[LOGIN-MINOR][${_ts()}] userState.updateLoginUser done');
+        _debug('[LOGIN-MINOR][${_ts()}] userState.updateLoginUser done');
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('codeNumber', updatedUser.codeNumber);
@@ -192,16 +193,16 @@ class MinorLoginController {
                   : null,
           source: 'legacy_minor_login',
         );
-        debugPrint(
+        _debug(
           '[LOGIN-MINOR][${_ts()}] work session sync area=${workSession.currentArea} mode=${workSession.mode} foreground=${workSession.foregroundServiceRunning} appFallback=${workSession.appFallbackListening}',
         );
-        debugPrint(
+        _debug(
           '[LOGIN-MINOR][${_ts()}] SharedPreferences 저장 완료: codeNumber=${prefs.getString('codeNumber')}',
         );
 
         if (context.mounted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            debugPrint(
+            _debug(
                 '[LOGIN-MINOR][${_ts()}] login success → onLoginSucceeded()');
             if (onLoginSucceeded != null) {
               onLoginSucceeded!();
@@ -214,18 +215,18 @@ class MinorLoginController {
       }
 
       if (context.mounted) {
-        debugPrint(
+        _debug(
             '[LOGIN-MINOR][${_ts()}] auth failed (name/password mismatch or no user)');
       }
       return false;
     } catch (e, st) {
-      debugPrint('[LOGIN-MINOR][${_ts()}] login error: $e\n$st');
+      _debug('[LOGIN-MINOR][${_ts()}] login error: $e\n$st');
       return false;
     } finally {
       if (context.mounted) {
         setState(() => isLoading = false);
       }
-      debugPrint('[LOGIN-MINOR][${_ts()}] set isLoading=false');
+      _debug('[LOGIN-MINOR][${_ts()}] set isLoading=false');
     }
   }
 

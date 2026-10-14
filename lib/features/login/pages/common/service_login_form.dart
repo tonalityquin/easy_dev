@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../shared/auth/account_code_number.dart';
 import '../../../../app/di/routes.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
@@ -32,11 +33,13 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
     );
   }
 
-  void _handleLogin() {
-    _controller.login(setState);
+  Future<void> _handleLogin() async {
+    await _controller.login(setState);
+    if (!mounted) return;
+    setState(() {});
   }
 
-  void _onLoginButtonPressed() {
+  Future<void> _onLoginButtonPressed() async {
     if (_controller.isLoading) return;
 
     _trace(
@@ -47,7 +50,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
       },
     );
 
-    _handleLogin();
+    await _handleLogin();
   }
 
   void _onTopCompanyLogoTapped() {
@@ -82,6 +85,12 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
     final cs = baseTheme.colorScheme;
+
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final transitionDuration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 220);
 
     final themed = baseTheme.copyWith(
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -145,88 +154,126 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                     ),
                   ],
                 ),
-                GestureDetector(
-                  onTap: _onTopCompanyLogoTapped,
-                  child: SizedBox(
-                    height: 360,
-                    child: Image.asset('assets/images/pelican.png'),
+                CommonAnimatedReveal(
+                  delay: const Duration(milliseconds: 70),
+                  child: GestureDetector(
+                    onTap: _onTopCompanyLogoTapped,
+                    child: SizedBox(
+                      height: 360,
+                      child: Image.asset('assets/images/pelican.png'),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _controller.nameController,
-                  focusNode: _controller.nameFocus,
-                  textInputAction: TextInputAction.next,
-                  onSubmitted: (_) => FocusScope.of(context)
-                      .requestFocus(_controller.codeNumberFocus),
-                  decoration: _controller.inputDecoration(
-                    label: "이름",
-                    icon: Icons.person,
+                CommonAnimatedReveal(
+                  delay: const Duration(milliseconds: 120),
+                  child: TextField(
+                    controller: _controller.nameController,
+                    focusNode: _controller.nameFocus,
+                    textInputAction: TextInputAction.next,
+                    onSubmitted: (_) => FocusScope.of(context)
+                        .requestFocus(_controller.codeNumberFocus),
+                    decoration: _controller.inputDecoration(
+                      label: "이름",
+                      icon: Icons.person,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: _controller.codeNumberController,
-                  focusNode: _controller.codeNumberFocus,
-                  keyboardType: TextInputType.text,
-                  inputFormatters: const [AccountCodeNumberInputFormatter()],
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  textInputAction: TextInputAction.next,
-                  onChanged: (value) =>
-                      _controller.formatCodeNumber(value, setState),
-                  onSubmitted: (_) => FocusScope.of(context)
-                      .requestFocus(_controller.passwordFocus),
-                  decoration: _controller.inputDecoration(
-                    label: "코드번호",
-                    icon: Icons.tag_rounded,
+                CommonAnimatedReveal(
+                  delay: const Duration(milliseconds: 170),
+                  child: TextField(
+                    controller: _controller.codeNumberController,
+                    focusNode: _controller.codeNumberFocus,
+                    keyboardType: TextInputType.text,
+                    inputFormatters: const [AccountCodeNumberInputFormatter()],
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    textInputAction: TextInputAction.next,
+                    onChanged: (value) =>
+                        _controller.formatCodeNumber(value, setState),
+                    onSubmitted: (_) => FocusScope.of(context)
+                        .requestFocus(_controller.passwordFocus),
+                    decoration: _controller.inputDecoration(
+                      label: "코드번호",
+                      icon: Icons.tag_rounded,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: _controller.passwordController,
-                  focusNode: _controller.passwordFocus,
-                  obscureText: _controller.obscurePassword,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _onLoginButtonPressed(),
-                  decoration: _controller.inputDecoration(
-                    label: "비밀번호(5자리 이상)",
-                    icon: Icons.lock,
-                    suffixIcon: IconButton(
-                      icon: Icon(_controller.obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility),
-                      onPressed: () =>
-                          setState(() => _controller.togglePassword()),
-                      tooltip: _controller.obscurePassword ? '표시' : '숨기기',
+                CommonAnimatedReveal(
+                  delay: const Duration(milliseconds: 220),
+                  child: TextField(
+                    controller: _controller.passwordController,
+                    focusNode: _controller.passwordFocus,
+                    obscureText: _controller.obscurePassword,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _onLoginButtonPressed(),
+                    decoration: _controller.inputDecoration(
+                      label: "비밀번호(5자리 이상)",
+                      icon: Icons.lock,
+                      suffixIcon: IconButton(
+                        icon: Icon(_controller.obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility),
+                        onPressed: () =>
+                            setState(() => _controller.togglePassword()),
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.login),
-                    label: Text(
-                      _controller.isLoading ? '로딩 중...' : '서비스 로그인',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
+                CommonAnimatedReveal(
+                  delay: const Duration(milliseconds: 270),
+                  child: AnimatedSwitcher(
+                    duration: transitionDuration,
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) {
+                      final scale = Tween<double>(begin: 0.98, end: 1).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      );
+                      return FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(scale: scale, child: child),
+                      );
+                    },
+                    child: SizedBox(
+                      key: ValueKey<bool>(_controller.isLoading),
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.login),
+                        label: Text(
+                          _controller.isLoading
+                              ? '로딩 중...'
+                              : '서비스 로그인',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                        onPressed: _controller.isLoading
+                            ? null
+                            : _onLoginButtonPressed,
                       ),
                     ),
-                    onPressed:
-                        _controller.isLoading ? null : _onLoginButtonPressed,
                   ),
                 ),
                 const SizedBox(height: 1),
-                Center(
-                  child: InkWell(
-                    onTap: _onPelicanLogoTapped,
-                    borderRadius: BorderRadius.circular(8),
-                    child: SizedBox(
-                      height: 80,
-                      child: Image.asset('assets/images/pelican.png'),
+                CommonAnimatedReveal(
+                  delay: const Duration(milliseconds: 320),
+                  child: Center(
+                    child: InkWell(
+                      onTap: _onPelicanLogoTapped,
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        height: 80,
+                        child: Image.asset('assets/images/pelican.png'),
+                      ),
                     ),
                   ),
                 ),

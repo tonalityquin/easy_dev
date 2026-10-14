@@ -85,6 +85,11 @@ class _DoubleLoginFormState extends State<DoubleLoginForm> {
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final transitionDuration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 220);
     return CommonLoginScaffold(
       spec: CommonLoginModeSpec.doubleMode,
       onTopLogoPressed: _onTopCompanyLogoTapped,
@@ -116,13 +121,46 @@ class _DoubleLoginFormState extends State<DoubleLoginForm> {
       ),
       actions: CommonAnimatedReveal(
         delay: const Duration(milliseconds: 240),
-        child: CommonButton(
-          label: _controller.isLoading ? '로그인 중' : '로그인',
-          icon: Icons.login_rounded,
-          expand: true,
-          loading: _controller.isLoading,
-          onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
-          haptic: CommonHaptic.light,
+        child: AnimatedSwitcher(
+          duration: transitionDuration,
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) {
+            final scale = Tween<double>(begin: 0.98, end: 1).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+            );
+            final slide = Tween<Offset>(
+              begin: const Offset(0, 0.04),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+            );
+            return FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: slide,
+                child: ScaleTransition(
+                  scale: scale,
+                  child: child,
+                ),
+              ),
+            );
+          },
+          child: CommonButton(
+            key: ValueKey<bool>(_controller.isLoading),
+            label: _controller.isLoading ? '로그인 중' : '로그인',
+            icon: Icons.login_rounded,
+            expand: true,
+            loading: _controller.isLoading,
+            onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
+            haptic: CommonHaptic.light,
+          ),
         ),
       ),
     );

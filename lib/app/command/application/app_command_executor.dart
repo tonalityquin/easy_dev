@@ -131,7 +131,15 @@ class AppCommandExecutor {
           }
           break;
         case 'debug':
-          await DebugSessionController.enable(source: 'command_terminal');
+          final debugEnabled =
+              await DebugSessionController.enable(source: 'command_terminal');
+          if (!debugEnabled) {
+            state = AppCommandExecutionState.failure;
+            outputLines = const <String>[
+              '[DENIED] developer authorization required',
+            ];
+            break;
+          }
           await DevQuickActions.mountIfNeeded();
           await _showProtectedStatus(
             context,

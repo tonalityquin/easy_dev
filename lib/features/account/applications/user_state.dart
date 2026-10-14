@@ -1092,28 +1092,6 @@ class UserState extends ChangeNotifier {
       await PlateTtsListenerService.stop();
     } catch (_) {}
 
-    try {
-      await FirebaseGoogleAuthBridge.instance.signOutFirebaseOnly();
-      final line =
-          '[USER-STATE][${DateTime.now().toIso8601String()}] clearUserToPhone Firebase signOut complete';
-      debugPrint(line);
-      onDiagnostic?.call(line);
-    } catch (e, st) {
-      final line =
-          '[USER-STATE][${DateTime.now().toIso8601String()}] clearUserToPhone Firebase signOut failed: $e';
-      debugPrint('$line\n$st');
-      onDiagnostic?.call(line);
-      await DevFirebaseDebugDialog.show(
-        operation: 'firebaseAuth.signOutFirebaseOnly',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'isTablet': _isTablet,
-          'source': 'UserState.clearUserToPhone.finally',
-        },
-      );
-    }
-
     await _areaState.clearSession(
       source: 'UserState.clearUserToPhone',
     );

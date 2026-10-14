@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../shared/auth/account_code_diagnostics.dart';
 import '../../../../shared/auth/account_code_number.dart';
+import '../../debug/login_debug_trace.dart';
 
 import '../../../../app/di/routes.dart';
 
@@ -17,6 +18,10 @@ import '../../applications/double/double_login_network_service.dart';
 import '../../applications/double/double_login_validate.dart';
 
 String _ts() => DateTime.now().toIso8601String();
+
+void _debug(Object? message) {
+  LoginDebugTrace.log('double', message);
+}
 
 class DoubleLoginController {
   DoubleLoginController(
@@ -62,7 +67,7 @@ class DoubleLoginController {
     Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
       final userState = Provider.of<UserState>(context, listen: false);
       final isLoggedIn = userState.isLoggedIn;
-      debugPrint(
+      _debug(
           '[LOGIN-LITE][${_ts()}] autoLogin check → isLoggedIn=$isLoggedIn');
 
       if (!isLoggedIn || !context.mounted) return;
@@ -71,13 +76,13 @@ class DoubleLoginController {
       final allowed =
           session != null && _hasModeAccess(session.modes, _requiredMode);
       if (!allowed) {
-        debugPrint(
+        _debug(
             '[LOGIN-LITE][${_ts()}] autoLogin blocked: modes missing "$_requiredMode"');
         return;
       }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        debugPrint('[LOGIN-LITE][${_ts()}] autoLogin → onLoginSucceeded()');
+        _debug('[LOGIN-LITE][${_ts()}] autoLogin → onLoginSucceeded()');
         if (onLoginSucceeded != null) {
           onLoginSucceeded!();
         } else {
@@ -101,10 +106,6 @@ class DoubleLoginController {
       },
     );
 
-    if (name.isEmpty && codeNumber.isEmpty && password == '00000') {
-      debugPrint('[LOGIN-LITE][${_ts()}] backdoor bypass');
-      return true;
-    }
 
     final codeNumberError = DoubleLoginValidate.validateCodeNumber(codeNumber);
     final passwordError = DoubleLoginValidate.validatePassword(password);
@@ -122,7 +123,7 @@ class DoubleLoginController {
     setState(() => isLoading = true);
 
     final isConn = await DoubleLoginNetworkService().isConnected();
-    debugPrint('[LOGIN-LITE][${_ts()}] isConnected=$isConn');
+    _debug('[LOGIN-LITE][${_ts()}] isConnected=$isConn');
 
     if (!isConn) {
       if (context.mounted) {
@@ -141,20 +142,20 @@ class DoubleLoginController {
       );
 
       if (context.mounted) {
-        debugPrint(
+        _debug(
             '[LOGIN-LITE][${_ts()}] 입력값 name="$name" codeNumber="${AccountCodeNumber.mask(codeNumber)}" pwLen=${password.length}');
         if (user != null) {
-          debugPrint(
+          _debug(
               '[LOGIN-LITE][${_ts()}] DB 유저: name=${user.name}, codeNumber=${AccountCodeNumber.mask(user.codeNumber)}');
         } else {
-          debugPrint('[LOGIN-LITE][${_ts()}] DB에서 사용자 정보 없음');
+          _debug('[LOGIN-LITE][${_ts()}] DB에서 사용자 정보 없음');
         }
       }
 
       if (user != null && user.name == name && user.password == password) {
         final allowed = _hasModeAccess(user.modes, _requiredMode);
         if (!allowed) {
-          debugPrint(
+          _debug(
               '[LOGIN-LITE][${_ts()}] login blocked: modes missing "$_requiredMode"');
           return false;
         }
@@ -172,14 +173,14 @@ class DoubleLoginController {
           area: areaToSet,
           operationLabel: 'double',
         );
-        debugPrint('[LOGIN-LITE][${_ts()}] AreaRecord 서버 강제 동기화 완료: $divisionToSet/$areaToSet');
+        _debug('[LOGIN-LITE][${_ts()}] AreaRecord 서버 강제 동기화 완료: $divisionToSet/$areaToSet');
         await userState.updateLoginUser(updatedUser);
         AccountCodeDiagnostics.record(
           'double',
           'login_success',
           meta: <String, Object?>{'codeNumber': AccountCodeNumber.mask(codeNumber)},
         );
-        debugPrint('[LOGIN-LITE][${_ts()}] userState.updateLoginUser done');
+        _debug('[LOGIN-LITE][${_ts()}] userState.updateLoginUser done');
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('codeNumber', updatedUser.codeNumber);
@@ -206,16 +207,16 @@ class DoubleLoginController {
                   : null,
           source: 'legacy_double_login',
         );
-        debugPrint(
+        _debug(
           '[LOGIN-LITE][${_ts()}] work session sync area=${workSession.currentArea} mode=${workSession.mode} foreground=${workSession.foregroundServiceRunning} appFallback=${workSession.appFallbackListening}',
         );
-        debugPrint(
+        _debug(
           '[LOGIN-LITE][${_ts()}] SharedPreferences 저장 완료: codeNumber=${prefs.getString('codeNumber')}',
         );
 
         if (context.mounted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            debugPrint(
+            _debug(
                 '[LOGIN-LITE][${_ts()}] login success → onLoginSucceeded()');
             if (onLoginSucceeded != null) {
               onLoginSucceeded!();
@@ -228,18 +229,18 @@ class DoubleLoginController {
       }
 
       if (context.mounted) {
-        debugPrint(
+        _debug(
             '[LOGIN-LITE][${_ts()}] auth failed (name/password mismatch or no user)');
       }
       return false;
     } catch (e, st) {
-      debugPrint('[LOGIN-LITE][${_ts()}] login error: $e\n$st');
+      _debug('[LOGIN-LITE][${_ts()}] login error: $e\n$st');
       return false;
     } finally {
       if (context.mounted) {
         setState(() => isLoading = false);
       }
-      debugPrint('[LOGIN-LITE][${_ts()}] set isLoading=false');
+      _debug('[LOGIN-LITE][${_ts()}] set isLoading=false');
     }
   }
 

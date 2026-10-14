@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/terminal/application/parkinworkin_terminal_diagnostics.dart';
 import '../../selector/application/dev_auth.dart';
+import 'developer_account_authorization.dart';
 
 class DebugSessionController {
   DebugSessionController._();
@@ -21,7 +22,22 @@ class DebugSessionController {
     );
   }
 
-  static Future<void> enable({String source = 'terminal'}) async {
+  static Future<bool> enable({String source = 'terminal'}) async {
+    if (!DeveloperAccountAuthorization.isAuthorized) {
+      final alreadyEnabled = await DevAuth.isDevModeEnabled();
+      if (alreadyEnabled) {
+        await DevAuth.setDevModeEnabled(false);
+      }
+      record(
+        'debug_session_enable_denied',
+        source: source,
+        meta: const <String, Object?>{
+          'reason': 'developer_authorization_required',
+        },
+      );
+      return false;
+    }
+
     final alreadyEnabled = await DevAuth.isDevModeEnabled();
     if (!alreadyEnabled) {
       await DevAuth.setDevModeEnabled(true);
@@ -29,8 +45,12 @@ class DebugSessionController {
     record(
       'debug_session_enable',
       source: source,
-      meta: <String, Object?>{'alreadyEnabled': alreadyEnabled},
+      meta: <String, Object?>{
+        'alreadyEnabled': alreadyEnabled,
+        'authorization': 'developer_account',
+      },
     );
+    return true;
   }
 
   static Future<void> disable({String source = 'developer_tools'}) async {
@@ -43,6 +63,7 @@ class DebugSessionController {
     if (wasEnabled) {
       await DevAuth.setDevModeEnabled(false);
     }
+    DeveloperAccountAuthorization.clearSession(source: source);
   }
 
   static void record(

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../shared/auth/account_code_diagnostics.dart';
 import '../../../../shared/auth/account_code_number.dart';
+import '../../debug/login_debug_trace.dart';
 
 import '../../../../app/di/routes.dart';
 
@@ -17,6 +18,10 @@ import '../../applications/service/service_login_network_service.dart';
 import '../../applications/service/service_login_validate.dart';
 
 String _ts() => DateTime.now().toIso8601String();
+
+void _debug(Object? message) {
+  LoginDebugTrace.log('service', message);
+}
 
 class ServiceLoginController {
   ServiceLoginController(
@@ -49,7 +54,7 @@ class ServiceLoginController {
     Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
       final userState = Provider.of<UserState>(context, listen: false);
       final isLoggedIn = userState.isLoggedIn;
-      debugPrint(
+      _debug(
           '[LOGIN-SERVICE][${_ts()}] autoLogin check → isLoggedIn=$isLoggedIn');
 
       if (!isLoggedIn || !context.mounted) return;
@@ -58,13 +63,13 @@ class ServiceLoginController {
       final allowed =
           session != null && _hasModeAccess(session.modes, _requiredMode);
       if (!allowed) {
-        debugPrint(
+        _debug(
             '[LOGIN-SERVICE][${_ts()}] autoLogin blocked: modes missing "$_requiredMode"');
         return;
       }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        debugPrint('[LOGIN-SERVICE][${_ts()}] autoLogin → onLoginSucceeded()');
+        _debug('[LOGIN-SERVICE][${_ts()}] autoLogin → onLoginSucceeded()');
         if (onLoginSucceeded != null) {
           onLoginSucceeded!();
         } else {
@@ -88,10 +93,6 @@ class ServiceLoginController {
       },
     );
 
-    if (name.isEmpty && codeNumber.isEmpty && password == '00000') {
-      debugPrint('[LOGIN-SERVICE][${_ts()}] backdoor bypass');
-      return;
-    }
 
     final codeNumberError = ServiceLoginValidate.validateCodeNumber(codeNumber);
     final passwordError = ServiceLoginValidate.validatePassword(password);
@@ -112,7 +113,7 @@ class ServiceLoginController {
     setState(() => isLoading = true);
 
     final isConn = await ServiceLoginNetworkService().isConnected();
-    debugPrint('[LOGIN-SERVICE][${_ts()}] isConnected=$isConn');
+    _debug('[LOGIN-SERVICE][${_ts()}] isConnected=$isConn');
     if (!isConn) {
       setState(() => isLoading = false);
       return;
@@ -128,20 +129,20 @@ class ServiceLoginController {
       );
 
       if (context.mounted) {
-        debugPrint(
+        _debug(
             '[LOGIN-SERVICE][${_ts()}] 입력값 name="$name" codeNumber="${AccountCodeNumber.mask(codeNumber)}" pwLen=${password.length}');
         if (user != null) {
-          debugPrint(
+          _debug(
               '[LOGIN-SERVICE][${_ts()}] DB 유저: name=${user.name}, codeNumber=${AccountCodeNumber.mask(user.codeNumber)}');
         } else {
-          debugPrint('[LOGIN-SERVICE][${_ts()}] DB에서 사용자 정보 없음');
+          _debug('[LOGIN-SERVICE][${_ts()}] DB에서 사용자 정보 없음');
         }
       }
 
       if (user != null && user.name == name && user.password == password) {
         final allowed = _hasModeAccess(user.modes, _requiredMode);
         if (!allowed) {
-          debugPrint(
+          _debug(
               '[LOGIN-SERVICE][${_ts()}] login blocked: modes missing "$_requiredMode"');
           return;
         }
@@ -158,14 +159,14 @@ class ServiceLoginController {
           area: areaToSet,
           operationLabel: 'service',
         );
-        debugPrint('[LOGIN-SERVICE][${_ts()}] AreaRecord 서버 강제 동기화 완료: $divisionToSet/$areaToSet');
+        _debug('[LOGIN-SERVICE][${_ts()}] AreaRecord 서버 강제 동기화 완료: $divisionToSet/$areaToSet');
         await userState.updateLoginUser(updatedUser);
         AccountCodeDiagnostics.record(
           'service',
           'login_success',
           meta: <String, Object?>{'codeNumber': AccountCodeNumber.mask(codeNumber)},
         );
-        debugPrint('[LOGIN-SERVICE][${_ts()}] userState.updateLoginUser done');
+        _debug('[LOGIN-SERVICE][${_ts()}] userState.updateLoginUser done');
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('codeNumber', updatedUser.codeNumber);
@@ -191,16 +192,16 @@ class ServiceLoginController {
                   : null,
           source: 'legacy_service_login',
         );
-        debugPrint(
+        _debug(
           '[LOGIN-SERVICE][${_ts()}] work session sync area=${workSession.currentArea} mode=${workSession.mode} foreground=${workSession.foregroundServiceRunning} appFallback=${workSession.appFallbackListening}',
         );
-        debugPrint(
+        _debug(
           '[LOGIN-SERVICE][${_ts()}] SharedPreferences 저장 완료: codeNumber=${prefs.getString('codeNumber')}',
         );
 
         if (context.mounted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            debugPrint(
+            _debug(
                 '[LOGIN-SERVICE][${_ts()}] login success → onLoginSucceeded()');
             if (onLoginSucceeded != null) {
               onLoginSucceeded!();
@@ -211,15 +212,15 @@ class ServiceLoginController {
         }
       } else {
         if (context.mounted) {
-          debugPrint(
+          _debug(
               '[LOGIN-SERVICE][${_ts()}] auth failed (name/password mismatch or no user)');
         }
       }
     } catch (e, st) {
-      debugPrint('[LOGIN-SERVICE][${_ts()}] login error: $e\n$st');
+      _debug('[LOGIN-SERVICE][${_ts()}] login error: $e\n$st');
     } finally {
       setState(() => isLoading = false);
-      debugPrint('[LOGIN-SERVICE][${_ts()}] set isLoading=false');
+      _debug('[LOGIN-SERVICE][${_ts()}] set isLoading=false');
     }
   }
 

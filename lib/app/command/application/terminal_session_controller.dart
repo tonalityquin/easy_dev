@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../features/dev/application/developer_account_authorization.dart';
 import '../../utils/motion_timing_diagnostics.dart';
 import 'app_command_definition.dart';
 import 'app_command_diagnostics.dart';
@@ -510,6 +511,43 @@ class TerminalSessionController extends ChangeNotifier {
       );
     }
     _settleRunning(runningLineId);
+    final authorized =
+        await DeveloperAccountAuthorization.authorizeInteractive(
+      source: source.isEmpty ? 'command_terminal' : source,
+    );
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      return const AppCommandExecutionResult(
+        state: AppCommandExecutionState.failure,
+        normalizedCommand: '<hidden>',
+      );
+    }
+    if (!authorized) {
+      _append(
+        TerminalLineType.error,
+        '[DENIED] developer authorization failed',
+        cadence: TerminalCadence.error,
+      );
+      _errorSerial += 1;
+      _busy = false;
+      _runningCommand = '';
+      AppCommandDiagnostics.record(
+        phase: 'terminal_importing_unlock_denied',
+        input: '<hidden>',
+        normalized: '<hidden>',
+        source: source,
+        command: '<hidden>',
+        result: 'failure',
+        path: _commandPath.terminalPath,
+      );
+      notifyListeners();
+      return const AppCommandExecutionResult(
+        state: AppCommandExecutionState.failure,
+        normalizedCommand: '<hidden>',
+        outputLines: <String>['[DENIED] developer authorization failed'],
+      );
+    }
     _importingUnlocked = true;
     _append(
       TerminalLineType.success,

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_completion_exit_dialog.dart';
+import '../../../../app/init/logout_helper.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/ops_delayed_refresh_gate.dart';
@@ -145,6 +146,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
           '개발자 모드 ON: 개인형 로그아웃 단계를 Status Dialog에 표시합니다.',
       standardModeMessage:
           '개발자 모드 OFF: 개인형 로그아웃 단계를 debugPrint로 기록합니다.',
+      showDialogImmediately: false,
     );
 
     var accountId = '';
@@ -196,8 +198,15 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
         await LauncherDebugAccountOverrideStore.discardForLogout(
           source: 'personal_side_menu',
         );
-        trace.log('Debug ephemeral 스냅샷을 폐기했습니다.', progress: 0.78);
+        trace.log('Debug ephemeral 스냅샷을 폐기했습니다.', progress: 0.76);
       }
+
+      await LogoutHelper.clearAuthenticationForLogout(
+        source: 'personal_side_menu',
+        onDiagnostic: (message) {
+          trace.log(message, progress: 0.88);
+        },
+      );
 
       trace.log(
         '개인형 로그아웃이 성공적으로 완료되었습니다. 앱 종료 Dialog를 표시합니다.',
@@ -205,6 +214,12 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
       );
       await trace.succeed('개인형 로그아웃이 완료되었습니다.');
 
+      if (!mounted) return;
+      await trace.showSnapshotStatusDialog(
+        context,
+        title: '개인형 로그아웃 상태',
+        description: '개인형 계정과 Google/Firebase 인증 로그아웃이 완료되었습니다.',
+      );
       if (!mounted) return;
       await LogoutCompletionExitDialog.show(
         context,
@@ -216,6 +231,13 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
         '개인형 로그아웃 처리에 실패했습니다.',
         error: e,
         stackTrace: st,
+      );
+      if (!mounted) return;
+      await trace.showSnapshotStatusDialog(
+        context,
+        title: '개인형 로그아웃 상태',
+        description: '개인형 로그아웃 처리에 실패했습니다.',
+        failure: true,
       );
       if (!mounted) return;
       _showSnack('로그아웃 중 오류가 발생했습니다.', success: false);
@@ -391,12 +413,19 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                     subtitle: '개인형 홈을 종료 상태로 저장',
                     onTap: () => _runAfterClose(_exitApp),
                   ),
-                  _MenuTile(
-                    icon: Icons.logout_rounded,
-                    title: '로그아웃',
-                    subtitle: '개인형 계정을 이 기기에서 해제',
-                    danger: true,
-                    onTap: () => _runAfterClose(_logout),
+                  CommonAnimatedReveal(
+                    duration: personalCommonDuration(
+                      context,
+                      CommonUiMotion.selection,
+                    ),
+                    offset: const Offset(0, 0.08),
+                    child: _MenuTile(
+                      icon: Icons.logout_rounded,
+                      title: '로그아웃',
+                      subtitle: '개인형 계정을 이 기기에서 해제',
+                      danger: true,
+                      onTap: () => _runAfterClose(_logout),
+                    ),
                   ),
                 ],
               ),

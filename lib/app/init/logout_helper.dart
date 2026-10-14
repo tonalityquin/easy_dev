@@ -4,20 +4,34 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/account/applications/user_state.dart';
-import '../../features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../features/dev/application/area_state.dart';
+import '../../features/dev/application/debug_session_controller.dart';
 import '../../features/headquarter/application/headquarter_side_dock_launcher_controller.dart';
 import '../../features/launcher/application/launcher_debug_account_override_store.dart';
 import '../../shared/tts/application/plate_tts_session_diagnostics.dart';
 import '../../shared/tts/application/plate_tts_session_recovery_store.dart';
 import '../../shared/tts/application/tts_ownership.dart';
 import '../../shared/tts/services/plate/plate_tts_listener_service.dart';
+import '../auth/google_auth_session.dart';
 import '../utils/block_dialog/blocking_dialog.dart';
 import '../utils/developer_operation_status_dialog.dart';
 import '../utils/snackbar_helper.dart';
 import 'logout_completion_exit_dialog.dart';
 
 class LogoutHelper {
+  static Future<void> clearAuthenticationForLogout({
+    String source = 'logout_helper',
+    void Function(String message)? onDiagnostic,
+  }) async {
+    await DebugSessionController.disable(source: source);
+    onDiagnostic?.call('개발자 모드와 개발자 인증 세션을 초기화했습니다.');
+
+    await GoogleAuthSession.instance.signOut();
+    onDiagnostic?.call(
+      'Google 및 Firebase 인증 로그아웃과 다음 실행 계정 선택 예약을 완료했습니다.',
+    );
+  }
+
   static Future<void> logoutAndGoToLogin(
     BuildContext context, {
     String? route,
@@ -101,8 +115,12 @@ class LogoutHelper {
         progress: 0.62,
       );
 
-      await FirebaseGoogleAuthBridge.instance.signOutAll();
-      trace.log('Firebase 및 Google 인증 로그아웃 완료.', progress: 0.78);
+      await clearAuthenticationForLogout(
+        source: 'logout_helper',
+        onDiagnostic: (message) {
+          trace.log(message, progress: 0.78);
+        },
+      );
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('mode');

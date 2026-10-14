@@ -6,6 +6,7 @@ import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/auth/account_code_number.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../controllers/tablet/tablet_login_controller.dart';
+import '../common/code_number_debug_action.dart';
 import '../common/common_login_ui.dart';
 
 class TabletLoginForm extends StatefulWidget {
@@ -90,6 +91,10 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
       spec: CommonLoginModeSpec.tablet,
       onTopLogoPressed: _onTopCompanyLogoTapped,
       onFooterLogoPressed: _onFooterLogoTapped,
+      topTrailing: const CodeNumberDebugAction(
+        scope: 'tablet',
+        title: '태블릿 로그인 로그',
+      ),
       status: const _TabletLoginStatus(),
       fields: CommonLoginFields(
         nameController: _controller.nameController,

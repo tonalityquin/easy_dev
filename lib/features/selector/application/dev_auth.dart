@@ -18,6 +18,7 @@ class DevPrefs {
 
 class DevAuth {
   static final ValueNotifier<bool> devModeEnabled = ValueNotifier<bool>(false);
+  static bool _processRestoreCompleted = false;
 
   static Future<DevPrefs> restorePrefs() async {
     final prefs = await SharedPreferences.getInstance();
@@ -28,6 +29,18 @@ class DevAuth {
     if (prefs.containsKey(_prefsKeyDevAuthUntil)) {
       await prefs.remove(_prefsKeyDevAuthUntil);
     }
+
+    if (!_processRestoreCompleted) {
+      _processRestoreCompleted = true;
+      if (prefs.containsKey(kDevModeEnabledKey)) {
+        await prefs.remove(kDevModeEnabledKey);
+      }
+      if (devModeEnabled.value) {
+        devModeEnabled.value = false;
+      }
+      return DevPrefs(savedMode: savedMode, devAuthorized: false);
+    }
+
     final enabled = prefs.getBool(kDevModeEnabledKey) ?? false;
     if (devModeEnabled.value != enabled) {
       devModeEnabled.value = enabled;

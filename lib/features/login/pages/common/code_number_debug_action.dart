@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../features/selector/application/dev_auth.dart';
 import '../../../../shared/auth/account_code_diagnostics.dart';
+import '../../debug/login_debug_trace.dart';
 
 class CodeNumberDebugAction extends StatelessWidget {
   const CodeNumberDebugAction({
@@ -16,7 +16,9 @@ class CodeNumberDebugAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final colorScheme = Theme.of(context).colorScheme;
     return ValueListenableBuilder<bool>(
       valueListenable: DevAuth.devModeEnabled,
       builder: (context, enabled, _) {
@@ -33,21 +35,39 @@ class CodeNumberDebugAction extends StatelessWidget {
             );
           },
           child: enabled
-              ? CommonIconButton(
-                  key: const ValueKey<String>('code-number-debug-on'),
-                  icon: Icons.bug_report_rounded,
-                  tooltip: '코드번호 로그인 로그',
-                  onPressed: () => AccountCodeDiagnostics.showStatusDialog(
-                    context,
-                    scope: scope,
-                    title: title,
+              ? Semantics(
+                  key: ValueKey<String>('login-debug-$scope-on'),
+                  button: true,
+                  label: title,
+                  child: Material(
+                    color: colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(12),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () => LoginDebugTrace.showStatusDialog(
+                        context,
+                        scope: scope,
+                        title: title,
+                        additionalDebugPrintCode:
+                            AccountCodeDiagnostics.debugPrintCode(
+                          scope: scope,
+                        ),
+                      ),
+                      child: const SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: Center(
+                          child: Icon(
+                            Icons.bug_report_rounded,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                  haptic: CommonHaptic.selection,
-                  size: 40,
-                  iconSize: 20,
                 )
-              : const SizedBox.shrink(
-                  key: ValueKey<String>('code-number-debug-off'),
+              : SizedBox.shrink(
+                  key: ValueKey<String>('login-debug-$scope-off'),
                 ),
         );
       },

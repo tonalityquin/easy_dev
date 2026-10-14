@@ -10,6 +10,7 @@ import '../../../../features/account/domain/models/tablet/tablet_model.dart';
 import '../../../../features/account/domain/repositories/user_repository.dart';
 import '../../../../features/tablet/applications/tablet_pad_mode_state.dart';
 import '../../../../shared/auth/account_code_number.dart';
+import '../../debug/login_debug_trace.dart';
 import '../../../../shared/work_session/application/work_area_session_coordinator.dart';
 import '../../../dev/application/area_state.dart';
 import '../area_login_session_refresher.dart';
@@ -17,6 +18,10 @@ import '../../applications/tablet/tablet_login_network_service.dart';
 import '../../applications/tablet/tablet_login_validate.dart';
 
 String _ts() => DateTime.now().toIso8601String();
+
+void _debug(Object? message) {
+  LoginDebugTrace.log('tablet', message);
+}
 
 
 class TabletCredentialAuthenticationResult {
@@ -61,7 +66,7 @@ class TabletLoginController {
     await Provider.of<UserState>(context, listen: false).loadTabletToLogIn();
     final isLoggedIn =
         Provider.of<UserState>(context, listen: false).isLoggedIn;
-    debugPrint(
+    _debug(
       '[LOGIN-TABLET][${_ts()}] autoLogin check → isLoggedIn=$isLoggedIn',
     );
     if (!isLoggedIn || !context.mounted) return false;
@@ -70,7 +75,7 @@ class TabletLoginController {
     if (navigateOnSuccess) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
-        debugPrint('[LOGIN-TABLET][${_ts()}] autoLogin → onLoginSucceeded()');
+        _debug('[LOGIN-TABLET][${_ts()}] autoLogin → onLoginSucceeded()');
         if (onLoginSucceeded != null) {
           onLoginSucceeded!();
         } else {
@@ -246,13 +251,6 @@ class TabletLoginController {
     final codeNumber = AccountCodeNumber.normalize(codeNumberController.text);
     final password = passwordController.text.trim();
 
-    if (name.isEmpty && codeNumber.isEmpty && password == '00000') {
-      return const TabletCredentialAuthenticationResult(
-        success: true,
-        message: '태블릿형 개발자 인증을 통과했습니다.',
-      );
-    }
-
     final codeNumberError = TabletLoginValidate.validateCodeNumber(codeNumber);
     final passwordError = TabletLoginValidate.validatePassword(password);
 
@@ -276,7 +274,7 @@ class TabletLoginController {
     }
 
     final isConn = await TabletLoginNetworkService().isConnected();
-    debugPrint('[LOGIN-TABLET][${_ts()}] isConnected=$isConn');
+    _debug('[LOGIN-TABLET][${_ts()}] isConnected=$isConn');
     if (!isConn) {
       return const TabletCredentialAuthenticationResult(
         success: false,
@@ -307,14 +305,14 @@ class TabletLoginController {
       );
 
       if (context.mounted) {
-        debugPrint(
+        _debug(
           '[LOGIN-TABLET][${_ts()}] input nameLength=${name.length} codeNumber=${AccountCodeNumber.mask(codeNumber)} pwLen=${password.length} candidates=${candidates.length} matches=${matches.length}',
         );
       }
 
       if (matches.isEmpty) {
         if (context.mounted) {
-          debugPrint(
+          _debug(
             '[LOGIN-TABLET][${_ts()}] auth failed (credential match missing)',
           );
         }
@@ -346,7 +344,7 @@ class TabletLoginController {
               tablet.currentArea ??
               (tablet.areas.isNotEmpty ? tablet.areas.first : ''))
           .trim();
-      debugPrint(
+      _debug(
         '[LOGIN-TABLET][${_ts()}] resolved areaName="$areaName" from tablet.selected/current/areas',
       );
       if (areaName.isEmpty) {
@@ -362,7 +360,7 @@ class TabletLoginController {
         tablet: tablet,
       );
     } catch (e, st) {
-      debugPrint('[LOGIN-TABLET][${_ts()}] login error: $e\n$st');
+      _debug('[LOGIN-TABLET][${_ts()}] login error: $e\n$st');
       await DevFirebaseDebugDialog.show(
         context: context,
         operation: 'tablet.authenticateCredentials',
@@ -427,7 +425,7 @@ class TabletLoginController {
         area: areaName,
         operationLabel: 'tablet',
       );
-      debugPrint(
+      _debug(
         '[LOGIN-TABLET][${_ts()}] AreaRecord 서버 강제 동기화 완료: $divisionToSet/$areaName',
       );
 
@@ -439,7 +437,7 @@ class TabletLoginController {
       await prefs.setString('selectedArea', areaName);
       await prefs.setString('englishSelectedAreaName', englishAreaName);
       await prefs.setString('mode', _savedMode);
-      debugPrint(
+      _debug(
         '[LOGIN-TABLET][${_ts()}] prefs saved (tabletCodeNumber/selectedArea/englishSelectedAreaName/mode=$_savedMode)',
       );
 
@@ -451,7 +449,7 @@ class TabletLoginController {
       } else {
         userState.applyEphemeralLoginTablet(sessionTablet);
       }
-      debugPrint(
+      _debug(
         '[LOGIN-TABLET][${_ts()}] userState session applied persistence=${persistSession ? 'persistent' : 'ephemeral'}',
       );
 
@@ -474,13 +472,13 @@ class TabletLoginController {
             : 'launcher_debug_ephemeral_tablet',
         persistMode: persistSession,
       );
-      debugPrint(
+      _debug(
         '[LOGIN-TABLET][${_ts()}] work session sync area=${workSession.currentArea} mode=${workSession.mode} foreground=${workSession.foregroundServiceRunning} appFallback=${workSession.appFallbackListening}',
       );
 
       return true;
     } catch (e, st) {
-      debugPrint(
+      _debug(
         '[LOGIN-TABLET][${_ts()}] activate authenticated tablet error: $e\n$st',
       );
       await DevFirebaseDebugDialog.show(
@@ -504,13 +502,6 @@ class TabletLoginController {
   Future<bool> login(StateSetter setState) async {
     final name = nameController.text.trim();
     final codeNumber = AccountCodeNumber.normalize(codeNumberController.text);
-    final password = passwordController.text.trim();
-
-    if (name.isEmpty && codeNumber.isEmpty && password == '00000') {
-      debugPrint('[LOGIN-TABLET][${_ts()}] backdoor bypass');
-      return true;
-    }
-
     TabletAccountDiagnostics.clear();
     TabletAccountDiagnostics.record(
       'login_start',
@@ -576,7 +567,7 @@ class TabletLoginController {
       if (context.mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!context.mounted) return;
-          debugPrint(
+          _debug(
             '[LOGIN-TABLET][${_ts()}] login success → onLoginSucceeded()',
           );
           if (onLoginSucceeded != null) {
@@ -591,7 +582,7 @@ class TabletLoginController {
       if (context.mounted) {
         setState(() => isLoading = false);
       }
-      debugPrint('[LOGIN-TABLET][${_ts()}] set isLoading=false');
+      _debug('[LOGIN-TABLET][${_ts()}] set isLoading=false');
     }
   }
 

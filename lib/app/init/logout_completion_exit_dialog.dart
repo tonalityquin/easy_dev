@@ -43,64 +43,98 @@ class _LogoutCompletionExitBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 320),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: tokens.dangerContainer,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: tokens.danger.withOpacity(
-                    tokens.isDark ? 0.56 : 0.36,
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 12 * (1 - value)),
+            child: Transform.scale(
+              scale: 0.96 + (0.04 * value),
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0.88, end: 1),
+                duration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 420),
+                curve: Curves.easeOutBack,
+                builder: (context, value, child) {
+                  return Transform.scale(
+                    scale: value,
+                    child: child,
+                  );
+                },
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: tokens.dangerContainer,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: tokens.danger.withOpacity(
+                        tokens.isDark ? 0.56 : 0.36,
+                      ),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.power_settings_new_rounded,
+                    size: 26,
+                    color: tokens.danger,
                   ),
                 ),
               ),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.power_settings_new_rounded,
-                size: 26,
-                color: tokens.danger,
+              const SizedBox(height: 18),
+              Text(
+                '앱을 종료합니다.',
+                textAlign: TextAlign.center,
+                style: text.titleMedium?.copyWith(
+                  color: tokens.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              '앱을 종료합니다.',
-              textAlign: TextAlign.center,
-              style: text.titleMedium?.copyWith(
-                color: tokens.textPrimary,
-                fontWeight: FontWeight.w800,
+              const SizedBox(height: 22),
+              CommonButton(
+                label: '앱 종료',
+                icon: Icons.power_settings_new_rounded,
+                variant: CommonButtonVariant.destructive,
+                haptic: CommonHaptic.medium,
+                expand: true,
+                semanticsLabel: '앱 종료',
+                onPressed: () async {
+                  debugPrint('[LOGOUT-EXIT] exitButtonPressed=true');
+                  final exitAction = onExit;
+                  if (exitAction != null) {
+                    await exitAction();
+                    return;
+                  }
+                  await AppExitService.exitApp(
+                    context,
+                    useCommonUi: useCommonUi,
+                  );
+                },
               ),
-            ),
-            const SizedBox(height: 22),
-            CommonButton(
-              label: '앱 종료',
-              icon: Icons.power_settings_new_rounded,
-              variant: CommonButtonVariant.destructive,
-              haptic: CommonHaptic.medium,
-              expand: true,
-              semanticsLabel: '앱 종료',
-              onPressed: () async {
-                debugPrint('[LOGOUT-EXIT] exitButtonPressed=true');
-                final exitAction = onExit;
-                if (exitAction != null) {
-                  await exitAction();
-                  return;
-                }
-                await AppExitService.exitApp(
-                  context,
-                  useCommonUi: useCommonUi,
-                );
-              },
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

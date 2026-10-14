@@ -97,17 +97,22 @@ class StatusDialog {
             : content;
       },
       transitionBuilder: (_, animation, __, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: CommonUiMotion.enter,
+          reverseCurve: CommonUiMotion.exit,
+        );
         return FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.96, end: 1).animate(
-              CurvedAnimation(
-                parent: animation,
-                curve: CommonUiMotion.enter,
-                reverseCurve: CommonUiMotion.exit,
-              ),
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.035),
+              end: Offset.zero,
+            ).animate(curved),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+              child: child,
             ),
-            child: child,
           ),
         );
       },

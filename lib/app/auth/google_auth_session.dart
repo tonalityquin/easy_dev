@@ -72,6 +72,8 @@ class GoogleAuthSession {
 
   static const String prefsKeyBlockGoogleSession =
       'debug_block_google_session_attempts_v1';
+  static const String prefsKeyForceAccountSelection =
+      'google_force_account_selection_next_login_v1';
 
   GoogleSignInAccount? _user;
   auth.AuthClient? _client;
@@ -90,10 +92,12 @@ class GoogleAuthSession {
   final Map<String, Future<auth.AuthClient>> _refreshClientFuturesByEmail =
       <String, Future<auth.AuthClient>>{};
   bool _accountSwitchInProgress = false;
+  bool _suppressFirebaseBridgeForNextSignInEvent = false;
 
   Duration _maxClientAge = const Duration(minutes: 30);
 
   bool _sessionBlocked = false;
+  bool _forceAccountSelectionPending = false;
   bool _blockFlagLoaded = false;
   Completer<void>? _blockLoadCompleter;
 
@@ -114,6 +118,8 @@ class GoogleAuthSession {
     try {
       final prefs = await SharedPreferences.getInstance();
       _sessionBlocked = prefs.getBool(prefsKeyBlockGoogleSession) ?? false;
+      _forceAccountSelectionPending =
+          prefs.getBool(prefsKeyForceAccountSelection) ?? false;
       _blockFlagLoaded = true;
       _blockLoadCompleter!.complete();
     } catch (e, st) {
@@ -148,6 +154,16 @@ class GoogleAuthSession {
 
       await _authSub?.cancel();
       _authSub = null;
+    }
+  }
+
+  Future<void> _setForceAccountSelectionPending(bool value) async {
+    _forceAccountSelectionPending = value;
+    final prefs = await SharedPreferences.getInstance();
+    if (value) {
+      await prefs.setBool(prefsKeyForceAccountSelection, true);
+    } else {
+      await prefs.remove(prefsKeyForceAccountSelection);
     }
   }
 
@@ -189,6 +205,12 @@ class GoogleAuthSession {
       _authSub?.cancel();
       _authSub = signIn.authenticationEvents.listen((event) {
         if (event is GoogleSignInAuthenticationEventSignIn) {
+          if (_forceAccountSelectionPending && !_accountSwitchInProgress) {
+            debugPrint(
+              '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signIn ignored forceAccountSelectionPending=true email=${event.user.email}',
+            );
+            return;
+          }
           _user = event.user;
           _client = null;
           _lastAuthorizedAt = null;
@@ -197,7 +219,11 @@ class GoogleAuthSession {
           _emitIdentity();
           debugPrint(
               '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signIn email=${event.user.email}');
-          if (!_accountSwitchInProgress) {
+          final suppressFirebaseBridge =
+              _accountSwitchInProgress ||
+              _suppressFirebaseBridgeForNextSignInEvent;
+          _suppressFirebaseBridgeForNextSignInEvent = false;
+          if (!suppressFirebaseBridge) {
             unawaited(
               FirebaseGoogleAuthBridge.instance
                   .ensureSignedInWithGoogleUser(event.user)
@@ -234,26 +260,39 @@ class GoogleAuthSession {
         }
       });
 
-      _user = await signIn.attemptLightweightAuthentication();
-      if (_user != null) {
-        _rememberIdentity(_user!);
-        _restoreCachedClientForCurrentUser();
-      }
-      _emitIdentity();
-      debugPrint(
-          '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight result email=${_user?.email}');
-      if (_user != null) {
-        unawaited(
-          FirebaseGoogleAuthBridge.instance
-              .ensureSignedInWithGoogleUser(_user!)
-              .then((ok) {
-            debugPrint(
-                '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight -> Firebase bridge ok=$ok email=${_user?.email}');
-          }).catchError((Object e, StackTrace st) {
-            debugPrint(
-                '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight -> Firebase bridge failed: $e\n$st');
-          }),
+      if (_forceAccountSelectionPending) {
+        _user = null;
+        _client = null;
+        _lastAuthorizedAt = null;
+        _emitIdentity();
+        debugPrint(
+          '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight skipped forceAccountSelectionPending=true',
         );
+      } else {
+        _user = await signIn.attemptLightweightAuthentication();
+        if (_user != null) {
+          _rememberIdentity(_user!);
+          _restoreCachedClientForCurrentUser();
+        }
+        _emitIdentity();
+        debugPrint(
+          '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight result email=${_user?.email}',
+        );
+        if (_user != null) {
+          unawaited(
+            FirebaseGoogleAuthBridge.instance
+                .ensureSignedInWithGoogleUser(_user!)
+                .then((ok) {
+              debugPrint(
+                '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight -> Firebase bridge ok=$ok email=${_user?.email}',
+              );
+            }).catchError((Object e, StackTrace st) {
+              debugPrint(
+                '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight -> Firebase bridge failed: $e\n$st',
+              );
+            }),
+          );
+        }
       }
     } catch (e, st) {
       await DebugApiLogger().log(
@@ -282,7 +321,9 @@ class GoogleAuthSession {
         await init();
       }
 
-      _user ??= await GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (_user == null && !_forceAccountSelectionPending) {
+        _user = await GoogleSignIn.instance.attemptLightweightAuthentication();
+      }
       if (_user != null) {
         _rememberIdentity(_user!);
         _restoreCachedClientForCurrentUser();
@@ -314,9 +355,15 @@ class GoogleAuthSession {
         final firebaseOk = await FirebaseGoogleAuthBridge.instance
             .ensureSignedInWithGoogleUser(user);
         debugPrint(
-            '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] interactive authenticate -> Firebase bridge ok=$firebaseOk email=${user.email}');
+          '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] interactive authenticate -> Firebase bridge ok=$firebaseOk email=${user.email}',
+        );
         await _ensureAuthorizedClient();
-        if (_client != null) return _client!;
+        if (_client != null) {
+          if (_forceAccountSelectionPending) {
+            await _setForceAccountSelectionPending(false);
+          }
+          return _client!;
+        }
       }
 
       throw StateError('AuthClient 생성 실패: 로그인/스코프 권한 확인 필요');
@@ -398,7 +445,9 @@ class GoogleAuthSession {
   }) async {
     try {
       if (!_initialized) await init();
-      _user ??= await GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (_user == null && !_forceAccountSelectionPending) {
+        _user = await GoogleSignIn.instance.attemptLightweightAuthentication();
+      }
       if (_user != null) {
         _rememberIdentity(_user!);
         _restoreCachedClientForCurrentUser();
@@ -451,44 +500,67 @@ class GoogleAuthSession {
   Future<void> signOut() async {
     await _ensureBlockFlagLoaded();
 
-    if (_sessionBlocked) {
+    Object? firstError;
+    StackTrace? firstStackTrace;
+
+    void capture(Object error, StackTrace stackTrace) {
+      firstError ??= error;
+      firstStackTrace ??= stackTrace;
+    }
+
+    _accountSwitchInProgress = true;
+    try {
+      try {
+        await GoogleSignIn.instance.signOut();
+      } catch (error, stackTrace) {
+        capture(error, stackTrace);
+      }
+    } finally {
       _user = null;
       _client = null;
       _lastAuthorizedAt = null;
       _clientsByEmail.clear();
       _authorizedAtByEmail.clear();
       _identitiesByEmail.clear();
+      _refreshClientFuturesByEmail.clear();
+      _suppressFirebaseBridgeForNextSignInEvent = false;
       _emitIdentity();
-      return;
+      _accountSwitchInProgress = false;
     }
 
     try {
-      _accountSwitchInProgress = false;
-      await GoogleSignIn.instance.signOut();
-      _user = null;
-      _client = null;
-      _lastAuthorizedAt = null;
-      _clientsByEmail.clear();
-      _authorizedAtByEmail.clear();
-      _identitiesByEmail.clear();
-      _emitIdentity();
       await FirebaseGoogleAuthBridge.instance.signOutFirebaseOnly();
-      debugPrint(
-          '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] GoogleAuthSession.signOut -> Firebase signOut complete');
-    } catch (e, st) {
+    } catch (error, stackTrace) {
+      capture(error, stackTrace);
+    }
+
+    try {
+      await _setForceAccountSelectionPending(true);
+    } catch (error, stackTrace) {
+      capture(error, stackTrace);
+    }
+
+    debugPrint(
+      '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] GoogleAuthSession.signOut googleCleared=true firebaseCleared=${FirebaseGoogleAuthBridge.instance.currentUser == null} forceAccountSelectionPending=$_forceAccountSelectionPending',
+    );
+
+    if (firstError != null) {
       await DebugApiLogger().log(
         {
           'tag': 'GoogleAuthSession.signOut',
-          'message': 'Google SignOut 실패',
-          'error': e.toString(),
-          'stack': st.toString(),
-          'userEmail': _user?.email ?? 'null',
+          'message': 'Google/Firebase 로그아웃 중 일부 단계 실패',
+          'error': firstError.toString(),
+          'stack': firstStackTrace?.toString() ?? '',
           'sessionBlocked': _sessionBlocked,
+          'forceAccountSelectionPending': _forceAccountSelectionPending,
         },
         level: 'error',
         tags: const ['auth', 'google'],
       );
-      rethrow;
+      Error.throwWithStackTrace(
+        firstError!,
+        firstStackTrace ?? StackTrace.current,
+      );
     }
   }
 
@@ -516,8 +588,10 @@ class GoogleAuthSession {
       throw StateError('google_login_email_required');
     }
 
-    var user = _user;
-    if (user == null) {
+    final forceAccountSelection = _forceAccountSelectionPending;
+    var user = forceAccountSelection ? null : _user;
+
+    if (user == null && !forceAccountSelection) {
       user = await GoogleSignIn.instance.attemptLightweightAuthentication();
       if (user != null) {
         _user = user;
@@ -531,6 +605,21 @@ class GoogleAuthSession {
       if (!GoogleSignIn.instance.supportsAuthenticate()) {
         throw StateError('interactive_google_auth_not_supported');
       }
+
+      if (forceAccountSelection) {
+        _accountSwitchInProgress = true;
+        try {
+          await GoogleSignIn.instance.signOut();
+        } catch (_) {
+        } finally {
+          _user = null;
+          _client = null;
+          _lastAuthorizedAt = null;
+          _emitIdentity();
+          _accountSwitchInProgress = false;
+        }
+      }
+
       user = await GoogleSignIn.instance.authenticate();
       _user = user;
       _client = null;
@@ -559,6 +648,10 @@ class GoogleAuthSession {
       if (firebaseEmail == null || firebaseEmail != expected) {
         throw StateError('firebase_google_email_mismatch');
       }
+    }
+
+    if (_forceAccountSelectionPending) {
+      await _setForceAccountSelectionPending(false);
     }
 
     return identity;
@@ -592,6 +685,46 @@ class GoogleAuthSession {
     return client;
   }
 
+  Future<GoogleAuthIdentity> authenticateIdentityOnly({
+    bool forceAccountSelection = false,
+  }) async {
+    await _ensureBlockFlagLoaded();
+    _throwIfBlocked('authenticateIdentityOnly');
+    if (!_initialized) await init();
+    final current = currentIdentity;
+    if (!forceAccountSelection && current != null) {
+      return current;
+    }
+    if (!GoogleSignIn.instance.supportsAuthenticate()) {
+      throw StateError('interactive_google_auth_not_supported');
+    }
+    _accountSwitchInProgress = true;
+    _suppressFirebaseBridgeForNextSignInEvent = true;
+    var authenticated = false;
+    try {
+      if (forceAccountSelection) {
+        await GoogleSignIn.instance.signOut();
+        _user = null;
+        _client = null;
+        _lastAuthorizedAt = null;
+        _emitIdentity();
+      }
+      final user = await GoogleSignIn.instance.authenticate();
+      authenticated = true;
+      _user = user;
+      _client = null;
+      _lastAuthorizedAt = null;
+      _rememberIdentity(user);
+      _emitIdentity();
+      return currentIdentity!;
+    } finally {
+      if (!authenticated) {
+        _suppressFirebaseBridgeForNextSignInEvent = false;
+      }
+      _accountSwitchInProgress = false;
+    }
+  }
+
   Future<GoogleAuthIdentity> authenticateAccount({
     String? expectedEmail,
     bool forceAccountSelection = false,
@@ -601,7 +734,9 @@ class GoogleAuthSession {
     _throwIfBlocked('authenticateAccount');
     if (!_initialized) await init();
     final expected = _normalizeEmail(expectedEmail);
-    if (!forceAccountSelection && expected != null) {
+    final effectiveForceAccountSelection =
+        forceAccountSelection || _forceAccountSelectionPending;
+    if (!effectiveForceAccountSelection && expected != null) {
       final cachedIdentity = _identitiesByEmail[expected];
       final cachedClient = _cachedClientFor(expected);
       if (cachedIdentity != null && cachedClient != null) {
@@ -609,7 +744,7 @@ class GoogleAuthSession {
       }
     }
     final current = currentIdentity;
-    if (!forceAccountSelection &&
+    if (!effectiveForceAccountSelection &&
         current != null &&
         (expected == null || current.normalizedEmail == expected)) {
       await safeClientFor(expectedEmail: current.email);
@@ -621,7 +756,7 @@ class GoogleAuthSession {
     _cacheCurrentClient();
     _accountSwitchInProgress = true;
     try {
-      if (_user != null) {
+      if (_user != null || effectiveForceAccountSelection) {
         await GoogleSignIn.instance.signOut();
         _user = null;
         _client = null;
@@ -649,6 +784,9 @@ class GoogleAuthSession {
         throw StateError('google_auth_client_unavailable');
       }
       _cacheCurrentClient();
+      if (_forceAccountSelectionPending) {
+        await _setForceAccountSelectionPending(false);
+      }
       return identity;
     } finally {
       _accountSwitchInProgress = false;

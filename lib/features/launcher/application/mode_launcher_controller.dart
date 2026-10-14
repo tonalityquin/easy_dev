@@ -20,6 +20,7 @@ import '../../../app/init/db_connection_status_section.dart';
 import '../../../app/init/work_status_notification.dart';
 import '../../../app/init/startup_tasks.dart';
 import '../../dev/application/debug_session_controller.dart';
+import '../../dev/application/developer_account_authorization.dart';
 import '../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../dev/page/dialogs/plate_billing_count_dialog.dart';
 import '../../dev/page/sheets/dev_quick_actions.dart';
@@ -1754,6 +1755,34 @@ class ModeLauncherController extends ChangeNotifier {
       _runningCommand = '';
       return const ModeLauncherSubmitResult();
     }
+    final authorized =
+        await DeveloperAccountAuthorization.authorizeInteractive(
+      source: 'mode_terminal',
+    );
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      return const ModeLauncherSubmitResult();
+    }
+    if (!authorized) {
+      _busy = false;
+      _runningCommand = '';
+      _append(
+        TerminalLineType.error,
+        '[DENIED] developer authorization failed',
+      );
+      _errorSerial += 1;
+      LauncherDiagnostics.record(
+        'terminal_importing_unlock_denied',
+        scope: 'mode_terminal',
+        meta: <String, Object?>{
+          'path': _commandPath.terminalPath,
+          'command': '<hidden>',
+        },
+      );
+      notifyListeners();
+      return const ModeLauncherSubmitResult();
+    }
     _importingUnlocked = true;
     _busy = false;
     _runningCommand = '';
@@ -1764,6 +1793,7 @@ class ModeLauncherController extends ChangeNotifier {
       meta: <String, Object?>{
         'path': _commandPath.terminalPath,
         'command': '<hidden>',
+        'authorization': 'developer_account',
       },
     );
     notifyListeners();
@@ -1987,7 +2017,26 @@ class ModeLauncherController extends ChangeNotifier {
         _runningCommand = 'debug';
         _append(TerminalLineType.running, 'Activating DEBUG session');
         await _commandDelay(reduceMotion);
-        await DebugSessionController.enable(source: 'mode_terminal');
+        final debugEnabled =
+            await DebugSessionController.enable(source: 'mode_terminal');
+        if (!debugEnabled) {
+          _busy = false;
+          _runningCommand = '';
+          _append(
+            TerminalLineType.error,
+            '[DENIED] developer authorization required',
+          );
+          _errorSerial += 1;
+          LauncherDiagnostics.record(
+            'terminal_debug_denied',
+            scope: 'mode_terminal',
+            meta: <String, Object?>{
+              'importingUnlocked': _importingUnlocked,
+            },
+          );
+          notifyListeners();
+          return const ModeLauncherSubmitResult();
+        }
         await DevQuickActions.mountIfNeeded();
         _busy = false;
         _runningCommand = '';
