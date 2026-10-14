@@ -756,13 +756,6 @@ class PersonalLoginController {
 
       final matchedDoc = matches.single;
       final matchedData = matchedDoc.data();
-      final storedPassword = (matchedData['password'] ?? '').toString().trim();
-      if (storedPassword.isEmpty) {
-        return failureResult(
-          '개인형 계정에 비밀번호가 없습니다. 개발자 모드에서 비밀번호가 포함된 계정으로 다시 생성하세요.',
-        );
-      }
-
       final storedName = (matchedData['name'] ?? '').toString().trim();
       final storedCodeNumber = _codeNumberFromData(matchedData);
       final selectedArea = _selectedAreaFromData(matchedData);

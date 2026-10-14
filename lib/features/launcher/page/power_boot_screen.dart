@@ -70,6 +70,9 @@ class _PowerBootScreenState extends State<PowerBootScreen>
   bool _cinematicExiting = false;
   bool _exiting = false;
   bool _deviceRoleMigrationRequired = false;
+  bool _personalPurposeUnlocked = false;
+  bool _personalUnlockPersisting = false;
+  int _personalUnlockTapCount = 0;
   int _cinematicGeneration = 0;
   String _cinematicSequence = 'ready';
 
@@ -121,7 +124,10 @@ class _PowerBootScreenState extends State<PowerBootScreen>
     );
     final purpose = await AppStartFlowPrefs.getUserPurpose();
     final storedDeviceRole = await AppStartFlowPrefs.getDeviceRole();
+    final personalPurposeUnlocked =
+        await AppStartFlowPrefs.getPersonalPurposeUnlocked();
     if (!mounted) return;
+    _personalPurposeUnlocked = personalPurposeUnlocked;
     if (purpose == AppStartUserPurpose.tabletInstallation &&
         storedDeviceRole == null) {
       setState(() {
@@ -173,7 +179,11 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       await _openTerminal();
       return;
     }
-    setState(() => _poweringOn = false);
+    setState(() {
+      _poweringOn = false;
+      _personalPurposeUnlocked = personalPurposeUnlocked;
+      _personalUnlockTapCount = 0;
+    });
     await _runCinematicIntroSequence(
       introStage: _PowerBootStage.purposeIntro,
       choicesStage: _PowerBootStage.purposeCategory,
@@ -383,8 +393,83 @@ class _PowerBootScreenState extends State<PowerBootScreen>
     );
   }
 
+  Future<void> _handlePersonalPurposeBackgroundTap() async {
+    if (_interactionLocked ||
+        _stage != _PowerBootStage.purposeCategory ||
+        _personalPurposeUnlocked ||
+        _personalUnlockPersisting) {
+      return;
+    }
+    const requiredTapCount = 10;
+    final next = _personalUnlockTapCount + 1;
+    _personalUnlockTapCount = next;
+    AppStartDebugTrace.log(
+      'power_boot',
+      'personal_purpose_hidden_tap',
+      meta: <String, Object?>{
+        'count': next,
+        'required': requiredTapCount,
+        'persistent': false,
+      },
+    );
+    LauncherDiagnostics.record(
+      'startup_personal_purpose_hidden_tap',
+      scope: 'power_boot',
+      meta: <String, Object?>{
+        'count': next,
+        'required': requiredTapCount,
+        'firebaseReads': 0,
+        'firebaseWrites': 0,
+      },
+    );
+    if (next < requiredTapCount) return;
+    _personalUnlockPersisting = true;
+    try {
+      await AppStartFlowPrefs.unlockPersonalPurpose();
+      if (!mounted) return;
+      setState(() {
+        _personalPurposeUnlocked = true;
+        _personalUnlockTapCount = 0;
+      });
+      await HapticFeedback.mediumImpact();
+      AppStartDebugTrace.log(
+        'power_boot',
+        'personal_purpose_unlocked',
+        meta: <String, Object?>{
+          'required': requiredTapCount,
+          'persistent': true,
+        },
+      );
+      LauncherDiagnostics.record(
+        'startup_personal_purpose_unlocked',
+        scope: 'power_boot',
+        meta: <String, Object?>{
+          'required': requiredTapCount,
+          'persistent': true,
+          'firebaseReads': 0,
+          'firebaseWrites': 0,
+        },
+      );
+    } catch (error) {
+      _personalUnlockTapCount = 0;
+      AppStartDebugTrace.log(
+        'power_boot',
+        'personal_purpose_unlock_failed',
+        meta: <String, Object?>{'errorType': error.runtimeType.toString()},
+      );
+      LauncherDiagnostics.record(
+        'startup_personal_purpose_unlock_failed',
+        scope: 'power_boot',
+        meta: <String, Object?>{'errorType': error.runtimeType.toString()},
+      );
+    } finally {
+      _personalUnlockPersisting = false;
+    }
+  }
+
   Future<void> _selectTopPurpose(String category) async {
     if (_interactionLocked || _stage != _PowerBootStage.purposeCategory) return;
+    _personalUnlockTapCount = 0;
     await HapticFeedback.selectionClick();
     AppStartDebugTrace.log(
       'power_boot',
@@ -883,6 +968,8 @@ class _PowerBootScreenState extends State<PowerBootScreen>
     final persistedDeviceRole = await AppStartFlowPrefs.getDeviceRole();
     final permissionNoticeDone =
         await AppStartFlowPrefs.getPermissionNoticeDone();
+    final persistedPersonalPurposeUnlocked =
+        await AppStartFlowPrefs.getPersonalPurposeUnlocked();
     if (!mounted) return;
     LauncherDiagnostics.record(
       'power_status_requested',
@@ -912,6 +999,10 @@ class _PowerBootScreenState extends State<PowerBootScreen>
         'Device role migration pending: ${persistedPurpose == AppStartUserPurpose.tabletInstallation && persistedDeviceRole == null}',
         'Device role migration active: $_deviceRoleMigrationRequired',
         'Permission notice done: $permissionNoticeDone',
+        'Personal purpose unlocked: $_personalPurposeUnlocked',
+        'Personal unlock taps: $_personalUnlockTapCount/10',
+        'Personal unlock persisting: $_personalUnlockPersisting',
+        'Persisted personal purpose unlocked: $persistedPersonalPurposeUnlocked',
         'Startup ready: ${_report?.readyCount ?? 0}/4',
         'Notifications: ${_report?.notificationsReady == true ? 'READY' : 'WARN'}',
         'Reminder: ${_report?.reminderReady == true ? 'READY' : 'WARN'}',
@@ -997,26 +1088,57 @@ class _PowerBootScreenState extends State<PowerBootScreen>
   }
 
   Widget _buildPurposeCategory(BuildContext context) {
-    return _buildCinematicChoices(
-      context,
-      choices: <_CinematicChoiceData>[
-        _CinematicChoiceData(
-          label: '업무',
-          selected: false,
-          onPressed: () => _selectTopPurpose('work'),
-        ),
+    final choices = <_CinematicChoiceData>[
+      _CinematicChoiceData(
+        label: '업무',
+        selected: false,
+        onPressed: () => _selectTopPurpose('work'),
+      ),
+      if (_personalPurposeUnlocked)
         _CinematicChoiceData(
           label: '개인',
           selected: _selectedPurpose == AppStartUserPurpose.personal,
           onPressed: () => _selectTopPurpose('personal'),
         ),
-        _CinematicChoiceData(
-          label: '기기',
-          selected:
-              _selectedPurpose == AppStartUserPurpose.tabletInstallation,
-          onPressed: () => _selectTopPurpose('device'),
+      _CinematicChoiceData(
+        label: '기기',
+        selected: _selectedPurpose == AppStartUserPurpose.tabletInstallation,
+        onPressed: () => _selectTopPurpose('device'),
+      ),
+    ];
+    final duration = _reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 360);
+    return AnimatedSize(
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      child: AnimatedSwitcher(
+        duration: duration,
+        reverseDuration: duration,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: .985, end: 1).animate(curved),
+              child: child,
+            ),
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey<bool>(_personalPurposeUnlocked),
+          child: _buildCinematicChoices(
+            context,
+            choices: choices,
+          ),
         ),
-      ],
+      ),
     );
   }
 
@@ -1334,6 +1456,7 @@ class _PowerBootScreenState extends State<PowerBootScreen>
       return;
     }
     if (_stage == _PowerBootStage.purposeCategory) {
+      _personalUnlockTapCount = 0;
       unawaited(
         _transitionToStage(
           _PowerBootStage.ready,
@@ -1378,6 +1501,19 @@ class _PowerBootScreenState extends State<PowerBootScreen>
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
+                      if (_stage == _PowerBootStage.purposeCategory &&
+                          !_personalPurposeUnlocked)
+                        Positioned.fill(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _interactionLocked
+                                ? null
+                                : () => unawaited(
+                                      _handlePersonalPurposeBackgroundTap(),
+                                    ),
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
                       Center(child: _buildCenter(context)),
                       Align(
                         alignment: Alignment.bottomCenter,

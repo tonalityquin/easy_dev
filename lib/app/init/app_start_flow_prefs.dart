@@ -12,6 +12,8 @@ class AppStartFlowPrefs {
   static const String permissionTutorialPurposeKey =
       'app_start_permission_tutorial_purpose_v1';
   static const String userPurposeKey = 'app_start_user_purpose_v1';
+  static const String personalPurposeUnlockedKey =
+      'app_start_personal_purpose_unlocked_v1';
   static const String deviceRoleKey = 'app_device_role_v1';
   static const String permissionNoticeDoneKey =
       'app_start_permission_notice_done_v1';
@@ -71,12 +73,30 @@ class AppStartFlowPrefs {
     final previous = prefs.getString(userPurposeKey);
     final next = purpose.storageValue;
     await prefs.setString(userPurposeKey, next);
+    if (purpose == AppStartUserPurpose.personal) {
+      await prefs.setBool(personalPurposeUnlockedKey, true);
+    }
     if (previous != next) {
       await prefs.remove(deviceRoleKey);
       await prefs.setBool(permissionTutorialDoneKey, false);
       await prefs.remove(permissionTutorialPurposeKey);
       await prefs.setBool(permissionNoticeDoneKey, false);
     }
+  }
+
+  static Future<bool> getPersonalPurposeUnlocked() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getBool(personalPurposeUnlockedKey);
+    if (stored != null) return stored;
+    final purpose = parseAppStartUserPurpose(prefs.getString(userPurposeKey));
+    if (purpose != AppStartUserPurpose.personal) return false;
+    await prefs.setBool(personalPurposeUnlockedKey, true);
+    return true;
+  }
+
+  static Future<void> unlockPersonalPurpose() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(personalPurposeUnlockedKey, true);
   }
 
   static Future<AppDeviceRole?> getDeviceRole() async {

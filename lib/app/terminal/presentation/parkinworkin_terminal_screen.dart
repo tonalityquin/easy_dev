@@ -1239,6 +1239,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     await _showLauncherDialog(
       builder: (dialogContext) => _LauncherAccountDialog(
         accountKind: _launcherController!.selectedAccountKindLabel,
+        accountKindType: _launcherController!.selectedAccountKind,
         initialName: _launcherController!.enteredName,
         initialAccountIdentifier: _launcherController!.enteredCodeNumber,
         reduceMotion: _reduceMotion,
@@ -5171,6 +5172,7 @@ enum _LauncherPasteField {
 class _LauncherAccountDialog extends StatefulWidget {
   const _LauncherAccountDialog({
     required this.accountKind,
+    required this.accountKindType,
     required this.initialName,
     required this.initialAccountIdentifier,
     required this.reduceMotion,
@@ -5181,6 +5183,7 @@ class _LauncherAccountDialog extends StatefulWidget {
   });
 
   final String accountKind;
+  final TerminalAccountKind? accountKindType;
   final String initialName;
   final String initialAccountIdentifier;
   final bool reduceMotion;
@@ -5383,8 +5386,12 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
     );
   }
 
+  int get _requiredDeveloperTapCount =>
+      widget.accountKindType == TerminalAccountKind.tablet ? 3 : 5;
+
   Future<void> _registerEmptyDeveloperTap() async {
     if (_busy || _developerPasswordMode) return;
+    final requiredTapCount = _requiredDeveloperTapCount;
     final next = _emptySubmitCount + 1;
     LauncherDiagnostics.record(
       'developer_password_hidden_tap',
@@ -5392,12 +5399,12 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       meta: <String, Object?>{
         'accountKind': widget.accountKind,
         'count': next,
-        'required': 5,
+        'required': requiredTapCount,
         'firebaseReads': 0,
         'firebaseWrites': 0,
       },
     );
-    if (next < 5) {
+    if (next < requiredTapCount) {
       setState(() {
         _emptySubmitCount = next;
         _nameError = null;
@@ -5421,6 +5428,7 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       scope: 'launcher_terminal_manual_auth',
       meta: <String, Object?>{
         'accountKind': widget.accountKind,
+        'required': requiredTapCount,
         'firebaseReads': 0,
         'firebaseWrites': 0,
       },
