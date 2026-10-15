@@ -1029,18 +1029,30 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       );
 
       if (result.type == CommuteResultType.failure) {
+        final failureMessage = result.message.trim().isNotEmpty
+            ? result.message.trim()
+            : '출근 처리 중 오류가 발생했습니다. (err_take_mistake)';
         setState(() {
           _stage = _CommutePowerGateStage.failure;
-          _stateMessage = '출근을 시작하지 못했습니다.';
+          _stateMessage = failureMessage;
           _showClockInIssueResolution = false;
           _clockInIssueFailureReason = '';
           _clockInIssueFailureDetail = '';
         });
+        LauncherDiagnostics.record(
+          'commute_power_failure_message',
+          scope: 'commute_power',
+          meta: <String, Object?>{
+            'mode': widget.spec.diagnosticKey,
+            'message': failureMessage,
+          },
+        );
         await HapticFeedback.heavyImpact();
         if (!mounted) return;
         await StatusDialog.showFailure(
           context,
           title: '출근 실패',
+          description: failureMessage,
           useCommonUi: true,
         );
         return;
@@ -1131,9 +1143,11 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
         },
       );
       if (!mounted) return;
+      const failureMessage =
+          '출근 처리 중 오류가 발생했습니다. (err_take_mistake)';
       setState(() {
         _stage = _CommutePowerGateStage.failure;
-        _stateMessage = '출근을 시작하지 못했습니다.';
+        _stateMessage = failureMessage;
         _showClockInIssueResolution = false;
         _clockInIssueState = null;
         _clockInIssueFailureReason = '';
@@ -1145,6 +1159,7 @@ class _CommonCommuteInScreenState extends State<CommonCommuteInScreen>
       await StatusDialog.showFailure(
         context,
         title: '출근 실패',
+        description: failureMessage,
         useCommonUi: true,
       );
     }

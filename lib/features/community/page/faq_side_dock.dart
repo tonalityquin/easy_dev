@@ -29,74 +29,116 @@ class _FaqEntry {
 
 const List<_FaqEntry> _faqCatalog = [
   _FaqEntry(
-    code: "common_user_00",
-    question: "로그인이 안되고 있어요.",
-    answer: "진입한 창이 부여받은 계정에 호환이 되나요?\n\n각 로그인 창마다 다른 검증 로직을 가지고 있습니다. 관리자로부터 제공 받은 계정이 호환되는 창을 다시 확인해주세요.",
+    code: 'err_launcher_clean',
+    question: '런처 터미널 로그인 화면',
+    answer:
+        '입력한 계정 정보를 다시 확인하세요. (err_launcher_clean)\n\n'
+        '입력한 계정 코드에 해당하는 사용자 계정을 확인할 수 없는 경우 표시됩니다.\n\n'
+        '계정 코드를 다시 확인한 후 로그인해주세요.',
   ),
   _FaqEntry(
-    code: "common_user_01",
-    question: "계정 비밀번호를 분실했어요.",
-    answer: "비밀번호는 계정 추가 시 랜덤 함수로 생성됩니다.\n\n관리자로부터 개발사에 직접 문의하세요. 꼭 개인적으로 비밀번호를 저장하시기 바랍니다.",
+    code: 'err_launcher_cool_cool',
+    question: '런처 터미널 로그인 화면',
+    answer:
+        '입력한 계정 정보를 다시 확인하세요. (err_launcher_cool_cool)\n\n'
+        '사용자 계정은 존재하지만 현재 활성 상태가 아닌 경우 표시됩니다.\n\n'
+        '관리자에게 계정 활성 상태를 확인해주세요.',
   ),
   _FaqEntry(
-    code: "common_user_02",
-    question: "로그아웃을 하고 앱을 실행했어요. 그런데 404가 떠요.",
-    answer: "정상적인 앱 종료가 이루어지지 않았습니다.\n\n로그아웃을 하고 꼭 탭에서 앱을 완전히 종료해주세요.",
+    code: 'err_launcher_wrong',
+    question: '런처 터미널 로그인 화면',
+    answer:
+        '입력한 계정 정보를 다시 확인하세요. (err_launcher_wrong)\n\n'
+        '사용자 계정은 존재하고 활성 상태이지만 입력한 이름과 계정 정보가 일치하지 않는 경우 표시됩니다.\n\n'
+        '이름과 계정 정보를 다시 확인한 후 로그인해주세요.',
   ),
   _FaqEntry(
-    code: "service_user_commute",
-    question: "출근 보고 버튼을 눌러도 반응이 없어요.",
-    answer: "문제는 세 가지 중에 있습니다.\n\n1.오픈 카카오톡 채팅방이 아니다.\n2.채팅방이 삭제되었거나 추방당한 적이 있다.\n3.URL을 잘못 복사하여 붙여넣었다.\n\n위의 내용을 점검 후 다시 실행하시면 됩니다.",
+    code: 'err_lost_user',
+    question: '출근 화면 · 계정 확인',
+    answer:
+        '출근 계정 정보를 확인할 수 없습니다. (err_lost_user)\n\n'
+        '출근 직전 서버에서 현재 사용자 계정 문서를 확인할 수 없는 경우 표시됩니다.\n\n'
+        '현재 로그인 계정을 확인한 후 다시 시도해주세요.',
   ),
   _FaqEntry(
-    code: "service_user_humanResource_00",
-    question: "지역과 사용자를 골랐습니다. 그런데 데이터가 없어요.",
-    answer: "문제는 세 가지 중에 있습니다.\n\n1.해당 계정으로 저장된 로그가 없다.\n2.링크를 잘못 삽입했다.\n3.계정 권한을 부여하지 않았다.\n\n위의 내용을 점검 후 다시 실행하시면 됩니다.",
+    code: 'err_cool_cool_user',
+    question: '출근 화면 · 계정 확인',
+    answer:
+        '현재 계정으로 출근할 수 없습니다. (err_cool_cool_user)\n\n'
+        '출근 직전 서버에서 확인한 사용자 계정이 현재 활성 상태가 아닌 경우 표시됩니다.\n\n'
+        '관리자에게 계정 활성 상태를 확인해주세요.',
   ),
   _FaqEntry(
-    code: "service_userAccounts_HeadQuarter_00",
-    question: "회사 일정 달력을 열었어요. 그런데 일정을 불러오지 못하고 있어요.",
-    answer: "문제는 세 가지 중에 있습니다.\n\n1.링크를 잘못 삽입했다.\n2.계정 권한을 부여하지 않았다.\n3.해당 월에 생성한 할 일이 없다.\n\n위의 내용을 점검 후 다시 실행하시면 됩니다.",
+    code: 'err_lost_internet',
+    question: '출근 화면 · 계정 확인 및 서버 동기화',
+    answer:
+        '네트워크 연결을 확인한 후 다시 시도하세요. (err_lost_internet)\n\n'
+        '출근 계정 확인 또는 서버 근무 상태 동기화 중 네트워크 연결을 사용할 수 없는 경우 표시됩니다.\n\n'
+        '인터넷 연결 상태를 확인한 후 다시 시도해주세요.',
   ),
   _FaqEntry(
-    code: "service_userAccounts_HeadQuarter_01",
-    question: "완료 탭을 열었어요. 그런데 완료된 일을 불러오지 못하고 있어요.",
-    answer: "문제는 두 가지 중에 있습니다.\n1.계정 권한을 부여하지 않았다.\n2.완료된 할 일이 없다.\n\n기본적으로 markdown 문법을 따르고 있습니다.\n\n위의 내용을 점검 후 다시 실행하시면 됩니다.",
+    code: 'err_block_working',
+    question: '출근 화면 · 계정 확인 및 서버 동기화',
+    answer:
+        '출근 권한을 확인할 수 없습니다. (err_block_working)\n\n'
+        '출근 계정 확인 또는 서버 근무 상태 반영 과정에서 접근 권한이 허용되지 않은 경우 표시됩니다.\n\n'
+        '반복해서 발생하면 관리자에게 문의해주세요.',
   ),
   _FaqEntry(
-    code: "service_area_HeadQuarter_02",
-    question: "완료된 할 일을 엑셀에 저장하지 못 했습니다. 그런데 실수로 먼저 지웠는데 복구하고 싶어요.",
-    answer: "지워진 할 일은 복구할 수 없습니다.\n\n반드시 사전에 저장 후 삭제해야 합니다.",
+    code: 'err_check_sync_user',
+    question: '출근 화면 · 계정 확인',
+    answer:
+        '출근 계정 확인 중 오류가 발생했습니다. (err_check_sync_user)\n\n'
+        '출근 직전 사용자 계정을 서버에서 확인하는 과정에서 기타 오류가 발생한 경우 표시됩니다.\n\n'
+        '잠시 후 다시 시도하고 반복해서 발생하면 관리자에게 문의해주세요.',
   ),
   _FaqEntry(
-    code: "service_area_plate_tts",
-    question: "번호판을 생성할 때와 출차 요청했어요. 그런데 소리가 안들려요.",
-    answer: "본 앱은 기본적으로 Google TTS를 사용 중입니다.\n\n1.설정->일반->글자 읽어주기->기본 엔진\n\"Google 음성 인식 및 합성\"을 선택해주세요.\n2.플레이스토어에 가서 최신 업데이트 버전을 확인하세요.",
+    code: 'err_local_save_commute',
+    question: '출근 화면 · 출근 기록 저장',
+    answer:
+        '출근 기록을 저장하지 못했습니다. (err_local_save_commute)\n\n'
+        '단말에 새로운 출근 기록을 저장하는 과정에서 오류가 발생한 경우 표시됩니다.\n\n'
+        '다시 시도하고 반복해서 발생하면 관리자에게 문의해주세요.',
   ),
   _FaqEntry(
-    code: "service_area_userManagement_00",
-    question: "계정의 근무지를 변경하고 싶어요.",
-    answer: "동일 계정으로 근무지를 변경할 수 없습니다.\n\n1.이전 근무자의 계정을 삭제하세요.\n2.변경된 지역에서 계정을 새롭게 생성하세요.",
+    code: 'err_switch_fallen',
+    question: '출근 화면 · 근무 상태 저장',
+    answer:
+        '근무 상태를 저장하지 못했습니다. (err_switch_fallen)\n\n'
+        '단말의 로컬 근무 상태를 isWorking으로 저장하는 과정에서 오류가 발생한 경우 표시됩니다.\n\n'
+        '다시 시도하고 반복해서 발생하면 관리자에게 문의해주세요.',
   ),
   _FaqEntry(
-    code: "service_area_page_00",
-    question: "홈 화면의 구역 내 잔여 데이터를 보고 싶어요.",
-    answer: "구역 내 잔여 데이터 열람은 제한이 있습니다.\n\n1. 홈 버튼을 누른 후, 구역 현황 화면에 진입 하세요.\n2. 각 지역마다 5대의 기본값을 설정하고 있습니다.\n3. 현재 4대의 데이터가 있는 경우 열람이 가능합니다.\n4. 현재 5대의 데이터가 있는 경우 열람이 가능합니다.\n5. 현재 6대의 데이터가 있는 경우 열람이 불가능합니다.\n\n해당 기능의 범위를 늘리고자 하는 경우, 개인 문의 부탁드립니다.",
+    code: 'err_lost_switch',
+    question: '출근 화면 · 서버 근무 상태 동기화',
+    answer:
+        '서버에 근무 상태를 반영하지 못했습니다. (err_lost_switch)\n\n'
+        '로컬 출근 처리 후 서버의 근무 상태를 갱신하는 과정에서 오류가 발생한 경우 표시됩니다.\n\n'
+        '네트워크 상태를 확인한 후 다시 시도해주세요.',
   ),
   _FaqEntry(
-    code: "service_area_page_01",
-    question: "입차 요청과 출차 요청 탭을 눌렀어요. 아무 반응이 없어요.",
-    answer: "데이터가 없다는 뜻입니다.\n\n입차 요청 혹은 출차 요청에 데이터가 없는 경우에는 해당 화면을 눌러도 진입이 되지 않습니다.",
+    code: 'err_runtime_error',
+    question: '출근 화면 · 근무 기능 시작',
+    answer:
+        '근무 기능을 시작하지 못했습니다. (err_runtime_error)\n\n'
+        '출근 처리 후 근무에 필요한 런타임 기능을 활성화하는 과정에서 오류가 발생한 경우 표시됩니다.\n\n'
+        '다시 시도하고 반복해서 발생하면 관리자에게 문의해주세요.',
   ),
   _FaqEntry(
-    code: "service_area_page_02",
-    question: "입차 요청과 출차 요청 탭을 눌렀어요. 아무 반응이 없어요.",
-    answer: "데이터가 없다는 뜻입니다.\n\n입차 요청 혹은 출차 요청에 데이터가 없는 경우에는 해당 화면을 눌러도 진입이 되지 않습니다.",
+    code: 'err_noti_fallen',
+    question: '출근 화면 · 근무 알림 시작',
+    answer:
+        '근무 알림을 시작하지 못했습니다. (err_noti_fallen)\n\n'
+        '출근 처리 후 근무 상태 알림을 시작하거나 갱신하는 과정에서 오류가 발생한 경우 표시됩니다.\n\n'
+        '알림 설정을 확인하고 반복해서 발생하면 관리자에게 문의해주세요.',
   ),
   _FaqEntry(
-    code: "service_area_page_03",
-    question: "번호판 검색이 안되고 있어요.",
-    answer: "어느 화면에서 번호판을 검색했나요?\n\n1. 모든 상태를 검색할 수 있는 경우\n- 입차 요청\n- 출차 요청\n\n2. 입차 완료만 검색할 수 있는 경우\n- 입차 완료\n\n3. 출차 완료만 검색할 수 있는 경우\n- 출차 완료(정산 탭)\n\n해당 화면을 눌러도 진입이 되지 않습니다.",
+    code: 'err_take_mistake',
+    question: '출근 화면 · 출근 처리',
+    answer:
+        '출근 처리 중 오류가 발생했습니다. (err_take_mistake)\n\n'
+        '분류된 출근 오류 외의 예상하지 못한 문제가 발생한 경우 표시됩니다.\n\n'
+        '오류 코드와 함께 관리자에게 문의해주세요.',
   ),
 ];
 
@@ -115,7 +157,7 @@ Future<T?> showFaqSideDock<T>({
     return showCommonLeftSideDock<T>(
       context: context,
       builder: builder,
-      barrierLabel: 'FAQ / 문의',
+      barrierLabel: '오류 코드 / 문의',
       useRootNavigator: true,
       maxWidth: 460,
       widthFactor: .94,
@@ -125,7 +167,7 @@ Future<T?> showFaqSideDock<T>({
   return showCommonRightSideDock<T>(
     context: context,
     builder: builder,
-    barrierLabel: 'FAQ / 문의',
+    barrierLabel: '오류 코드 / 문의',
     useRootNavigator: true,
     maxWidth: 460,
     widthFactor: .94,
@@ -296,7 +338,7 @@ class _FaqSideDockContentState extends State<FaqSideDockContent> {
     final code = _debugPrintCode;
     await StatusDialog.showSuccess(
       context,
-      title: 'FAQ 개발자 상태',
+      title: '오류 안내 개발자 상태',
       description:
           'side=${widget.side.name} · source=${widget.source} · logs=${_debugLines.length}',
       copyText: code,
@@ -367,14 +409,14 @@ class _FaqSideDockContentState extends State<FaqSideDockContent> {
 
     return CommonSideDockFrame(
       showCloseTooltip: false,
-      title: 'FAQ / 문의',
+      title: '오류 코드 / 문의',
       subtitle: subtitle,
       icon: Icons.help_center_rounded,
       onClose: () => unawaited(_requestClose()),
       headerAction: _developerMode
           ? Semantics(
               button: true,
-              label: 'FAQ 개발자 상태',
+              label: '오류 안내 개발자 상태',
               child: IconButton(
                 onPressed: () => unawaited(_showDeveloperStatus()),
                 icon: Icon(
@@ -412,7 +454,7 @@ class _FaqSideDockContentState extends State<FaqSideDockContent> {
           ),
           const SizedBox(height: 12),
           CommonSideDockSection(
-            title: '질문',
+            title: '오류 코드',
             order: 2,
             child: OpsDockResultSwitcher(
               child: KeyedSubtree(
@@ -435,7 +477,7 @@ class _FaqSideDockContentState extends State<FaqSideDockContent> {
     return OpsDockListSurface(
       child: Semantics(
         textField: true,
-        label: 'FAQ 검색',
+        label: '오류 코드 검색',
         child: TextField(
           controller: _searchController,
           focusNode: _searchFocusNode,

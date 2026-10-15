@@ -289,7 +289,7 @@ class TerminalAuthCoordinator {
               'modeIndependentHeadquarter': true,
             },
           );
-          await userState.loadUserToLogInLocalOnly();
+          await userState.loadUserToLogInLocalOnly(requireFirebaseAuth: true);
           var restored = userState.session;
           if (restored is! UserSessionAccount) {
             LauncherDiagnostics.record(
@@ -299,7 +299,7 @@ class TerminalAuthCoordinator {
                 'fallback': 'server_user_restore',
               },
             );
-            await userState.loadUserToLogIn();
+            await userState.loadUserToLogIn(requireFirebaseAuth: true);
             restored = userState.session;
           }
 
@@ -451,10 +451,49 @@ class TerminalAuthCoordinator {
           final user = await context.read<UserRepository>().getUserByAccountCode(
                 accountIdentifier,
               );
-          if (user == null || user.name != normalizedName) {
+          if (user == null) {
+            LauncherDiagnostics.record(
+              'auth_account_identity_denied',
+              scope: 'auth',
+              meta: <String, Object?>{
+                'accountKind': accountKindId(kind),
+                'accountIdentifierMasked': maskedAccountIdentifier,
+                'reason': 'not_found',
+              },
+            );
             return const TerminalAccountIdentityResolutionResult(
               success: false,
-              message: '입력한 계정 정보를 다시 확인하세요.',
+              message: '입력한 계정 정보를 다시 확인하세요. (err_launcher_clean)',
+            );
+          }
+          if (!user.isActive) {
+            LauncherDiagnostics.record(
+              'auth_account_identity_denied',
+              scope: 'auth',
+              meta: <String, Object?>{
+                'accountKind': accountKindId(kind),
+                'accountIdentifierMasked': maskedAccountIdentifier,
+                'reason': 'inactive',
+              },
+            );
+            return const TerminalAccountIdentityResolutionResult(
+              success: false,
+              message: '입력한 계정 정보를 다시 확인하세요. (err_launcher_cool_cool)',
+            );
+          }
+          if (user.name != normalizedName) {
+            LauncherDiagnostics.record(
+              'auth_account_identity_denied',
+              scope: 'auth',
+              meta: <String, Object?>{
+                'accountKind': accountKindId(kind),
+                'accountIdentifierMasked': maskedAccountIdentifier,
+                'reason': 'name_mismatch',
+              },
+            );
+            return const TerminalAccountIdentityResolutionResult(
+              success: false,
+              message: '입력한 계정 정보를 다시 확인하세요. (err_launcher_wrong)',
             );
           }
           final modes = _userSupportedModes(user.modes);

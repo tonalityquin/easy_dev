@@ -197,9 +197,13 @@ class _CommonCommuteInWorkButtonWidgetState
       );
 
       if (result.type == CommuteResultType.failure) {
+        final failureMessage = result.message.trim().isNotEmpty
+            ? result.message.trim()
+            : '출근 처리 중 오류가 발생했습니다. (err_take_mistake)';
         await StatusDialog.showFailure(
           context,
           title: '출근 실패',
+          description: failureMessage,
           useCommonUi: true,
         );
         return;

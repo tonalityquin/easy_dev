@@ -16,10 +16,12 @@ class CommuteResult {
   const CommuteResult({
     required this.type,
     required this.destination,
+    this.message = '',
   });
 
   final CommuteResultType type;
   final CommuteDestination destination;
+  final String message;
 }
 
 class CommonCommuteInController {
@@ -143,17 +145,19 @@ class CommonCommuteInController {
 
       if (attendanceResult.alreadyRecorded) {
         await trace.succeed(attendanceResult.message);
-        return const CommuteResult(
+        return CommuteResult(
           type: CommuteResultType.alreadyWorked,
           destination: CommuteDestination.none,
+          message: attendanceResult.message,
         );
       }
 
       if (!attendanceResult.success) {
         await trace.fail(attendanceResult.message);
-        return const CommuteResult(
+        return CommuteResult(
           type: CommuteResultType.failure,
           destination: CommuteDestination.none,
+          message: attendanceResult.message,
         );
       }
 
@@ -168,16 +172,20 @@ class CommonCommuteInController {
       return CommuteResult(
         type: CommuteResultType.success,
         destination: destination,
+        message: attendanceResult.message,
       );
     } catch (error, stackTrace) {
+      const message =
+          '출근 처리 중 오류가 발생했습니다. (err_take_mistake)';
       await trace.fail(
-        '공통 출근 처리 중 오류가 발생했습니다.',
+        message,
         error: error,
         stackTrace: stackTrace,
       );
       return const CommuteResult(
         type: CommuteResultType.failure,
         destination: CommuteDestination.none,
+        message: message,
       );
     }
   }

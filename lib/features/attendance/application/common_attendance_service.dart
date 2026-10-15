@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +8,7 @@ import '../../../app/init/work_schedule_prefs.dart';
 import '../../../app/init/work_status_notification.dart';
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../account/applications/user_state.dart';
+import '../../account/domain/repositories/user_repository.dart';
 import '../../commute/domain/repositories/commute_true_false_repository.dart';
 import '../../dashboard/applications/common/endtime_reminder_service.dart';
 import '../../dev/application/area_state.dart';
@@ -71,17 +73,21 @@ class CommonAttendanceService {
       isHeadquarter: isHeadquarter,
     );
     if (attendance == null || !attendance.isValid) {
-      const message = '출근 처리에 필요한 사용자 또는 업무 지역 정보가 없습니다.';
+      const message = '출근 처리 중 오류가 발생했습니다. (err_take_mistake)';
       _record(
         'clock_in_invalid_context',
         attendance,
         trace: trace,
-        extra: const <String, Object?>{'message': message},
+        extra: const <String, Object?>{
+          'reason': 'invalid_context',
+          'message': message,
+        },
       );
       return const AttendanceActionResult.failure(message: message);
     }
 
     final userState = context.read<UserState>();
+    final userRepository = context.read<UserRepository>();
     try {
       _record('clock_in_start', attendance, trace: trace);
       await userState.ensureTodayClockInStatus();
@@ -96,35 +102,217 @@ class CommonAttendanceService {
         return const AttendanceActionResult.alreadyRecorded(message: message);
       }
 
-      final now = recordedAt ?? DateTime.now();
-      final session = await AttBrkRepository.instance.insertClockInWithSession(
-        dateTime: now,
-        attendance: attendance,
-      );
-      _record(
-        'clock_in_local_saved',
-        attendance,
-        trace: trace,
-        extra: <String, Object?>{
-          'at': now.toIso8601String(),
-          'sessionContext': session.contextKey,
-          'sessionMode': session.modeKey,
-          'sessionHeadquarter': session.isHeadquarter,
-        },
-      );
+      if (!userState.isTablet) {
+        try {
+          final latestUser =
+              await userRepository.getUserByIdFromServer(attendance.userId);
+          if (latestUser == null) {
+            const message =
+                '출근 계정 정보를 확인할 수 없습니다. (err_lost_user)';
+            _record(
+              'clock_in_account_check_failed',
+              attendance,
+              trace: trace,
+              extra: const <String, Object?>{
+                'reason': 'account_not_found',
+                'allowed': false,
+                'firebaseRead': 1,
+                'message': message,
+              },
+            );
+            return const AttendanceActionResult.failure(message: message);
+          }
+          if (!latestUser.isActive) {
+            const message =
+                '현재 계정으로 출근할 수 없습니다. (err_cool_cool_user)';
+            _record(
+              'clock_in_blocked',
+              attendance,
+              trace: trace,
+              extra: const <String, Object?>{
+                'reason': 'inactive_account',
+                'isActive': false,
+                'allowed': false,
+                'firebaseRead': 1,
+                'message': message,
+              },
+            );
+            return const AttendanceActionResult.failure(message: message);
+          }
+          _record(
+            'clock_in_account_checked',
+            attendance,
+            trace: trace,
+            extra: const <String, Object?>{
+              'reason': 'active_account',
+              'isActive': true,
+              'allowed': true,
+              'firebaseRead': 1,
+            },
+          );
+        } on FirebaseException catch (error, stackTrace) {
+          final networkFailure = _isNetworkFirebaseFailure(error);
+          final permissionFailure = error.code == 'permission-denied';
+          final message = networkFailure
+              ? '네트워크 연결을 확인한 후 다시 시도하세요. (err_lost_internet)'
+              : permissionFailure
+                  ? '출근 권한을 확인할 수 없습니다. (err_block_working)'
+                  : '출근 계정 확인 중 오류가 발생했습니다. (err_check_sync_user)';
+          _record(
+            'clock_in_account_check_failed',
+            attendance,
+            trace: trace,
+            extra: <String, Object?>{
+              'reason': networkFailure
+                  ? 'network_unavailable'
+                  : permissionFailure
+                      ? 'permission_denied'
+                      : 'account_check_failed',
+              'firebaseCode': error.code,
+              'firebaseRead': 1,
+              'allowed': false,
+              'message': message,
+              'error': error,
+              'stack': stackTrace,
+            },
+          );
+          return AttendanceActionResult.failure(message: message);
+        } catch (error, stackTrace) {
+          const message =
+              '출근 계정 확인 중 오류가 발생했습니다. (err_check_sync_user)';
+          _record(
+            'clock_in_account_check_failed',
+            attendance,
+            trace: trace,
+            extra: <String, Object?>{
+              'reason': 'account_check_failed',
+              'firebaseRead': 1,
+              'allowed': false,
+              'message': message,
+              'error': error,
+              'stack': stackTrace,
+            },
+          );
+          return const AttendanceActionResult.failure(message: message);
+        }
+      }
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isWorking', true);
-      await WorkSchedulePrefs.refreshReminderFromPrefs(prefs);
-      await userState.setWorkingStatus(true);
-      await _activateWorkingRuntime(
-        attendance,
-        userState: userState,
-        trace: trace,
-      );
-      await WorkStatusNotificationController.refresh(
-        source: 'attendance_clock_in',
-      );
+      final now = recordedAt ?? DateTime.now();
+      try {
+        final session = await AttBrkRepository.instance.insertClockInWithSession(
+          dateTime: now,
+          attendance: attendance,
+        );
+        _record(
+          'clock_in_local_saved',
+          attendance,
+          trace: trace,
+          extra: <String, Object?>{
+            'at': now.toIso8601String(),
+            'sessionContext': session.contextKey,
+            'sessionMode': session.modeKey,
+            'sessionHeadquarter': session.isHeadquarter,
+          },
+        );
+      } catch (error, stackTrace) {
+        const message =
+            '출근 기록을 저장하지 못했습니다. (err_local_save_commute)';
+        _record(
+          'clock_in_local_save_failed',
+          attendance,
+          trace: trace,
+          extra: <String, Object?>{
+            'reason': 'local_attendance_save_failed',
+            'message': message,
+            'error': error,
+            'stack': stackTrace,
+          },
+        );
+        return const AttendanceActionResult.failure(message: message);
+      }
+
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final saved = await prefs.setBool('isWorking', true);
+        if (!saved) {
+          throw StateError('WORKING_STATE_LOCAL_PERSIST_FAILED');
+        }
+        await WorkSchedulePrefs.refreshReminderFromPrefs(prefs);
+        _record(
+          'clock_in_local_working_state_saved',
+          attendance,
+          trace: trace,
+          extra: const <String, Object?>{
+            'isWorking': true,
+            'localPreference': true,
+          },
+        );
+      } catch (error, stackTrace) {
+        const message =
+            '근무 상태를 저장하지 못했습니다. (err_switch_fallen)';
+        _record(
+          'clock_in_local_working_state_failed',
+          attendance,
+          trace: trace,
+          extra: <String, Object?>{
+            'reason': 'working_state_local_save_failed',
+            'message': message,
+            'error': error,
+            'stack': stackTrace,
+          },
+        );
+        return const AttendanceActionResult.failure(message: message);
+      }
+
+      try {
+        await userState.setWorkingStatus(
+          true,
+          persistLocalPreference: false,
+        );
+      } on FirebaseException catch (error, stackTrace) {
+        final networkFailure = _isNetworkFirebaseFailure(error);
+        final permissionFailure = error.code == 'permission-denied';
+        final message = networkFailure
+            ? '네트워크 연결을 확인한 후 다시 시도하세요. (err_lost_internet)'
+            : permissionFailure
+                ? '출근 권한을 확인할 수 없습니다. (err_block_working)'
+                : '서버에 근무 상태를 반영하지 못했습니다. (err_lost_switch)';
+        _record(
+          'clock_in_remote_working_state_failed',
+          attendance,
+          trace: trace,
+          extra: <String, Object?>{
+            'reason': networkFailure
+                ? 'network_unavailable'
+                : permissionFailure
+                    ? 'permission_denied'
+                    : 'working_state_remote_write_failed',
+            'firebaseCode': error.code,
+            'firebaseWrite': 1,
+            'message': message,
+            'error': error,
+            'stack': stackTrace,
+          },
+        );
+        return AttendanceActionResult.failure(message: message);
+      } catch (error, stackTrace) {
+        const message =
+            '서버에 근무 상태를 반영하지 못했습니다. (err_lost_switch)';
+        _record(
+          'clock_in_remote_working_state_failed',
+          attendance,
+          trace: trace,
+          extra: <String, Object?>{
+            'reason': 'working_state_remote_write_failed',
+            'firebaseWrite': 1,
+            'message': message,
+            'error': error,
+            'stack': stackTrace,
+          },
+        );
+        return const AttendanceActionResult.failure(message: message);
+      }
+
       userState.markClockInToday();
       _record(
         'clock_in_working_state_updated',
@@ -135,6 +323,61 @@ class CommonAttendanceService {
           'firebaseWrite': 1,
         },
       );
+
+      final runtimeStarted = await _activateWorkingRuntime(
+        attendance,
+        userState: userState,
+        trace: trace,
+      );
+      if (!runtimeStarted) {
+        const message =
+            '근무 기능을 시작하지 못했습니다. (err_runtime_error)';
+        _record(
+          'clock_in_runtime_failed',
+          attendance,
+          trace: trace,
+          extra: const <String, Object?>{
+            'reason': 'working_runtime_failed',
+            'message': message,
+          },
+        );
+        return const AttendanceActionResult.failure(message: message);
+      }
+
+      try {
+        final notificationReady = await WorkStatusNotificationController.refresh(
+          source: 'attendance_clock_in',
+        );
+        if (!notificationReady) {
+          const message =
+              '근무 알림을 시작하지 못했습니다. (err_noti_fallen)';
+          _record(
+            'clock_in_notification_failed',
+            attendance,
+            trace: trace,
+            extra: const <String, Object?>{
+              'reason': 'working_notification_failed',
+              'message': message,
+            },
+          );
+          return const AttendanceActionResult.failure(message: message);
+        }
+      } catch (error, stackTrace) {
+        const message =
+            '근무 알림을 시작하지 못했습니다. (err_noti_fallen)';
+        _record(
+          'clock_in_notification_failed',
+          attendance,
+          trace: trace,
+          extra: <String, Object?>{
+            'reason': 'working_notification_failed',
+            'message': message,
+            'error': error,
+            'stack': stackTrace,
+          },
+        );
+        return const AttendanceActionResult.failure(message: message);
+      }
 
       await _recordClockInAtToCommuteTrueFalse(
         attendance,
@@ -147,18 +390,20 @@ class CommonAttendanceService {
         message: '출근 기록이 완료되었습니다.',
       );
     } catch (error, stackTrace) {
+      const message =
+          '출근 처리 중 오류가 발생했습니다. (err_take_mistake)';
       _record(
         'clock_in_failure',
         attendance,
         trace: trace,
         extra: <String, Object?>{
+          'reason': 'unexpected_error',
+          'message': message,
           'error': error,
           'stack': stackTrace,
         },
       );
-      return AttendanceActionResult.failure(
-        message: '출근 처리 중 오류가 발생했습니다: $error',
-      );
+      return const AttendanceActionResult.failure(message: message);
     }
   }
 
@@ -469,7 +714,7 @@ class CommonAttendanceService {
     );
   }
 
-  static Future<void> _activateWorkingRuntime(
+  static Future<bool> _activateWorkingRuntime(
     AttendanceContext attendance, {
     required UserState userState,
     DeveloperOperationTrace? trace,
@@ -499,6 +744,7 @@ class CommonAttendanceService {
           'mode': result.mode,
         },
       );
+      return true;
     } catch (error, stackTrace) {
       _record(
         'clock_in_runtime_activation_failure',
@@ -509,6 +755,7 @@ class CommonAttendanceService {
           'stack': stackTrace.toString(),
         },
       );
+      return false;
     }
   }
 
@@ -587,6 +834,12 @@ class CommonAttendanceService {
     trace?.log(
       'attendance $event ${meta.entries.map((entry) => '${entry.key}=${entry.value}').join(' ')}',
     );
+  }
+
+  static bool _isNetworkFirebaseFailure(FirebaseException error) {
+    return error.code == 'unavailable' ||
+        error.code == 'deadline-exceeded' ||
+        error.code == 'network-request-failed';
   }
 
   static bool _isToday(DateTime value) {

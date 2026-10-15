@@ -13,6 +13,10 @@ class FirestoreUserRepository implements UserRepository {
   Future<UserModel?> getUserById(String userId) => _readService.getUserById(userId);
 
   @override
+  Future<UserModel?> getUserByIdFromServer(String userId) =>
+      _readService.getUserByIdFromServer(userId);
+
+  @override
   Future<UserModel?> getUserByAccountCode(String accountCode) =>
       _readService.getUserByAccountCode(accountCode);
 

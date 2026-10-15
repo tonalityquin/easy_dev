@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import '../../../app/auth/google_auth_session.dart';
 import '../../../app/init/work_schedule_prefs.dart';
 import '../../../app/utils/area_context_debug_trace.dart';
 import '../../../app/utils/dev_firebase_debug_dialog.dart';
@@ -150,6 +151,59 @@ class UserState extends ChangeNotifier {
     _selectedUserId = null;
   }
 
+  String? _normalizedRestoreEmail(String? value) {
+    final normalized = value?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  bool _isRestoreIdentityBound({
+    required String expectedEmail,
+    required String source,
+    required String accountType,
+  }) {
+    final expected = _normalizedRestoreEmail(expectedEmail);
+    final firebaseEmail = _normalizedRestoreEmail(
+      FirebaseGoogleAuthBridge.instance.currentUser?.email,
+    );
+    final googleEmail =
+        GoogleAuthSession.instance.currentIdentity?.normalizedEmail;
+    final firebaseMatched =
+        expected != null && firebaseEmail == expected;
+    final googleMatched = expected != null && googleEmail == expected;
+    final matched = firebaseMatched && googleMatched;
+
+    LauncherDiagnostics.record(
+      'auth_restore_identity_checked',
+      scope: 'auth',
+      meta: <String, Object?>{
+        'source': source,
+        'accountType': accountType,
+        'expectedEmailPresent': expected != null,
+        'firebaseEmailPresent': firebaseEmail != null,
+        'googleEmailPresent': googleEmail != null,
+        'firebaseMatched': firebaseMatched,
+        'googleMatched': googleMatched,
+        'matched': matched,
+      },
+    );
+
+    if (!matched) {
+      LauncherDiagnostics.record(
+        'auth_${accountType}_restore_blocked',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'source': source,
+          'reason': 'identity_mismatch',
+        },
+      );
+    }
+
+    return matched;
+  }
+
   void _guardSessionSwitchOrThrow(String updatedId,
       {required bool expectTablet}) {
     if (_session == null) return;
@@ -221,11 +275,16 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  Future<void> setWorkingStatus(bool isWorking) async {
+  Future<void> setWorkingStatus(
+    bool isWorking, {
+    bool persistLocalPreference = true,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final localBefore = prefs.getBool('isWorking') ?? false;
     final sessionBefore = _session?.isWorking;
-    await prefs.setBool('isWorking', isWorking);
+    if (persistLocalPreference) {
+      await prefs.setBool('isWorking', isWorking);
+    }
     LauncherDiagnostics.record(
       'working_state_write',
       scope: 'working_state',
@@ -235,6 +294,7 @@ class UserState extends ChangeNotifier {
         'sessionBefore': sessionBefore,
         'requested': isWorking,
         'tablet': _isTablet,
+        'persistLocalPreference': persistLocalPreference,
       },
     );
 
@@ -1272,13 +1332,12 @@ class UserState extends ChangeNotifier {
     await prefs.setString('position', tablet.position ?? '');
   }
 
-  Future<void> loadUserToLogInLocalOnly() async {
+  Future<void> loadUserToLogInLocalOnly({bool requireFirebaseAuth = false}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final codeNumber = (prefs.getString('codeNumber') ?? prefs.getString('phone'))?.trim();
       final selectedArea = prefs.getString('selectedArea')?.trim();
       final storedDivision = prefs.getString('division')?.trim();
-      final role = prefs.getString('role')?.trim();
       final hadStoredSchedule = WorkSchedulePrefs.hasStoredSchedulePrefs(prefs);
       await WorkSchedulePrefs.migrateLegacySchedulePrefs(prefs);
       final startTimeByWeekday = WorkSchedulePrefs.readDayTimeMapFromPrefs(
@@ -1297,10 +1356,38 @@ class UserState extends ChangeNotifier {
           .ensureSignedInFromGoogleSession(interactive: false);
       debugPrint(
           '[USER-STATE][${DateTime.now().toIso8601String()}] loadUserToLogInLocalOnly firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}');
+      LauncherDiagnostics.record(
+        'auth_user_restore_firebase_checked',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'source': 'local_cache',
+          'required': requireFirebaseAuth,
+          'firebaseOk': firebaseOk,
+        },
+      );
+      if (requireFirebaseAuth && !firebaseOk) {
+        LauncherDiagnostics.record(
+          'auth_user_restore_blocked',
+          scope: 'auth',
+          meta: const <String, Object?>{
+            'source': 'local_cache',
+            'reason': 'firebase_auth_failed',
+          },
+        );
+        return;
+      }
 
       final userId = "$codeNumber-$selectedArea";
       final decoded = jsonDecode(cachedJson) as Map<String, dynamic>;
       var userData = UserModel.fromMap(userId, decoded);
+      if (requireFirebaseAuth &&
+          !_isRestoreIdentityBound(
+            expectedEmail: userData.email,
+            source: 'local_cache',
+            accountType: 'user',
+          )) {
+        return;
+      }
       final restoredIsWorking = userData.isWorking;
 
       _isTablet = false;
@@ -1324,7 +1411,6 @@ class UserState extends ChangeNotifier {
 
       userData = userData.copyWith(
         currentArea: trimmedArea,
-        role: role ?? userData.role,
         position: position ?? userData.position,
         breakDays: effectiveBreakDays,
         startTimeByWeekday: effectiveStartByWeekday,
@@ -1334,6 +1420,15 @@ class UserState extends ChangeNotifier {
             : userData.divisions,
         isSaved: true,
         isWorking: localIsWorking,
+      );
+      LauncherDiagnostics.record(
+        'auth_user_role_source_applied',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'source': 'cached_user',
+          'rolePresent': userData.role.trim().isNotEmpty,
+          'preferenceOverrideApplied': false,
+        },
       );
       LauncherDiagnostics.record(
         'working_state_restore_reconciled',
@@ -1353,6 +1448,13 @@ class UserState extends ChangeNotifier {
       _user = userData;
       _tablet = null;
       _session = UserSessionAccount(userData);
+      LauncherDiagnostics.record(
+        'auth_user_restore_session_created',
+        scope: 'auth',
+        meta: const <String, Object?>{
+          'source': 'local_cache',
+        },
+      );
       notifyListeners();
 
       _areaState.setAreaLocalOnly(
@@ -1365,13 +1467,12 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  Future<void> loadUserToLogIn() async {
+  Future<void> loadUserToLogIn({bool requireFirebaseAuth = false}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final codeNumber = (prefs.getString('codeNumber') ?? prefs.getString('phone'))?.trim();
       final selectedArea = prefs.getString('selectedArea')?.trim();
       final division = prefs.getString('division')?.trim();
-      final role = prefs.getString('role')?.trim();
       final hadStoredSchedule = WorkSchedulePrefs.hasStoredSchedulePrefs(prefs);
       await WorkSchedulePrefs.migrateLegacySchedulePrefs(prefs);
       final startTimeByWeekday = WorkSchedulePrefs.readDayTimeMapFromPrefs(
@@ -1387,10 +1488,49 @@ class UserState extends ChangeNotifier {
           .ensureSignedInFromGoogleSession(interactive: false);
       debugPrint(
           '[USER-STATE][${DateTime.now().toIso8601String()}] loadUserToLogIn firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}');
+      LauncherDiagnostics.record(
+        'auth_user_restore_firebase_checked',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'source': 'remote_user',
+          'required': requireFirebaseAuth,
+          'firebaseOk': firebaseOk,
+        },
+      );
+      if (requireFirebaseAuth && !firebaseOk) {
+        LauncherDiagnostics.record(
+          'auth_user_restore_blocked',
+          scope: 'auth',
+          meta: const <String, Object?>{
+            'source': 'remote_user',
+            'reason': 'firebase_auth_failed',
+          },
+        );
+        return;
+      }
 
       final userId = "$codeNumber-$selectedArea";
       var userData = await _repository.getUserById(userId);
       if (userData == null) return;
+      if (!userData.isActive) {
+        LauncherDiagnostics.record(
+          'auth_user_restore_blocked',
+          scope: 'auth',
+          meta: const <String, Object?>{
+            'source': 'remote_user',
+            'reason': 'inactive_account',
+          },
+        );
+        return;
+      }
+      if (requireFirebaseAuth &&
+          !_isRestoreIdentityBound(
+            expectedEmail: userData.email,
+            source: 'remote_user',
+            accountType: 'user',
+          )) {
+        return;
+      }
       final restoredIsWorking = userData.isWorking;
 
       _isTablet = false;
@@ -1409,7 +1549,6 @@ class UserState extends ChangeNotifier {
 
       userData = userData.copyWith(
         currentArea: trimmedArea,
-        role: role ?? userData.role,
         position: position ?? userData.position,
         breakDays: effectiveBreakDays,
         startTimeByWeekday: effectiveStartByWeekday,
@@ -1417,6 +1556,14 @@ class UserState extends ChangeNotifier {
         divisions: division != null ? [division] : userData.divisions,
         isSaved: true,
         isWorking: localIsWorking,
+      );
+      LauncherDiagnostics.record(
+        'auth_user_role_source_applied',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'source': 'server',
+          'rolePresent': userData.role.trim().isNotEmpty,
+        },
       );
       LauncherDiagnostics.record(
         'working_state_restore_reconciled',
@@ -1446,6 +1593,13 @@ class UserState extends ChangeNotifier {
       _user = userData;
       _tablet = null;
       _session = UserSessionAccount(userData);
+      LauncherDiagnostics.record(
+        'auth_user_restore_session_created',
+        scope: 'auth',
+        meta: const <String, Object?>{
+          'source': 'remote_user',
+        },
+      );
       notifyListeners();
 
     } catch (e) {
@@ -1461,7 +1615,6 @@ class UserState extends ChangeNotifier {
       );
       final selectedArea = prefs.getString('selectedArea')?.trim();
       final division = prefs.getString('division')?.trim();
-      final role = prefs.getString('role')?.trim();
       final position = prefs.getString('position');
       final englishSelectedAreaName =
           prefs.getString('englishSelectedAreaName')?.trim();
@@ -1474,6 +1627,27 @@ class UserState extends ChangeNotifier {
       debugPrint(
         '[USER-STATE][${DateTime.now().toIso8601String()}] loadTabletToLogIn firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}',
       );
+      LauncherDiagnostics.record(
+        'auth_tablet_restore_firebase_checked',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'firebaseOk': firebaseOk,
+          'currentUserPresent':
+              FirebaseGoogleAuthBridge.instance.currentUser != null,
+          'anonymous':
+              FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous,
+        },
+      );
+      if (!firebaseOk) {
+        LauncherDiagnostics.record(
+          'auth_tablet_restore_blocked',
+          scope: 'auth',
+          meta: const <String, Object?>{
+            'reason': 'firebase_auth_failed',
+          },
+        );
+        return;
+      }
 
       TabletModel? tablet;
       if (tabletCodeNumber.isNotEmpty) {
@@ -1503,6 +1677,13 @@ class UserState extends ChangeNotifier {
         );
         return;
       }
+      if (!_isRestoreIdentityBound(
+        expectedEmail: tablet.email,
+        source: 'remote_tablet',
+        accountType: 'tablet',
+      )) {
+        return;
+      }
 
       final canonicalId = AccountCodeNumber.documentId(
         codeNumber: tablet.codeNumber,
@@ -1515,7 +1696,6 @@ class UserState extends ChangeNotifier {
         id: effectiveId,
         currentArea: selectedArea,
         selectedArea: selectedArea,
-        role: role ?? tablet.role,
         position: position ?? tablet.position,
         divisions: division != null ? <String>[division] : tablet.divisions,
         englishSelectedAreaName: (englishSelectedAreaName?.isNotEmpty ?? false)
@@ -1523,6 +1703,14 @@ class UserState extends ChangeNotifier {
             : tablet.englishSelectedAreaName,
         isSaved: true,
         isWorking: localIsWorking,
+      );
+      LauncherDiagnostics.record(
+        'auth_tablet_role_source_applied',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'source': 'server',
+          'rolePresent': tabletData.role.trim().isNotEmpty,
+        },
       );
       LauncherDiagnostics.record(
         'working_state_restore_reconciled',
@@ -1573,6 +1761,13 @@ class UserState extends ChangeNotifier {
       _user = null;
       _tablet = tabletData;
       _session = TabletSessionAccount(tabletData);
+      LauncherDiagnostics.record(
+        'auth_tablet_restore_session_created',
+        scope: 'auth',
+        meta: const <String, Object?>{
+          'source': 'remote_tablet',
+        },
+      );
       notifyListeners();
 
       await _saveTabletPrefs(tabletData);

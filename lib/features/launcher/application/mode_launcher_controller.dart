@@ -1728,10 +1728,34 @@ class ModeLauncherController extends ChangeNotifier {
     return _protectedCommands.contains(normalized);
   }
 
+  void _syncImportingAuthorization() {
+    if (!_importingUnlocked) {
+      return;
+    }
+    if (DeveloperAccountAuthorization.isAuthorized) {
+      return;
+    }
+    _importingUnlocked = false;
+    _append(
+      TerminalLineType.error,
+      '[LOCKED] developer authorization expired',
+      cadence: TerminalCadence.error,
+    );
+    LauncherDiagnostics.record(
+      'terminal_importing_unlock_revoked',
+      scope: 'mode_terminal',
+      meta: <String, Object?>{
+        'reason': 'developer_authorization_lost',
+        'path': _commandPath.terminalPath,
+      },
+    );
+  }
+
   Future<ModeLauncherSubmitResult> _unlockImporting(
     BuildContext context, {
     required bool reduceMotion,
   }) async {
+    _syncImportingAuthorization();
     if (_importingUnlocked) {
       _append(TerminalLineType.success, '[ OK ] protected commands enabled');
       notifyListeners();
@@ -1849,6 +1873,27 @@ class ModeLauncherController extends ChangeNotifier {
     );
   }
 
+  String _gmailEmailForStatus(String rawEmail) {
+    final email = rawEmail.trim();
+    if (email.isEmpty) return '-';
+    if (_devModeEnabled) return email;
+
+    final separator = email.indexOf('@');
+    if (separator <= 0 || separator >= email.length - 1) {
+      return '***';
+    }
+
+    final local = email.substring(0, separator);
+    final domain = email.substring(separator + 1);
+    final visibleCount = local.length <= 2
+        ? 1
+        : local.length <= 4
+            ? 2
+            : 3;
+    final visibleLocal = local.substring(0, visibleCount);
+    return '$visibleLocal***@$domain';
+  }
+
   bool _isGlobalCommand(String normalized) {
     return const <String>{
       'modes', 'mode', '모드', 'help', 'status', '상태',
@@ -1864,8 +1909,11 @@ class ModeLauncherController extends ChangeNotifier {
     String normalized, {
     required bool reduceMotion,
   }) async {
-    if (_requiresImportingUnlock(normalized) && !_importingUnlocked) {
-      return _rejectProtectedCommand(normalized);
+    if (_requiresImportingUnlock(normalized)) {
+      _syncImportingAuthorization();
+      if (!_importingUnlocked) {
+        return _rejectProtectedCommand(normalized);
+      }
     }
     switch (normalized) {
       case 'setting':
@@ -1893,18 +1941,38 @@ class ModeLauncherController extends ChangeNotifier {
       case '상태':
         await _refreshLiveStatus();
         final gmailStatus = await GmailSenderAuth.status();
+        final configuredEmail = _gmailEmailForStatus(
+          gmailStatus.configuredEmail,
+        );
+        final authenticatedEmail = _gmailEmailForStatus(
+          gmailStatus.authenticatedEmail,
+        );
+        LauncherDiagnostics.record(
+          'gmail_status_rendered',
+          scope: 'mode_terminal',
+          meta: <String, Object?>{
+            'developerMode': _devModeEnabled,
+            'configured': gmailStatus.configured,
+            'authenticated': gmailStatus.authenticated,
+            'matches': gmailStatus.matches,
+            'emailVisibility': _devModeEnabled ? 'full' : 'masked',
+          },
+        );
         _appendStatus();
-        _append(
+        await _appendPaced(
           TerminalLineType.output,
-          'Gmail configured    ${gmailStatus.configuredEmail.isEmpty ? '-' : gmailStatus.configuredEmail}',
+          'Gmail configured    $configuredEmail',
+          reduceMotion,
         );
-        _append(
+        await _appendPaced(
           TerminalLineType.output,
-          'Gmail authenticated ${gmailStatus.authenticatedEmail.isEmpty ? '-' : gmailStatus.authenticatedEmail}',
+          'Gmail authenticated $authenticatedEmail',
+          reduceMotion,
         );
-        _append(
+        await _appendPaced(
           gmailStatus.matches ? TerminalLineType.success : TerminalLineType.system,
           'Gmail sender state  ${gmailStatus.state}',
+          reduceMotion,
         );
         if (_devModeEnabled && context.mounted) {
           final completion = LauncherDiagnostics.showStatus(

@@ -7,6 +7,7 @@ abstract class UserRepository {
   Future<List<UserModel>> searchUsersByCodeNumber(String codeNumber);
   Future<List<UserModel>> searchUsersByName(String name);
   Future<UserModel?> getUserById(String userId);
+  Future<UserModel?> getUserByIdFromServer(String userId);
   Future<UserModel?> getUserByHandle(String handle);
   Future<TabletModel?> getTabletByCodeNumber(String codeNumber);
   Future<List<TabletModel>> searchTabletsByCodeNumber(String codeNumber);

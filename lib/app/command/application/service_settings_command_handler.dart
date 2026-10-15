@@ -72,6 +72,7 @@ class ServiceSettingsCommandHandler {
       args,
       themeController: themeController,
       debugEnabled: debugEnabled,
+      source: source,
     );
 
     DebugSessionController.record(
@@ -93,6 +94,7 @@ class ServiceSettingsCommandHandler {
     List<String> args, {
     required ThemePrefsController themeController,
     required bool debugEnabled,
+    required String source,
   }) async {
     if (args.isEmpty) {
       return _help(
@@ -116,9 +118,41 @@ class ServiceSettingsCommandHandler {
         if (!debugEnabled) return _debugRequired('color');
         return _color(args.skip(1).toList(), themeController);
       case 'email':
-        return _email(args.skip(1).toList());
+        return _email(
+          args.skip(1).toList(),
+          developerMode: debugEnabled,
+        );
       case 'edit':
         if (args.length == 2 && args[1] == 'email') {
+          _recordAreaEmailDebug(
+            'terminal_edit_authorization_checked',
+            source: source,
+            meta: <String, Object?>{'debugEnabled': debugEnabled},
+          );
+          if (!debugEnabled) {
+            _recordAreaEmailDebug(
+              'terminal_edit_authorization_denied',
+              source: source,
+              meta: const <String, Object?>{
+                'reason': 'developer_mode_required',
+                'stage': 'command_entry',
+              },
+            );
+            DebugSessionController.record(
+              'service_setting_email_edit_denied',
+              source: source,
+              meta: const <String, Object?>{
+                'reason': 'developer_mode_required',
+                'stage': 'command_entry',
+              },
+            );
+            return _debugRequired('edit email');
+          }
+          _recordAreaEmailDebug(
+            'terminal_edit_authorization_allowed',
+            source: source,
+            meta: const <String, Object?>{'stage': 'command_entry'},
+          );
           return await _beginEmailEdit(context);
         }
         return const ServiceSettingsCommandResult.failure(<String>[
@@ -162,7 +196,7 @@ class ServiceSettingsCommandHandler {
           );
         case 'email':
           return ServiceSettingsCommandResult.success(
-            await _emailHelpLines(),
+            await _emailHelpLines(developerMode: debugEnabled),
           );
         case 'recipient':
           if (!debugEnabled) return _debugRequired('recipient');
@@ -192,7 +226,10 @@ class ServiceSettingsCommandHandler {
       if (debugEnabled)
         ..._themeHelpLines(themeController, includeCurrent: false),
       '',
-      ...await _emailHelpLines(includeCurrent: false),
+      ...await _emailHelpLines(
+        includeCurrent: false,
+        developerMode: debugEnabled,
+      ),
     ];
     if (debugEnabled) {
       lines.addAll(<String>[
@@ -368,14 +405,27 @@ class ServiceSettingsCommandHandler {
 
   static Future<List<String>> _emailHelpLines({
     bool includeCurrent = true,
+    required bool developerMode,
   }) async {
     final area = await AreaSnapshotScope.readCurrentArea();
     final current = area?.email.trim() ?? '';
+    final displayEmail = _emailForDisplay(
+      current,
+      developerMode: developerMode,
+    );
+    _recordAreaEmailDebug(
+      'terminal_email_help_rendered',
+      meta: <String, Object?>{
+        'developerMode': developerMode,
+        'configured': current.isNotEmpty,
+        'emailVisibility': developerMode ? 'full' : 'masked',
+      },
+    );
     return <String>[
       'EMAIL',
       if (includeCurrent) 'division     ${AreaSnapshotScope.division.isEmpty ? '-' : AreaSnapshotScope.division}',
       if (includeCurrent) 'area         ${AreaSnapshotScope.area.isEmpty ? '-' : AreaSnapshotScope.area}',
-      if (includeCurrent) 'current      ${current.isEmpty ? '-' : current}',
+      if (includeCurrent) 'current      $displayEmail',
       '',
       'COMMAND',
       'email',
@@ -383,7 +433,28 @@ class ServiceSettingsCommandHandler {
     ];
   }
 
-  static Future<ServiceSettingsCommandResult> _email(List<String> args) async {
+  static String _emailForDisplay(
+    String email, {
+    required bool developerMode,
+  }) {
+    final value = email.trim();
+    if (value.isEmpty) return '-';
+    if (developerMode) return value;
+
+    final atIndex = value.indexOf('@');
+    if (atIndex <= 0) return '***';
+
+    final localPart = value.substring(0, atIndex);
+    final domain = value.substring(atIndex);
+    final visibleLength = localPart.length >= 3 ? 3 : 1;
+    final visible = localPart.substring(0, visibleLength);
+    return '$visible***$domain';
+  }
+
+  static Future<ServiceSettingsCommandResult> _email(
+    List<String> args, {
+    required bool developerMode,
+  }) async {
     if (args.isNotEmpty) {
       return const ServiceSettingsCommandResult.failure(<String>[
         '[error] email',
@@ -393,12 +464,18 @@ class ServiceSettingsCommandHandler {
     }
     final area = await AreaSnapshotScope.readCurrentArea();
     final current = area?.email.trim() ?? '';
+    final displayEmail = _emailForDisplay(
+      current,
+      developerMode: developerMode,
+    );
     _recordAreaEmailDebug(
       'terminal_status',
       meta: <String, Object?>{
         'bound': AreaSnapshotScope.isBound,
         'found': area != null,
-        'email': current,
+        'configured': current.isNotEmpty,
+        'developerMode': developerMode,
+        'emailVisibility': developerMode ? 'full' : 'masked',
       },
     );
     return ServiceSettingsCommandResult.success(<String>[
@@ -406,7 +483,7 @@ class ServiceSettingsCommandHandler {
       '────────────────────────────────',
       'division       ${AreaSnapshotScope.division.isEmpty ? '-' : AreaSnapshotScope.division}',
       'area           ${AreaSnapshotScope.area.isEmpty ? '-' : AreaSnapshotScope.area}',
-      'email          ${current.isEmpty ? '-' : current}',
+      'email          $displayEmail',
       '────────────────────────────────',
       '',
       '수정하려면:',
@@ -495,6 +572,36 @@ class ServiceSettingsCommandHandler {
     String rawLocalParts, {
     required String source,
   }) async {
+    final debugEnabled = await DevAuth.isDevModeEnabled();
+    _recordAreaEmailDebug(
+      'terminal_edit_submit_authorization_checked',
+      source: source,
+      meta: <String, Object?>{'debugEnabled': debugEnabled},
+    );
+    if (!debugEnabled) {
+      _recordAreaEmailDebug(
+        'terminal_edit_authorization_denied',
+        source: source,
+        meta: const <String, Object?>{
+          'reason': 'developer_mode_required',
+          'stage': 'submit',
+        },
+      );
+      DebugSessionController.record(
+        'service_setting_email_edit_denied',
+        source: source,
+        meta: const <String, Object?>{
+          'reason': 'developer_mode_required',
+          'stage': 'submit',
+        },
+      );
+      return _debugRequired('edit email');
+    }
+    _recordAreaEmailDebug(
+      'terminal_edit_authorization_allowed',
+      source: source,
+      meta: const <String, Object?>{'stage': 'submit'},
+    );
     final normalizedLocalParts =
         EmailConfig.normalizeGmailLocalPartList(rawLocalParts);
     final localPartsValid =

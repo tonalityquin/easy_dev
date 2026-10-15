@@ -60,6 +60,21 @@ class UserReadService {
     }
   }
 
+  Future<UserModel?> getUserByIdFromServer(String userId) async {
+    try {
+      final doc = await _getUserCollectionRef()
+          .doc(userId)
+          .get(const GetOptions(source: Source.server));
+
+      if (!doc.exists) {
+        return null;
+      }
+      return UserModel.fromMap(doc.id, doc.data()!);
+    } on FirebaseException {
+      rethrow;
+    }
+  }
+
   Future<UserModel?> getUserByAccountCode(String accountCode) async {
     final normalized = AccountCodeNumber.normalize(accountCode);
     if (!AccountCodeNumber.isValid(normalized)) return null;

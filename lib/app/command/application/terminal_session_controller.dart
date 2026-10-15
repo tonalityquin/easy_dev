@@ -466,10 +466,35 @@ class TerminalSessionController extends ChangeNotifier {
     );
   }
 
+  void _syncImportingAuthorization() {
+    if (!_importingUnlocked) {
+      return;
+    }
+    if (DeveloperAccountAuthorization.isAuthorized) {
+      return;
+    }
+    _importingUnlocked = false;
+    _append(
+      TerminalLineType.error,
+      '[LOCKED] developer authorization expired',
+      cadence: TerminalCadence.error,
+    );
+    AppCommandDiagnostics.record(
+      phase: 'terminal_importing_unlock_revoked',
+      input: '<hidden>',
+      normalized: '<hidden>',
+      source: source,
+      command: '<hidden>',
+      result: 'revoked',
+      path: _commandPath.terminalPath,
+    );
+  }
+
   Future<AppCommandExecutionResult> _unlockImporting(
     BuildContext context, {
     required bool reduceMotion,
   }) async {
+    _syncImportingAuthorization();
     if (_importingUnlocked) {
       _append(
         TerminalLineType.success,
@@ -584,6 +609,9 @@ class TerminalSessionController extends ChangeNotifier {
     AppCommandDefinition definition, {
     required bool reduceMotion,
   }) async {
+    if (AppCommandExecutor.requiresImportingUnlock(definition.command)) {
+      _syncImportingAuthorization();
+    }
     if (AppCommandExecutor.requiresImportingUnlock(definition.command) &&
         !_importingUnlocked) {
       _append(

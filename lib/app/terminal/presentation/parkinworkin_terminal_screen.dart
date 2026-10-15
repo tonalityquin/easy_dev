@@ -12,6 +12,7 @@ import '../../../features/launcher/application/terminal_auth_coordinator.dart';
 import '../../auth/gmail_sender_auth.dart';
 import '../../config/email_config.dart';
 import '../../../features/selector/application/dev_auth.dart';
+import '../../../features/dev/application/developer_account_authorization.dart';
 import '../../../shared/auth/account_code_number.dart';
 import '../../../features/dev/presentation/debug_caution_surface.dart';
 import '../../command/application/app_command_registry.dart';
@@ -5417,6 +5418,61 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
 
     setState(() {
       _emptySubmitCount = 0;
+      _busy = true;
+      _nameError = null;
+      _accountIdentifierError = null;
+      _submitError = null;
+    });
+    await HapticFeedback.selectionClick();
+    LauncherDiagnostics.record(
+      'developer_password_authorization_start',
+      scope: 'launcher_terminal_manual_auth',
+      meta: <String, Object?>{
+        'accountKind': widget.accountKind,
+        'required': requiredTapCount,
+      },
+    );
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_developer_password_authorization_start',
+      context: 'launcher',
+      meta: <String, Object?>{
+        'accountKind': widget.accountKind,
+      },
+    );
+
+    final authorized =
+        await DeveloperAccountAuthorization.authorizeInteractive(
+      source: 'launcher_terminal_manual_auth',
+    );
+    if (!mounted) return;
+
+    if (!authorized) {
+      setState(() {
+        _busy = false;
+        _developerPasswordMode = false;
+        _submitError = '개발자 계정 인증에 실패했습니다.';
+      });
+      await HapticFeedback.mediumImpact();
+      LauncherDiagnostics.record(
+        'developer_password_authorization_denied',
+        scope: 'launcher_terminal_manual_auth',
+        meta: <String, Object?>{
+          'accountKind': widget.accountKind,
+          'required': requiredTapCount,
+        },
+      );
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_developer_password_authorization_denied',
+        context: 'launcher',
+        meta: <String, Object?>{
+          'accountKind': widget.accountKind,
+        },
+      );
+      return;
+    }
+
+    setState(() {
+      _busy = false;
       _developerPasswordMode = true;
       _nameError = null;
       _accountIdentifierError = null;
@@ -5436,7 +5492,9 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
     ParkinWorkinTerminalDiagnostics.record(
       'launcher_developer_password_mode_enabled',
       context: 'launcher',
-      meta: <String, Object?>{'accountKind': widget.accountKind},
+      meta: <String, Object?>{
+        'accountKind': widget.accountKind,
+      },
     );
     await LauncherDiagnostics.showStatus(
       context,
