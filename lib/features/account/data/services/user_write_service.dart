@@ -46,6 +46,10 @@ class UserWriteService {
     return _firestore.collection('user_accounts_show');
   }
 
+  CollectionReference<Map<String, dynamic>> _getUserCodeCollectionRef() {
+    return _firestore.collection('user_account_codes');
+  }
+
   CollectionReference<Map<String, dynamic>> _getTabletCollectionRef() {
     return _firestore.collection('tablet_accounts');
   }
@@ -150,16 +154,76 @@ class UserWriteService {
     return _inferAreaFromHyphenId(u.id);
   }
 
-  Map<String, dynamic> _toUserAccountsMap(UserModel user) {
+  Map<String, dynamic> _toUserAccountsMap(
+    UserModel user, {
+    bool? isActive,
+  }) {
     final map = Map<String, dynamic>.from(user.toMap());
-    map.remove('isActive');
+    map.remove('password');
     map.remove('disabledAt');
     map.remove('updatedAt');
+    map['isActive'] = isActive ?? user.isActive;
     return map;
+  }
+
+  Future<void> _assertUniqueUserCodeNumber(
+    String codeNumber, {
+    Set<String> excludeDocumentIds = const <String>{},
+  }) async {
+    final normalized = AccountCodeNumber.normalize(codeNumber);
+    if (!AccountCodeNumber.isValid(normalized)) {
+      throw StateError('INVALID_CODE_NUMBER');
+    }
+    final snapshots = await Future.wait(
+      <Future<QuerySnapshot<Map<String, dynamic>>>>[
+        _getUserCollectionRef()
+            .where('codeNumber', isEqualTo: normalized)
+            .limit(10)
+            .get(),
+        _getUserCollectionRef()
+            .where('phone', isEqualTo: normalized)
+            .limit(10)
+            .get(),
+        _getUserCollectionRef()
+            .where('handle', isEqualTo: normalized)
+            .limit(10)
+            .get(),
+      ],
+    );
+    final duplicated = snapshots
+        .expand((snapshot) => snapshot.docs)
+        .any((doc) => !excludeDocumentIds.contains(doc.id));
+    if (duplicated) {
+      throw StateError('CODE_NUMBER_ALREADY_EXISTS');
+    }
+  }
+
+  String _rootAccountCode(Map<String, dynamic> data) {
+    for (final field in <String>['codeNumber', 'phone', 'handle']) {
+      final value = AccountCodeNumber.normalize((data[field] ?? '').toString());
+      if (AccountCodeNumber.isValid(value)) return value;
+    }
+    return '';
+  }
+
+  Map<String, dynamic> _userCodeReservationPayload({
+    required String userId,
+    required String codeNumber,
+    required String area,
+    Object? createdAt,
+  }) {
+    return <String, dynamic>{
+      'userId': userId,
+      'codeNumber': codeNumber,
+      'area': area,
+      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
   }
 
   Map<String, dynamic> _removeLegacyScheduleFields(Map<String, dynamic> source) {
     final map = Map<String, dynamic>.from(source);
+    map['password'] = FieldValue.delete();
     map['startTime'] = FieldValue.delete();
     map['endTime'] = FieldValue.delete();
     return map;
@@ -296,7 +360,10 @@ class UserWriteService {
   }
 
   Future<void> addUserCard(UserModel user) async {
+    await _assertUniqueUserCodeNumber(user.codeNumber);
+    final normalizedCode = AccountCodeNumber.normalize(user.codeNumber);
     final userDocRef = _getUserCollectionRef().doc(user.id);
+    final codeDocRef = _getUserCodeCollectionRef().doc(normalizedCode);
 
     final division = _divisionOfUser(user);
     final area = _areaOfUser(user);
@@ -316,6 +383,14 @@ class UserWriteService {
 
     try {
       await _firestore.runTransaction((tx) async {
+        final rootSnap = await tx.get(userDocRef);
+        final codeSnap = await tx.get(codeDocRef);
+        if (rootSnap.exists) {
+          throw StateError('USER_ALREADY_EXISTS:${user.id}');
+        }
+        if (codeSnap.exists) {
+          throw StateError('CODE_NUMBER_ALREADY_EXISTS');
+        }
         final showSnap = await tx.get(showDocRef);
         final showData = showSnap.data() ?? <String, dynamic>{};
 
@@ -354,7 +429,15 @@ class UserWriteService {
           inactiveDelta: inactiveDelta,
         );
 
-        tx.set(userDocRef, _toUserAccountsMap(user));
+        tx.set(userDocRef, _toUserAccountsMap(user, isActive: wantActive));
+        tx.set(
+          codeDocRef,
+          _userCodeReservationPayload(
+            userId: user.id,
+            codeNumber: normalizedCode,
+            area: area,
+          ),
+        );
         tx.set(
           showDocRef,
           _showMetaPayload(division: division, area: area, counts: counts1),
@@ -434,6 +517,15 @@ class UserWriteService {
     final nextUserId = user.id.trim();
     final previousUserDocRef = _getUserCollectionRef().doc(previousUserId);
     final nextUserDocRef = _getUserCollectionRef().doc(nextUserId);
+    final nextCode = AccountCodeNumber.normalize(user.codeNumber);
+    if (!AccountCodeNumber.isValid(nextCode)) {
+      throw StateError('INVALID_CODE_NUMBER');
+    }
+    final nextCodeDocRef = _getUserCodeCollectionRef().doc(nextCode);
+    await _assertUniqueUserCodeNumber(
+      nextCode,
+      excludeDocumentIds: <String>{previousUserId, nextUserId},
+    );
 
     UserModel? prevUser;
     try {
@@ -474,6 +566,26 @@ class UserWriteService {
 
     try {
       await _firestore.runTransaction((tx) async {
+        final previousRootSnap = await tx.get(previousUserDocRef);
+        if (!previousRootSnap.exists || previousRootSnap.data() == null) {
+          throw StateError('USER_NOT_FOUND:$previousUserId');
+        }
+        final previousRootData = previousRootSnap.data()!;
+        final previousCode = _rootAccountCode(previousRootData);
+        final previousCodeDocRef = previousCode.isEmpty
+            ? null
+            : _getUserCodeCollectionRef().doc(previousCode);
+        final sameCode = previousCode == nextCode;
+        final nextCodeSnap = await tx.get(nextCodeDocRef);
+        final previousCodeSnap = sameCode || previousCodeDocRef == null
+            ? nextCodeSnap
+            : await tx.get(previousCodeDocRef);
+        final nextCodeOwner = (nextCodeSnap.data()?['userId'] ?? '').toString();
+        if (nextCodeSnap.exists &&
+            nextCodeOwner != previousUserId &&
+            nextCodeOwner != nextUserId) {
+          throw StateError('CODE_NUMBER_ALREADY_EXISTS');
+        }
         final newShowSnap = await tx.get(newShowDocRef);
         final newShowData = newShowSnap.data() ?? <String, dynamic>{};
         final newActiveLimit = _normalizeLimit(newShowData['activeLimit']);
@@ -486,9 +598,14 @@ class UserWriteService {
 
         if (!identityMoved && !showMoved) {
           final currentShowUserSnap = await tx.get(newShowUserDocRef);
+          final currentShowUserData =
+              currentShowUserSnap.data() ?? <String, dynamic>{};
+          final targetActive = currentShowUserSnap.exists
+              ? ((currentShowUserData['isActive'] as bool?) ?? user.isActive)
+              : user.isActive;
           var counts1 = newCounts0;
           if (!currentShowUserSnap.exists) {
-            final wantActive = user.isActive;
+            final wantActive = targetActive;
             final activeDelta = wantActive ? 1 : 0;
             final inactiveDelta = wantActive ? 0 : 1;
             _assertTotalLimit(
@@ -509,9 +626,19 @@ class UserWriteService {
             userMap['disabledAt'] = wantActive
                 ? FieldValue.delete()
                 : FieldValue.serverTimestamp();
+          } else {
+            userMap['isActive'] = targetActive;
+            userMap['disabledAt'] = targetActive
+                ? FieldValue.delete()
+                : (currentShowUserData['disabledAt'] ??
+                    FieldValue.serverTimestamp());
           }
 
-          tx.set(nextUserDocRef, _toUserAccountsMap(user));
+          tx.set(
+            nextUserDocRef,
+            _toUserAccountsMap(user, isActive: targetActive),
+            SetOptions(merge: true),
+          );
           tx.set(
             newShowDocRef,
             _showMetaPayload(
@@ -522,6 +649,22 @@ class UserWriteService {
             SetOptions(merge: true),
           );
           tx.set(newShowUserDocRef, userMap, SetOptions(merge: true));
+          tx.set(
+            nextCodeDocRef,
+            _userCodeReservationPayload(
+              userId: nextUserId,
+              codeNumber: nextCode,
+              area: newArea,
+              createdAt: nextCodeSnap.data()?['createdAt'],
+            ),
+            SetOptions(merge: true),
+          );
+          if (!sameCode &&
+              previousCodeDocRef != null &&
+              previousCodeSnap.exists &&
+              (previousCodeSnap.data()?['userId'] ?? '').toString() == previousUserId) {
+            tx.delete(previousCodeDocRef);
+          }
           return;
         }
 
@@ -569,7 +712,10 @@ class UserWriteService {
             if (!targetActive)
               'disabledAt': disabledAtValue ?? FieldValue.serverTimestamp(),
           };
-          tx.set(nextUserDocRef, _toUserAccountsMap(user));
+          tx.set(
+            nextUserDocRef,
+            _toUserAccountsMap(user, isActive: targetActive),
+          );
           tx.delete(previousUserDocRef);
           if (oldExists) {
             tx.delete(oldShowUserDocRef);
@@ -584,6 +730,22 @@ class UserWriteService {
             ),
             SetOptions(merge: true),
           );
+          tx.set(
+            nextCodeDocRef,
+            _userCodeReservationPayload(
+              userId: nextUserId,
+              codeNumber: nextCode,
+              area: newArea,
+              createdAt: nextCodeSnap.data()?['createdAt'],
+            ),
+            SetOptions(merge: true),
+          );
+          if (!sameCode &&
+              previousCodeDocRef != null &&
+              previousCodeSnap.exists &&
+              (previousCodeSnap.data()?['userId'] ?? '').toString() == previousUserId) {
+            tx.delete(previousCodeDocRef);
+          }
           return;
         }
 
@@ -641,9 +803,18 @@ class UserWriteService {
           inactiveDelta: newInactiveDelta,
         );
 
-        tx.set(nextUserDocRef, _toUserAccountsMap(user));
         if (identityMoved) {
+          tx.set(
+            nextUserDocRef,
+            _toUserAccountsMap(user, isActive: targetActive),
+          );
           tx.delete(previousUserDocRef);
+        } else {
+          tx.set(
+            nextUserDocRef,
+            _toUserAccountsMap(user, isActive: targetActive),
+            SetOptions(merge: true),
+          );
         }
         if (oldExists) {
           tx.delete(oldShowUserDocRef);
@@ -675,6 +846,22 @@ class UserWriteService {
           ),
           SetOptions(merge: true),
         );
+        tx.set(
+          nextCodeDocRef,
+          _userCodeReservationPayload(
+            userId: nextUserId,
+            codeNumber: nextCode,
+            area: newArea,
+            createdAt: nextCodeSnap.data()?['createdAt'],
+          ),
+          SetOptions(merge: true),
+        );
+        if (!sameCode &&
+            previousCodeDocRef != null &&
+            previousCodeSnap.exists &&
+            (previousCodeSnap.data()?['userId'] ?? '').toString() == previousUserId) {
+          tx.delete(previousCodeDocRef);
+        }
       });
     } on FirebaseException {
       rethrow;
@@ -718,7 +905,7 @@ class UserWriteService {
           tx.delete(_getTabletCollectionRef().doc(previous));
           return;
         }
-        tx.set(nextRef, tablet.toMap());
+        tx.set(nextRef, tablet.toMap(), SetOptions(merge: true));
       });
       TabletAccountDiagnostics.record(
         moving ? 'document_move_complete' : 'document_update_complete',
@@ -793,13 +980,29 @@ class UserWriteService {
         final userData = userSnap.data() ?? <String, dynamic>{};
         final bool currentActive = (userData['isActive'] as bool?) ?? true;
         final scheduleMigration = _weekdayScheduleMigrationPayload(current);
+        final rootStatusPayload = <String, dynamic>{
+          ...scheduleMigration,
+          'isActive': isActive,
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+        final viewStatusPayload = <String, dynamic>{
+          ...scheduleMigration,
+          'password': FieldValue.delete(),
+          'isActive': isActive,
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
 
-        tx.update(userDocRef, scheduleMigration);
+        tx.set(userDocRef, rootStatusPayload, SetOptions(merge: true));
 
         if (currentActive == isActive) {
           tx.set(
             showUserDocRef,
-            scheduleMigration,
+            <String, dynamic>{
+              ...viewStatusPayload,
+              'disabledAt': isActive
+                  ? FieldValue.delete()
+                  : (userData['disabledAt'] ?? FieldValue.serverTimestamp()),
+            },
             SetOptions(merge: true),
           );
           tx.set(
@@ -820,9 +1023,7 @@ class UserWriteService {
           tx.set(
             showUserDocRef,
             {
-              ...scheduleMigration,
-              'isActive': true,
-              'updatedAt': FieldValue.serverTimestamp(),
+              ...viewStatusPayload,
               'disabledAt': FieldValue.delete(),
             },
             SetOptions(merge: true),
@@ -833,9 +1034,7 @@ class UserWriteService {
           tx.set(
             showUserDocRef,
             {
-              ...scheduleMigration,
-              'isActive': false,
-              'updatedAt': FieldValue.serverTimestamp(),
+              ...viewStatusPayload,
               'disabledAt': FieldValue.serverTimestamp(),
             },
             SetOptions(merge: true),
@@ -883,6 +1082,10 @@ class UserWriteService {
 
         final showDocRef = _getUserShowCollectionRef().doc(showId);
         final showUserDocRef = showDocRef.collection('users').doc(id);
+        final normalizedCode = AccountCodeNumber.normalize(prevUser.codeNumber);
+        final codeDocRef = normalizedCode.isEmpty
+            ? null
+            : _getUserCodeCollectionRef().doc(normalizedCode);
 
         await _ensureOrSyncAccountCounts(
           showDocRef: showDocRef,
@@ -892,6 +1095,13 @@ class UserWriteService {
         );
 
         await _firestore.runTransaction((tx) async {
+          final codeSnap = codeDocRef == null ? null : await tx.get(codeDocRef);
+          if (codeSnap != null && codeSnap.exists) {
+            final owner = (codeSnap.data()?['userId'] ?? '').toString();
+            if (owner.isNotEmpty && owner != id) {
+              throw StateError('USER_CODE_RESERVATION_MISMATCH:$normalizedCode');
+            }
+          }
           final showSnap = await tx.get(showDocRef);
           final showData = showSnap.data() ?? <String, dynamic>{};
           final counts0 = _countsFromMeta(showData);
@@ -909,6 +1119,9 @@ class UserWriteService {
 
           tx.delete(showUserDocRef);
           tx.delete(userDocRef);
+          if (codeDocRef != null && codeSnap != null && codeSnap.exists) {
+            tx.delete(codeDocRef);
+          }
           tx.set(
             showDocRef,
             _showMetaPayload(division: division, area: area, counts: counts1),

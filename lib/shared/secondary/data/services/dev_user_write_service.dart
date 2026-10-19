@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../features/account/domain/models/user/user_model.dart';
+import '../../../auth/account_code_number.dart';
 
 class _DevAccountCounts {
   const _DevAccountCounts({
@@ -48,6 +49,9 @@ class DevUserWriteService {
   CollectionReference<Map<String, dynamic>> get _shows =>
       _firestore.collection('user_accounts_show');
 
+  CollectionReference<Map<String, dynamic>> get _codes =>
+      _firestore.collection('user_account_codes');
+
   String _showId(String division, String area) {
     final normalizedDivision = division.trim();
     final normalizedArea = area.trim();
@@ -59,7 +63,7 @@ class DevUserWriteService {
 
   Map<String, dynamic> _rootPayload(UserModel user) {
     final map = Map<String, dynamic>.from(user.toMap());
-    map.remove('isActive');
+    map.remove('password');
     map.remove('disabledAt');
     map.remove('updatedAt');
     return map;
@@ -67,9 +71,57 @@ class DevUserWriteService {
 
   Map<String, dynamic> _projectionPayload(UserModel user) {
     final map = Map<String, dynamic>.from(user.toMap());
+    map['password'] = FieldValue.delete();
     map['startTime'] = FieldValue.delete();
     map['endTime'] = FieldValue.delete();
     return map;
+  }
+
+
+  String _rootAccountCode(Map<String, dynamic> data) {
+    for (final field in <String>['codeNumber', 'phone', 'handle']) {
+      final value = AccountCodeNumber.normalize((data[field] ?? '').toString());
+      if (AccountCodeNumber.isValid(value)) return value;
+    }
+    return '';
+  }
+
+  Map<String, dynamic> _reservationPayload({
+    required String userId,
+    required String codeNumber,
+    required String area,
+    Object? createdAt,
+  }) {
+    return <String, dynamic>{
+      'userId': userId,
+      'codeNumber': codeNumber,
+      'area': area,
+      'createdAt': createdAt ?? FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+  }
+
+  Future<void> _assertUniqueUserCodeNumber(
+    String codeNumber, {
+    Set<String> excludeDocumentIds = const <String>{},
+  }) async {
+    final normalized = AccountCodeNumber.normalize(codeNumber);
+    if (!AccountCodeNumber.isValid(normalized)) {
+      throw StateError('INVALID_CODE_NUMBER');
+    }
+    final snapshots = await Future.wait(
+      <Future<QuerySnapshot<Map<String, dynamic>>>>[
+        _users.where('codeNumber', isEqualTo: normalized).limit(10).get(),
+        _users.where('phone', isEqualTo: normalized).limit(10).get(),
+        _users.where('handle', isEqualTo: normalized).limit(10).get(),
+      ],
+    );
+    final duplicated = snapshots
+        .expand((snapshot) => snapshot.docs)
+        .any((doc) => !excludeDocumentIds.contains(doc.id));
+    if (duplicated) {
+      throw StateError('CODE_NUMBER_ALREADY_EXISTS');
+    }
   }
 
   int? _intValue(dynamic value) => value is int ? value : null;
@@ -205,15 +257,18 @@ class DevUserWriteService {
     required String area,
     void Function(String message)? log,
   }) async {
+    await _assertUniqueUserCodeNumber(user.codeNumber);
+    final normalizedCode = AccountCodeNumber.normalize(user.codeNumber);
     final normalizedDivision = division.trim();
     final normalizedArea = area.trim();
     final showId = _showId(normalizedDivision, normalizedArea);
     final rootRef = _users.doc(user.id);
+    final codeRef = _codes.doc(normalizedCode);
     final showRef = _shows.doc(showId);
     final showUserRef = showRef.collection('users').doc(user.id);
 
     log?.call(
-      'DevUserWriteService create 시작: id=${user.id} division=$normalizedDivision area=$normalizedArea',
+      'DevUserWriteService create 시작: id=${AccountCodeNumber.maskDocumentId(user.id)} division=$normalizedDivision area=$normalizedArea',
     );
 
     await _ensureAccountCounts(
@@ -225,8 +280,12 @@ class DevUserWriteService {
 
     await _firestore.runTransaction((tx) async {
       final rootSnap = await tx.get(rootRef);
+      final codeSnap = await tx.get(codeRef);
       if (rootSnap.exists) {
         throw StateError('USER_ALREADY_EXISTS:${user.id}');
+      }
+      if (codeSnap.exists) {
+        throw StateError('CODE_NUMBER_ALREADY_EXISTS');
       }
 
       final showSnap = await tx.get(showRef);
@@ -260,6 +319,7 @@ class DevUserWriteService {
 
       final rootMap = <String, dynamic>{
         ..._rootPayload(user),
+        'isActive': user.isActive,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -273,6 +333,14 @@ class DevUserWriteService {
 
       tx.set(rootRef, rootMap);
       tx.set(
+        codeRef,
+        _reservationPayload(
+          userId: user.id,
+          codeNumber: normalizedCode,
+          area: normalizedArea,
+        ),
+      );
+      tx.set(
         showRef,
         _metaPayload(
           division: normalizedDivision,
@@ -285,7 +353,7 @@ class DevUserWriteService {
     });
 
     log?.call(
-      'DevUserWriteService create 완료: id=${user.id} show=$showId',
+      'DevUserWriteService create 완료: id=${AccountCodeNumber.maskDocumentId(user.id)} show=$showId',
     );
   }
 
@@ -300,6 +368,14 @@ class DevUserWriteService {
   }) async {
     final oldUserId = previousUserId.trim();
     final newUserId = user.id.trim();
+    final newCode = AccountCodeNumber.normalize(user.codeNumber);
+    if (!AccountCodeNumber.isValid(newCode)) {
+      throw StateError('INVALID_CODE_NUMBER');
+    }
+    await _assertUniqueUserCodeNumber(
+      newCode,
+      excludeDocumentIds: <String>{oldUserId, newUserId},
+    );
     final oldDivision = previousDivision.trim();
     final oldArea = previousArea.trim();
     final newDivision = targetDivision.trim();
@@ -317,7 +393,7 @@ class DevUserWriteService {
     final newShowUserRef = newShowRef.collection('users').doc(newUserId);
 
     log?.call(
-      'DevUserWriteService update 시작: oldId=$oldUserId newId=$newUserId old=$oldShowId new=$newShowId',
+      'DevUserWriteService update 시작: oldId=${AccountCodeNumber.maskDocumentId(oldUserId)} newId=${AccountCodeNumber.maskDocumentId(newUserId)} old=$oldShowId new=$newShowId',
     );
 
     await _ensureAccountCounts(
@@ -337,8 +413,23 @@ class DevUserWriteService {
 
     await _firestore.runTransaction((tx) async {
       final oldRootSnap = await tx.get(oldRootRef);
-      if (!oldRootSnap.exists) {
+      if (!oldRootSnap.exists || oldRootSnap.data() == null) {
         throw StateError('USER_NOT_FOUND:$oldUserId');
+      }
+      final oldRootData = oldRootSnap.data()!;
+      final oldCode = _rootAccountCode(oldRootData);
+      final oldCodeRef = oldCode.isEmpty ? null : _codes.doc(oldCode);
+      final newCodeRef = _codes.doc(newCode);
+      final sameCode = oldCode == newCode;
+      final newCodeSnap = await tx.get(newCodeRef);
+      final oldCodeSnap = sameCode || oldCodeRef == null
+          ? newCodeSnap
+          : await tx.get(oldCodeRef);
+      final newCodeOwner = (newCodeSnap.data()?['userId'] ?? '').toString();
+      if (newCodeSnap.exists &&
+          newCodeOwner != oldUserId &&
+          newCodeOwner != newUserId) {
+        throw StateError('CODE_NUMBER_ALREADY_EXISTS');
       }
       if (idChanged) {
         final newRootSnap = await tx.get(newRootRef);
@@ -418,6 +509,7 @@ class DevUserWriteService {
       final rootCreatedAt = oldRootSnap.data()?['createdAt'];
       final rootMap = <String, dynamic>{
         ..._rootPayload(user),
+        'isActive': targetActive,
         'createdAt': rootCreatedAt ?? FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -430,9 +522,11 @@ class DevUserWriteService {
             ? FieldValue.delete()
             : (oldShowUserData['disabledAt'] ?? FieldValue.serverTimestamp());
 
-      tx.set(newRootRef, rootMap);
       if (idChanged) {
+        tx.set(newRootRef, rootMap);
         tx.delete(oldRootRef);
+      } else {
+        tx.set(newRootRef, rootMap, SetOptions(merge: true));
       }
       if ((showChanged || idChanged) && oldShowUserExists) {
         tx.delete(oldShowUserRef);
@@ -457,6 +551,22 @@ class DevUserWriteService {
           ),
           SetOptions(merge: true),
         );
+      }
+      tx.set(
+        newCodeRef,
+        _reservationPayload(
+          userId: newUserId,
+          codeNumber: newCode,
+          area: newArea,
+          createdAt: newCodeSnap.data()?['createdAt'],
+        ),
+        SetOptions(merge: true),
+      );
+      if (!sameCode &&
+          oldCodeRef != null &&
+          oldCodeSnap.exists &&
+          (oldCodeSnap.data()?['userId'] ?? '').toString() == oldUserId) {
+        tx.delete(oldCodeRef);
       }
     });
 

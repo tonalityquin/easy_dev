@@ -70,6 +70,7 @@ class LauncherDiagnostics {
     required String title,
     required String description,
     String scope = 'launcher',
+    bool failure = false,
   }) async {
     final enabled = await DevAuth.isDevModeEnabled();
     if (!enabled || !context.mounted) return;
@@ -89,8 +90,22 @@ class LauncherDiagnostics {
         'attendanceLines': AttendanceDiagnostics.lines.length,
         'motionTimingLines': MotionTimingDiagnostics.lines.length,
         'buildOptimizationLines': BuildOptimizationDiagnostics.lines.length,
+        'tone': failure ? 'failure' : 'success',
       },
     );
+    if (failure) {
+      await StatusDialog.showFailure(
+        context,
+        title: title,
+        description: description,
+        copyText: debugPrintCode,
+        copyButtonLabel: 'debugPrint 코드 복사',
+        visibleDuration: Duration.zero,
+        useCommonUi: true,
+        awaitManualClose: true,
+      );
+      return;
+    }
     await StatusDialog.showSuccess(
       context,
       title: title,

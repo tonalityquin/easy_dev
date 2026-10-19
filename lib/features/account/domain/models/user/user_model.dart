@@ -16,7 +16,7 @@ class UserModel {
   final bool isSelected;
   final bool isWorking;
   final String name;
-  final String password;
+  final String? password;
   final String codeNumber;
 
   final String? position;
@@ -39,7 +39,7 @@ class UserModel {
     required this.isSelected,
     required this.isWorking,
     required this.name,
-    required this.password,
+    this.password,
     required this.codeNumber,
     this.position,
     required this.role,
@@ -136,14 +136,14 @@ class UserModel {
       isSelected: data['isSelected'] ?? false,
       isWorking: data['isWorking'] ?? false,
       name: data['name'] ?? '',
-      password: data['password'] ?? '',
+      password: data['password']?.toString(),
       codeNumber: (data['codeNumber'] ?? data['phone'] ?? '').toString(),
       position: data['position'],
       role: data['role'] ?? '',
       selectedArea: data['selectedArea'],
       startTimeByWeekday: startByWeekday,
       endTimeByWeekday: endByWeekday,
-      isActive: data['isActive'] ?? true,
+      isActive: data['isActive'] == true,
     );
   }
 
@@ -161,7 +161,6 @@ class UserModel {
       'isSelected': isSelected,
       'isWorking': isWorking,
       'name': name,
-      'password': password,
       'codeNumber': codeNumber,
       'position': position,
       'role': role,

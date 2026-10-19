@@ -30,6 +30,8 @@ class UserReadService {
 
   String _normalizeHandle(String h) => h.trim().toLowerCase();
 
+  String _userCacheKey(String selectedArea) => 'users_v2_$selectedArea';
+
   String _showDocId(String division, String area) {
     final d = division
         .trim()
@@ -38,6 +40,96 @@ class UserReadService {
         .trim()
         .isEmpty ? 'unknownArea' : area.trim();
     return '$d-$a';
+  }
+
+  UserModel _userFromShowData(String id, Map<String, dynamic> source) {
+    final data = Map<String, dynamic>.from(source);
+    data.remove('password');
+    return UserModel.fromMap(id, data);
+  }
+
+  Future<void> _writeRootActiveState(String id, bool active) async {
+    await _getUserCollectionRef().doc(id).set(
+      <String, dynamic>{'isActive': active},
+      SetOptions(merge: true),
+    );
+  }
+
+  Future<UserModel> _userFromRootWithActiveState(
+    String id,
+    Map<String, dynamic> source, {
+    GetOptions? viewOptions,
+  }) async {
+    final user = UserModel.fromMap(id, source);
+    if (source['isActive'] is bool) return user;
+
+    final division = user.divisions.isNotEmpty ? user.divisions.first.trim() : '';
+    final area = (user.currentArea ?? '').trim().isNotEmpty
+        ? user.currentArea!.trim()
+        : (user.selectedArea ?? '').trim().isNotEmpty
+            ? user.selectedArea!.trim()
+            : user.areas.isNotEmpty
+                ? user.areas.first.trim()
+                : '';
+    if (division.isEmpty || area.isEmpty) {
+      debugPrint(
+        'user_accounts isActive 확인 실패 → userId=$id reason=assignment_missing',
+      );
+      try {
+        await _writeRootActiveState(id, false);
+        debugPrint(
+          'user_accounts isActive fail-closed backfill 완료 → userId=$id isActive=false',
+        );
+      } on FirebaseException catch (e) {
+        debugPrint(
+          'user_accounts isActive fail-closed backfill 실패 → userId=$id code=${e.code}',
+        );
+      }
+      return user.copyWith(isActive: false);
+    }
+
+    try {
+      final showRef = _getUserShowCollectionRef()
+          .doc(_showDocId(division, area))
+          .collection('users')
+          .doc(id);
+      final showSnap = viewOptions == null
+          ? await showRef.get()
+          : await showRef.get(viewOptions);
+      final active = showSnap.data()?['isActive'];
+      if (active is! bool) {
+        debugPrint(
+          'user_accounts isActive 확인 실패 → userId=$id reason=view_state_missing',
+        );
+        try {
+          await _writeRootActiveState(id, false);
+          debugPrint(
+            'user_accounts isActive fail-closed backfill 완료 → userId=$id isActive=false',
+          );
+        } on FirebaseException catch (e) {
+          debugPrint(
+            'user_accounts isActive fail-closed backfill 실패 → userId=$id code=${e.code}',
+          );
+        }
+        return user.copyWith(isActive: false);
+      }
+      try {
+        await _writeRootActiveState(id, active);
+        debugPrint(
+          'user_accounts isActive backfill 완료 → userId=$id isActive=$active',
+        );
+      } on FirebaseException catch (e) {
+        debugPrint(
+          'user_accounts isActive backfill 쓰기 실패 → userId=$id code=${e.code}',
+        );
+      }
+      return user.copyWith(isActive: active);
+    } on FirebaseException catch (e) {
+      debugPrint(
+        'user_accounts isActive 확인 실패 → userId=$id code=${e.code}',
+      );
+      return user.copyWith(isActive: false);
+    }
   }
 
   static final Map<String, String?> _englishNameMemCache = {};
@@ -54,7 +146,7 @@ class UserReadService {
         debugPrint('DB 문서 없음 → userId=$userId');
         return null;
       }
-      return UserModel.fromMap(doc.id, doc.data()!);
+      return _userFromRootWithActiveState(doc.id, doc.data()!);
     } on FirebaseException {
       rethrow;
     }
@@ -69,7 +161,11 @@ class UserReadService {
       if (!doc.exists) {
         return null;
       }
-      return UserModel.fromMap(doc.id, doc.data()!);
+      return _userFromRootWithActiveState(
+        doc.id,
+        doc.data()!,
+        viewOptions: const GetOptions(source: Source.server),
+      );
     } on FirebaseException {
       rethrow;
     }
@@ -80,32 +176,53 @@ class UserReadService {
     if (!AccountCodeNumber.isValid(normalized)) return null;
 
     debugPrint(
-      'getUserByAccountCode, 조회 시작 - accountCode: ${AccountCodeNumber.mask(normalized)}',
+      'getUserByAccountCode, 조회 시작 - accountCode: ${AccountCodeNumber.mask(normalized)} source=root_query',
     );
     try {
-      final results = await Future.wait([
-        _getUserCollectionRef()
-            .where('codeNumber', isEqualTo: normalized)
-            .limit(10)
-            .get(),
-        _getUserCollectionRef()
-            .where('phone', isEqualTo: normalized)
-            .limit(10)
-            .get(),
-      ]);
-      final found = <String, UserModel>{};
-      for (final snapshot in results) {
-        for (final doc in snapshot.docs) {
-          found[doc.id] = UserModel.fromMap(doc.id, doc.data());
+      final codeSnapshot = await _getUserCollectionRef()
+          .where('codeNumber', isEqualTo: normalized)
+          .limit(2)
+          .get();
+      if (codeSnapshot.docs.length > 1) {
+        debugPrint(
+          'getUserByAccountCode, 중복 코드번호 감지 - accountCode: ${AccountCodeNumber.mask(normalized)} source=codeNumber',
+        );
+        return null;
+      }
+      if (codeSnapshot.docs.length == 1) {
+        final doc = codeSnapshot.docs.single;
+        return _userFromRootWithActiveState(doc.id, doc.data());
+      }
+
+      for (final field in <String>['phone', 'handle']) {
+        final legacySnapshot = await _getUserCollectionRef()
+            .where(field, isEqualTo: normalized)
+            .limit(2)
+            .get();
+        if (legacySnapshot.docs.length > 1) {
+          debugPrint(
+            'getUserByAccountCode, 중복 legacy 식별자 감지 - accountCode: ${AccountCodeNumber.mask(normalized)} source=$field',
+          );
+          return null;
+        }
+        if (legacySnapshot.docs.length == 1) {
+          final doc = legacySnapshot.docs.single;
+          return _userFromRootWithActiveState(doc.id, doc.data());
         }
       }
-      if (found.isEmpty) return null;
-      return found.values.first;
-    } on FirebaseException {
       return null;
-    } catch (e) {
-      debugPrint('DB 조회 중 예외 발생: $e');
-      return null;
+    } on FirebaseException catch (error, stackTrace) {
+      debugPrint(
+        'getUserByAccountCode, Firebase 조회 실패 - accountCode: ${AccountCodeNumber.mask(normalized)} code=${error.code} message=${error.message}',
+      );
+      debugPrint('$stackTrace');
+      rethrow;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'getUserByAccountCode, 조회 예외 - accountCode: ${AccountCodeNumber.mask(normalized)} error=$error',
+      );
+      debugPrint('$stackTrace');
+      rethrow;
     }
   }
 
@@ -121,9 +238,12 @@ class UserReadService {
           .where('codeNumber', isEqualTo: normalized)
           .limit(10)
           .get();
-      return snapshot.docs
-          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-          .toList(growable: false);
+      final users = await Future.wait(
+        snapshot.docs.map(
+          (doc) => _userFromRootWithActiveState(doc.id, doc.data()),
+        ),
+      );
+      return users.toList(growable: false);
     } on FirebaseException {
       return <UserModel>[];
     } catch (e) {
@@ -144,9 +264,11 @@ class UserReadService {
           .where('name', isEqualTo: normalized)
           .limit(20)
           .get();
-      final users = snapshot.docs
-          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-          .toList(growable: true);
+      final users = await Future.wait(
+        snapshot.docs.map(
+          (doc) => _userFromRootWithActiveState(doc.id, doc.data()),
+        ),
+      );
       users.sort((a, b) {
         final areaCompare = (a.selectedArea ?? '').compareTo(b.selectedArea ?? '');
         if (areaCompare != 0) return areaCompare;
@@ -184,7 +306,7 @@ class UserReadService {
 
       if (qs.docs.isNotEmpty) {
         final doc = qs.docs.first;
-        return UserModel.fromMap(doc.id, doc.data());
+        return _userFromRootWithActiveState(doc.id, doc.data());
       }
     } on FirebaseException {
       return null;
@@ -434,7 +556,7 @@ class UserReadService {
 
   Future<List<UserModel>> getUsersByAreaOnceWithCache(
       String selectedArea) async {
-    final cacheKey = 'users_$selectedArea';
+    final cacheKey = _userCacheKey(selectedArea);
     final prefs = await SharedPreferences.getInstance();
     final cachedJson = prefs.getString(cacheKey);
 
@@ -477,9 +599,11 @@ class UserReadService {
           .where('areas', arrayContains: selectedArea)
           .get();
 
-      final users = querySnapshot.docs
-          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-          .toList();
+      final users = await Future.wait(
+        querySnapshot.docs.map(
+          (doc) => _userFromRootWithActiveState(doc.id, doc.data()),
+        ),
+      );
 
       await updateCacheWithUsers(selectedArea, users);
       return users;
@@ -500,7 +624,7 @@ class UserReadService {
       final snap = await usersRef.get();
 
       final users = snap.docs
-          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+          .map((doc) => _userFromShowData(doc.id, doc.data()))
           .toList(growable: false);
 
       await updateCacheWithUsers(area.trim(), users);
@@ -530,7 +654,7 @@ class UserReadService {
           .get();
 
       final users = snap.docs
-          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+          .map((doc) => _userFromShowData(doc.id, doc.data()))
           .toList(growable: false);
 
       debugPrint(
@@ -606,6 +730,7 @@ class UserReadService {
 
   Future<void> clearUserCache(String selectedArea) async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_userCacheKey(selectedArea));
     await prefs.remove('users_$selectedArea');
     await prefs.remove('users_${selectedArea}_ts');
     debugPrint('🧹 사용자 캐시 초기화 → $selectedArea');
@@ -622,7 +747,7 @@ class UserReadService {
       List<UserModel> users) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonData = json.encode(users.map((u) => u.toMapWithId()).toList());
-    await prefs.setString('users_$selectedArea', jsonData);
+    await prefs.setString(_userCacheKey(selectedArea), jsonData);
     await prefs.setInt(
         'users_${selectedArea}_ts', DateTime
         .now()

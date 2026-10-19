@@ -10,7 +10,6 @@ import '../../../../../app/utils/status_dialog.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_origin_morph_dialog.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../shared/auth/account_code_number.dart';
 import '../../../../../shared/secondary/application/secondary_tablet_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
@@ -39,7 +38,6 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _codeNumberController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _scrollViewportKey = GlobalKey();
   final Map<TabletSettingsSection, GlobalKey> _sectionKeys =
@@ -101,7 +99,6 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
     _nameController.dispose();
     _codeNumberController.dispose();
     _emailController.dispose();
-    _passwordController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -114,14 +111,12 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
         AccountCodeNumber.generate(),
       );
       _emailController.clear();
-      _passwordController.text = FiveDigitPasswordGenerator.generate();
       _selectedRole = TabletRoleType.lowField;
       return;
     }
     _nameController.text = tablet.name;
     _codeNumberController.text = AccountCodeNumber.format(tablet.codeNumber);
     _emailController.text = tablet.email.split('@').first;
-    _passwordController.text = tablet.password;
     _selectedRole = TabletRoleType.fromName(tablet.role);
   }
 
@@ -137,9 +132,6 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
       _isValidEmailLocalPart(_emailController.text);
 
   bool get _identityOk => _nameOk && _codeNumberOk && _emailOk;
-  bool get _passwordOk =>
-      RegExp(r'^\d{5}$').hasMatch(_passwordController.text.trim());
-
   TabletSettingsSectionState _sectionState(TabletSettingsSection section) {
     switch (section) {
       case TabletSettingsSection.identity:
@@ -149,9 +141,6 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
             : TabletSettingsSectionState.incomplete;
       case TabletSettingsSection.permission:
         return TabletSettingsSectionState.complete;
-      case TabletSettingsSection.password:
-        if (_passwordOk) return TabletSettingsSectionState.complete;
-        return TabletSettingsSectionState.error;
     }
   }
 
@@ -172,7 +161,6 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
       codeNumber: AccountCodeNumber.normalize(_codeNumberController.text),
       emailLocal: _emailController.text.trim(),
       role: _selectedRole,
-      password: _passwordController.text.trim(),
     );
   }
 
@@ -190,9 +178,6 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
         case TabletSettingsSection.permission:
           _selectedRole = draft.role;
           break;
-        case TabletSettingsSection.password:
-          _passwordController.text = draft.password;
-          break;
       }
       _saveError = null;
     });
@@ -207,8 +192,6 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
         return '태블릿 식별 정보';
       case TabletSettingsSection.permission:
         return '운영 권한';
-      case TabletSettingsSection.password:
-        return '로그인 비밀번호';
     }
   }
 
@@ -218,8 +201,6 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
         return const Size(500, 460);
       case TabletSettingsSection.permission:
         return const Size(460, 320);
-      case TabletSettingsSection.password:
-        return const Size(460, 360);
     }
   }
 
@@ -392,10 +373,6 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
 
   String _permissionSummary() => _selectedRole.label;
 
-  String _passwordSummary() {
-    return _passwordOk ? '5자리 비밀번호 설정됨' : '비밀번호 입력 필요';
-  }
-
   String _friendlySaveError(String message) {
     final value = message.trim();
     return value.isEmpty ? '태블릿 정보를 저장하지 못했습니다.' : value;
@@ -447,6 +424,8 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
           '개발자 모드 ON: 태블릿 설정 로그를 debugPrint 코드로 복사할 수 있습니다.',
       standardModeMessage: '개발자 모드 OFF: 태블릿 설정 로그를 콘솔에 기록합니다.',
     );
+
+    trace.log('passwordPolicy=manual_firestore_only appPasswordWrite=false');
 
     try {
       if (area.isEmpty) {
@@ -520,7 +499,6 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
               codeNumber: codeNumber,
               email: email,
               role: _selectedRole.name,
-              password: _passwordController.text.trim(),
               position: null,
               areas: <String>[area],
               divisions: <String>[division],
@@ -537,7 +515,6 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
               codeNumber: codeNumber,
               email: email,
               role: _selectedRole.name,
-              password: _passwordController.text.trim(),
               areas: <String>[area],
               divisions: <String>[division],
               currentArea: area,
@@ -941,13 +918,6 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
                 section: TabletSettingsSection.permission,
                 title: '운영 권한',
                 summary: _permissionSummary(),
-              ),
-              divider,
-              _buildSummarySection(
-                context,
-                section: TabletSettingsSection.password,
-                title: '로그인 비밀번호',
-                summary: _passwordSummary(),
               ),
             ],
           ),

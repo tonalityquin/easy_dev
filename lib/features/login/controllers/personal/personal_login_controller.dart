@@ -9,7 +9,6 @@ import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/tablet/applications/tablet_pad_mode_state.dart';
 import '../../../../shared/auth/account_code_number.dart';
-import '../../../../shared/auth/five_digit_password_generator.dart';
 import 'personal_account_diagnostics.dart';
 import '../../applications/tablet/tablet_login_network_service.dart';
 import '../area_login_session_refresher.dart';
@@ -65,13 +64,11 @@ class PersonalAccountCreateResult {
   const PersonalAccountCreateResult({
     required this.success,
     required this.message,
-    this.password,
     this.codeNumber,
   });
 
   final bool success;
   final String message;
-  final String? password;
   final String? codeNumber;
 }
 
@@ -83,14 +80,11 @@ class PersonalLoginController {
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController codeNumberController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
 
   final FocusNode nameFocus = FocusNode();
   final FocusNode codeNumberFocus = FocusNode();
-  final FocusNode passwordFocus = FocusNode();
 
   bool isLoading = false;
-  bool obscurePassword = true;
   bool isLoggedIn = false;
   String? loggedInAccountId;
   String? loggedInName;
@@ -103,6 +97,7 @@ class PersonalLoginController {
   PadMode get _targetPadMode => PadMode.mobile;
 
   String get _savedMode => 'personal';
+
 
   void initState() {
     if (_inited) return;
@@ -366,40 +361,30 @@ class PersonalLoginController {
     return null;
   }
 
-  String? _validatePassword(String password) {
-    final value = password.trim();
-    if (value.isEmpty) return '비밀번호를 입력하세요.';
-    if (!RegExp(r'^\d{5}$').hasMatch(value)) return '비밀번호는 5자리 숫자입니다.';
-    return null;
-  }
 
   String? _validateDivision(String division) {
     if (division.trim().isEmpty) return '구역을 입력하세요.';
     return null;
   }
 
+
   String? validatePersonalInputs({
     required String name,
     required String codeNumber,
-    String? password,
   }) {
-    final basicError = _validateName(name) ?? _validateLoginCodeNumber(codeNumber);
-    if (basicError != null) return basicError;
-    if (password != null) return _validatePassword(password);
-    return null;
+    return _validateName(name) ?? _validateLoginCodeNumber(codeNumber);
   }
+
 
   String? validatePersonalAccountCreateInputs({
     required String name,
     required String codeNumber,
     required String gmail,
-    required String password,
     required String area,
     required String division,
   }) {
     return _validateName(name) ??
         _validateGeneratedCodeNumber(codeNumber) ??
-        _validatePassword(password) ??
         _validateGmail(gmail) ??
         _validateArea(area) ??
         _validateDivision(division);
@@ -412,21 +397,13 @@ class PersonalLoginController {
   }) {
     final inputName = nameController.text.trim();
     final inputCodeNumber = _normalizeCodeNumber(codeNumberController.text);
-    final inputPassword = passwordController.text.trim();
-    final inputSelectedArea = '';
-    final docId = inputCodeNumber.isEmpty || inputSelectedArea.isEmpty
-        ? ''
-        : _accountDocId(codeNumber: inputCodeNumber, area: inputSelectedArea);
     final lines = <String>[
-      '개인형 로그인 실패',
+      '개인형 계정 확인 실패',
       '시간: ${DateTime.now().toIso8601String()}',
       '사유: $message',
       '컬렉션: personal_accounts',
-      if (docId.isNotEmpty) '문서 ID: $docId',
       '입력 이름: $inputName',
       '입력 코드번호: ${AccountCodeNumber.mask(inputCodeNumber)}',
-      '입력 비밀번호 길이: ${inputPassword.length}',
-      if (inputSelectedArea.isNotEmpty) '입력 지역: $inputSelectedArea',
       if (error != null) '오류: $error',
       if (stackTrace != null) '스택: $stackTrace',
     ];
@@ -453,7 +430,6 @@ class PersonalLoginController {
     required String name,
     required String codeNumber,
     required String email,
-    required String password,
     required String area,
     required String division,
   }) {
@@ -465,7 +441,6 @@ class PersonalLoginController {
       'codeNumber': normalizedCodeNumber,
       'email': _normalizeGmail(email),
       'gmail': _normalizeGmail(email),
-      'password': password.trim(),
       'mode': 'personal',
       'modes': const <String>['personal'],
       'role': 'personal',
@@ -481,10 +456,6 @@ class PersonalLoginController {
     };
   }
 
-  String generatePersonalPassword() {
-    return FiveDigitPasswordGenerator.generate();
-  }
-
   String generatePersonalCodeNumber() {
     return AccountCodeNumber.generate();
   }
@@ -493,7 +464,6 @@ class PersonalLoginController {
     required String name,
     required String codeNumber,
     required String gmail,
-    required String password,
     required String area,
     required String division,
   }) async {
@@ -501,7 +471,6 @@ class PersonalLoginController {
       name: name,
       codeNumber: codeNumber,
       gmail: gmail,
-      password: password,
       area: area,
       division: division,
     );
@@ -575,7 +544,6 @@ class PersonalLoginController {
           name: name,
           codeNumber: normalizedCodeNumber,
           email: email,
-          password: password.trim(),
           area: normalizedArea,
           division: division,
         ),
@@ -595,7 +563,6 @@ class PersonalLoginController {
       return PersonalAccountCreateResult(
         success: true,
         message: '개인형 계정을 생성했습니다.',
-        password: password.trim(),
         codeNumber: normalizedCodeNumber,
       );
     } catch (e, st) {
@@ -631,45 +598,6 @@ class PersonalLoginController {
         success: false,
         message: '계정을 생성하지 못했습니다.',
       );
-    }
-  }
-
-  Future<PersonalCredentialAuthenticationResult> authenticateCredentials(
-    StateSetter setState,
-  ) async {
-    PersonalAccountDiagnostics.clear();
-    PersonalAccountDiagnostics.record(
-      'authentication_start',
-      meta: <String, Object?>{
-        'codeNumber': AccountCodeNumber.mask(
-          _normalizeCodeNumber(codeNumberController.text),
-        ),
-        'nameLength': nameController.text.trim().length,
-      },
-    );
-    setState(() => isLoading = true);
-    try {
-      final result = await _authenticateCredentialsCore();
-      PersonalAccountDiagnostics.record(
-        'authentication_complete',
-        meta: <String, Object?>{
-          'success': result.success,
-          'message': result.message,
-        },
-      );
-      if (context.mounted) {
-        await PersonalAccountDiagnostics.showStatusDialog(
-          context,
-          title: '개인형 계정 인증 상태',
-          description: result.message,
-          failure: !result.success,
-        );
-      }
-      return result;
-    } finally {
-      if (context.mounted) {
-        setState(() => isLoading = false);
-      }
     }
   }
 
@@ -819,173 +747,6 @@ class PersonalLoginController {
     }
   }
 
-  Future<PersonalCredentialAuthenticationResult>
-      _authenticateCredentialsCore() async {
-    final name = nameController.text.trim();
-    final codeNumber = _normalizeCodeNumber(codeNumberController.text);
-    final password = passwordController.text.trim();
-
-    final error = validatePersonalInputs(
-      name: name,
-      codeNumber: codeNumber,
-      password: password,
-    );
-    if (error != null) {
-      final failure = _loginFailureResult(error);
-      return PersonalCredentialAuthenticationResult(
-        success: false,
-        message: failure.message,
-        copyText: failure.copyText,
-      );
-    }
-
-    final isConn = await TabletLoginNetworkService().isConnected();
-    if (!isConn) {
-      final failure = _loginFailureResult('네트워크 연결을 확인하세요.');
-      return PersonalCredentialAuthenticationResult(
-        success: false,
-        message: failure.message,
-        copyText: failure.copyText,
-      );
-    }
-
-    try {
-      final candidates = await _findPersonalAccountCandidates(codeNumber);
-
-      QueryDocumentSnapshot<Map<String, dynamic>>? matchedDoc;
-      Map<String, dynamic>? matchedData;
-      var profileMatched = false;
-      var passwordMissingForMatchedProfile = false;
-
-      for (final doc in candidates) {
-        final data = doc.data();
-        final active = (data['isActive'] as bool?) ?? true;
-        if (!active) continue;
-
-        final storedName = (data['name'] ?? '').toString().trim();
-        final storedCodeNumber = _codeNumberFromData(data);
-        final profileMatches = storedName == name && storedCodeNumber == codeNumber;
-        if (!profileMatches) continue;
-
-        profileMatched = true;
-        final storedPassword = (data['password'] ?? '').toString().trim();
-        if (storedPassword.isEmpty) {
-          passwordMissingForMatchedProfile = true;
-          continue;
-        }
-        if (storedPassword != password) continue;
-
-        matchedDoc = doc;
-        matchedData = data;
-        break;
-      }
-
-      PersonalCredentialAuthenticationResult failureResult(String message) {
-        final failure = _loginFailureResult(message);
-        return PersonalCredentialAuthenticationResult(
-          success: false,
-          message: failure.message,
-          copyText: failure.copyText,
-        );
-      }
-
-      if (candidates.isEmpty) {
-        return failureResult('개인형 계정을 찾을 수 없습니다.');
-      }
-
-      final hasInactiveOnly = candidates.every((doc) {
-        final data = doc.data();
-        return ((data['isActive'] as bool?) ?? true) == false;
-      });
-      if (hasInactiveOnly) {
-        return failureResult('비활성화된 개인형 계정입니다.');
-      }
-
-      if (matchedDoc == null || matchedData == null) {
-        if (passwordMissingForMatchedProfile) {
-          return failureResult(
-            '개인형 계정에 비밀번호가 없습니다. 개발자 모드에서 비밀번호가 포함된 계정으로 다시 생성하세요.',
-          );
-        }
-        if (profileMatched) {
-          return failureResult('비밀번호가 일치하지 않습니다.');
-        }
-        return failureResult('입력한 계정 정보가 일치하지 않습니다.');
-      }
-
-      final storedName = (matchedData['name'] ?? '').toString().trim();
-      final storedCodeNumber = _codeNumberFromData(matchedData);
-      final selectedArea = _selectedAreaFromData(matchedData);
-      final division = _divisionFromData(matchedData);
-      if (selectedArea.isEmpty) {
-        return failureResult('개인형 계정의 지역 정보가 없습니다.');
-      }
-
-      final expectedDocId = _accountDocId(
-        codeNumber: storedCodeNumber,
-        area: selectedArea,
-      );
-      if (matchedDoc.id != expectedDocId) {
-        return failureResult(
-          '개인형 계정 문서 ID가 코드번호-지역 구조와 일치하지 않습니다.',
-        );
-      }
-
-      return PersonalCredentialAuthenticationResult(
-        success: true,
-        message: '$storedName님, 개인형 계정 인증에 성공했습니다.',
-        account: PersonalAuthenticatedAccount(
-          documentId: matchedDoc.id,
-          data: Map<String, dynamic>.from(matchedData),
-          name: storedName,
-          codeNumber: storedCodeNumber,
-          selectedArea: selectedArea,
-          division: division,
-        ),
-      );
-    } catch (e, st) {
-      await DevFirebaseDebugDialog.show(
-        context: context,
-        operation: 'personal_accounts.login',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'collection': 'personal_accounts',
-          'inputName': name,
-          'inputCodeNumber': AccountCodeNumber.mask(codeNumber),
-          'inputPasswordLength': password.length,
-          'query': _isLegacyNumericCodeNumber(codeNumber)
-              ? 'where(codeNumber|phone|personalPhone|handle == masked).limit(20)'
-              : 'where(codeNumber == masked).limit(20)',
-          'queryShape': _isLegacyNumericCodeNumber(codeNumber)
-              ? 'legacy-compatible-multi-single-field-equality'
-              : 'single-field-equality-with-limit',
-          'filters': _isLegacyNumericCodeNumber(codeNumber)
-              ? 'codeNumber|phone|personalPhone|handle'
-              : 'codeNumber',
-          'orderBy': 'none',
-          'limit': 20,
-          'compositeIndex':
-              'not-required-for-this-shape-unless-rules-or-console-error-requires-it',
-          'indexDebug':
-              'if FirebaseException.code == failed-precondition, use firebase.message console index link',
-          'postLoginWrite':
-              'doc(matchedDoc.id).set(isSaved,lastLoginAt,updatedAt,merge)',
-        },
-      );
-      final failure = _loginFailureResult(
-        '로그인 중 오류가 발생했습니다.',
-        error: e,
-        stackTrace: st,
-      );
-      return PersonalCredentialAuthenticationResult(
-        success: false,
-        message: failure.message,
-        copyText: failure.copyText,
-      );
-    }
-  }
-
   Future<PersonalLoginResult> activateAuthenticatedAccount(
     PersonalAuthenticatedAccount account, {
     bool persistSession = true,
@@ -1077,202 +838,19 @@ class PersonalLoginController {
     }
   }
 
-  Future<PersonalLoginResult> login(StateSetter setState) async {
-    PersonalAccountDiagnostics.clear();
-    PersonalAccountDiagnostics.record(
-      'login_start',
-      meta: <String, Object?>{
-        'codeNumber': AccountCodeNumber.mask(
-          _normalizeCodeNumber(codeNumberController.text),
-        ),
-        'nameLength': nameController.text.trim().length,
-      },
-    );
-    setState(() => isLoading = true);
-    try {
-      final credential = await _authenticateCredentialsCore();
-      final account = credential.account;
-      if (!credential.success || account == null) {
-        final result = PersonalLoginResult(
-          success: false,
-          message: credential.message,
-          copyText: credential.copyText,
-        );
-        PersonalAccountDiagnostics.record(
-          'login_failure',
-          meta: <String, Object?>{'message': result.message},
-        );
-        if (context.mounted) {
-          await PersonalAccountDiagnostics.showStatusDialog(
-            context,
-            title: '개인형 로그인 상태',
-            description: result.message,
-            failure: true,
-          );
-        }
-        return result;
-      }
-
-      final result = await activateAuthenticatedAccount(account);
-      PersonalAccountDiagnostics.record(
-        result.success ? 'login_success' : 'login_activation_failure',
-        meta: <String, Object?>{
-          'message': result.message,
-          'documentId': AccountCodeNumber.maskDocumentId(account.documentId),
-          'codeNumber': AccountCodeNumber.mask(account.codeNumber),
-        },
-      );
-      if (context.mounted) {
-        await PersonalAccountDiagnostics.showStatusDialog(
-          context,
-          title: '개인형 로그인 상태',
-          description: result.message,
-          failure: !result.success,
-        );
-      }
-      return result;
-    } finally {
-      if (context.mounted) {
-        setState(() => isLoading = false);
-      }
-    }
-  }
-
-  Future<PersonalLoginResult> logout(StateSetter setState) async {
-    setState(() => isLoading = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final accountId = loggedInAccountId ?? (prefs.getString('personalAccountId') ?? '').trim();
-      if (accountId.isNotEmpty) {
-        await _personalAccountsRef.doc(accountId).set(
-          <String, dynamic>{
-            'isSaved': false,
-            'lastLogoutAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      }
-      await prefs.remove('mode');
-      await prefs.remove('codeNumber');
-      await prefs.remove('selectedArea');
-      await prefs.remove('division');
-      await prefs.remove('role');
-      await prefs.remove('position');
-      await prefs.remove('personalAccountId');
-      await prefs.remove('personalName');
-      await prefs.remove('personalCodeNumber');
-      await prefs.remove('personalEmail');
-
-      passwordController.clear();
-      isLoggedIn = false;
-      loggedInAccountId = null;
-      loggedInName = null;
-
-      return const PersonalLoginResult(success: true, message: '개인형 로그아웃이 완료되었습니다.');
-    } catch (e, st) {
-      debugPrint('[LOGIN-PERSONAL][${_ts()}] logout error: $e\n$st');
-      await DevFirebaseDebugDialog.show(
-        context: context,
-        operation: 'personal_accounts.loginScreenLogout',
-        error: e,
-        stackTrace: st,
-        details: <String, Object?>{
-          'collection': 'personal_accounts',
-          'accountId': loggedInAccountId,
-          'write': 'doc(accountId).set(isSaved=false,lastLogoutAt,updatedAt,merge)',
-          'queryShape': 'direct-document-write',
-          'compositeIndex': 'not-required',
-        },
-      );
-      return const PersonalLoginResult(success: false, message: '로그아웃 중 오류가 발생했습니다.');
-    } finally {
-      if (context.mounted) {
-        setState(() => isLoading = false);
-      }
-    }
-  }
-
-  void togglePassword() {
-    obscurePassword = !obscurePassword;
-  }
-
-  void formatCodeNumber(String value, StateSetter setState) {
-    final formatted = AccountCodeNumber.format(value);
-    setState(() {
-      codeNumberController.value = TextEditingValue(
-        text: formatted,
-        selection: TextSelection.collapsed(offset: formatted.length),
-      );
-    });
-  }
-
   void fillLoginFields({
     required String name,
     required String codeNumber,
-    String? password,
   }) {
     nameController.text = name.trim();
-    codeNumberController.text = _formatCodeNumberForDisplay(_normalizeCodeNumber(codeNumber));
-    if (password != null) {
-      passwordController.text = password.trim();
-    }
+    codeNumberController.text =
+        _formatCodeNumberForDisplay(_normalizeCodeNumber(codeNumber));
   }
-
-  InputDecoration inputDecoration({
-    required String label,
-    IconData? icon,
-    Widget? suffixIcon,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: icon != null ? Icon(icon) : null,
-      suffixIcon: suffixIcon,
-      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-      filled: true,
-      fillColor: cs.surfaceContainerLow,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: cs.outlineVariant),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: cs.outlineVariant),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: cs.primary, width: 1.8),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: cs.error),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: cs.error, width: 1.8),
-      ),
-      prefixIconColor: MaterialStateColor.resolveWith(
-        (states) => states.contains(MaterialState.focused)
-            ? cs.primary
-            : cs.onSurfaceVariant,
-      ),
-      suffixIconColor: MaterialStateColor.resolveWith(
-        (states) => states.contains(MaterialState.focused)
-            ? cs.primary
-            : cs.onSurfaceVariant,
-      ),
-    );
-  }
-
 
   void dispose() {
     nameController.dispose();
     codeNumberController.dispose();
-    passwordController.dispose();
     nameFocus.dispose();
     codeNumberFocus.dispose();
-    passwordFocus.dispose();
   }
 }

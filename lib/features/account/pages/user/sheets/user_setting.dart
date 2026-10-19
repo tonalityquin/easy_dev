@@ -11,11 +11,12 @@ import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_origin_morph_dialog.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../shared/auth/account_code_number.dart';
-import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../../dev/application/area_state.dart';
+import '../../../../dev/application/developer_account_authorization.dart';
 import '../../../../launcher/application/app_mode_registry.dart';
+import '../../../../selector/application/dev_auth.dart';
 import '../../../applications/user_state.dart';
 import '../../../domain/models/user/user_model.dart';
 import '../../../domain/repositories/user_repository.dart';
@@ -48,7 +49,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _codeNumberController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _positionController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _scrollViewportKey = GlobalKey();
@@ -58,6 +58,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   };
 
   RoleType _selectedRole = RoleType.fieldCommon;
+  UserCodeEntryMode _codeEntryMode = UserCodeEntryMode.generated;
   final Set<String> _selectedModes = <String>{};
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
   Map<String, TimeOfDay?> _endByDay = <String, TimeOfDay?>{};
@@ -74,6 +75,41 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
 
   bool get isEditMode => widget.initialUser != null;
 
+  bool get _manualCodeAllowedNow =>
+      !isEditMode &&
+      DevAuth.devModeEnabled.value &&
+      DeveloperAccountAuthorization.isAuthorized;
+
+  Future<bool> _isManualCodeAuthorized({bool interactive = false}) async {
+    if (isEditMode) return false;
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled) return false;
+    if (interactive) {
+      return DeveloperAccountAuthorization.authorizeInteractive(
+        source: 'user_account_manual_code_entry',
+      );
+    }
+    return DeveloperAccountAuthorization.isAuthorized;
+  }
+
+  void _handleDevModeChanged() {
+    if (!mounted || isEditMode) return;
+    if (DevAuth.devModeEnabled.value ||
+        _codeEntryMode != UserCodeEntryMode.developerManual) {
+      setState(() {});
+      return;
+    }
+    setState(() {
+      _codeEntryMode = UserCodeEntryMode.generated;
+      _codeNumberController.text = AccountCodeNumber.format(
+        AccountCodeNumber.generate(),
+      );
+      _saveError = null;
+    });
+    _syncSectionStates(source: 'developer_mode_disabled');
+    _workspace?.log('manual_code_entry_disabled reason=developer_mode_off');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -83,6 +119,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     _endByDay = <String, TimeOfDay?>{
       for (final day in _days) day: null,
     };
+    DevAuth.devModeEnabled.addListener(_handleDevModeChanged);
     _populateInitialValues();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -115,20 +152,20 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     _nameController.dispose();
     _codeNumberController.dispose();
     _emailController.dispose();
-    _passwordController.dispose();
     _positionController.dispose();
     _scrollController.dispose();
+    DevAuth.devModeEnabled.removeListener(_handleDevModeChanged);
     super.dispose();
   }
 
   void _populateInitialValues() {
     final user = widget.initialUser;
     if (user == null) {
+      _codeEntryMode = UserCodeEntryMode.generated;
       _nameController.clear();
       _codeNumberController.text = AccountCodeNumber.format(AccountCodeNumber.generate());
       _emailController.clear();
       _positionController.clear();
-      _passwordController.text = FiveDigitPasswordGenerator.generate();
       _selectedRole = RoleType.fieldCommon;
       _selectedModes
         ..clear()
@@ -142,6 +179,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       _breakDays = Set<String>.of(_days);
       return;
     }
+    _codeEntryMode = UserCodeEntryMode.generated;
     _nameController.text = user.name;
     final existingCode = AccountCodeNumber.normalize(user.codeNumber);
     _codeNumberController.text = AccountCodeNumber.format(
@@ -150,7 +188,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
           : AccountCodeNumber.generate(),
     );
     _emailController.text = user.email.split('@').first;
-    _passwordController.text = user.password;
     _positionController.text = user.position ?? '';
     _selectedRole = RoleType.values.firstWhere(
       (role) => role.name == user.role,
@@ -227,14 +264,24 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   }
 
   bool get _nameOk => _nameController.text.trim().isNotEmpty;
-  bool get _codeNumberOk => isEditMode
-      ? AccountCodeNumber.isValid(_codeNumberController.text)
-      : AccountCodeNumber.isGeneratedCode(_codeNumberController.text);
+  bool get _codeNumberOk {
+    if (isEditMode) {
+      return AccountCodeNumber.isValid(_codeNumberController.text);
+    }
+    switch (_codeEntryMode) {
+      case UserCodeEntryMode.generated:
+        return AccountCodeNumber.isGeneratedCode(_codeNumberController.text);
+      case UserCodeEntryMode.developerManual:
+        return _manualCodeAllowedNow &&
+            AccountCodeNumber.isDeveloperManualCode(
+              AccountCodeNumber.normalize(_codeNumberController.text),
+            );
+    }
+  }
   bool get _emailOk => _emailController.text.trim().isNotEmpty &&
       _isValidEmailLocalPart(_emailController.text);
   bool get _identityOk => _nameOk && _codeNumberOk && _emailOk;
   bool get _permissionOk => _selectedModes.isNotEmpty;
-  bool get _passwordOk => RegExp(r'^\d{5}$').hasMatch(_passwordController.text);
 
   bool get _scheduleOk {
     for (final day in _days) {
@@ -264,9 +311,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         return _positionController.text.trim().isEmpty
             ? UserSettingsSectionState.optional
             : UserSettingsSectionState.complete;
-      case UserSettingsSection.password:
-        if (_passwordOk) return UserSettingsSectionState.complete;
-        return UserSettingsSectionState.error;
       case UserSettingsSection.schedule:
         if (_scheduleOk) return UserSettingsSectionState.complete;
         return UserSettingsSectionState.error;
@@ -300,9 +344,9 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     return UserSettingsDraft(
       name: _nameController.text.trim(),
       codeNumber: AccountCodeNumber.normalize(_codeNumberController.text),
+      codeEntryMode: _codeEntryMode,
       emailLocal: _emailController.text.trim(),
       position: _positionController.text.trim(),
-      password: _passwordController.text.trim(),
       role: _selectedRole,
       modes: Set<String>.of(_selectedModes),
       startByDay: Map<String, TimeOfDay?>.of(_startByDay),
@@ -320,7 +364,11 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       switch (section) {
         case UserSettingsSection.identity:
           _nameController.text = draft.name;
-          _codeNumberController.text = AccountCodeNumber.format(draft.codeNumber);
+          _codeEntryMode = draft.codeEntryMode;
+          _codeNumberController.text = draft.codeEntryMode ==
+                  UserCodeEntryMode.developerManual
+              ? draft.codeNumber
+              : AccountCodeNumber.format(draft.codeNumber);
           _emailController.text = draft.emailLocal;
           break;
         case UserSettingsSection.permission:
@@ -331,9 +379,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
           break;
         case UserSettingsSection.position:
           _positionController.text = draft.position;
-          break;
-        case UserSettingsSection.password:
-          _passwordController.text = draft.password;
           break;
         case UserSettingsSection.schedule:
           _startByDay = _normalizeWeekMap(draft.startByDay);
@@ -346,7 +391,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     _markDirty(section, source: 'editor_apply');
     final workingDays = _workingDaySet().length;
     _workspace?.log(
-      'settings_editor_applied section=${section.name} modes=${_selectedModes.length} workingDays=$workingDays passwordLength=${_passwordController.text.trim().length}',
+      'settings_editor_applied section=${section.name} modes=${_selectedModes.length} workingDays=$workingDays passwordPolicy=manual_firestore_only',
     );
   }
 
@@ -366,8 +411,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         return const Size(540, 460);
       case UserSettingsSection.position:
         return const Size(460, 310);
-      case UserSettingsSection.password:
-        return const Size(480, 370);
       case UserSettingsSection.schedule:
         return const Size(620, 720);
     }
@@ -381,8 +424,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         return '권한과 허용 모드';
       case UserSettingsSection.position:
         return '현장 직책';
-      case UserSettingsSection.password:
-        return '초기 비밀번호';
       case UserSettingsSection.schedule:
         return '요일별 근무 시간';
     }
@@ -425,6 +466,18 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       trace.log(
         '원본 row bounds 확보: width=${sourceRect.width.toStringAsFixed(1)}, height=${sourceRect.height.toStringAsFixed(1)}',
       );
+      final manualCodeAllowed = await _isManualCodeAuthorized();
+      if (!mounted) return;
+      if (!manualCodeAllowed &&
+          _codeEntryMode == UserCodeEntryMode.developerManual) {
+        setState(() {
+          _codeEntryMode = UserCodeEntryMode.generated;
+          _codeNumberController.text = AccountCodeNumber.format(
+            AccountCodeNumber.generate(),
+          );
+        });
+        trace.log('코드번호 직접 입력 모드 해제: reason=developer_capability_unavailable');
+      }
       final applied = await showCommonOriginMorphDialog<bool>(
         context: context,
         sourceRect: sourceRect,
@@ -436,6 +489,9 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
             section: section,
             initialDraft: _currentDraft().detached(),
             isEditMode: isEditMode,
+            manualCodeAllowed: manualCodeAllowed,
+            onRequestManualCodeEntry: () =>
+                _isManualCodeAuthorized(interactive: true),
             trace: trace,
             onApply: (draft) => _applyEditorDraft(section, draft),
           );
@@ -549,6 +605,16 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
           ? '선택한 지역의 활성 계정 한도에 도달했습니다.'
           : '선택한 지역의 활성 계정은 최대 $limit개까지 사용할 수 있습니다.';
     }
+    if (message.contains('MANUAL_CODE_NOT_AUTHORIZED')) {
+      return '개발자 모드와 개발자 계정 인증을 다시 확인하세요.';
+    }
+    if (message.contains('MANUAL_CODE_INVALID')) {
+      return '직접 입력 코드번호는 숫자 11자리여야 합니다.';
+    }
+    if (message.contains('CODE_NUMBER_ALREADY_EXISTS') ||
+        message.contains('USER_ALREADY_EXISTS')) {
+      return '이미 사용 중인 코드번호입니다.';
+    }
     if (message.contains('전체 계정 제한')) {
       return limit == null
           ? '선택한 지역의 전체 계정 한도에 도달했습니다.'
@@ -609,9 +675,23 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
           '개발자 모드 OFF: 계정 설정 로그를 콘솔에 기록합니다.',
     );
 
+    trace.log('passwordPolicy=manual_firestore_only appPasswordWrite=false');
+
     try {
+      if (_codeEntryMode == UserCodeEntryMode.developerManual) {
+        final authorized = await _isManualCodeAuthorized();
+        if (!authorized) {
+          throw StateError('MANUAL_CODE_NOT_AUTHORIZED');
+        }
+        final manualCode = AccountCodeNumber.normalize(
+          _codeNumberController.text,
+        );
+        if (!AccountCodeNumber.isDeveloperManualCode(manualCode)) {
+          throw StateError('MANUAL_CODE_INVALID');
+        }
+      }
       trace.log(
-        '입력값 검증 통과: 사용자 ${_maskName(_nameController.text)}, 코드번호 ${_maskCodeNumber(_codeNumberController.text)}, 허용 모드 ${normalizedModes.length}개',
+        '입력값 검증 통과: 사용자 ${_maskName(_nameController.text)}, 코드번호 ${_maskCodeNumber(_codeNumberController.text)}, 코드할당=${_codeEntryMode.name}, 허용 모드 ${normalizedModes.length}개',
         progress: 0.12,
       );
       final englishName =
@@ -624,21 +704,33 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       final requiresCodeAllocation = !isEditMode ||
           !AccountCodeNumber.isValid(initialUser?.codeNumber ?? '');
       if (requiresCodeAllocation) {
-        var normalizedCode = AccountCodeNumber.normalize(_codeNumberController.text);
+        var normalizedCode = AccountCodeNumber.normalize(
+          _codeNumberController.text,
+        );
         var existing = await repository.getUserByAccountCode(normalizedCode);
-        var attempts = 0;
-        while (existing != null && attempts < 8) {
-          attempts += 1;
-          normalizedCode = AccountCodeNumber.generate();
-          _codeNumberController.text = AccountCodeNumber.format(normalizedCode);
+        if (_codeEntryMode == UserCodeEntryMode.developerManual) {
+          if (existing != null) {
+            throw StateError('CODE_NUMBER_ALREADY_EXISTS');
+          }
           trace.log(
-            '코드번호 중복 감지 후 재발급: attempt=$attempts code=${AccountCodeNumber.mask(normalizedCode)}',
+            '개발자 직접 입력 코드번호 중복 검사 완료: code=${AccountCodeNumber.mask(normalizedCode)}',
             progress: 0.34,
           );
-          existing = await repository.getUserByAccountCode(normalizedCode);
-        }
-        if (existing != null) {
-          throw StateError('CODE_NUMBER_GENERATION_FAILED');
+        } else {
+          var attempts = 0;
+          while (existing != null && attempts < 8) {
+            attempts += 1;
+            normalizedCode = AccountCodeNumber.generate();
+            _codeNumberController.text = AccountCodeNumber.format(normalizedCode);
+            trace.log(
+              '코드번호 중복 감지 후 재발급: attempt=$attempts code=${AccountCodeNumber.mask(normalizedCode)}',
+              progress: 0.34,
+            );
+            existing = await repository.getUserByAccountCode(normalizedCode);
+          }
+          if (existing != null) {
+            throw StateError('CODE_NUMBER_GENERATION_FAILED');
+          }
         }
       }
 
@@ -659,7 +751,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         email: '${_emailController.text.trim()}@gmail.com',
         role: _selectedRole.name,
         modes: normalizedModes,
-        password: _passwordController.text.trim(),
         position: _positionController.text.trim(),
         areas: <String>[area],
         divisions: <String>[division],
@@ -675,6 +766,10 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         isActive: initialUser?.isActive ?? true,
       );
 
+      trace.log(
+        '전역 코드 인덱스 정책 적용: user_account_codes reservation과 일반 User 저장을 동일 transaction으로 요청합니다.',
+        progress: 0.54,
+      );
       trace.log('계정 모델 구성 완료: Firestore 저장을 요청합니다.', progress: 0.58);
       String? saveError;
       bool saved = true;
@@ -903,10 +998,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     return value.isEmpty ? '미지정' : value;
   }
 
-  String _passwordSummary() {
-    return _passwordOk ? '5자리 비밀번호 설정됨' : '비밀번호 입력 필요';
-  }
-
   String _scheduleSummary() {
     final workingDays = _workingDaySet();
     final breakDays = _normalizedBreakDays();
@@ -1044,15 +1135,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     );
   }
 
-  Widget _buildPasswordSection(BuildContext context) {
-    return _buildSummarySection(
-      context,
-      section: UserSettingsSection.password,
-      title: '초기 비밀번호',
-      summary: _passwordSummary(),
-    );
-  }
-
   Widget _buildScheduleSection(BuildContext context) {
     return _buildSummarySection(
       context,
@@ -1150,8 +1232,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
               _buildPermissionSection(context),
               divider,
               _buildPositionSection(context),
-              divider,
-              _buildPasswordSection(context),
               divider,
               _buildScheduleSection(context),
             ],

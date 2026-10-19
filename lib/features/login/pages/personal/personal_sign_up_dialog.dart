@@ -25,7 +25,6 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
   final TextEditingController _gmailController = TextEditingController();
   final TextEditingController _areaController = TextEditingController();
   final TextEditingController _divisionController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
   final FocusNode _nameFocus = FocusNode();
   final FocusNode _codeNumberFocus = FocusNode();
   final FocusNode _gmailFocus = FocusNode();
@@ -38,7 +37,6 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
   @override
   void initState() {
     super.initState();
-    _passwordController.text = widget.controller.generatePersonalPassword();
     _codeNumberController.text = AccountCodeNumber.format(
       widget.controller.generatePersonalCodeNumber(),
     );
@@ -51,7 +49,6 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
     _gmailController.dispose();
     _areaController.dispose();
     _divisionController.dispose();
-    _passwordController.dispose();
     _nameFocus.dispose();
     _codeNumberFocus.dispose();
     _gmailFocus.dispose();
@@ -117,33 +114,12 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
     );
   }
 
-  void _regeneratePassword() {
-    if (_isSaving) return;
-    setState(() {
-      _passwordController.text = widget.controller.generatePersonalPassword();
-      _errorMessage = null;
-    });
-  }
-
-  Future<void> _copyPassword() async {
-    final password = _passwordController.text.trim();
-    if (password.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: password));
-    if (!mounted) return;
-    showCommonLoginSnack(
-      context,
-      message: '비밀번호를 복사했습니다.',
-      success: true,
-    );
-  }
-
   Future<void> _create() async {
     FocusScope.of(context).unfocus();
     final error = widget.controller.validatePersonalAccountCreateInputs(
       name: _nameController.text,
       codeNumber: _codeNumberController.text,
       gmail: _gmailController.text,
-      password: _passwordController.text,
       area: _areaController.text,
       division: _divisionController.text,
     );
@@ -161,7 +137,6 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
       name: _nameController.text,
       codeNumber: _codeNumberController.text,
       gmail: _gmailController.text,
-      password: _passwordController.text,
       area: _areaController.text,
       division: _divisionController.text,
     );
@@ -176,7 +151,6 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
       widget.controller.fillLoginFields(
         name: _nameController.text,
         codeNumber: createdCodeNumber,
-        password: result.password ?? _passwordController.text,
       );
       HapticFeedback.selectionClick();
       Navigator.of(context).pop(true);
@@ -390,45 +364,6 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                   ),
                   const SizedBox(height: 12),
                   _field(
-                    controller: _passwordController,
-                    enabled: !_isSaving,
-                    readOnly: true,
-                    label: '자동 생성 비밀번호',
-                    icon: Icons.lock_rounded,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: <TextInputFormatter>[
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(5),
-                    ],
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        CommonIconButton(
-                          icon: Icons.refresh_rounded,
-                          tooltip: '비밀번호 재생성',
-                          onPressed: _isSaving ? null : _regeneratePassword,
-                          haptic: CommonHaptic.selection,
-                          size: 40,
-                          iconSize: 20,
-                        ),
-                        CommonIconButton(
-                          icon: Icons.copy_rounded,
-                          tooltip: '비밀번호 복사',
-                          onPressed: _isSaving ? null : _copyPassword,
-                          haptic: CommonHaptic.selection,
-                          size: 40,
-                          iconSize: 20,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _CommonSignUpInfo(
-                    icon: Icons.key_rounded,
-                    text: '생성된 5자리 번호는 개인형 로그인 비밀번호로 사용됩니다.',
-                  ),
-                  const SizedBox(height: 12),
-                  _field(
                     controller: _areaController,
                     focusNode: _areaFocus,
                     enabled: !_isSaving,
@@ -518,13 +453,26 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                 onPressed:
                     _isSaving ? null : () => Navigator.of(context).pop(false),
               );
-              final create = CommonButton(
-                label: _isSaving ? '생성 중' : '생성',
-                icon: Icons.check_rounded,
-                expand: true,
-                loading: _isSaving,
-                onPressed: _isSaving ? null : _create,
-                haptic: CommonHaptic.light,
+              final create = AnimatedSwitcher(
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                switchInCurve: CommonUiMotion.enter,
+                switchOutCurve: CommonUiMotion.exit,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.97, end: 1).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: CommonButton(
+                  key: ValueKey<bool>(_isSaving),
+                  label: _isSaving ? '생성 중' : '생성',
+                  icon: Icons.check_rounded,
+                  expand: true,
+                  loading: _isSaving,
+                  onPressed: _isSaving ? null : _create,
+                  haptic: CommonHaptic.light,
+                ),
               );
               return narrow
                   ? Column(

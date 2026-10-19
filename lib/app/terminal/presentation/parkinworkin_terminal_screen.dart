@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../utils/motion_timing_diagnostics.dart';
-import '../../../features/launcher/application/launcher_actions.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
 import '../../../features/launcher/application/mode_launcher_controller.dart';
 import '../../../features/launcher/application/terminal_auth_coordinator.dart';
@@ -1236,7 +1236,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       },
     );
     var openDeveloperPassword = false;
-    var openGoogleVerification = false;
     await _showLauncherDialog(
       builder: (dialogContext) => _LauncherAccountDialog(
         accountKind: _launcherController!.selectedAccountKindLabel,
@@ -1255,7 +1254,9 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
           );
           if (result.accepted) {
             openDeveloperPassword = developerPasswordMode;
-            openGoogleVerification = !developerPasswordMode;
+            if (!developerPasswordMode) {
+              _deferredLauncherResult = result.flowResult;
+            }
           }
           return result;
         },
@@ -1264,10 +1265,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     if (!mounted) return;
     if (openDeveloperPassword) {
       await _showLauncherPasswordDialog();
-      return;
-    }
-    if (openGoogleVerification) {
-      await _showLauncherGoogleVerificationDialog();
     }
   }
 
@@ -1292,6 +1289,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       name: name,
       codeNumber: accountIdentifier,
       reduceMotion: _reduceMotion,
+      developerPasswordMode: developerPasswordMode,
     );
     if (!mounted) return result;
     _syncPlayback();
@@ -1312,101 +1310,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       },
     );
     return result;
-  }
-
-  Future<void> _showLauncherGoogleVerificationDialog() async {
-    ParkinWorkinTerminalDiagnostics.record(
-      'launcher_google_verification_dialog_open',
-      context: _contextLabel,
-      meta: <String, Object?>{
-        'accountKind': _launcherController!.selectedAccountKindLabel,
-      },
-    );
-    await _showLauncherDialog(
-      builder: (dialogContext) => _LauncherGoogleVerificationDialog(
-        accountKind: _launcherController!.selectedAccountKindLabel,
-        reduceMotion: _reduceMotion,
-        onStatus: _showDeveloperStatus,
-        onOpened: _handleLauncherDialogOpened,
-        onClosing: _handleLauncherDialogClosing,
-        onAuthenticate: _authenticateLauncherGoogleIdentity,
-        onExit: _exitLauncherFromAccountVerification,
-      ),
-    );
-  }
-
-  Future<LauncherCredentialSubmitResult> _authenticateLauncherGoogleIdentity() async {
-    ParkinWorkinTerminalDiagnostics.record(
-      'launcher_google_verification_submit',
-      context: _contextLabel,
-      meta: <String, Object?>{
-        'accountKind': _launcherController!.selectedAccountKindLabel,
-        'emailProtected': true,
-      },
-    );
-    final result = await _launcherController!.authenticateResolvedGoogleIdentity(
-      context,
-      reduceMotion: _reduceMotion,
-    );
-    if (!mounted) return result;
-    _syncPlayback();
-    if (result.accepted) {
-      _deferredLauncherResult = result.flowResult;
-      ParkinWorkinTerminalDiagnostics.record(
-        'launcher_google_verification_complete',
-        context: _contextLabel,
-        meta: <String, Object?>{
-          'stage': _launcherController!.loginStage.name,
-          'hasTargetRoute': result.flowResult.targetRoute != null,
-          'emailProtected': true,
-        },
-      );
-    } else {
-      ParkinWorkinTerminalDiagnostics.record(
-        'launcher_google_verification_rejected',
-        context: _contextLabel,
-        meta: <String, Object?>{
-          'authenticationError': result.authenticationError != null,
-          'emailProtected': true,
-        },
-      );
-    }
-    return result;
-  }
-
-
-  Future<void> _exitLauncherFromAccountVerification() async {
-    ParkinWorkinTerminalDiagnostics.record(
-      'launcher_account_verification_exit_requested',
-      context: _contextLabel,
-      meta: <String, Object?>{
-        'accountKind': _launcherController!.selectedAccountKindLabel,
-        'workNotificationRunning':
-            WorkStatusNotificationController.status.value.serviceRunning,
-        'workNotificationPersistent':
-            WorkStatusNotificationController.status.value.notificationPersistent,
-      },
-    );
-    LauncherDiagnostics.record(
-      'account_verification_exit_requested',
-      scope: 'launcher_terminal_manual_auth',
-      meta: <String, Object?>{
-        'accountKind': _launcherController!.selectedAccountKindLabel,
-        'workNotificationRunning':
-            WorkStatusNotificationController.status.value.serviceRunning,
-      },
-    );
-    await LauncherActions.exitApp(context);
-    if (!mounted) return;
-    ParkinWorkinTerminalDiagnostics.record(
-      'launcher_account_verification_exit_returned',
-      context: _contextLabel,
-      meta: <String, Object?>{
-        'workNotificationRunning':
-            WorkStatusNotificationController.status.value.serviceRunning,
-        'appExitShutdown': WorkStatusNotificationController.appExitShutdown,
-      },
-    );
   }
 
   Future<void> _showLauncherPasswordDialog() async {
@@ -5468,6 +5371,13 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
           'accountKind': widget.accountKind,
         },
       );
+      await LauncherDiagnostics.showStatus(
+        context,
+        title: '개발자 Firebase 인증 실패',
+        description: '개발자 Google/Firebase 선행 인증 로그를 확인할 수 있습니다.',
+        scope: 'launcher_terminal_manual_auth',
+        failure: true,
+      );
       return;
     }
 
@@ -5729,7 +5639,63 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
                       ),
                     ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            AnimatedSwitcher(
+              duration: widget.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SizeTransition(
+                  sizeFactor: animation,
+                  axisAlignment: -1,
+                  child: child,
+                ),
+              ),
+              child: _busy
+                  ? Row(
+                      key: ValueKey<String>(
+                        _developerPasswordMode
+                            ? (kDebugMode
+                                ? 'account_auth_pipeline_busy_debug_anonymous'
+                                : 'account_auth_pipeline_busy_developer')
+                            : 'account_auth_pipeline_busy_standard',
+                      ),
+                      children: [
+                        SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            color: _terminalAccent.withOpacity(.9),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _developerPasswordMode
+                                ? (kDebugMode
+                                    ? 'FIREBASE ANON AUTH → ACCOUNT LOOKUP'
+                                    : 'FIREBASE AUTH → ACCOUNT LOOKUP')
+                                : 'GOOGLE → FIREBASE → ACCOUNT LOOKUP',
+                            style: const TextStyle(
+                              color: _terminalMuted,
+                              fontFamily: 'monospace',
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: .2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey<String>('account_auth_pipeline_idle'),
+                    ),
+            ),
+            const SizedBox(height: 12),
             Align(
               alignment: Alignment.centerRight,
               child: _TerminalDialogActionButton(
@@ -5755,251 +5721,6 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
     _nameFocus.dispose();
     _accountIdentifierFocus.dispose();
     super.dispose();
-  }
-}
-
-class _LauncherGoogleVerificationDialog extends StatefulWidget {
-  const _LauncherGoogleVerificationDialog({
-    required this.accountKind,
-    required this.reduceMotion,
-    required this.onStatus,
-    required this.onOpened,
-    required this.onClosing,
-    required this.onAuthenticate,
-    required this.onExit,
-  });
-
-  final String accountKind;
-  final bool reduceMotion;
-  final VoidCallback onStatus;
-  final VoidCallback onOpened;
-  final VoidCallback onClosing;
-  final Future<LauncherCredentialSubmitResult> Function() onAuthenticate;
-  final Future<void> Function() onExit;
-
-  @override
-  State<_LauncherGoogleVerificationDialog> createState() =>
-      _LauncherGoogleVerificationDialogState();
-}
-
-class _LauncherGoogleVerificationDialogState
-    extends State<_LauncherGoogleVerificationDialog> {
-  final GlobalKey<_MiniTerminalFrameState> _frameKey =
-      GlobalKey<_MiniTerminalFrameState>();
-  bool _busy = false;
-  bool _exiting = false;
-  String? _submitError;
-
-  void _handleOpened() {
-    widget.onOpened();
-    LauncherDiagnostics.record(
-      'google_verification_dialog_ready',
-      scope: 'launcher_terminal_manual_auth',
-      meta: <String, Object?>{
-        'accountKind': widget.accountKind,
-        'emailProtected': true,
-      },
-    );
-  }
-
-  Future<void> _authenticate() async {
-    if (_busy || _exiting) return;
-    setState(() {
-      _busy = true;
-      _submitError = null;
-    });
-    await HapticFeedback.selectionClick();
-    final result = await widget.onAuthenticate();
-    if (!mounted) return;
-    if (result.accepted) {
-      await HapticFeedback.lightImpact();
-      widget.onClosing();
-      await WidgetsBinding.instance.endOfFrame;
-      await _frameKey.currentState?.close();
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      return;
-    }
-    await HapticFeedback.mediumImpact();
-    setState(() {
-      _busy = false;
-      _submitError = result.authenticationError;
-    });
-  }
-
-  Future<void> _exitApp() async {
-    if (_busy || _exiting) return;
-    setState(() {
-      _exiting = true;
-      _submitError = null;
-    });
-    WorkStatusNotificationController.beginAppExitSuppression(
-      source: 'launcher_account_verification_exit',
-    );
-    LauncherDiagnostics.record(
-      'account_verification_exit_pressed',
-      scope: 'launcher_terminal_manual_auth',
-      meta: <String, Object?>{
-        'accountKind': widget.accountKind,
-        'workNotificationRunning':
-            WorkStatusNotificationController.status.value.serviceRunning,
-        'workNotificationPersistent':
-            WorkStatusNotificationController.status.value.notificationPersistent,
-      },
-    );
-    await HapticFeedback.mediumImpact();
-    widget.onClosing();
-    await WidgetsBinding.instance.endOfFrame;
-    await _frameKey.currentState?.close();
-    if (!mounted) return;
-    final onExit = widget.onExit;
-    Navigator.of(context).pop();
-    await onExit();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      child: _MiniTerminalFrame(
-        key: _frameKey,
-        title: 'ACCOUNT VERIFICATION',
-        reduceMotion: widget.reduceMotion,
-        onStatus: widget.onStatus,
-        onOpenCompleted: _handleOpened,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AnimatedContainer(
-              duration: widget.reduceMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-              decoration: BoxDecoration(
-                color: _terminalAccent.withOpacity(_busy || _exiting ? .12 : .08),
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(
-                  color: _terminalAccent.withOpacity(_busy || _exiting ? .9 : .7),
-                ),
-              ),
-              child: Row(
-                children: [
-                  AnimatedSwitcher(
-                    duration: widget.reduceMotion
-                        ? Duration.zero
-                        : const Duration(milliseconds: 160),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: ScaleTransition(
-                        scale: Tween<double>(begin: .9, end: 1).animate(animation),
-                        child: child,
-                      ),
-                    ),
-                    child: Icon(
-                      _exiting
-                          ? Icons.power_settings_new_rounded
-                          : _busy
-                              ? Icons.sync_rounded
-                              : Icons.verified_user_rounded,
-                      key: ValueKey<String>(
-                        _exiting ? 'exiting' : _busy ? 'busy' : 'ready',
-                      ),
-                      size: 18,
-                      color: _terminalAccent,
-                    ),
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: AnimatedSwitcher(
-                      duration: widget.reduceMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 160),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      child: Text(
-                        _exiting
-                            ? 'ENDING SESSION'
-                            : _busy
-                                ? 'VERIFYING ACCOUNT'
-                                : widget.accountKind.isEmpty
-                                    ? 'ACCOUNT IDENTITY'
-                                    : '${widget.accountKind} · ACCOUNT IDENTITY',
-                        key: ValueKey<String>(
-                          _exiting ? 'exiting' : _busy ? 'busy' : 'ready',
-                        ),
-                        style: const TextStyle(
-                          color: _terminalAccent,
-                          fontFamily: 'monospace',
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              '로그인한 계정에 대한 인증 정보를 확인합니다.',
-              style: TextStyle(
-                color: _terminalMuted,
-                fontFamily: 'monospace',
-                fontSize: 10.5,
-                height: 1.4,
-              ),
-            ),
-            AnimatedSwitcher(
-              duration: widget.reduceMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 160),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              child: _submitError == null
-                  ? const SizedBox.shrink()
-                  : Padding(
-                      key: ValueKey<String>(_submitError!),
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        _submitError!,
-                        style: const TextStyle(
-                          color: _terminalError,
-                          fontFamily: 'monospace',
-                          fontSize: 10.5,
-                          height: 1.3,
-                        ),
-                      ),
-                    ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _TerminalDialogActionButton(
-                  label: '종료',
-                  busy: _exiting,
-                  enabled: !_busy && !_exiting,
-                  reduceMotion: widget.reduceMotion,
-                  onPressed: _exitApp,
-                ),
-                const SizedBox(width: 8),
-                _TerminalDialogActionButton(
-                  label: '인증',
-                  busy: _busy,
-                  enabled: !_busy && !_exiting,
-                  reduceMotion: widget.reduceMotion,
-                  onPressed: _authenticate,
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

@@ -4,7 +4,7 @@ enum SecondaryTabletView { management, settings }
 
 enum TabletSettingsMode { create, edit }
 
-enum TabletSettingsSection { identity, permission, password }
+enum TabletSettingsSection { identity, permission }
 
 enum TabletSettingsSectionState { complete, incomplete, error }
 
@@ -24,7 +24,6 @@ class SecondaryTabletWorkspaceState extends ChangeNotifier {
       <TabletSettingsSection, TabletSettingsSectionState>{
     TabletSettingsSection.identity: TabletSettingsSectionState.incomplete,
     TabletSettingsSection.permission: TabletSettingsSectionState.complete,
-    TabletSettingsSection.password: TabletSettingsSectionState.complete,
   };
 
   SecondaryTabletView get view => _view;
@@ -200,7 +199,6 @@ class SecondaryTabletWorkspaceState extends ChangeNotifier {
             ? TabletSettingsSectionState.incomplete
             : TabletSettingsSectionState.complete,
         TabletSettingsSection.permission: TabletSettingsSectionState.complete,
-        TabletSettingsSection.password: TabletSettingsSectionState.complete,
       });
   }
 

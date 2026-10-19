@@ -8,8 +8,9 @@ import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../../app/utils/status_dialog.dart';
 import '../../../data/services/dev_user_write_service.dart';
 import '../../../../../features/account/domain/models/user/user_model.dart';
+import '../../../../../features/dev/application/developer_account_authorization.dart';
+import '../../../../../features/selector/application/dev_auth.dart';
 import '../../../../../shared/auth/account_code_number.dart';
-import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
@@ -60,6 +61,17 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   int _refreshTick = 0;
   String? _scopeAreasDivision;
   Future<List<String>>? _scopeAreasFuture;
+
+  Future<bool> _isManualCodeAuthorized({bool interactive = false}) async {
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled) return false;
+    if (interactive) {
+      return DeveloperAccountAuthorization.authorizeInteractive(
+        source: 'secondary_user_manual_code_entry',
+      );
+    }
+    return DeveloperAccountAuthorization.isAuthorized;
+  }
 
   Map<String, dynamic> _normalizedWeekMapFromData(
     Map<String, dynamic> data,
@@ -142,7 +154,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       'name': d['name'] ?? '',
       'codeNumber': d['codeNumber'] ?? d['phone'] ?? '',
       'email': d['email'] ?? '',
-      'password': d['password'] ?? '',
       'divisions': divisions,
       'areas': areas,
       'role': d['role'] ?? 'fieldCommon',
@@ -326,7 +337,27 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     required String totalTitle,
   }) async {
     final raw = e.toString();
-    if (raw.contains('USER_ALREADY_EXISTS') || raw.contains('SHOW_USER_ALREADY_EXISTS')) {
+    if (raw.contains('MANUAL_CODE_NOT_AUTHORIZED')) {
+      await StatusDialog.showFailure(
+        context,
+        title: '개발자 인증이 필요합니다',
+        description: '개발자 모드와 개발자 계정 인증 상태를 확인한 뒤 다시 시도하세요.',
+        useCommonUi: true,
+      );
+      return;
+    }
+    if (raw.contains('MANUAL_CODE_INVALID')) {
+      await StatusDialog.showFailure(
+        context,
+        title: '코드번호를 확인하세요',
+        description: '직접 입력 코드번호는 숫자 11자리여야 합니다.',
+        useCommonUi: true,
+      );
+      return;
+    }
+    if (raw.contains('CODE_NUMBER_ALREADY_EXISTS') ||
+        raw.contains('USER_ALREADY_EXISTS') ||
+        raw.contains('SHOW_USER_ALREADY_EXISTS')) {
       await StatusDialog.showFailure(
         context,
         title: '동일 계정이 이미 존재합니다',
@@ -518,6 +549,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 
   Future<void> _openCreateDialog(List<String> divisionList) async {
     if (_creating) return;
+    final manualCodeAllowed = await _isManualCodeAuthorized();
+    if (!mounted) return;
 
     final draft = await showCommonOverlayDialog<_CreateUserAccountDraft>(
       context: context,
@@ -527,6 +560,9 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         roleList: _roles,
         initialDivision: widget.selectedDivision,
         initialArea: widget.selectedArea,
+        manualCodeAllowed: manualCodeAllowed,
+        onRequestManualCodeEntry: () =>
+            _isManualCodeAuthorized(interactive: true),
         fetchAreasForDivision: _fetchAreaNamesForDivision,
       ),
     );
@@ -547,7 +583,22 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       standardModeMessage: '개발자 모드 OFF: 운영 계정 생성 로그를 콘솔에 기록합니다.',
     );
 
+    trace.log('passwordPolicy=manual_firestore_only appPasswordWrite=false');
+
     try {
+      if (draft.codeEntryMode == UserCodeEntryMode.developerManual) {
+        final authorized = await _isManualCodeAuthorized();
+        if (!authorized) {
+          throw StateError('MANUAL_CODE_NOT_AUTHORIZED');
+        }
+        if (!AccountCodeNumber.isDeveloperManualCode(draft.codeNumber)) {
+          throw StateError('MANUAL_CODE_INVALID');
+        }
+      }
+      trace.log(
+        '코드번호 할당 방식 확인: mode=${draft.codeEntryMode.name} code=${AccountCodeNumber.mask(draft.codeNumber)}',
+        progress: 0.1,
+      );
       final englishName = await _fetchEnglishNameByArea(draft.division, draft.area) ?? draft.area;
       final user = UserModel(
         id: draft.documentId,
@@ -562,7 +613,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         isSelected: false,
         isWorking: false,
         name: draft.name,
-        password: draft.password,
         codeNumber: draft.codeNumber,
         position: draft.position,
         role: draft.role,
@@ -572,12 +622,16 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         isActive: true,
       );
       trace.log(
-        '현재 소속 확정: division=${draft.division} area=${draft.area} id=${draft.documentId}',
+        '현재 소속 확정: division=${draft.division} area=${draft.area} id=${AccountCodeNumber.maskDocumentId(draft.documentId)}',
         progress: 0.16,
       );
       trace.log(
         '휴게 정책: timeIndependent=true breakDays=${user.breakDays.length} breakEnabledWithoutScheduledTimes=true',
         progress: 0.3,
+      );
+      trace.log(
+        '전역 코드 인덱스 정책 적용: user_account_codes reservation과 일반 User 저장을 동일 transaction으로 요청합니다.',
+        progress: 0.34,
       );
       trace.log(
         'DevUserWriteService 전용 경로로 계정 생성을 요청합니다. breakDays=${user.breakDays.join(',')}',
@@ -1396,8 +1450,8 @@ class _CreateUserAccountDraft {
   _CreateUserAccountDraft({
     required this.name,
     required this.codeNumber,
+    required this.codeEntryMode,
     required this.email,
-    required this.password,
     required this.division,
     required this.area,
     required this.role,
@@ -1412,8 +1466,8 @@ class _CreateUserAccountDraft {
 
   final String name;
   final String codeNumber;
+  final UserCodeEntryMode codeEntryMode;
   final String email;
-  final String password;
   final String division;
   final String area;
   final String role;
@@ -1434,6 +1488,8 @@ class _CreateUserAccountDialog extends StatefulWidget {
     required this.roleList,
     required this.initialDivision,
     required this.initialArea,
+    required this.manualCodeAllowed,
+    required this.onRequestManualCodeEntry,
     required this.fetchAreasForDivision,
   });
 
@@ -1441,6 +1497,8 @@ class _CreateUserAccountDialog extends StatefulWidget {
   final List<String> roleList;
   final String? initialDivision;
   final String? initialArea;
+  final bool manualCodeAllowed;
+  final Future<bool> Function() onRequestManualCodeEntry;
   final Future<List<String>> Function(String division) fetchAreasForDivision;
 
   @override
@@ -1454,12 +1512,12 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _codeNumberController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _positionController = TextEditingController();
 
   String? _selectedDivision;
   String? _selectedArea;
   String _selectedRole = 'fieldCommon';
+  UserCodeEntryMode _codeEntryMode = UserCodeEntryMode.generated;
   final Set<String> _selectedModes = <String>{'single'};
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
   Map<String, TimeOfDay?> _endByDay = <String, TimeOfDay?>{};
@@ -1478,7 +1536,6 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
         ? 'fieldCommon'
         : (widget.roleList.isNotEmpty ? widget.roleList.last : 'fieldCommon');
     _codeNumberController.text = AccountCodeNumber.format(AccountCodeNumber.generate());
-    _passwordController.text = FiveDigitPasswordGenerator.generate();
     _startByDay = <String, TimeOfDay?>{
       for (final day in _days) day: null,
     };
@@ -1494,7 +1551,6 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     _nameController.dispose();
     _codeNumberController.dispose();
     _emailController.dispose();
-    _passwordController.dispose();
     _positionController.dispose();
     super.dispose();
   }
@@ -1504,7 +1560,14 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   String _documentIdPreview() {
     final codeNumber = _normalizedCodeNumber();
     final area = (_selectedArea ?? '').trim();
-    if (!AccountCodeNumber.isGeneratedCode(codeNumber) || area.isEmpty) return '-';
+    final valid = switch (_codeEntryMode) {
+      UserCodeEntryMode.generated =>
+        AccountCodeNumber.isGeneratedCode(codeNumber),
+      UserCodeEntryMode.developerManual =>
+        widget.manualCodeAllowed &&
+            AccountCodeNumber.isDeveloperManualCode(codeNumber),
+    };
+    if (!valid || area.isEmpty) return '-';
     return AccountCodeNumber.documentId(codeNumber: codeNumber, area: area);
   }
 
@@ -1591,12 +1654,20 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     final name = _nameController.text.trim();
     final codeNumber = _normalizedCodeNumber();
     final emailLocal = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-
     if (name.isEmpty) return '이름을 입력하세요';
-    if (!AccountCodeNumber.isGeneratedCode(codeNumber)) return '코드번호를 다시 생성하세요';
+    if (_codeEntryMode == UserCodeEntryMode.generated) {
+      if (!AccountCodeNumber.isGeneratedCode(codeNumber)) {
+        return '코드번호를 다시 생성하세요';
+      }
+    } else {
+      if (!widget.manualCodeAllowed) {
+        return '개발자 인증 상태를 다시 확인하세요';
+      }
+      if (!AccountCodeNumber.isDeveloperManualCode(codeNumber)) {
+        return '코드번호는 숫자 11자리로 입력하세요';
+      }
+    }
     if (emailLocal.isEmpty || !_isValidEmailLocalPart(emailLocal)) return '이메일을 다시 확인하세요';
-    if (password.isEmpty) return '비밀번호를 입력하세요';
     if ((_selectedDivision ?? '').trim().isEmpty) return '회사를 선택하세요';
     if ((_selectedArea ?? '').trim().isEmpty) return '지역을 선택하세요';
     if (_selectedModes.isEmpty) return '허용 모드를 1개 이상 선택하세요';
@@ -1628,8 +1699,8 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
       _CreateUserAccountDraft(
         name: _nameController.text.trim(),
         codeNumber: _normalizedCodeNumber(),
+        codeEntryMode: _codeEntryMode,
         email: '${_emailController.text.trim()}@gmail.com',
-        password: _passwordController.text.trim(),
         division: _selectedDivision!.trim(),
         area: _selectedArea!.trim(),
         role: _selectedRole,
@@ -1650,6 +1721,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     bool readOnly = false,
     Widget? suffixIcon,
     ValueChanged<String>? onChanged,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return TextField(
       key: key,
@@ -1657,10 +1729,84 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
       keyboardType: keyboardType,
       readOnly: readOnly,
       onChanged: onChanged,
+      inputFormatters: inputFormatters,
       decoration: opsInputDecoration(
         context,
         label: label,
         suffixIcon: suffixIcon,
+      ),
+    );
+  }
+
+  Future<void> _setCodeEntryMode(UserCodeEntryMode mode) async {
+    if (mode == _codeEntryMode) return;
+    if (mode == UserCodeEntryMode.developerManual) {
+      if (!widget.manualCodeAllowed) return;
+      final authorized = await widget.onRequestManualCodeEntry();
+      if (!mounted) return;
+      if (!authorized) {
+        const logLine = 'secondary user manual code entry authorization failed';
+        debugPrint(logLine);
+        setState(() => _errorText = '개발자 계정 인증에 실패했습니다');
+        final developerMode = await DevAuth.isDevModeEnabled();
+        if (developerMode && mounted) {
+          await StatusDialog.showFailure(
+            context,
+            title: '코드번호 직접 입력 인증 실패',
+            description: '개발자 계정 재인증에 실패했습니다.',
+            copyText: "debugPrint('secondary user manual code entry authorization failed');",
+            copyButtonLabel: 'debugPrint 코드 복사',
+            visibleDuration: Duration.zero,
+            useCommonUi: true,
+            awaitManualClose: true,
+          );
+        }
+        return;
+      }
+      setState(() {
+        _codeEntryMode = UserCodeEntryMode.developerManual;
+        _codeNumberController.clear();
+        _errorText = null;
+      });
+      debugPrint('secondary user manual code entry enabled: digits=11');
+      return;
+    }
+    setState(() {
+      _codeEntryMode = UserCodeEntryMode.generated;
+      _codeNumberController.text = AccountCodeNumber.format(
+        AccountCodeNumber.generate(),
+      );
+      _errorText = null;
+    });
+    debugPrint('secondary user generated code entry enabled');
+  }
+
+  Widget _buildCodeEntryModeSelector(bool reduceMotion) {
+    if (!widget.manualCodeAllowed) return const SizedBox.shrink();
+    return AnimatedSize(
+      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.enter,
+      child: Row(
+        children: [
+          Expanded(
+            child: ChoiceChip(
+              label: const Text('자동 생성'),
+              selected: _codeEntryMode == UserCodeEntryMode.generated,
+              onSelected: (_) =>
+                  _setCodeEntryMode(UserCodeEntryMode.generated),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ChoiceChip(
+              label: const Text('직접 입력'),
+              selected:
+                  _codeEntryMode == UserCodeEntryMode.developerManual,
+              onSelected: (_) =>
+                  _setCodeEntryMode(UserCodeEntryMode.developerManual),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1871,41 +2017,63 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                         onChanged: (_) => setState(() => _errorText = null),
                       ),
                       const SizedBox(height: 12),
+                      _buildCodeEntryModeSelector(reduceMotion),
+                      if (widget.manualCodeAllowed) const SizedBox(height: 12),
                       AnimatedSwitcher(
                         duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                        switchInCurve: Curves.easeOutBack,
-                        switchOutCurve: Curves.easeInCubic,
+                        switchInCurve: CommonUiMotion.enter,
+                        switchOutCurve: CommonUiMotion.exit,
                         transitionBuilder: (child, animation) {
                           return FadeTransition(
                             opacity: animation,
-                            child: ScaleTransition(scale: animation, child: child),
+                            child: ScaleTransition(
+                              scale: Tween<double>(begin: .97, end: 1).animate(animation),
+                              child: child,
+                            ),
                           );
                         },
                         child: _buildTextField(
-                          key: ValueKey<String>(_codeNumberController.text),
+                          key: ValueKey<String>('user_create_code_${_codeEntryMode.name}'),
                           controller: _codeNumberController,
                           label: '코드번호',
-                          readOnly: true,
+                          keyboardType: _codeEntryMode == UserCodeEntryMode.developerManual
+                              ? TextInputType.number
+                              : null,
+                          readOnly: _codeEntryMode == UserCodeEntryMode.generated,
+                          inputFormatters:
+                              _codeEntryMode == UserCodeEntryMode.developerManual
+                                  ? <TextInputFormatter>[
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      LengthLimitingTextInputFormatter(11),
+                                    ]
+                                  : null,
+                          onChanged: (_) => setState(() => _errorText = null),
                           suffixIcon: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
                                 onPressed: () async {
+                                  final code = _normalizedCodeNumber();
+                                  final value = _codeEntryMode ==
+                                          UserCodeEntryMode.developerManual
+                                      ? code
+                                      : AccountCodeNumber.format(code);
                                   await Clipboard.setData(
-                                    ClipboardData(text: _codeNumberController.text),
+                                    ClipboardData(text: value),
                                   );
                                 },
                                 icon: const Icon(Icons.copy_rounded),
                               ),
-                              IconButton(
-                                onPressed: () => setState(() {
-                                  _errorText = null;
-                                  _codeNumberController.text = AccountCodeNumber.format(
-                                    AccountCodeNumber.generate(),
-                                  );
-                                }),
-                                icon: const Icon(Icons.refresh_rounded),
-                              ),
+                              if (_codeEntryMode == UserCodeEntryMode.generated)
+                                IconButton(
+                                  onPressed: () => setState(() {
+                                    _errorText = null;
+                                    _codeNumberController.text = AccountCodeNumber.format(
+                                      AccountCodeNumber.generate(),
+                                    );
+                                  }),
+                                  icon: const Icon(Icons.refresh_rounded),
+                                ),
                             ],
                           ),
                         ),
@@ -1916,18 +2084,6 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                         label: '이메일 아이디(@gmail.com 제외)',
                         keyboardType: TextInputType.emailAddress,
                         onChanged: (_) => setState(() => _errorText = null),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildTextField(
-                        controller: _passwordController,
-                        label: '비밀번호',
-                        suffixIcon: IconButton(
-                          tooltip: '비밀번호 재생성',
-                          onPressed: () => setState(
-                            () => _passwordController.text = FiveDigitPasswordGenerator.generate(),
-                          ),
-                          icon: const Icon(Icons.refresh_rounded),
-                        ),
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(

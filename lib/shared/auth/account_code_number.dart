@@ -2,6 +2,11 @@ import 'dart:math';
 
 import 'package:flutter/services.dart';
 
+enum UserCodeEntryMode {
+  generated,
+  developerManual,
+}
+
 class AccountCodeNumber {
   static const int length = 11;
   static const String _letters = 'abcdefghijklmnopqrstuvwxyz';
@@ -60,6 +65,10 @@ class AccountCodeNumber {
     if (!RegExp(r'^[a-z0-9]{11}$').hasMatch(normalized)) return false;
     return normalized.split('').any(_isLetter) &&
         normalized.split('').any(_isDigit);
+  }
+
+  static bool isDeveloperManualCode(String value) {
+    return RegExp(r'^\d{11}$').hasMatch(value.trim());
   }
 
   static String documentId({

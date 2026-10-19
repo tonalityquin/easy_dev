@@ -1,3 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,6 +18,7 @@ import '../../login/controllers/area_login_session_refresher.dart';
 import '../../login/controllers/personal/personal_login_controller.dart';
 import '../../login/controllers/tablet/tablet_login_controller.dart';
 import '../../tablet/applications/tablet_pad_mode_state.dart';
+import '../../dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../dev/application/area_state.dart';
 import '../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../headquarter/application/headquarter_dashboard_context.dart';
@@ -112,6 +116,16 @@ class TerminalAccountIdentityResolutionResult {
   final String message;
   final TerminalAuthenticatedAccount? account;
   final String? copyText;
+}
+
+class TerminalFirebasePreAuthenticationResult {
+  const TerminalFirebasePreAuthenticationResult({
+    required this.success,
+    required this.message,
+  });
+
+  final bool success;
+  final String message;
 }
 
 class TerminalModeActivationResult {
@@ -420,6 +434,126 @@ class TerminalAuthCoordinator {
     }
   }
 
+  static Future<TerminalFirebasePreAuthenticationResult>
+      ensureFirebaseIdentityBeforeAccountLookup({
+    required TerminalAccountKind kind,
+    required bool developerPasswordMode,
+  }) async {
+    final debugDeveloperAnonymousAuth =
+        kDebugMode && developerPasswordMode;
+    LauncherDiagnostics.record(
+      'auth_firebase_prelookup_start',
+      meta: <String, Object?>{
+        'accountKind': accountKindId(kind),
+        'developerPasswordMode': developerPasswordMode,
+        'debugDeveloperAnonymousAuth': debugDeveloperAnonymousAuth,
+      },
+    );
+
+    if (debugDeveloperAnonymousAuth) {
+      LauncherDiagnostics.record(
+        'auth_firebase_prelookup_debug_developer_anonymous_start',
+        meta: <String, Object?>{
+          'accountKind': accountKindId(kind),
+          'developerPasswordMode': true,
+          'interactiveGoogle': false,
+        },
+      );
+      try {
+        final firebaseUser = await FirebaseGoogleAuthBridge.instance
+            .ensureDebugDeveloperFirebaseAuthenticated();
+        final authenticated = firebaseUser != null;
+        LauncherDiagnostics.record(
+          authenticated
+              ? 'auth_firebase_prelookup_debug_developer_anonymous_success'
+              : 'auth_firebase_prelookup_debug_developer_anonymous_failed',
+          meta: <String, Object?>{
+            'accountKind': accountKindId(kind),
+            'developerPasswordMode': true,
+            'interactiveGoogle': false,
+            'firebaseAuthenticated': authenticated,
+            'firebaseAnonymous': firebaseUser?.isAnonymous,
+            'firebaseUidPresent': firebaseUser != null,
+          },
+        );
+        if (!authenticated) {
+          return const TerminalFirebasePreAuthenticationResult(
+            success: false,
+            message: 'Debug Firebase 인증을 완료하지 못했습니다.',
+          );
+        }
+        return const TerminalFirebasePreAuthenticationResult(
+          success: true,
+          message: 'Debug Firebase 인증을 확인했습니다.',
+        );
+      } on FirebaseAuthException catch (error, stackTrace) {
+        LauncherDiagnostics.record(
+          'auth_firebase_prelookup_debug_developer_anonymous_error',
+          meta: <String, Object?>{
+            'accountKind': accountKindId(kind),
+            'developerPasswordMode': true,
+            'interactiveGoogle': false,
+            'firebaseAuthCode': error.code,
+            'firebaseAuthMessage': error.message ?? '',
+            'stack': stackTrace,
+          },
+        );
+        return const TerminalFirebasePreAuthenticationResult(
+          success: false,
+          message: 'Debug Firebase 인증을 완료하지 못했습니다.',
+        );
+      } catch (error, stackTrace) {
+        LauncherDiagnostics.record(
+          'auth_firebase_prelookup_debug_developer_anonymous_error',
+          meta: <String, Object?>{
+            'accountKind': accountKindId(kind),
+            'developerPasswordMode': true,
+            'interactiveGoogle': false,
+            'errorType': error.runtimeType.toString(),
+            'error': error,
+            'stack': stackTrace,
+          },
+        );
+        return const TerminalFirebasePreAuthenticationResult(
+          success: false,
+          message: 'Debug Firebase 인증을 완료하지 못했습니다.',
+        );
+      }
+    }
+
+    try {
+      final identity = await GoogleAuthSession.instance
+          .ensureFirebaseAuthenticatedIdentity();
+      LauncherDiagnostics.record(
+        'auth_firebase_prelookup_success',
+        meta: <String, Object?>{
+          'accountKind': accountKindId(kind),
+          'developerPasswordMode': developerPasswordMode,
+          'googleIdentityPresent': identity.email.trim().isNotEmpty,
+          'firebaseBridgeVerified': true,
+        },
+      );
+      return const TerminalFirebasePreAuthenticationResult(
+        success: true,
+        message: 'Firebase 인증을 확인했습니다.',
+      );
+    } catch (error, stackTrace) {
+      LauncherDiagnostics.record(
+        'auth_firebase_prelookup_failed',
+        meta: <String, Object?>{
+          'accountKind': accountKindId(kind),
+          'developerPasswordMode': developerPasswordMode,
+          'errorType': error.runtimeType.toString(),
+          'stack': stackTrace,
+        },
+      );
+      return const TerminalFirebasePreAuthenticationResult(
+        success: false,
+        message: 'Google 계정 인증을 다시 확인하세요.',
+      );
+    }
+  }
+
   static Future<TerminalAccountIdentityResolutionResult> resolveAccountIdentity(
     BuildContext context, {
     required TerminalAccountKind kind,
@@ -606,6 +740,28 @@ class TerminalAuthCoordinator {
             controller.dispose();
           }
       }
+    } on FirebaseException catch (error, stackTrace) {
+      LauncherDiagnostics.record(
+        'auth_account_identity_firebase_error',
+        meta: <String, Object?>{
+          'accountKind': accountKindId(kind),
+          'accountIdentifierMasked': maskedAccountIdentifier,
+          'firebaseCode': error.code,
+          'firebaseMessage': error.message ?? '',
+          'stack': stackTrace,
+        },
+      );
+      final message = switch (error.code) {
+        'permission-denied' =>
+          '계정 조회 권한을 확인하지 못했습니다. Firebase 인증 상태를 확인하세요. (err_launcher_permission)',
+        'unavailable' =>
+          'Firebase 연결 상태를 확인하세요. (err_launcher_unavailable)',
+        _ => '계정 조회 중 Firebase 오류가 발생했습니다. (err_launcher_firebase)',
+      };
+      return TerminalAccountIdentityResolutionResult(
+        success: false,
+        message: message,
+      );
     } catch (error, stackTrace) {
       LauncherDiagnostics.record(
         'auth_account_identity_error',
@@ -632,10 +788,10 @@ class TerminalAuthCoordinator {
   }) async {
     final normalizedPassword = password.trim();
     final storedPassword = switch (account.kind) {
-      TerminalAccountKind.user => account.user?.password.trim() ?? '',
+      TerminalAccountKind.user => account.user?.password?.trim() ?? '',
       TerminalAccountKind.personal =>
         (account.personalAccount?.data['password'] ?? '').toString().trim(),
-      TerminalAccountKind.tablet => account.tablet?.password.trim() ?? '',
+      TerminalAccountKind.tablet => account.tablet?.password?.trim() ?? '',
     };
     LauncherDiagnostics.record(
       'auth_account_password_verify_start',
@@ -644,6 +800,8 @@ class TerminalAuthCoordinator {
         'displayNameLength': account.displayName.length,
         'passwordLength': normalizedPassword.length,
         'passwordProtected': true,
+        'temporaryPasswordPresent': storedPassword.isNotEmpty,
+        'passwordSource': 'manual_firestore_field',
         'firebaseReads': 0,
       },
     );
@@ -655,6 +813,8 @@ class TerminalAuthCoordinator {
           'accountKind': accountKindId(account.kind),
           'passwordLength': normalizedPassword.length,
           'passwordProtected': true,
+          'temporaryPasswordPresent': storedPassword.isNotEmpty,
+          'passwordSource': 'manual_firestore_field',
           'firebaseReads': 0,
         },
       );
@@ -798,36 +958,6 @@ class TerminalAuthCoordinator {
         message: accountVerificationFailureMessage,
       );
     }
-  }
-
-  static Future<TerminalAccountAuthenticationResult> authenticateAccount(
-    BuildContext context, {
-    required TerminalAccountKind kind,
-    required String name,
-    required String codeNumber,
-    required String password,
-    TerminalSessionPersistence persistence =
-        TerminalSessionPersistence.persistent,
-  }) async {
-    final identity = await resolveAccountIdentity(
-      context,
-      kind: kind,
-      name: name,
-      codeNumber: codeNumber,
-    );
-    final account = identity.account;
-    if (!identity.success || account == null) {
-      return TerminalAccountAuthenticationResult(
-        success: false,
-        message: identity.message,
-        copyText: identity.copyText,
-      );
-    }
-    return verifyResolvedAccountPassword(
-      account: account,
-      password: password,
-      persistence: persistence,
-    );
   }
 
   static Future<TerminalModeActivationResult> activateHeadquarterContext(

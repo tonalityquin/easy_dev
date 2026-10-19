@@ -11,7 +11,7 @@ class TabletModel {
   final bool isSaved;
   final bool isWorking;
   final String name;
-  final String password;
+  final String? password;
   final String codeNumber;
   final String? position;
   final String role;
@@ -28,7 +28,7 @@ class TabletModel {
     required this.isSaved,
     required this.isWorking,
     required this.name,
-    required this.password,
+    this.password,
     required this.codeNumber,
     this.position,
     required this.role,
@@ -93,7 +93,7 @@ class TabletModel {
       isSaved: data['isSaved'] ?? false,
       isWorking: data['isWorking'] ?? false,
       name: data['name'] ?? '',
-      password: data['password'] ?? '',
+      password: data['password']?.toString(),
       codeNumber: normalizedCodeNumber,
       position: data['position'],
       role: data['role'] ?? '',
@@ -111,7 +111,6 @@ class TabletModel {
       'isSaved': isSaved,
       'isWorking': isWorking,
       'name': name,
-      'password': password,
       'codeNumber': AccountCodeNumber.normalize(codeNumber),
       'email': email.trim(),
       'position': position,

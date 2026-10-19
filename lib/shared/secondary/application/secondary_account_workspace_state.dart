@@ -6,7 +6,7 @@ enum SecondaryAccountView { management, settings }
 
 enum UserSettingsMode { create, edit }
 
-enum UserSettingsSection { identity, permission, position, password, schedule }
+enum UserSettingsSection { identity, permission, position, schedule }
 
 enum UserSettingsSectionState { complete, incomplete, error, optional }
 
@@ -28,7 +28,6 @@ class SecondaryAccountWorkspaceState extends ChangeNotifier {
     UserSettingsSection.identity: UserSettingsSectionState.incomplete,
     UserSettingsSection.permission: UserSettingsSectionState.complete,
     UserSettingsSection.position: UserSettingsSectionState.optional,
-    UserSettingsSection.password: UserSettingsSectionState.complete,
     UserSettingsSection.schedule: UserSettingsSectionState.complete,
   };
 
@@ -245,7 +244,6 @@ class SecondaryAccountWorkspaceState extends ChangeNotifier {
             : UserSettingsSectionState.complete,
         UserSettingsSection.permission: UserSettingsSectionState.complete,
         UserSettingsSection.position: UserSettingsSectionState.optional,
-        UserSettingsSection.password: UserSettingsSectionState.complete,
         UserSettingsSection.schedule: UserSettingsSectionState.complete,
       });
   }

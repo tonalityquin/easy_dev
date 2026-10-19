@@ -5,7 +5,6 @@ import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../../app/utils/snackbar_helper.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
-import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../shared/auth/account_code_number.dart';
 import '../../../../../shared/secondary/application/secondary_tablet_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
@@ -38,7 +37,6 @@ class _TabletSettingSectionEditorDialogState
   late final TextEditingController _nameController;
   late final TextEditingController _codeNumberController;
   late final TextEditingController _emailController;
-  late final TextEditingController _passwordController;
   late TabletRoleType _role;
   bool _submitted = false;
   bool _reduceMotion = false;
@@ -50,7 +48,6 @@ class _TabletSettingSectionEditorDialogState
     _nameController = TextEditingController(text: draft.name);
     _codeNumberController = TextEditingController(text: AccountCodeNumber.format(draft.codeNumber));
     _emailController = TextEditingController(text: draft.emailLocal);
-    _passwordController = TextEditingController(text: draft.password);
     _role = draft.role;
     widget.trace.log('편집 화면이 열렸습니다: section=${widget.section.name}');
   }
@@ -66,7 +63,6 @@ class _TabletSettingSectionEditorDialogState
     _nameController.dispose();
     _codeNumberController.dispose();
     _emailController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
@@ -76,8 +72,6 @@ class _TabletSettingSectionEditorDialogState
         return '태블릿 식별 정보';
       case TabletSettingsSection.permission:
         return '운영 권한';
-      case TabletSettingsSection.password:
-        return '로그인 비밀번호';
     }
   }
 
@@ -87,8 +81,6 @@ class _TabletSettingSectionEditorDialogState
         return Icons.tablet_mac_rounded;
       case TabletSettingsSection.permission:
         return Icons.verified_user_rounded;
-      case TabletSettingsSection.password:
-        return Icons.password_rounded;
     }
   }
 
@@ -104,17 +96,12 @@ class _TabletSettingSectionEditorDialogState
       _isValidEmailLocalPart(_emailController.text);
 
   bool get _identityOk => _nameOk && _codeNumberOk && _emailOk;
-  bool get _passwordOk =>
-      RegExp(r'^\d{5}$').hasMatch(_passwordController.text.trim());
-
   bool _validate() {
     switch (widget.section) {
       case TabletSettingsSection.identity:
         return _identityOk;
       case TabletSettingsSection.permission:
         return true;
-      case TabletSettingsSection.password:
-        return _passwordOk;
     }
   }
 
@@ -129,8 +116,6 @@ class _TabletSettingSectionEditorDialogState
         );
       case TabletSettingsSection.permission:
         return base.copyWith(role: _role);
-      case TabletSettingsSection.password:
-        return base.copyWith(password: _passwordController.text.trim());
     }
   }
 
@@ -145,7 +130,7 @@ class _TabletSettingSectionEditorDialogState
     }
     final result = _resultDraft();
     widget.trace.log(
-      '편집 적용: section=${widget.section.name} nameLength=${result.name.length} codeNumber=${AccountCodeNumber.mask(result.codeNumber)} emailSet=${result.emailLocal.isNotEmpty} emailDomain=gmail.com role=${result.role.name} passwordLength=${result.password.length}',
+      '편집 적용: section=${widget.section.name} nameLength=${result.name.length} codeNumber=${AccountCodeNumber.mask(result.codeNumber)} emailSet=${result.emailLocal.isNotEmpty} emailDomain=gmail.com role=${result.role.name} passwordPolicy=manual_firestore_only',
     );
     widget.onApply(result);
     if (!mounted) return;
@@ -166,24 +151,6 @@ class _TabletSettingSectionEditorDialogState
       title: '$_title 편집 로그',
       description: '현재 편집 동작의 debugPrint 코드를 확인하고 복사할 수 있습니다.',
     );
-  }
-
-  Future<void> _copyPassword() async {
-    final value = _passwordController.text.trim();
-    await Clipboard.setData(ClipboardData(text: value));
-    widget.trace.log('비밀번호 클립보드 복사: length=${value.length}');
-    if (!mounted) return;
-    showSelectedSnackbar(
-      context,
-      '태블릿 비밀번호를 복사했습니다.',
-      useCommonUi: true,
-    );
-  }
-
-  void _regeneratePassword() {
-    final next = FiveDigitPasswordGenerator.generate();
-    setState(() => _passwordController.text = next);
-    widget.trace.log('비밀번호 재생성: length=${next.length}');
   }
 
   Future<void> _copyCodeNumber() async {
@@ -347,55 +314,12 @@ class _TabletSettingSectionEditorDialogState
     );
   }
 
-  Widget _passwordEditor(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _passwordController,
-          keyboardType: TextInputType.number,
-          textInputAction: TextInputAction.done,
-          onChanged: (_) {
-            if (_submitted) setState(() {});
-          },
-          enableSuggestions: false,
-          autocorrect: false,
-          inputFormatters: <TextInputFormatter>[
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(5),
-          ],
-          decoration: opsInputDecoration(
-            context,
-            label: '비밀번호',
-            prefixIcon: const Icon(Icons.password_rounded),
-            suffixIcon: IconButton(
-              tooltip: '복사',
-              onPressed: _copyPassword,
-              icon: const Icon(Icons.copy_rounded),
-            ),
-            errorText: _submitted && !_passwordOk
-                ? '5자리 숫자 비밀번호를 입력하세요.'
-                : null,
-          ),
-        ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: _regeneratePassword,
-          icon: const Icon(Icons.refresh_rounded, size: 18),
-          label: const Text('새 비밀번호 생성'),
-        ),
-      ],
-    );
-  }
-
   Widget _body(BuildContext context) {
     switch (widget.section) {
       case TabletSettingsSection.identity:
         return _identityEditor(context);
       case TabletSettingsSection.permission:
         return _permissionEditor(context);
-      case TabletSettingsSection.password:
-        return _passwordEditor(context);
     }
   }
 

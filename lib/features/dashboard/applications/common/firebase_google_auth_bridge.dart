@@ -21,7 +21,7 @@ class FirebaseGoogleAuthBridge {
 
   bool get isSignedIn => _auth.currentUser != null;
 
-  bool get canUseProductionAnonymousFallback =>
+  bool get canUseDebugAnonymousFallback =>
       kDebugMode && _enableDebugAnonymousFallback;
 
   Future<void> configureRuntime() async {
@@ -35,7 +35,7 @@ class FirebaseGoogleAuthBridge {
     _runtimeConfigured = true;
 
     debugPrint(
-      '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] FirebaseAuth production runtime 사용 productionAnonFallback=$canUseProductionAnonymousFallback',
+      '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] FirebaseAuth runtime configured debugAnonFallback=$canUseDebugAnonymousFallback',
     );
   }
 
@@ -45,11 +45,11 @@ class FirebaseGoogleAuthBridge {
     await configureRuntime();
 
     debugPrint(
-      '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] bootstrapWithExistingGoogleUser start googleEmail=${googleUser?.email} productionAnonFallback=$canUseProductionAnonymousFallback',
+      '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] bootstrapWithExistingGoogleUser start googleEmail=${googleUser?.email} debugAnonFallback=$canUseDebugAnonymousFallback',
     );
 
     if (googleUser == null) {
-      if (canUseProductionAnonymousFallback) {
+      if (canUseDebugAnonymousFallback) {
         final ok = await _signInAnonymouslyForDebug();
         final user = _auth.currentUser;
         debugPrint(
@@ -129,9 +129,9 @@ class FirebaseGoogleAuthBridge {
 
     if (googleUser == null) {
       debugPrint(
-        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Google 세션 없음 interactive=$interactive productionAnonFallback=$canUseProductionAnonymousFallback',
+        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Google 세션 없음 interactive=$interactive debugAnonFallback=$canUseDebugAnonymousFallback',
       );
-      if (canUseProductionAnonymousFallback) {
+      if (canUseDebugAnonymousFallback) {
         return _signInAnonymouslyForDebug();
       }
       return false;
@@ -208,7 +208,7 @@ class FirebaseGoogleAuthBridge {
     final current = _auth.currentUser;
     if (current != null && current.isAnonymous) {
       debugPrint(
-        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] production 익명 Firebase 세션 재사용 uid=${current.uid}',
+        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug 익명 Firebase 세션 재사용 uid=${current.uid}',
       );
       return true;
     }
@@ -216,14 +216,59 @@ class FirebaseGoogleAuthBridge {
     try {
       final result = await _auth.signInAnonymously();
       debugPrint(
-        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] production 익명 Firebase 로그인 성공 uid=${result.user?.uid}',
+        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug 익명 Firebase 로그인 성공 uid=${result.user?.uid}',
       );
       return result.user != null;
     } catch (e, st) {
       debugPrint(
-        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] production 익명 Firebase 로그인 실패: $e\n$st',
+        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug 익명 Firebase 로그인 실패: $e\n$st',
       );
       return false;
+    }
+  }
+
+
+  Future<User?> ensureDebugDeveloperFirebaseAuthenticated() async {
+    await configureRuntime();
+
+    if (!kDebugMode) {
+      debugPrint(
+        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 인증 거부 reason=not_debug_build',
+      );
+      return null;
+    }
+
+    final current = _auth.currentUser;
+    if (current != null && current.isAnonymous) {
+      debugPrint(
+        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 익명 세션 재사용 uid=${current.uid}',
+      );
+      return current;
+    }
+
+    if (current != null) {
+      debugPrint(
+        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 비익명 세션 종료 uid=${current.uid} email=${current.email}',
+      );
+      await _auth.signOut();
+    }
+
+    debugPrint(
+      '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 익명 인증 시작',
+    );
+
+    try {
+      final result = await _auth.signInAnonymously();
+      final user = result.user;
+      debugPrint(
+        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 익명 인증 성공 uid=${user?.uid} anonymous=${user?.isAnonymous}',
+      );
+      return user;
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 익명 인증 실패: $error\n$stackTrace',
+      );
+      rethrow;
     }
   }
 

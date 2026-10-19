@@ -3306,11 +3306,6 @@ class _UserSettingsTableOfContentsRail extends StatelessWidget {
       icon: Icons.work_rounded,
     ),
     _UserSettingsTocItem(
-      section: UserSettingsSection.password,
-      label: '암호',
-      icon: Icons.lock_rounded,
-    ),
-    _UserSettingsTocItem(
       section: UserSettingsSection.schedule,
       label: '일정',
       icon: Icons.schedule_rounded,
@@ -3520,11 +3515,6 @@ class _TabletSettingsTableOfContentsRail extends StatefulWidget {
       section: TabletSettingsSection.permission,
       label: '권한',
       icon: Icons.verified_user_rounded,
-    ),
-    _TabletSettingsTocItem(
-      section: TabletSettingsSection.password,
-      label: '암호',
-      icon: Icons.lock_rounded,
     ),
   ];
 

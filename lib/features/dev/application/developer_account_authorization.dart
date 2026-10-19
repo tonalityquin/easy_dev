@@ -69,6 +69,8 @@ class DeveloperAccountAuthorization {
         meta: const <String, Object?>{
           'mode': 'debug',
           'interactiveGoogle': false,
+          'firebaseBridgeVerified': false,
+          'debugBypass': true,
         },
       );
       return true;
@@ -87,7 +89,8 @@ class DeveloperAccountAuthorization {
     );
 
     try {
-      final identity = await GoogleAuthSession.instance.authenticateIdentityOnly(
+      final identity = await GoogleAuthSession.instance
+          .ensureFirebaseAuthenticatedIdentity(
         forceAccountSelection: true,
       );
       final email = identity.normalizedEmail;
@@ -130,6 +133,7 @@ class DeveloperAccountAuthorization {
           'mode': 'release',
           'interactiveGoogle': true,
           'identityBound': true,
+          'firebaseBridgeVerified': true,
         },
       );
       return true;

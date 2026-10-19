@@ -125,7 +125,6 @@ class UserState extends ChangeNotifier {
 
   String get phone => codeNumber;
 
-  String get password => _user?.password ?? _tablet?.password ?? '';
 
   String get area =>
       _user?.areas.firstOrNull ?? _tablet?.areas.firstOrNull ?? '';
@@ -784,7 +783,6 @@ class UserState extends ChangeNotifier {
       isSelected: current.isSelected,
       isWorking: current.isWorking,
       name: current.name,
-      password: current.password,
       codeNumber: current.codeNumber,
       position: current.position,
       role: current.role,

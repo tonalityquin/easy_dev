@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../../shared/auth/account_code_number.dart';
 import '../widgets/user_role_type_section.dart';
 
 class UserSettingsDraft {
   UserSettingsDraft({
     required this.name,
     required this.codeNumber,
+    required this.codeEntryMode,
     required this.emailLocal,
     required this.position,
-    required this.password,
     required this.role,
     required Set<String> modes,
     required Map<String, TimeOfDay?> startByDay,
@@ -21,9 +22,9 @@ class UserSettingsDraft {
 
   final String name;
   final String codeNumber;
+  final UserCodeEntryMode codeEntryMode;
   final String emailLocal;
   final String position;
-  final String password;
   final RoleType role;
   final Set<String> modes;
   final Map<String, TimeOfDay?> startByDay;
@@ -33,9 +34,9 @@ class UserSettingsDraft {
   UserSettingsDraft copyWith({
     String? name,
     String? codeNumber,
+    UserCodeEntryMode? codeEntryMode,
     String? emailLocal,
     String? position,
-    String? password,
     RoleType? role,
     Set<String>? modes,
     Map<String, TimeOfDay?>? startByDay,
@@ -45,9 +46,9 @@ class UserSettingsDraft {
     return UserSettingsDraft(
       name: name ?? this.name,
       codeNumber: codeNumber ?? this.codeNumber,
+      codeEntryMode: codeEntryMode ?? this.codeEntryMode,
       emailLocal: emailLocal ?? this.emailLocal,
       position: position ?? this.position,
-      password: password ?? this.password,
       role: role ?? this.role,
       modes: modes ?? this.modes,
       startByDay: startByDay ?? this.startByDay,
@@ -60,9 +61,9 @@ class UserSettingsDraft {
     return UserSettingsDraft(
       name: name,
       codeNumber: codeNumber,
+      codeEntryMode: codeEntryMode,
       emailLocal: emailLocal,
       position: position,
-      password: password,
       role: role,
       modes: modes,
       startByDay: startByDay,

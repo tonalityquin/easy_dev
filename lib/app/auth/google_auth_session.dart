@@ -685,6 +685,74 @@ class GoogleAuthSession {
     return client;
   }
 
+  Future<GoogleAuthIdentity> ensureFirebaseAuthenticatedIdentity({
+    bool forceAccountSelection = false,
+  }) async {
+    await _ensureBlockFlagLoaded();
+    _throwIfBlocked('ensureFirebaseAuthenticatedIdentity');
+    if (!_initialized) await init();
+
+    final effectiveForceAccountSelection =
+        forceAccountSelection || _forceAccountSelectionPending;
+    var user = effectiveForceAccountSelection ? null : _user;
+
+    if (user == null && !effectiveForceAccountSelection) {
+      user = await GoogleSignIn.instance.attemptLightweightAuthentication();
+      if (user != null) {
+        _user = user;
+        _rememberIdentity(user);
+        _restoreCachedClientForCurrentUser();
+        _emitIdentity();
+      }
+    }
+
+    if (user == null) {
+      if (!GoogleSignIn.instance.supportsAuthenticate()) {
+        throw StateError('interactive_google_auth_not_supported');
+      }
+      _accountSwitchInProgress = true;
+      try {
+        if (_user != null || effectiveForceAccountSelection) {
+          await GoogleSignIn.instance.signOut();
+          _user = null;
+          _client = null;
+          _lastAuthorizedAt = null;
+          _emitIdentity();
+        }
+        user = await GoogleSignIn.instance.authenticate();
+        _user = user;
+        _client = null;
+        _lastAuthorizedAt = null;
+        _rememberIdentity(user);
+        _emitIdentity();
+      } finally {
+        _accountSwitchInProgress = false;
+      }
+    }
+
+    final identity = currentIdentity;
+    if (identity == null) {
+      throw StateError('google_identity_unavailable');
+    }
+    final firebaseOk = await FirebaseGoogleAuthBridge.instance
+        .ensureSignedInWithGoogleUser(user);
+    if (!firebaseOk) {
+      throw StateError('firebase_google_bridge_failed');
+    }
+    final firebaseUser = FirebaseGoogleAuthBridge.instance.currentUser;
+    final firebaseEmail = firebaseUser?.email?.trim().toLowerCase();
+    if (firebaseUser == null ||
+        firebaseUser.isAnonymous ||
+        firebaseEmail == null ||
+        firebaseEmail != identity.normalizedEmail) {
+      throw StateError('firebase_google_identity_mismatch');
+    }
+    if (_forceAccountSelectionPending) {
+      await _setForceAccountSelectionPending(false);
+    }
+    return identity;
+  }
+
   Future<GoogleAuthIdentity> authenticateIdentityOnly({
     bool forceAccountSelection = false,
   }) async {

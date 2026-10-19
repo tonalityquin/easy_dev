@@ -454,11 +454,24 @@ class _StatusDialogContent extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                CommonButton(
-                  label: copyButtonLabel,
-                  icon: Icons.copy_rounded,
-                  onPressed: onCopy,
-                  haptic: CommonHaptic.selection,
+                AnimatedSwitcher(
+                  duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                  switchInCurve: CommonUiMotion.enter,
+                  switchOutCurve: CommonUiMotion.exit,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.96, end: 1).animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: CommonButton(
+                    key: ValueKey<String>(copyButtonLabel),
+                    label: copyButtonLabel,
+                    icon: Icons.copy_rounded,
+                    onPressed: onCopy,
+                    haptic: CommonHaptic.selection,
+                  ),
                 ),
                 CommonButton(
                   label: '닫기',
@@ -475,10 +488,23 @@ class _StatusDialogContent extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                ElevatedButton.icon(
-                  onPressed: onCopy,
-                  icon: const Icon(Icons.copy_rounded, size: 18),
-                  label: Text(copyButtonLabel),
+                AnimatedSwitcher(
+                  duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.96, end: 1).animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: ElevatedButton.icon(
+                    key: ValueKey<String>(copyButtonLabel),
+                    onPressed: onCopy,
+                    icon: const Icon(Icons.copy_rounded, size: 18),
+                    label: Text(copyButtonLabel),
+                  ),
                 ),
                 TextButton(
                   onPressed: onClose,

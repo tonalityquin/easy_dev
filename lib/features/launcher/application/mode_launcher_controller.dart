@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -3688,6 +3689,7 @@ class ModeLauncherController extends ChangeNotifier {
     required String name,
     required String codeNumber,
     required bool reduceMotion,
+    required bool developerPasswordMode,
   }) async {
     if (_busy || _loginStage != TerminalLoginStage.credentials) {
       return const LauncherCredentialSubmitResult(
@@ -3762,11 +3764,17 @@ class ModeLauncherController extends ChangeNotifier {
       },
     );
 
+    final debugDeveloperAnonymousAuth = kDebugMode && developerPasswordMode;
     _loginStage = TerminalLoginStage.authenticating;
     _busy = true;
-    _runningCommand = 'IDENTITY';
+    _runningCommand = debugDeveloperAnonymousAuth ? 'AUTH_DEBUG_ANON' : 'AUTH';
     _append(TerminalLineType.system, 'Account identity received');
-    _append(TerminalLineType.running, 'Resolving account identity');
+    _append(
+      TerminalLineType.running,
+      debugDeveloperAnonymousAuth
+          ? 'Authenticating debug Firebase session'
+          : 'Authenticating Google and Firebase',
+    );
     notifyListeners();
     await _commandDelay(reduceMotion);
     if (_disposed || !context.mounted) {
@@ -3777,6 +3785,58 @@ class ModeLauncherController extends ChangeNotifier {
         authenticationError: '계정 확인을 완료하지 못했습니다.',
       );
     }
+
+    final preAuth =
+        await TerminalAuthCoordinator.ensureFirebaseIdentityBeforeAccountLookup(
+      kind: kind,
+      developerPasswordMode: developerPasswordMode,
+    );
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '계정 인증을 완료하지 못했습니다.',
+      );
+    }
+    if (!preAuth.success) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      _errorSerial += 1;
+      _append(TerminalLineType.error, '[ERROR] Firebase authentication failed');
+      LauncherDiagnostics.record(
+        'auth_firebase_prelookup_rejected',
+        meta: <String, Object?>{
+          'accountKind': TerminalAuthCoordinator.accountKindId(kind),
+          'developerPasswordMode': developerPasswordMode,
+          'message': preAuth.message,
+        },
+      );
+      notifyListeners();
+      await LauncherDiagnostics.showStatus(
+        context,
+        title: '로그인 Firebase 인증 실패',
+        description: debugDeveloperAnonymousAuth
+            ? 'Firestore 계정 조회 전 Debug Firebase 인증 로그를 확인할 수 있습니다.'
+            : 'Firestore 계정 조회 전 Google/Firebase 인증 로그를 확인할 수 있습니다.',
+        scope: 'launcher_firebase_prelookup_auth',
+        failure: true,
+      );
+      return LauncherCredentialSubmitResult(
+        authenticationError: preAuth.message,
+      );
+    }
+
+    _runningCommand = 'IDENTITY';
+    _append(
+      TerminalLineType.success,
+      debugDeveloperAnonymousAuth
+          ? '[ OK ] Debug Firebase authentication ready'
+          : '[ OK ] Firebase authentication ready',
+    );
+    _append(TerminalLineType.running, 'Resolving account identity');
+    notifyListeners();
 
     final result = await TerminalAuthCoordinator.resolveAccountIdentity(
       context,
@@ -3810,6 +3870,15 @@ class ModeLauncherController extends ChangeNotifier {
         },
       );
       notifyListeners();
+      await LauncherDiagnostics.showStatus(
+        context,
+        title: '계정 조회 실패',
+        description: debugDeveloperAnonymousAuth
+            ? 'Debug Firebase 인증과 Firestore 계정 조회 로그를 확인할 수 있습니다.'
+            : 'Firebase 인증과 Firestore 계정 조회 로그를 확인할 수 있습니다.',
+        scope: 'launcher_account_identity_resolution',
+        failure: true,
+      );
       return LauncherCredentialSubmitResult(
         authenticationError: result.message,
       );
@@ -3823,11 +3892,95 @@ class ModeLauncherController extends ChangeNotifier {
       meta: <String, Object?>{
         'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
         'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
+        'developerPasswordMode': developerPasswordMode,
         'firebasePasswordReadsNextStep': 0,
       },
     );
     notifyListeners();
-    return const LauncherCredentialSubmitResult();
+
+    if (developerPasswordMode) {
+      if (debugDeveloperAnonymousAuth) {
+        await LauncherDiagnostics.showStatus(
+          context,
+          title: 'Debug 개발자 Firebase 인증 완료',
+          description: 'Google 계정 선택 없이 Firebase 인증 후 Firestore 계정 조회를 완료한 로그를 확인할 수 있습니다.',
+          scope: 'launcher_debug_developer_anonymous_auth',
+        );
+        if (_disposed || !context.mounted) {
+          return const LauncherCredentialSubmitResult(
+            authenticationError: '계정 인증을 완료하지 못했습니다.',
+          );
+        }
+      }
+      return const LauncherCredentialSubmitResult();
+    }
+
+    _busy = true;
+    _loginStage = TerminalLoginStage.authenticating;
+    _runningCommand = 'VERIFY';
+    _append(TerminalLineType.running, 'Binding Google identity to app account');
+    notifyListeners();
+    final googleResult =
+        await TerminalAuthCoordinator.verifyResolvedAccountGoogleIdentity(
+      account: account,
+      persistence: _sessionPersistence,
+    );
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      return const LauncherCredentialSubmitResult(
+        authenticationError: TerminalAuthCoordinator.accountVerificationFailureMessage,
+      );
+    }
+    final authenticated = googleResult.account;
+    if (!googleResult.success || authenticated == null) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      _pendingManualAccount = null;
+      _errorSerial += 1;
+      _append(TerminalLineType.error, '[ERROR] Google account binding failed');
+      LauncherDiagnostics.record(
+        'auth_google_binding_failed_after_lookup',
+        meta: <String, Object?>{
+          'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+          'message': googleResult.message,
+        },
+      );
+      notifyListeners();
+      await LauncherDiagnostics.showStatus(
+        context,
+        title: 'Google 계정 검증 실패',
+        description: 'Firebase 인증 후 앱 계정 이메일 일치 검증 로그를 확인할 수 있습니다.',
+        scope: 'launcher_google_account_binding',
+        failure: true,
+      );
+      return LauncherCredentialSubmitResult(
+        authenticationError: googleResult.message,
+      );
+    }
+
+    _pendingManualAccount = null;
+    await LauncherDiagnostics.showStatus(
+      context,
+      title: '로그인 인증 완료',
+      description: 'Google → Firebase → Firestore 계정 조회 → 이메일 일치 검증 순서의 로그를 확인할 수 있습니다.',
+      scope: 'launcher_auth_pipeline',
+    );
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '계정 인증을 완료하지 못했습니다.',
+      );
+    }
+    return _completeAuthenticatedManualAccount(
+      context,
+      account: authenticated,
+      reduceMotion: reduceMotion,
+    );
   }
 
   Future<LauncherCredentialSubmitResult> authenticateResolvedPassword(
@@ -3924,11 +4077,33 @@ class ModeLauncherController extends ChangeNotifier {
         },
       );
       notifyListeners();
+      await LauncherDiagnostics.showStatus(
+        context,
+        title: '개발자 비밀번호 인증 실패',
+        description: '임시 Firestore password 필드 인증 로그를 확인할 수 있습니다.',
+        scope: 'launcher_developer_password_auth',
+        failure: true,
+      );
       return LauncherCredentialSubmitResult(
         passwordError: result.message,
       );
     }
 
+    await LauncherDiagnostics.showStatus(
+      context,
+      title: '개발자 비밀번호 인증 성공',
+      description: '임시 Firestore password 필드 인증 로그를 확인할 수 있습니다.',
+      scope: 'launcher_developer_password_auth',
+    );
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      _enteredPassword = '';
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '비밀번호 인증을 완료하지 못했습니다.',
+      );
+    }
     _pendingManualAccount = null;
     return _completeAuthenticatedManualAccount(
       context,
@@ -4027,185 +4202,6 @@ class ModeLauncherController extends ChangeNotifier {
     return _completeAuthenticatedManualAccount(
       context,
       account: authenticated,
-      reduceMotion: reduceMotion,
-    );
-  }
-
-  Future<LauncherCredentialSubmitResult> authenticateCredentials(
-    BuildContext context, {
-    required String name,
-    required String codeNumber,
-    required String password,
-    required bool reduceMotion,
-  }) async {
-    if (_busy || _loginStage != TerminalLoginStage.credentials) {
-      return const LauncherCredentialSubmitResult(
-        authenticationError: '계정 인증을 시작할 수 없습니다.',
-      );
-    }
-    final kind = _selectedAccountKind;
-    if (kind == null) {
-      _resetAccountSelection();
-      return const LauncherCredentialSubmitResult(
-        authenticationError: '계정 유형을 확인할 수 없습니다.',
-      );
-    }
-
-    final normalizedName = name.trim();
-    final accountIdentifier = AccountCodeNumber.normalize(codeNumber);
-    final legacyNumericAccountIdentifier =
-        RegExp(r'^\d{10,11}$').hasMatch(accountIdentifier);
-    final validAccountIdentifier = AccountCodeNumber.isValid(accountIdentifier);
-    final validPassword = kind == TerminalAccountKind.personal
-        ? RegExp(r'^\d{5}$').hasMatch(password)
-        : password.length >= 5;
-
-    final nameError = normalizedName.isEmpty ? _nameError : null;
-    final codeNumberError = validAccountIdentifier ? null : _codeNumberError;
-    final passwordError = validPassword ? null : _passwordError;
-
-    if (nameError != null || codeNumberError != null || passwordError != null) {
-      LauncherDiagnostics.record(
-        'auth_credentials_rejected',
-        meta: <String, Object?>{
-          'accountKind': TerminalAuthCoordinator.accountKindId(kind),
-          'nameValid': nameError == null,
-          'codeNumberValid': codeNumberError == null,
-          'passwordValid': passwordError == null,
-          'nameLength': normalizedName.length,
-          'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
-          'legacyNumericAccountIdentifier': legacyNumericAccountIdentifier,
-          'passwordLength': password.length,
-        },
-      );
-      return LauncherCredentialSubmitResult(
-        nameError: nameError,
-        codeNumberError: codeNumberError,
-        passwordError: passwordError,
-      );
-    }
-
-    final changed =
-        _enteredName != normalizedName || _enteredCodeNumber != accountIdentifier;
-    _enteredName = normalizedName;
-    _enteredCodeNumber = accountIdentifier;
-    _enteredPassword = password;
-    if (changed) {
-      _authenticatedAccount = null;
-      _pendingManualAccount = null;
-      _availableWorkAreas = <LauncherWorkAreaOption>[];
-      _selectedWorkArea = null;
-      _supportedModes = <AppModeDefinition>[];
-      _selectedMode = null;
-    }
-
-    LauncherDiagnostics.record(
-      'auth_credentials_submitted',
-      meta: <String, Object?>{
-        'accountKind': TerminalAuthCoordinator.accountKindId(kind),
-        'nameLength': normalizedName.length,
-        'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
-        'legacyNumericAccountIdentifier': legacyNumericAccountIdentifier,
-        'passwordLength': password.length,
-        'sessionPersistence': TerminalAuthCoordinator.sessionPersistenceId(
-          _sessionPersistence,
-        ),
-      },
-    );
-    DebugSessionController.record(
-      'auth_credentials_submitted',
-      source: 'mode_terminal',
-      meta: <String, Object?>{
-        'accountKind': TerminalAuthCoordinator.accountKindId(kind),
-        'nameLength': normalizedName.length,
-        'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
-        'legacyNumericAccountIdentifier': legacyNumericAccountIdentifier,
-        'passwordLength': password.length,
-      },
-    );
-
-    _loginStage = TerminalLoginStage.authenticating;
-    _busy = true;
-    _runningCommand = 'AUTH';
-    _append(TerminalLineType.system, 'Account credentials received');
-    _append(TerminalLineType.running, 'Authenticating account');
-    notifyListeners();
-    await _commandDelay(reduceMotion);
-    if (_disposed || !context.mounted) {
-      _busy = false;
-      _runningCommand = '';
-      return const LauncherCredentialSubmitResult(
-        authenticationError: '계정 인증을 완료하지 못했습니다.',
-      );
-    }
-
-    final result = await TerminalAuthCoordinator.authenticateAccount(
-      context,
-      kind: kind,
-      name: _enteredName,
-      codeNumber: _enteredCodeNumber,
-      password: _enteredPassword,
-      persistence: _sessionPersistence,
-    );
-    if (_disposed || !context.mounted) {
-      _busy = false;
-      _runningCommand = '';
-      return const LauncherCredentialSubmitResult(
-        authenticationError: '계정 인증을 완료하지 못했습니다.',
-      );
-    }
-
-    if (legacyNumericAccountIdentifier &&
-        kind == TerminalAccountKind.user) {
-      LauncherDiagnostics.record(
-        'legacy_numeric_user_authentication_result',
-        scope: 'legacy_numeric_auth',
-        meta: <String, Object?>{
-          'success': result.success && result.account != null,
-          'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
-          'message': result.message,
-        },
-      );
-      await LauncherDiagnostics.showStatus(
-        context,
-        title: '기존 숫자 계정 인증 상태',
-        description: result.message,
-        scope: 'legacy_numeric_auth',
-      );
-      if (_disposed || !context.mounted) {
-        _busy = false;
-        _runningCommand = '';
-        return const LauncherCredentialSubmitResult(
-          authenticationError: '계정 인증을 완료하지 못했습니다.',
-        );
-      }
-    }
-
-    final account = result.account;
-    if (!result.success || account == null) {
-      _append(TerminalLineType.error, '[ERROR] Account authentication failed');
-      _busy = false;
-      _runningCommand = '';
-      _enteredPassword = '';
-      _loginStage = TerminalLoginStage.credentials;
-      _errorSerial += 1;
-      LauncherDiagnostics.record(
-        'auth_credentials_failed',
-        meta: <String, Object?>{
-          'accountKind': TerminalAuthCoordinator.accountKindId(kind),
-          'message': result.message,
-          'accountIdentifierMasked': AccountCodeNumber.mask(accountIdentifier),
-        },
-      );
-      notifyListeners();
-      return LauncherCredentialSubmitResult(
-        authenticationError: result.message,
-      );
-    }
-
-    return _completeAuthenticatedManualAccount(
-      context,
-      account: account,
       reduceMotion: reduceMotion,
     );
   }

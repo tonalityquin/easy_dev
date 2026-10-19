@@ -14,7 +14,6 @@ import '../../features/dashboard/pages/common/headquarter_page.dart';
 import '../../features/description/pages/description_page.dart';
 import '../../features/dev/page/dev_stub_page.dart';
 import '../../features/headquarter/page/head_stub_page.dart';
-import '../../features/login/pages/common/login_screen.dart';
 import '../../features/mode_single/page/single_inside_screen.dart';
 import '../../features/novel/presentation/novel_mobile_writing_page.dart';
 import '../../features/sprint/pages/sprint_mode_loading_page.dart';
@@ -137,7 +136,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.powerBoot: _buildPowerBootPage,
   AppRoutes.modeLauncher: _buildModeLauncherPage,
   AppRoutes.descriptionIntro: (context) => const DescriptionPage(),
-  AppRoutes.serviceLogin: (context) => const LoginScreen(),
+  AppRoutes.serviceLogin: _buildModeLauncherPage,
   AppRoutes.personalLogin: _buildModeLauncherPage,
   AppRoutes.tabletLogin: _buildModeLauncherPage,
   AppRoutes.singleLogin: _buildModeLauncherPage,

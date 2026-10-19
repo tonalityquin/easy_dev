@@ -13,7 +13,10 @@ import '../../../../shared/secondary/application/secondary_account_workspace_sta
 import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../dev/application/area_state.dart';
+import '../../../selector/application/dev_auth.dart';
 import '../../applications/user_state.dart';
+import '../../data/services/user_active_state_backfill_service.dart';
+import '../../data/services/user_code_reservation_backfill_service.dart';
 import '../../domain/models/user/user_model.dart';
 
 extension IterableX<T> on Iterable<T> {
@@ -41,6 +44,8 @@ class _UserManagementState extends State<UserManagement> {
   _UserStatusFilter _statusFilter = _UserStatusFilter.all;
   bool _refreshing = false;
   bool _selectionClearScheduled = false;
+  bool _migratingActiveState = false;
+  bool _migratingCodeIndex = false;
 
   void _log(String message) {
     final workspace = _workspaceState;
@@ -54,6 +59,7 @@ class _UserManagementState extends State<UserManagement> {
   @override
   void initState() {
     super.initState();
+    unawaited(DevAuth.isDevModeEnabled());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(_initialRefresh());
@@ -89,7 +95,7 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   Future<void> _refreshUsersForCurrentArea(BuildContext context) async {
-    if (_refreshing) return;
+    if (_refreshing || _migratingActiveState || _migratingCodeIndex) return;
     final userState = context.read<UserState>();
     setState(() => _refreshing = true);
     _log('refresh_started');
@@ -103,6 +109,105 @@ class _UserManagementState extends State<UserManagement> {
     } finally {
       if (mounted) {
         setState(() => _refreshing = false);
+      }
+    }
+  }
+
+  Future<void> _backfillUserActiveState() async {
+    if (_migratingActiveState || _migratingCodeIndex || _refreshing) return;
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled || !mounted) return;
+
+    final confirmed = await showOpsConfirmDialog(
+      context: context,
+      title: 'isActive 동기화',
+      message: 'user_accounts_show의 isActive를 기준으로 user_accounts를 일괄 동기화하고 View의 password 필드를 정리합니다.',
+      confirmLabel: '동기화',
+      icon: Icons.sync_alt_rounded,
+      barrierDismissible: false,
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _migratingActiveState = true);
+    final rootContext = Navigator.of(context, rootNavigator: true).context;
+    final trace = await DeveloperOperationTrace.start(
+      context: rootContext,
+      title: 'User isActive 동기화',
+      initialMessage: 'user_accounts_show와 user_accounts의 isActive 검사를 시작합니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: 동기화 상태와 debugPrint 코드를 확인하고 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF: 동기화 로그를 콘솔에 기록합니다.',
+    );
+
+    try {
+      final result = await UserActiveStateBackfillService().run(
+        onLog: (message, progress) => trace.log(message, progress: progress),
+      );
+      if (mounted) {
+        await context.read<UserState>().refreshUsersBySelectedAreaAndCache();
+      }
+      if (result.hasBlockingIssues) {
+        await trace.fail('isActive 동기화 검증에서 확인이 필요한 항목이 발견되었습니다. ${result.summary}');
+        return;
+      }
+      await trace.succeed('isActive 동기화와 검증이 완료되었습니다. ${result.summary}');
+    } catch (error, stackTrace) {
+      await trace.fail(
+        'isActive 동기화 중 예외가 발생했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _migratingActiveState = false);
+      }
+    }
+  }
+
+  Future<void> _backfillUserCodeReservations() async {
+    if (_migratingCodeIndex || _migratingActiveState || _refreshing) return;
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled || !mounted) return;
+
+    final confirmed = await showOpsConfirmDialog(
+      context: context,
+      title: '코드 인덱스 동기화',
+      message: '모든 user_accounts의 코드번호를 user_account_codes에 일괄 예약하고 전역 중복과 인덱스 충돌을 검증합니다.',
+      confirmLabel: '동기화',
+      icon: Icons.key_rounded,
+      barrierDismissible: false,
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _migratingCodeIndex = true);
+    final rootContext = Navigator.of(context, rootNavigator: true).context;
+    final trace = await DeveloperOperationTrace.start(
+      context: rootContext,
+      title: 'User 코드 인덱스 동기화',
+      initialMessage: 'user_accounts와 user_account_codes의 전역 코드번호 검사를 시작합니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: 코드 인덱스 동기화 상태와 debugPrint 코드를 확인하고 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF: 코드 인덱스 동기화 로그를 콘솔에 기록합니다.',
+    );
+
+    try {
+      final result = await UserCodeReservationBackfillService().run(
+        onLog: (message, progress) => trace.log(message, progress: progress),
+      );
+      if (result.hasBlockingIssues) {
+        await trace.fail('코드 인덱스 동기화 검증에서 확인이 필요한 항목이 발견되었습니다. ${result.summary}');
+        return;
+      }
+      await trace.succeed('코드 인덱스 동기화와 검증이 완료되었습니다. ${result.summary}');
+    } catch (error, stackTrace) {
+      await trace.fail(
+        '코드 인덱스 동기화 중 예외가 발생했습니다.',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _migratingCodeIndex = false);
       }
     }
   }
@@ -525,11 +630,73 @@ class _UserManagementState extends State<UserManagement> {
         CommonIconButton(
           icon: Icons.refresh_rounded,
           tooltip: '새로고침',
-          onPressed: refreshing ? null : () => _refreshUsersForCurrentArea(context),
+          onPressed: refreshing || _migratingActiveState || _migratingCodeIndex
+              ? null
+              : () => _refreshUsersForCurrentArea(context),
           loading: refreshing,
           haptic: CommonHaptic.selection,
           size: 40,
           iconSize: 19,
+        ),
+        ValueListenableBuilder<bool>(
+          valueListenable: DevAuth.devModeEnabled,
+          builder: (context, enabled, child) {
+            final reduceMotion =
+                MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+            return AnimatedSwitcher(
+              duration:
+                  reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              switchInCurve: CommonUiMotion.enter,
+              switchOutCurve: CommonUiMotion.exit,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: .88, end: 1).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: enabled
+                  ? Padding(
+                      key: const ValueKey<String>('user_developer_migrations'),
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CommonIconButton(
+                            icon: Icons.sync_alt_rounded,
+                            tooltip: 'isActive 동기화',
+                            onPressed: refreshing ||
+                                    _migratingActiveState ||
+                                    _migratingCodeIndex
+                                ? null
+                                : _backfillUserActiveState,
+                            loading: _migratingActiveState,
+                            haptic: CommonHaptic.selection,
+                            size: 40,
+                            iconSize: 19,
+                          ),
+                          const SizedBox(width: 4),
+                          CommonIconButton(
+                            icon: Icons.key_rounded,
+                            tooltip: '코드 인덱스 동기화',
+                            onPressed: refreshing ||
+                                    _migratingActiveState ||
+                                    _migratingCodeIndex
+                                ? null
+                                : _backfillUserCodeReservations,
+                            loading: _migratingCodeIndex,
+                            haptic: CommonHaptic.selection,
+                            size: 40,
+                            iconSize: 19,
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey<String>('user_developer_migrations_hidden'),
+                    ),
+            );
+          },
         ),
         const SizedBox(width: 4),
         AnimatedOpacity(
@@ -540,7 +707,7 @@ class _UserManagementState extends State<UserManagement> {
           child: CommonIconButton(
             icon: Icons.person_add_alt_1_rounded,
             tooltip: '계정 등록',
-            onPressed: deleteMode
+            onPressed: deleteMode || _migratingActiveState || _migratingCodeIndex
                 ? null
                 : () => _handlePrimaryAction(context, forceCreate: true),
             haptic: CommonHaptic.selection,

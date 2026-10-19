@@ -7,7 +7,6 @@ import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../../shared/auth/account_code_number.dart';
-import '../../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import 'models/user_settings_draft.dart';
@@ -19,6 +18,8 @@ class UserSettingSectionEditorDialog extends StatefulWidget {
     required this.section,
     required this.initialDraft,
     required this.isEditMode,
+    required this.manualCodeAllowed,
+    required this.onRequestManualCodeEntry,
     required this.trace,
     required this.onApply,
   });
@@ -26,6 +27,8 @@ class UserSettingSectionEditorDialog extends StatefulWidget {
   final UserSettingsSection section;
   final UserSettingsDraft initialDraft;
   final bool isEditMode;
+  final bool manualCodeAllowed;
+  final Future<bool> Function() onRequestManualCodeEntry;
   final DeveloperOperationTrace trace;
   final ValueChanged<UserSettingsDraft> onApply;
 
@@ -48,8 +51,8 @@ class _UserSettingSectionEditorDialogState
   late final TextEditingController _codeNumberController;
   late final TextEditingController _emailController;
   late final TextEditingController _positionController;
-  late final TextEditingController _passwordController;
   late RoleType _role;
+  late UserCodeEntryMode _codeEntryMode;
   late Set<String> _modes;
   late Map<String, TimeOfDay?> _startByDay;
   late Map<String, TimeOfDay?> _endByDay;
@@ -62,10 +65,14 @@ class _UserSettingSectionEditorDialogState
     super.initState();
     final draft = widget.initialDraft;
     _nameController = TextEditingController(text: draft.name);
-    _codeNumberController = TextEditingController(text: AccountCodeNumber.format(draft.codeNumber));
+    _codeEntryMode = draft.codeEntryMode;
+    _codeNumberController = TextEditingController(
+      text: draft.codeEntryMode == UserCodeEntryMode.developerManual
+          ? draft.codeNumber
+          : AccountCodeNumber.format(draft.codeNumber),
+    );
     _emailController = TextEditingController(text: draft.emailLocal);
     _positionController = TextEditingController(text: draft.position);
-    _passwordController = TextEditingController(text: draft.password);
     _role = draft.role;
     _modes = Set<String>.of(draft.modes);
     _startByDay = Map<String, TimeOfDay?>.of(draft.startByDay);
@@ -86,7 +93,6 @@ class _UserSettingSectionEditorDialogState
     _codeNumberController.dispose();
     _emailController.dispose();
     _positionController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
@@ -111,8 +117,6 @@ class _UserSettingSectionEditorDialogState
         return '권한과 허용 모드';
       case UserSettingsSection.position:
         return '현장 직책';
-      case UserSettingsSection.password:
-        return '초기 비밀번호';
       case UserSettingsSection.schedule:
         return '요일별 근무 시간';
     }
@@ -126,8 +130,6 @@ class _UserSettingSectionEditorDialogState
         return Icons.verified_user_rounded;
       case UserSettingsSection.position:
         return Icons.badge_rounded;
-      case UserSettingsSection.password:
-        return Icons.password_rounded;
       case UserSettingsSection.schedule:
         return Icons.schedule_rounded;
     }
@@ -139,7 +141,15 @@ class _UserSettingSectionEditorDialogState
     final email = _emailController.text.trim();
     final codeNumberOk = widget.isEditMode
         ? AccountCodeNumber.isValid(codeNumber)
-        : AccountCodeNumber.isGeneratedCode(codeNumber);
+        : switch (_codeEntryMode) {
+            UserCodeEntryMode.generated =>
+              AccountCodeNumber.isGeneratedCode(codeNumber),
+            UserCodeEntryMode.developerManual =>
+              widget.manualCodeAllowed &&
+                  AccountCodeNumber.isDeveloperManualCode(
+                    AccountCodeNumber.normalize(codeNumber),
+                  ),
+          };
     return name.isNotEmpty &&
         codeNumberOk &&
         email.isNotEmpty &&
@@ -147,9 +157,6 @@ class _UserSettingSectionEditorDialogState
   }
 
   bool get _permissionOk => _modes.isNotEmpty;
-
-  bool get _passwordOk =>
-      RegExp(r'^\d{5}$').hasMatch(_passwordController.text.trim());
 
   bool get _scheduleOk {
     for (final day in _days) {
@@ -186,8 +193,6 @@ class _UserSettingSectionEditorDialogState
         return _permissionOk;
       case UserSettingsSection.position:
         return true;
-      case UserSettingsSection.password:
-        return _passwordOk;
       case UserSettingsSection.schedule:
         return _scheduleOk;
     }
@@ -200,6 +205,7 @@ class _UserSettingSectionEditorDialogState
         return base.copyWith(
           name: _nameController.text.trim(),
           codeNumber: AccountCodeNumber.normalize(_codeNumberController.text),
+          codeEntryMode: _codeEntryMode,
           emailLocal: _emailController.text.trim(),
         );
       case UserSettingsSection.permission:
@@ -209,8 +215,6 @@ class _UserSettingSectionEditorDialogState
         );
       case UserSettingsSection.position:
         return base.copyWith(position: _positionController.text.trim());
-      case UserSettingsSection.password:
-        return base.copyWith(password: _passwordController.text.trim());
       case UserSettingsSection.schedule:
         return base.copyWith(
           startByDay: _startByDay,
@@ -232,7 +236,7 @@ class _UserSettingSectionEditorDialogState
       return result.startByDay[day] != null && result.endByDay[day] != null;
     }).length;
     widget.trace.log(
-      '편집 적용: section=${widget.section.name} modes=${result.modes.length} workingDays=$workingDays passwordLength=${result.password.length}',
+      '편집 적용: section=${widget.section.name} modes=${result.modes.length} workingDays=$workingDays passwordPolicy=manual_firestore_only',
     );
     widget.onApply(result);
     if (!mounted) return;
@@ -258,28 +262,12 @@ class _UserSettingSectionEditorDialogState
     );
   }
 
-  Future<void> _copyPassword() async {
-    await Clipboard.setData(
-      ClipboardData(text: _passwordController.text.trim()),
-    );
-    widget.trace.log('비밀번호 클립보드 복사: length=${_passwordController.text.trim().length}');
-    if (!mounted) return;
-    showSelectedSnackbar(
-      context,
-      '비밀번호를 복사했습니다.',
-      useCommonUi: true,
-    );
-  }
-
-  void _regeneratePassword() {
-    final next = FiveDigitPasswordGenerator.generate();
-    setState(() => _passwordController.text = next);
-    widget.trace.log('비밀번호 재생성: length=${next.length}');
-  }
-
   Future<void> _copyCodeNumber() async {
     final codeNumber = AccountCodeNumber.normalize(_codeNumberController.text);
-    await Clipboard.setData(ClipboardData(text: AccountCodeNumber.format(codeNumber)));
+    final copyValue = _codeEntryMode == UserCodeEntryMode.developerManual
+        ? codeNumber
+        : AccountCodeNumber.format(codeNumber);
+    await Clipboard.setData(ClipboardData(text: copyValue));
     widget.trace.log('코드번호 클립보드 복사: code=${AccountCodeNumber.mask(codeNumber)}');
     if (!mounted) return;
     showSelectedSnackbar(
@@ -290,10 +278,158 @@ class _UserSettingSectionEditorDialogState
   }
 
   void _regenerateCodeNumber() {
-    if (widget.isEditMode) return;
+    if (widget.isEditMode ||
+        _codeEntryMode != UserCodeEntryMode.generated) {
+      return;
+    }
     final next = AccountCodeNumber.generate();
     setState(() => _codeNumberController.text = AccountCodeNumber.format(next));
     widget.trace.log('코드번호 재생성: code=${AccountCodeNumber.mask(next)}');
+  }
+
+  Future<void> _setCodeEntryMode(UserCodeEntryMode mode) async {
+    if (widget.isEditMode || mode == _codeEntryMode) return;
+    if (mode == UserCodeEntryMode.developerManual) {
+      if (!widget.manualCodeAllowed) {
+        widget.trace.log('코드번호 직접 입력 거부: reason=developer_capability_unavailable');
+        if (widget.trace.developerMode && mounted) {
+          await widget.trace.showSnapshotStatusDialog(
+            context,
+            title: '코드번호 직접 입력 불가',
+            description: '개발자 모드와 개발자 계정 인증 상태를 확인하세요.',
+            failure: true,
+          );
+        }
+        return;
+      }
+      final authorized = await widget.onRequestManualCodeEntry();
+      if (!mounted) return;
+      if (!authorized) {
+        widget.trace.log('코드번호 직접 입력 재인증 실패');
+        if (widget.trace.developerMode) {
+          await widget.trace.showSnapshotStatusDialog(
+            context,
+            title: '코드번호 직접 입력 인증 실패',
+            description: '개발자 계정 재인증에 실패했습니다.',
+            failure: true,
+          );
+        }
+        return;
+      }
+      setState(() {
+        _codeEntryMode = UserCodeEntryMode.developerManual;
+        _codeNumberController.clear();
+        _submitted = false;
+      });
+      widget.trace.log('코드번호 직접 입력 모드 활성화: digits=11');
+      return;
+    }
+    final next = AccountCodeNumber.generate();
+    setState(() {
+      _codeEntryMode = UserCodeEntryMode.generated;
+      _codeNumberController.text = AccountCodeNumber.format(next);
+      _submitted = false;
+    });
+    widget.trace.log(
+      '코드번호 자동 생성 모드 활성화: code=${AccountCodeNumber.mask(next)}',
+    );
+  }
+
+  Widget _codeEntryModeSelector(BuildContext context) {
+    if (widget.isEditMode || !widget.manualCodeAllowed) {
+      return const SizedBox.shrink();
+    }
+    return AnimatedSize(
+      duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.enter,
+      child: Row(
+        children: [
+          Expanded(
+            child: ChoiceChip(
+              label: const Text('자동 생성'),
+              selected: _codeEntryMode == UserCodeEntryMode.generated,
+              onSelected: (_) =>
+                  _setCodeEntryMode(UserCodeEntryMode.generated),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: ChoiceChip(
+              label: const Text('직접 입력'),
+              selected:
+                  _codeEntryMode == UserCodeEntryMode.developerManual,
+              onSelected: (_) =>
+                  _setCodeEntryMode(UserCodeEntryMode.developerManual),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _codeNumberEditor(BuildContext context) {
+    final manual = _codeEntryMode == UserCodeEntryMode.developerManual;
+    final valid = widget.isEditMode
+        ? AccountCodeNumber.isValid(_codeNumberController.text)
+        : manual
+            ? AccountCodeNumber.isDeveloperManualCode(
+                AccountCodeNumber.normalize(_codeNumberController.text),
+              )
+            : AccountCodeNumber.isGeneratedCode(_codeNumberController.text);
+    return AnimatedSwitcher(
+      duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      switchInCurve: CommonUiMotion.enter,
+      switchOutCurve: CommonUiMotion.exit,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: .97, end: 1).animate(animation),
+          child: child,
+        ),
+      ),
+      child: TextField(
+        key: ValueKey<String>('code_entry_${_codeEntryMode.name}_${widget.isEditMode}'),
+        controller: _codeNumberController,
+        readOnly: widget.isEditMode || !manual,
+        enableInteractiveSelection: true,
+        keyboardType: manual ? TextInputType.number : null,
+        inputFormatters: manual
+            ? <TextInputFormatter>[
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(11),
+              ]
+            : null,
+        textInputAction: TextInputAction.next,
+        onChanged: (_) {
+          if (_submitted) setState(() {});
+        },
+        decoration: opsInputDecoration(
+          context,
+          label: '코드번호',
+          prefixIcon: const Icon(Icons.tag_rounded),
+          locked: widget.isEditMode || !manual,
+          suffixIcon: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                onPressed: _copyCodeNumber,
+                icon: const Icon(Icons.copy_rounded),
+              ),
+              if (!widget.isEditMode && !manual)
+                IconButton(
+                  onPressed: _regenerateCodeNumber,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+            ],
+          ),
+          errorText: _submitted && !valid
+              ? manual
+                  ? '코드번호는 숫자 11자리로 입력하세요.'
+                  : '코드번호를 다시 생성하세요.'
+              : null,
+        ),
+      ),
+    );
   }
 
   Future<void> _pickTime({required String day, required bool isStart}) async {
@@ -410,50 +546,10 @@ class _UserSettingSectionEditorDialogState
           ),
         ),
         const SizedBox(height: 10),
-        AnimatedSwitcher(
-          duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
-          switchInCurve: Curves.easeOutBack,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) {
-            return FadeTransition(
-              opacity: animation,
-              child: ScaleTransition(scale: animation, child: child),
-            );
-          },
-          child: TextField(
-            key: ValueKey<String>(_codeNumberController.text),
-            controller: _codeNumberController,
-            readOnly: true,
-            enableInteractiveSelection: true,
-            textInputAction: TextInputAction.next,
-            decoration: opsInputDecoration(
-              context,
-              label: '코드번호',
-              prefixIcon: const Icon(Icons.tag_rounded),
-              locked: true,
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    onPressed: _copyCodeNumber,
-                    icon: const Icon(Icons.copy_rounded),
-                  ),
-                  if (!widget.isEditMode)
-                    IconButton(
-                      onPressed: _regenerateCodeNumber,
-                      icon: const Icon(Icons.refresh_rounded),
-                    ),
-                ],
-              ),
-              errorText: _submitted &&
-                      !(widget.isEditMode
-                          ? AccountCodeNumber.isValid(_codeNumberController.text)
-                          : AccountCodeNumber.isGeneratedCode(_codeNumberController.text))
-                  ? '코드번호를 다시 생성하세요.'
-                  : null,
-            ),
-          ),
-        ),
+        _codeEntryModeSelector(context),
+        if (!widget.isEditMode && widget.manualCodeAllowed)
+          const SizedBox(height: 10),
+        _codeNumberEditor(context),
         const SizedBox(height: 10),
         TextField(
           controller: _emailController,
@@ -553,47 +649,6 @@ class _UserSettingSectionEditorDialogState
         label: '직책',
         prefixIcon: const Icon(Icons.badge_rounded),
       ),
-    );
-  }
-
-  Widget _passwordEditor(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _passwordController,
-          keyboardType: TextInputType.number,
-          textInputAction: TextInputAction.done,
-          onChanged: (_) {
-            if (_submitted) setState(() {});
-          },
-          enableSuggestions: false,
-          autocorrect: false,
-          inputFormatters: <TextInputFormatter>[
-            FilteringTextInputFormatter.digitsOnly,
-            LengthLimitingTextInputFormatter(5),
-          ],
-          decoration: opsInputDecoration(
-            context,
-            label: '비밀번호',
-            prefixIcon: const Icon(Icons.password_rounded),
-            suffixIcon: IconButton(
-              tooltip: '복사',
-              onPressed: _copyPassword,
-              icon: const Icon(Icons.copy_rounded),
-            ),
-            errorText: _submitted && !_passwordOk
-                ? '5자리 숫자 비밀번호를 입력하세요.'
-                : null,
-          ),
-        ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: _regeneratePassword,
-          icon: const Icon(Icons.refresh_rounded, size: 18),
-          label: const Text('새 비밀번호 생성'),
-        ),
-      ],
     );
   }
 
@@ -748,8 +803,6 @@ class _UserSettingSectionEditorDialogState
         return _permissionEditor(context);
       case UserSettingsSection.position:
         return _positionEditor(context);
-      case UserSettingsSection.password:
-        return _passwordEditor(context);
       case UserSettingsSection.schedule:
         return _scheduleEditor(context);
     }
