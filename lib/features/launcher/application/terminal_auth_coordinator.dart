@@ -90,18 +90,29 @@ class TerminalAuthenticatedAccount {
   }
 }
 
+enum TerminalAuthFailureReason {
+  none,
+  accountNotFound,
+  inactiveAccount,
+  nameMismatch,
+  googleEmailMismatch,
+  other,
+}
+
 class TerminalAccountAuthenticationResult {
   const TerminalAccountAuthenticationResult({
     required this.success,
     required this.message,
     this.account,
     this.copyText,
+    this.failureReason = TerminalAuthFailureReason.none,
   });
 
   final bool success;
   final String message;
   final TerminalAuthenticatedAccount? account;
   final String? copyText;
+  final TerminalAuthFailureReason failureReason;
 }
 
 class TerminalAccountIdentityResolutionResult {
@@ -110,12 +121,14 @@ class TerminalAccountIdentityResolutionResult {
     required this.message,
     this.account,
     this.copyText,
+    this.failureReason = TerminalAuthFailureReason.none,
   });
 
   final bool success;
   final String message;
   final TerminalAuthenticatedAccount? account;
   final String? copyText;
+  final TerminalAuthFailureReason failureReason;
 }
 
 class TerminalFirebasePreAuthenticationResult {
@@ -598,6 +611,7 @@ class TerminalAuthCoordinator {
             return const TerminalAccountIdentityResolutionResult(
               success: false,
               message: '입력한 계정 정보를 다시 확인하세요. (err_launcher_clean)',
+              failureReason: TerminalAuthFailureReason.accountNotFound,
             );
           }
           if (!user.isActive) {
@@ -613,6 +627,7 @@ class TerminalAuthCoordinator {
             return const TerminalAccountIdentityResolutionResult(
               success: false,
               message: '입력한 계정 정보를 다시 확인하세요. (err_launcher_cool_cool)',
+              failureReason: TerminalAuthFailureReason.inactiveAccount,
             );
           }
           if (user.name != normalizedName) {
@@ -628,6 +643,7 @@ class TerminalAuthCoordinator {
             return const TerminalAccountIdentityResolutionResult(
               success: false,
               message: '입력한 계정 정보를 다시 확인하세요. (err_launcher_wrong)',
+              failureReason: TerminalAuthFailureReason.nameMismatch,
             );
           }
           final modes = _userSupportedModes(user.modes);
@@ -667,6 +683,15 @@ class TerminalAuthCoordinator {
                 success: false,
                 message: result.message,
                 copyText: result.copyText,
+                failureReason: switch (result.failureKind) {
+                  PersonalIdentityFailureKind.accountNotFound =>
+                    TerminalAuthFailureReason.accountNotFound,
+                  PersonalIdentityFailureKind.inactiveAccount =>
+                    TerminalAuthFailureReason.inactiveAccount,
+                  PersonalIdentityFailureKind.nameMismatch =>
+                    TerminalAuthFailureReason.nameMismatch,
+                  _ => TerminalAuthFailureReason.other,
+                },
               );
             }
             final account = TerminalAuthenticatedAccount(
@@ -712,6 +737,13 @@ class TerminalAuthCoordinator {
               return TerminalAccountIdentityResolutionResult(
                 success: false,
                 message: result.message,
+                failureReason: switch (result.failureKind) {
+                  TabletIdentityFailureKind.accountNotFound =>
+                    TerminalAuthFailureReason.accountNotFound,
+                  TabletIdentityFailureKind.nameMismatch =>
+                    TerminalAuthFailureReason.nameMismatch,
+                  _ => TerminalAuthFailureReason.other,
+                },
               );
             }
             final account = TerminalAuthenticatedAccount(
@@ -927,6 +959,7 @@ class TerminalAuthCoordinator {
       return const TerminalAccountAuthenticationResult(
         success: false,
         message: accountVerificationFailureMessage,
+        failureReason: TerminalAuthFailureReason.googleEmailMismatch,
       );
     } on GoogleSessionBlockedException {
       LauncherDiagnostics.record(

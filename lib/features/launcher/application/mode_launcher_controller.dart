@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -7,6 +8,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/utils/motion_timing_diagnostics.dart';
+import '../../../app/auth/google_auth_session.dart';
+import '../../account/applications/user_state.dart';
+import '../../dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../../shared/auth/account_code_number.dart';
 import '../../../app/auth/gmail_sender_auth.dart';
 import '../../../app/command/application/service_settings_command_handler.dart';
@@ -3731,6 +3735,11 @@ class ModeLauncherController extends ChangeNotifier {
       );
     }
 
+    final userStateBeforeAttempt = context.read<UserState>();
+    final approvedSessionBeforeAttempt = userStateBeforeAttempt.isLoggedIn ||
+        _authenticatedAccount?.activated == true;
+    final firebaseUidBeforeAttempt = FirebaseAuth.instance.currentUser?.uid;
+
     final changed = _enteredName != normalizedName ||
         _enteredCodeNumber != accountIdentifier;
     _enteredName = normalizedName;
@@ -3859,6 +3868,17 @@ class ModeLauncherController extends ChangeNotifier {
     _loginStage = TerminalLoginStage.credentials;
     if (!result.success || account == null) {
       _pendingManualAccount = null;
+      if (result.failureReason == TerminalAuthFailureReason.accountNotFound ||
+          result.failureReason == TerminalAuthFailureReason.inactiveAccount ||
+          result.failureReason == TerminalAuthFailureReason.nameMismatch) {
+        await _clearRejectedNewFirebaseSession(
+          userStateBeforeAttempt: userStateBeforeAttempt,
+          approvedSessionBeforeAttempt: approvedSessionBeforeAttempt,
+          firebaseUidBeforeAttempt: firebaseUidBeforeAttempt,
+          skipDebugAnonymous: debugDeveloperAnonymousAuth,
+          reason: result.failureReason.name,
+        );
+      }
       _append(TerminalLineType.error, '[ERROR] Account identity failed');
       _errorSerial += 1;
       LauncherDiagnostics.record(
@@ -3939,6 +3959,16 @@ class ModeLauncherController extends ChangeNotifier {
       _runningCommand = '';
       _loginStage = TerminalLoginStage.credentials;
       _pendingManualAccount = null;
+      if (googleResult.failureReason ==
+          TerminalAuthFailureReason.googleEmailMismatch) {
+        await _clearRejectedNewFirebaseSession(
+          userStateBeforeAttempt: userStateBeforeAttempt,
+          approvedSessionBeforeAttempt: approvedSessionBeforeAttempt,
+          firebaseUidBeforeAttempt: firebaseUidBeforeAttempt,
+          skipDebugAnonymous: debugDeveloperAnonymousAuth,
+          reason: googleResult.failureReason.name,
+        );
+      }
       _errorSerial += 1;
       _append(TerminalLineType.error, '[ERROR] Google account binding failed');
       LauncherDiagnostics.record(
@@ -3980,6 +4010,119 @@ class ModeLauncherController extends ChangeNotifier {
       context,
       account: authenticated,
       reduceMotion: reduceMotion,
+    );
+  }
+
+  Future<void> _clearRejectedNewFirebaseSession({
+    required UserState userStateBeforeAttempt,
+    required bool approvedSessionBeforeAttempt,
+    required String? firebaseUidBeforeAttempt,
+    required bool skipDebugAnonymous,
+    required String reason,
+  }) async {
+    if (skipDebugAnonymous) return;
+
+    final currentFirebaseUid = FirebaseAuth.instance.currentUser?.uid;
+    final previousIdentityPreserved = approvedSessionBeforeAttempt &&
+        firebaseUidBeforeAttempt != null &&
+        firebaseUidBeforeAttempt == currentFirebaseUid;
+    if (previousIdentityPreserved) {
+      LauncherDiagnostics.record(
+        'auth_rejected_session_preserved',
+        scope: 'auth',
+        meta: <String, Object?>{'reason': reason},
+      );
+      return;
+    }
+
+    final previousSessionInvalidated = approvedSessionBeforeAttempt;
+    Object? googleSignOutError;
+    try {
+      await GoogleAuthSession.instance.signOut();
+    } catch (error) {
+      googleSignOutError = error;
+      LauncherDiagnostics.record(
+        'auth_rejected_session_cleanup_failed',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'reason': reason,
+          'errorType': error.runtimeType.toString(),
+        },
+      );
+    }
+
+    if (FirebaseAuth.instance.currentUser != null) {
+      try {
+        await FirebaseGoogleAuthBridge.instance.signOutFirebaseOnly();
+      } catch (error) {
+        LauncherDiagnostics.record(
+          'auth_firebase_cleanup_retry_failed',
+          scope: 'auth',
+          meta: <String, Object?>{
+            'reason': reason,
+            'errorType': error.runtimeType.toString(),
+          },
+        );
+      }
+    }
+
+    final firebaseSessionRemaining =
+        FirebaseAuth.instance.currentUser != null;
+    LauncherDiagnostics.record(
+      firebaseSessionRemaining
+          ? 'auth_rejected_session_firebase_remaining'
+          : 'auth_rejected_session_cleared',
+      scope: 'auth',
+      meta: <String, Object?>{
+        'reason': reason,
+        'previousSessionInvalidated': previousSessionInvalidated,
+        'firebaseSessionRemaining': firebaseSessionRemaining,
+        'googleSignOutFailed': googleSignOutError != null,
+      },
+    );
+
+    if (!previousSessionInvalidated) return;
+
+    try {
+      await userStateBeforeAttempt.clearUserToPhone(
+        skipRemoteStatusUpdate: true,
+      );
+    } catch (error) {
+      LauncherDiagnostics.record(
+        'auth_previous_session_local_cleanup_failed',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'errorType': error.runtimeType.toString(),
+        },
+      );
+      try {
+        await userStateBeforeAttempt.discardLocalLoginSession(
+          source: 'auth_identity_changed',
+        );
+      } catch (fallbackError) {
+        LauncherDiagnostics.record(
+          'auth_previous_session_discard_failed',
+          scope: 'auth',
+          meta: <String, Object?>{
+            'errorType': fallbackError.runtimeType.toString(),
+          },
+        );
+      }
+    }
+
+    _authenticatedAccount = null;
+    _pendingManualAccount = null;
+    _availableWorkAreas = <LauncherWorkAreaOption>[];
+    _selectedWorkArea = null;
+    _supportedModes = <AppModeDefinition>[];
+    _selectedMode = null;
+    _sessionRestoreSucceeded = false;
+    _runtimeContextReady = false;
+    _workContextRestored = false;
+    LauncherDiagnostics.record(
+      'auth_previous_session_invalidated',
+      scope: 'auth',
+      meta: <String, Object?>{'reason': reason},
     );
   }
 

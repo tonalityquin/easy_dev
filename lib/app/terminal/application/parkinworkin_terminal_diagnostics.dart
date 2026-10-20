@@ -59,6 +59,7 @@ class ParkinWorkinTerminalDiagnostics {
       ...ThemeDebugTrace.lines,
       ...MotionTimingDiagnostics.lines,
       ...BuildOptimizationDiagnostics.lines,
+      ...StatusDialog.debugLines,
       ..._lines,
     ];
     if (merged.isEmpty) {
@@ -95,6 +96,7 @@ class ParkinWorkinTerminalDiagnostics {
         'appStartLines': AppStartDebugTrace.lines.length,
         'motionTimingLines': MotionTimingDiagnostics.lines.length,
         'buildOptimizationLines': BuildOptimizationDiagnostics.lines.length,
+        'statusDialogLines': StatusDialog.debugLines.length,
       },
     );
     await StatusDialog.showSuccess(

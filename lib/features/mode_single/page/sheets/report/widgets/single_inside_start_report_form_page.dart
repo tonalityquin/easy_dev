@@ -1110,7 +1110,7 @@ class _SingleInsideStartReportFormPageState
         ),
       );
 
-      return doc.save();
+      return await doc.save();
     } catch (e) {
       await _logApiError(
         tag: 'SingleInsideStartReportFormPage._buildPdfBytes',

@@ -64,12 +64,36 @@ class DebugApiLogger {
       }
 
       final now = DateTime.now().toIso8601String();
-      final entry = _toLine(message, level: level, ts: now, tags: tags);
+      final isAuthLog = tags?.contains('auth') == true;
+      final safeMessage = isAuthLog ? _safeAuthLog(message) : message;
+      final safeTags = isAuthLog
+          ? tags?.where((tag) =>
+              RegExp(r'^[a-zA-Z0-9._-]{1,40}$').hasMatch(tag)).toList(growable: false)
+          : tags;
+      final entry = _toLine(safeMessage, level: level, ts: now, tags: safeTags);
       await _rotateIfNeeded();
       await _logFile!.writeAsString(entry, mode: FileMode.append, encoding: utf8);
     } catch (e) {
       debugPrint('❌ DebugApiLogger 로그 기록 실패: $e');
     }
+  }
+
+  Map<String, Object?> _safeAuthLog(Object? message) {
+    if (message is! Map) {
+      return const <String, Object?>{'event': 'auth_error'};
+    }
+    final tag = message['tag']?.toString() ?? 'auth_error';
+    final safeTag = RegExp(r'^[a-zA-Z0-9._-]{1,120}$').hasMatch(tag)
+        ? tag
+        : 'auth_error';
+    final type = message['errorType']?.toString() ?? '';
+    final safeType = RegExp(r'^[a-zA-Z0-9._-]{1,80}$').hasMatch(type)
+        ? type
+        : 'unknown';
+    return <String, Object?>{
+      'event': safeTag,
+      'errorType': safeType,
+    };
   }
 
   String _toLine(Object? message, {required String level, required String ts, List<String>? tags}) {

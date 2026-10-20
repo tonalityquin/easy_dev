@@ -5,9 +5,6 @@ buildscript {
     }
 
     dependencies {
-        //noinspection AndroidGradlePluginVersion
-        classpath "com.android.tools.build:gradle:8.7.3"
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0"
         classpath "com.google.gms:google-services:4.4.2"
     }
 }
@@ -24,6 +21,18 @@ rootProject.buildDir = "../build"
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
+subprojects { subproject ->
+    subproject.pluginManager.withPlugin("com.android.library") {
+        if (subproject.name == "tflite_flutter") {
+            def androidComponents = subproject.extensions.getByName("androidComponents")
+            androidComponents.finalizeDsl { androidExtension ->
+                androidExtension.compileOptions.sourceCompatibility = JavaVersion.VERSION_17
+                androidExtension.compileOptions.targetCompatibility = JavaVersion.VERSION_17
+            }
+        }
+    }
+}
+
 subprojects {
     project.evaluationDependsOn(":app")
 }

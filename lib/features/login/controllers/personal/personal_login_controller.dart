@@ -46,18 +46,32 @@ class PersonalAuthenticatedAccount {
   final String division;
 }
 
+enum PersonalIdentityFailureKind {
+  none,
+  invalidInput,
+  networkError,
+  accountNotFound,
+  inactiveAccount,
+  nameMismatch,
+  ambiguousAccount,
+  invalidAccountData,
+  lookupError,
+}
+
 class PersonalCredentialAuthenticationResult {
   const PersonalCredentialAuthenticationResult({
     required this.success,
     required this.message,
     this.account,
     this.copyText,
+    this.failureKind = PersonalIdentityFailureKind.none,
   });
 
   final bool success;
   final String message;
   final PersonalAuthenticatedAccount? account;
   final String? copyText;
+  final PersonalIdentityFailureKind failureKind;
 }
 
 class PersonalAccountCreateResult {
@@ -620,6 +634,7 @@ class PersonalLoginController {
         success: false,
         message: failure.message,
         copyText: failure.copyText,
+        failureKind: PersonalIdentityFailureKind.invalidInput,
       );
     }
 
@@ -630,6 +645,7 @@ class PersonalLoginController {
         success: false,
         message: failure.message,
         copyText: failure.copyText,
+        failureKind: PersonalIdentityFailureKind.networkError,
       );
     }
 
@@ -637,17 +653,24 @@ class PersonalLoginController {
       final candidates =
           await _findPersonalAccountCandidates(resolvedCodeNumber);
 
-      PersonalCredentialAuthenticationResult failureResult(String message) {
+      PersonalCredentialAuthenticationResult failureResult(
+        String message,
+        PersonalIdentityFailureKind failureKind,
+      ) {
         final failure = _loginFailureResult(message);
         return PersonalCredentialAuthenticationResult(
           success: false,
           message: failure.message,
           copyText: failure.copyText,
+          failureKind: failureKind,
         );
       }
 
       if (candidates.isEmpty) {
-        return failureResult('개인형 계정을 찾을 수 없습니다.');
+        return failureResult(
+          '개인형 계정을 찾을 수 없습니다.',
+          PersonalIdentityFailureKind.accountNotFound,
+        );
       }
 
       final activeCandidates = candidates.where((doc) {
@@ -655,7 +678,10 @@ class PersonalLoginController {
         return (data['isActive'] as bool?) ?? true;
       }).toList(growable: false);
       if (activeCandidates.isEmpty) {
-        return failureResult('비활성화된 개인형 계정입니다.');
+        return failureResult(
+          '비활성화된 개인형 계정입니다.',
+          PersonalIdentityFailureKind.inactiveAccount,
+        );
       }
 
       final matches = activeCandidates.where((doc) {
@@ -676,10 +702,16 @@ class PersonalLoginController {
         },
       );
       if (matches.isEmpty) {
-        return failureResult('입력한 계정 정보가 일치하지 않습니다.');
+        return failureResult(
+          '입력한 계정 정보가 일치하지 않습니다.',
+          PersonalIdentityFailureKind.nameMismatch,
+        );
       }
       if (matches.length > 1) {
-        return failureResult('같은 계정 정보의 개인형 계정이 여러 업무 지역에 존재합니다.');
+        return failureResult(
+          '같은 계정 정보의 개인형 계정이 여러 업무 지역에 존재합니다.',
+          PersonalIdentityFailureKind.ambiguousAccount,
+        );
       }
 
       final matchedDoc = matches.single;
@@ -689,7 +721,10 @@ class PersonalLoginController {
       final selectedArea = _selectedAreaFromData(matchedData);
       final division = _divisionFromData(matchedData);
       if (selectedArea.isEmpty) {
-        return failureResult('개인형 계정의 지역 정보가 없습니다.');
+        return failureResult(
+          '개인형 계정의 지역 정보가 없습니다.',
+          PersonalIdentityFailureKind.invalidAccountData,
+        );
       }
 
       final expectedDocId = _accountDocId(
@@ -699,6 +734,7 @@ class PersonalLoginController {
       if (matchedDoc.id != expectedDocId) {
         return failureResult(
           '개인형 계정 문서 ID가 코드번호-지역 구조와 일치하지 않습니다.',
+          PersonalIdentityFailureKind.invalidAccountData,
         );
       }
 
@@ -743,6 +779,7 @@ class PersonalLoginController {
         success: false,
         message: failure.message,
         copyText: failure.copyText,
+        failureKind: PersonalIdentityFailureKind.lookupError,
       );
     }
   }

@@ -1189,7 +1189,7 @@ class HeadMemo {
         final legacySnapshot = await _remoteRootRef.get();
         final legacyData = legacySnapshot.data();
         if (legacyData != null && legacyData['books'] is List) {
-          return _pullLegacyLibraryFromFirestore(legacyData);
+          return await _pullLegacyLibraryFromFirestore(legacyData);
         }
         throw StateError('remote_head_memo_book_not_found');
       }

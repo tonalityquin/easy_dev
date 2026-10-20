@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'app/auth/google_auth_session.dart';
+import 'app/utils/secure_auth_diagnostics.dart';
 import 'app/config/auth_config.dart';
 import 'app/di/providers.dart';
 import 'app/di/routes.dart';
@@ -51,7 +52,7 @@ void main() async {
     } catch (_) {}
   }
 
-  debugPrint('[MAIN][${_ts()}] initCommunicationPort');
+  SecureAuthDiagnostics.record('[MAIN][${_ts()}] initCommunicationPort');
   FlutterForegroundTask.initCommunicationPort();
   WorkStatusNotificationController.initializeForegroundTask();
   WorkStatusNotificationController.initializeTaskEventListener();
@@ -107,7 +108,7 @@ void main() async {
     }
   };
 
-  debugPrint('[MAIN][${_ts()}] runApp(AppBootstrapper + ThemePrefsController)');
+  SecureAuthDiagnostics.record('[MAIN][${_ts()}] runApp(AppBootstrapper + ThemePrefsController)');
   runApp(
     ChangeNotifierProvider.value(
       value: themeController,
@@ -132,11 +133,11 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
       future: _initFuture,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          debugPrint('[MAIN][${_ts()}] FutureBuilder error: ${snapshot.error}');
+          SecureAuthDiagnostics.record('[MAIN][${_ts()}] FutureBuilder error: ${snapshot.error}');
           return const ErrorApp(message: 'DB 초기화 실패. 앱을 다시 시작해주세요.');
         }
         if (snapshot.connectionState == ConnectionState.done) {
-          debugPrint('[MAIN][${_ts()}] FutureBuilder done → MyApp');
+          SecureAuthDiagnostics.record('[MAIN][${_ts()}] FutureBuilder done → MyApp');
           return const MyApp();
         }
 
@@ -165,66 +166,66 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     AuthConfig.validate();
     await AppModeMigration.migrateLegacyMode();
 
-    debugPrint('[MAIN][${_ts()}] Firebase.initializeApp');
+    SecureAuthDiagnostics.record('[MAIN][${_ts()}] Firebase.initializeApp');
     await Firebase.initializeApp();
 
-    debugPrint('[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime');
+    SecureAuthDiagnostics.record('[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime');
     try {
       await FirebaseGoogleAuthBridge.instance.configureRuntime();
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime done uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}',
       );
     } catch (e, st) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime failed: $e\n$st',
       );
     }
 
-    debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init (one-time OAuth)');
+    SecureAuthDiagnostics.record('[MAIN][${_ts()}] GoogleAuthSession.init (one-time OAuth)');
     try {
       await GoogleAuthSession.instance.init(
         serverClientId: AuthConfig.webClientId,
       );
-      debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init done');
+      SecureAuthDiagnostics.record('[MAIN][${_ts()}] GoogleAuthSession.init done');
     } catch (e, st) {
-      debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init failed: $e\n$st');
+      SecureAuthDiagnostics.record('[MAIN][${_ts()}] GoogleAuthSession.init failed: $e\n$st');
     }
 
-    debugPrint(
+    SecureAuthDiagnostics.record(
       '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser',
     );
     try {
       final existingGoogleUser = GoogleAuthSession.instance.currentUser;
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] existing Google user email=${existingGoogleUser?.email}',
       );
       final ok = await FirebaseGoogleAuthBridge.instance
           .bootstrapWithExistingGoogleUser(existingGoogleUser);
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser done ok=$ok uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}',
       );
     } catch (e, st) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser failed: $e\n$st',
       );
     }
 
-    debugPrint('[MAIN][${_ts()}] HeadMemo.init');
+    SecureAuthDiagnostics.record('[MAIN][${_ts()}] HeadMemo.init');
     await HeadMemo.init();
 
-    debugPrint('[MAIN][${_ts()}] HeadquarterSideDockLauncherController.initialize');
+    SecureAuthDiagnostics.record('[MAIN][${_ts()}] HeadquarterSideDockLauncherController.initialize');
     await HeadquarterSideDockLauncherController.initialize();
 
-    debugPrint('[MAIN][${_ts()}] DashMemo.init');
+    SecureAuthDiagnostics.record('[MAIN][${_ts()}] DashMemo.init');
     await ProductivitySheet.init();
 
-    debugPrint('[MAIN][${_ts()}] GameQuickActions.init');
+    SecureAuthDiagnostics.record('[MAIN][${_ts()}] GameQuickActions.init');
     await GameQuickActions.init();
 
-    debugPrint('[MAIN][${_ts()}] DevQuickActions.init');
+    SecureAuthDiagnostics.record('[MAIN][${_ts()}] DevQuickActions.init');
     await DevQuickActions.init();
 
-    debugPrint('[MAIN][${_ts()}] _initializeApp done');
+    SecureAuthDiagnostics.record('[MAIN][${_ts()}] _initializeApp done');
   }
 }
 
@@ -251,7 +252,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    debugPrint('[LIFECYCLE][${_ts()}] $state');
+    SecureAuthDiagnostics.record('[LIFECYCLE][${_ts()}] $state');
     WorkStatusNotificationController.recordLifecycle(state);
 
     if (AppExitFlag.isExiting) {
@@ -277,7 +278,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('[MAIN][${_ts()}] build MyApp');
+    SecureAuthDiagnostics.record('[MAIN][${_ts()}] build MyApp');
 
     return MultiProvider(
       providers: appProviders,
@@ -315,7 +316,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             navigatorObservers: <NavigatorObserver>[AppNavigator.observer],
             builder: (context, child) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                debugPrint('[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');
+                SecureAuthDiagnostics.record('[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');
                 GameQuickActions.mountIfNeeded();
                 ProductivitySheet.mountIfNeeded();
                 DevQuickActions.mountIfNeeded();

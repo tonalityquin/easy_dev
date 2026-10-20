@@ -146,7 +146,7 @@ class UserReadService {
         debugPrint('DB 문서 없음 → userId=$userId');
         return null;
       }
-      return _userFromRootWithActiveState(doc.id, doc.data()!);
+      return await _userFromRootWithActiveState(doc.id, doc.data()!);
     } on FirebaseException {
       rethrow;
     }
@@ -161,7 +161,7 @@ class UserReadService {
       if (!doc.exists) {
         return null;
       }
-      return _userFromRootWithActiveState(
+      return await _userFromRootWithActiveState(
         doc.id,
         doc.data()!,
         viewOptions: const GetOptions(source: Source.server),
@@ -191,7 +191,7 @@ class UserReadService {
       }
       if (codeSnapshot.docs.length == 1) {
         final doc = codeSnapshot.docs.single;
-        return _userFromRootWithActiveState(doc.id, doc.data());
+        return await _userFromRootWithActiveState(doc.id, doc.data());
       }
 
       for (final field in <String>['phone', 'handle']) {
@@ -207,7 +207,7 @@ class UserReadService {
         }
         if (legacySnapshot.docs.length == 1) {
           final doc = legacySnapshot.docs.single;
-          return _userFromRootWithActiveState(doc.id, doc.data());
+          return await _userFromRootWithActiveState(doc.id, doc.data());
         }
       }
       return null;
@@ -306,7 +306,7 @@ class UserReadService {
 
       if (qs.docs.isNotEmpty) {
         final doc = qs.docs.first;
-        return _userFromRootWithActiveState(doc.id, doc.data());
+        return await _userFromRootWithActiveState(doc.id, doc.data());
       }
     } on FirebaseException {
       return null;

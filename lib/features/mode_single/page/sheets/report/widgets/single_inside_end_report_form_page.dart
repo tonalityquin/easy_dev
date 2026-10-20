@@ -1176,7 +1176,7 @@ class _SingleInsideEndReportSideDockState
     );
 
     try {
-      return document.save();
+      return await document.save();
     } catch (error, stackTrace) {
       _recordDebug('pdf_build_failure error=$error');
       await _logApiError(

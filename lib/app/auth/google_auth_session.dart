@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+import '../utils/secure_auth_diagnostics.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis_auth/googleapis_auth.dart' as auth show AuthClient;
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
@@ -62,7 +62,7 @@ class GoogleAccountMismatchException implements Exception {
   final String actualEmail;
 
   @override
-  String toString() => 'google_account_mismatch:$expectedEmail:$actualEmail';
+  String toString() => 'google_account_mismatch';
 }
 
 class GoogleAuthSession {
@@ -206,7 +206,7 @@ class GoogleAuthSession {
       _authSub = signIn.authenticationEvents.listen((event) {
         if (event is GoogleSignInAuthenticationEventSignIn) {
           if (_forceAccountSelectionPending && !_accountSwitchInProgress) {
-            debugPrint(
+            SecureAuthDiagnostics.record(
               '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signIn ignored forceAccountSelectionPending=true email=${event.user.email}',
             );
             return;
@@ -217,7 +217,7 @@ class GoogleAuthSession {
           _rememberIdentity(event.user);
           _restoreCachedClientForCurrentUser();
           _emitIdentity();
-          debugPrint(
+          SecureAuthDiagnostics.record(
               '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signIn email=${event.user.email}');
           final suppressFirebaseBridge =
               _accountSwitchInProgress ||
@@ -228,10 +228,10 @@ class GoogleAuthSession {
               FirebaseGoogleAuthBridge.instance
                   .ensureSignedInWithGoogleUser(event.user)
                   .then((ok) {
-                debugPrint(
+                SecureAuthDiagnostics.record(
                     '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signIn -> Firebase bridge ok=$ok email=${event.user.email}');
               }).catchError((Object e, StackTrace st) {
-                debugPrint(
+                SecureAuthDiagnostics.record(
                     '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signIn -> Firebase bridge failed: $e\n$st');
               }),
             );
@@ -242,7 +242,7 @@ class GoogleAuthSession {
           _client = null;
           _lastAuthorizedAt = null;
           _emitIdentity();
-          debugPrint(
+          SecureAuthDiagnostics.record(
               '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signOut');
           if (!_accountSwitchInProgress) {
             _clientsByEmail.clear();
@@ -252,7 +252,7 @@ class GoogleAuthSession {
               FirebaseGoogleAuthBridge.instance
                   .signOutFirebaseOnly()
                   .catchError((Object e, StackTrace st) {
-                debugPrint(
+                SecureAuthDiagnostics.record(
                     '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] authenticationEvents signOut -> Firebase signOut failed: $e\n$st');
               }),
             );
@@ -265,7 +265,7 @@ class GoogleAuthSession {
         _client = null;
         _lastAuthorizedAt = null;
         _emitIdentity();
-        debugPrint(
+        SecureAuthDiagnostics.record(
           '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight skipped forceAccountSelectionPending=true',
         );
       } else {
@@ -275,7 +275,7 @@ class GoogleAuthSession {
           _restoreCachedClientForCurrentUser();
         }
         _emitIdentity();
-        debugPrint(
+        SecureAuthDiagnostics.record(
           '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight result email=${_user?.email}',
         );
         if (_user != null) {
@@ -283,11 +283,11 @@ class GoogleAuthSession {
             FirebaseGoogleAuthBridge.instance
                 .ensureSignedInWithGoogleUser(_user!)
                 .then((ok) {
-              debugPrint(
+              SecureAuthDiagnostics.record(
                 '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight -> Firebase bridge ok=$ok email=${_user?.email}',
               );
             }).catchError((Object e, StackTrace st) {
-              debugPrint(
+              SecureAuthDiagnostics.record(
                 '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] init lightweight -> Firebase bridge failed: $e\n$st',
               );
             }),
@@ -295,9 +295,13 @@ class GoogleAuthSession {
         }
       }
     } catch (e, st) {
+      SecureAuthDiagnostics.record(
+        'auth_error event=GoogleAuthSession.init errorType=${e.runtimeType}',
+      );
       await DebugApiLogger().log(
         {
           'tag': 'GoogleAuthSession.init',
+          'errorType': e.runtimeType.toString(),
           'message': 'GoogleSignIn 초기화 또는 lightweight 인증 실패',
           'error': e.toString(),
           'stack': st.toString(),
@@ -350,11 +354,11 @@ class GoogleAuthSession {
         _lastAuthorizedAt = null;
         _rememberIdentity(user);
         _emitIdentity();
-        debugPrint(
+        SecureAuthDiagnostics.record(
             '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] interactive authenticate success email=${user.email}');
         final firebaseOk = await FirebaseGoogleAuthBridge.instance
             .ensureSignedInWithGoogleUser(user);
-        debugPrint(
+        SecureAuthDiagnostics.record(
           '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] interactive authenticate -> Firebase bridge ok=$firebaseOk email=${user.email}',
         );
         await _ensureAuthorizedClient();
@@ -368,9 +372,13 @@ class GoogleAuthSession {
 
       throw StateError('AuthClient 생성 실패: 로그인/스코프 권한 확인 필요');
     } catch (e, st) {
+      SecureAuthDiagnostics.record(
+        'auth_error event=GoogleAuthSession._rawClient errorType=${e.runtimeType}',
+      );
       await DebugApiLogger().log(
         {
           'tag': 'GoogleAuthSession._rawClient',
+          'errorType': e.runtimeType.toString(),
           'message': 'AuthClient 생성 실패',
           'error': e.toString(),
           'stack': st.toString(),
@@ -392,9 +400,13 @@ class GoogleAuthSession {
     try {
       return await _rawClient();
     } catch (e, st) {
+      SecureAuthDiagnostics.record(
+        'auth_error event=GoogleAuthSession.safeClient errorType=${e.runtimeType}',
+      );
       await DebugApiLogger().log(
         {
           'tag': 'GoogleAuthSession.safeClient',
+          'errorType': e.runtimeType.toString(),
           'message': 'safeClient에서 AuthClient 획득 실패 -> signOut 시도',
           'error': e.toString(),
           'stack': st.toString(),
@@ -467,9 +479,13 @@ class GoogleAuthSession {
       _verifyExpectedIdentity(expectedEmail);
       return client;
     } catch (e, st) {
+      SecureAuthDiagnostics.record(
+        'auth_error event=GoogleAuthSession.refreshClient errorType=${e.runtimeType}',
+      );
       await DebugApiLogger().log(
         {
           'tag': 'GoogleAuthSession.refreshClient',
+          'errorType': e.runtimeType.toString(),
           'message': '토큰 강제 갱신 실패',
           'error': e.toString(),
           'stack': st.toString(),
@@ -540,14 +556,18 @@ class GoogleAuthSession {
       capture(error, stackTrace);
     }
 
-    debugPrint(
+    SecureAuthDiagnostics.record(
       '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] GoogleAuthSession.signOut googleCleared=true firebaseCleared=${FirebaseGoogleAuthBridge.instance.currentUser == null} forceAccountSelectionPending=$_forceAccountSelectionPending',
     );
 
     if (firstError != null) {
+      SecureAuthDiagnostics.record(
+        'auth_error event=GoogleAuthSession.signOut errorType=${firstError.runtimeType}',
+      );
       await DebugApiLogger().log(
         {
           'tag': 'GoogleAuthSession.signOut',
+          'errorType': firstError.runtimeType.toString(),
           'message': 'Google/Firebase 로그아웃 중 일부 단계 실패',
           'error': firstError.toString(),
           'stack': firstStackTrace?.toString() ?? '',
@@ -931,7 +951,7 @@ class GoogleAuthSession {
         progress: 0.28,
       );
     } else {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         "[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] OAuth scope=${_scopes.join(', ')} user=${_user?.email ?? 'null'} forceAuthorize=$forceAuthorize",
       );
     }
@@ -956,14 +976,14 @@ class GoogleAuthSession {
 
       final successMessage =
           'OAuth AuthClient 준비 완료 scopeCount=${_scopes.length}';
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] $successMessage',
       );
       if (trace != null) {
         unawaited(trace.succeed(successMessage));
       }
     } catch (e, st) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[GOOGLE-AUTH][${DateTime.now().toIso8601String()}] OAuth authorization failed: $e\n$st',
       );
       if (trace != null) {
@@ -975,9 +995,13 @@ class GoogleAuthSession {
           ),
         );
       }
+      SecureAuthDiagnostics.record(
+        'auth_error event=GoogleAuthSession.ensureAuthorizedClient errorType=${e.runtimeType}',
+      );
       await DebugApiLogger().log(
         {
           'tag': 'GoogleAuthSession.ensureAuthorizedClient',
+          'errorType': e.runtimeType.toString(),
           'message': '스코프 권한 부여 또는 토큰 발급 실패',
           'error': e.toString(),
           'stack': st.toString(),

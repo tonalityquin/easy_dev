@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../../../../app/utils/secure_auth_diagnostics.dart';
 
 String _firebaseBridgeTs() => DateTime.now().toIso8601String();
 
@@ -26,7 +27,7 @@ class FirebaseGoogleAuthBridge {
 
   Future<void> configureRuntime() async {
     if (_runtimeConfigured) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] configureRuntime skipped: already configured',
       );
       return;
@@ -34,7 +35,7 @@ class FirebaseGoogleAuthBridge {
 
     _runtimeConfigured = true;
 
-    debugPrint(
+    SecureAuthDiagnostics.record(
       '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] FirebaseAuth runtime configured debugAnonFallback=$canUseDebugAnonymousFallback',
     );
   }
@@ -44,7 +45,7 @@ class FirebaseGoogleAuthBridge {
   ) async {
     await configureRuntime();
 
-    debugPrint(
+    SecureAuthDiagnostics.record(
       '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] bootstrapWithExistingGoogleUser start googleEmail=${googleUser?.email} debugAnonFallback=$canUseDebugAnonymousFallback',
     );
 
@@ -52,14 +53,14 @@ class FirebaseGoogleAuthBridge {
       if (canUseDebugAnonymousFallback) {
         final ok = await _signInAnonymouslyForDebug();
         final user = _auth.currentUser;
-        debugPrint(
+        SecureAuthDiagnostics.record(
           '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] bootstrapWithExistingGoogleUser anon result ok=$ok uid=${user?.uid} email=${user?.email} anonymous=${user?.isAnonymous}',
         );
         return ok;
       }
 
       final user = _auth.currentUser;
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] bootstrapWithExistingGoogleUser no-google-user result ok=false uid=${user?.uid} email=${user?.email} anonymous=${user?.isAnonymous}',
       );
       return false;
@@ -67,7 +68,7 @@ class FirebaseGoogleAuthBridge {
 
     final ok = await ensureSignedInWithGoogleUser(googleUser);
     final user = _auth.currentUser;
-    debugPrint(
+    SecureAuthDiagnostics.record(
       '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] bootstrapWithExistingGoogleUser result ok=$ok uid=${user?.uid} email=${user?.email} anonymous=${user?.isAnonymous}',
     );
     return ok;
@@ -77,7 +78,7 @@ class FirebaseGoogleAuthBridge {
     await configureRuntime();
     final ok = await ensureSignedInFromGoogleSession(interactive: interactive);
     final user = _auth.currentUser;
-    debugPrint(
+    SecureAuthDiagnostics.record(
       '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] bootstrap result ok=$ok uid=${user?.uid} email=${user?.email} anonymous=${user?.isAnonymous}',
     );
     return ok;
@@ -89,7 +90,7 @@ class FirebaseGoogleAuthBridge {
 
     final existing = _auth.currentUser;
     if (existing != null && !existing.isAnonymous) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] 기존 Firebase 사용자 유지 uid=${existing.uid} email=${existing.email}',
       );
       return true;
@@ -100,11 +101,11 @@ class FirebaseGoogleAuthBridge {
     try {
       googleUser =
           await GoogleSignIn.instance.attemptLightweightAuthentication();
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] lightweight Google 세션 email=${googleUser?.email}',
       );
     } catch (e, st) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] lightweight Google 세션 확인 실패: $e\n$st',
       );
     }
@@ -113,22 +114,22 @@ class FirebaseGoogleAuthBridge {
         interactive &&
         GoogleSignIn.instance.supportsAuthenticate()) {
       try {
-        debugPrint(
+        SecureAuthDiagnostics.record(
           '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] interactive Google 인증 시도',
         );
         googleUser = await GoogleSignIn.instance.authenticate();
-        debugPrint(
+        SecureAuthDiagnostics.record(
           '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] interactive Google 인증 결과 email=${googleUser.email}',
         );
       } catch (e, st) {
-        debugPrint(
+        SecureAuthDiagnostics.record(
           '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] interactive Google 인증 실패: $e\n$st',
         );
       }
     }
 
     if (googleUser == null) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Google 세션 없음 interactive=$interactive debugAnonFallback=$canUseDebugAnonymousFallback',
       );
       if (canUseDebugAnonymousFallback) {
@@ -146,7 +147,7 @@ class FirebaseGoogleAuthBridge {
     await configureRuntime();
 
     if (googleUser == null) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] ensureSignedInWithGoogleUser skipped: googleUser=null',
       );
       return false;
@@ -159,7 +160,7 @@ class FirebaseGoogleAuthBridge {
     if (current != null &&
         !current.isAnonymous &&
         normalizedCurrentEmail == normalizedGoogleEmail) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Firebase 사용자와 Google 사용자 이메일 일치 email=$normalizedGoogleEmail',
       );
       return true;
@@ -169,19 +170,19 @@ class FirebaseGoogleAuthBridge {
       final googleAuth = googleUser.authentication;
       final idToken = googleAuth.idToken;
 
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Google 인증 정보 수신 email=${googleUser.email} hasIdToken=${idToken != null && idToken.isNotEmpty}',
       );
 
       if (idToken == null || idToken.isEmpty) {
-        debugPrint(
+        SecureAuthDiagnostics.record(
           '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] FirebaseAuth 로그인 중단: idToken 없음',
         );
         return false;
       }
 
       if (current != null && current.isAnonymous) {
-        debugPrint(
+        SecureAuthDiagnostics.record(
           '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] 익명 Firebase 세션 정리 후 Google credential 로그인 진행',
         );
         await _auth.signOut();
@@ -191,13 +192,13 @@ class FirebaseGoogleAuthBridge {
       final result = await _auth.signInWithCredential(credential);
       final user = result.user;
 
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] FirebaseAuth Google 로그인 성공 uid=${user?.uid} email=${user?.email} anonymous=${user?.isAnonymous}',
       );
 
       return user != null;
     } catch (e, st) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] FirebaseAuth Google 로그인 실패 email=${googleUser.email}: $e\n$st',
       );
       return false;
@@ -207,7 +208,7 @@ class FirebaseGoogleAuthBridge {
   Future<bool> _signInAnonymouslyForDebug() async {
     final current = _auth.currentUser;
     if (current != null && current.isAnonymous) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug 익명 Firebase 세션 재사용 uid=${current.uid}',
       );
       return true;
@@ -215,12 +216,12 @@ class FirebaseGoogleAuthBridge {
 
     try {
       final result = await _auth.signInAnonymously();
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug 익명 Firebase 로그인 성공 uid=${result.user?.uid}',
       );
       return result.user != null;
     } catch (e, st) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug 익명 Firebase 로그인 실패: $e\n$st',
       );
       return false;
@@ -232,7 +233,7 @@ class FirebaseGoogleAuthBridge {
     await configureRuntime();
 
     if (!kDebugMode) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 인증 거부 reason=not_debug_build',
       );
       return null;
@@ -240,32 +241,32 @@ class FirebaseGoogleAuthBridge {
 
     final current = _auth.currentUser;
     if (current != null && current.isAnonymous) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 익명 세션 재사용 uid=${current.uid}',
       );
       return current;
     }
 
     if (current != null) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 비익명 세션 종료 uid=${current.uid} email=${current.email}',
       );
       await _auth.signOut();
     }
 
-    debugPrint(
+    SecureAuthDiagnostics.record(
       '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 익명 인증 시작',
     );
 
     try {
       final result = await _auth.signInAnonymously();
       final user = result.user;
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 익명 인증 성공 uid=${user?.uid} anonymous=${user?.isAnonymous}',
       );
       return user;
     } catch (error, stackTrace) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 익명 인증 실패: $error\n$stackTrace',
       );
       rethrow;
@@ -277,19 +278,19 @@ class FirebaseGoogleAuthBridge {
 
     final current = _auth.currentUser;
     if (current == null) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] signOutFirebaseOnly skipped: currentUser=null',
       );
       return;
     }
 
-    debugPrint(
+    SecureAuthDiagnostics.record(
       '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Firebase 로그아웃 uid=${current.uid} email=${current.email} anonymous=${current.isAnonymous}',
     );
 
     await _auth.signOut();
 
-    debugPrint(
+    SecureAuthDiagnostics.record(
       '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Firebase 로그아웃 완료',
     );
   }
@@ -299,11 +300,11 @@ class FirebaseGoogleAuthBridge {
 
     try {
       await GoogleSignIn.instance.signOut();
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Google 로그아웃 완료',
       );
     } catch (e, st) {
-      debugPrint(
+      SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Google 로그아웃 실패: $e\n$st',
       );
     }

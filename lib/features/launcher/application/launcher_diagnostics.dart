@@ -10,6 +10,7 @@ import '../../../app/init/app_start_debug_trace.dart';
 import '../../../app/init/startup_tasks.dart';
 import '../../../app/init/work_status_notification.dart';
 import '../../../app/utils/status_dialog.dart';
+import '../../../app/utils/secure_auth_diagnostics.dart';
 import '../../attendance/application/attendance_diagnostics.dart';
 import '../../selector/application/dev_auth.dart';
 import '../../../shared/area_remote_settings/application/area_snapshot_persistence.dart';
@@ -33,13 +34,14 @@ class LauncherDiagnostics {
       ...AreaSnapshotPersistence.debugLines,
       ...MotionTimingDiagnostics.lines,
       ...BuildOptimizationDiagnostics.lines,
+      ...SecureAuthDiagnostics.lines,
       ..._lines,
     ];
     if (merged.isEmpty) {
       return 'debugPrint(${jsonEncode('[LAUNCHER] 기록된 로그가 없습니다.')});';
     }
     return merged
-        .map((line) => 'debugPrint(${jsonEncode(line)});')
+        .map((line) => 'debugPrint(${jsonEncode(SecureAuthDiagnostics.redact(line))});')
         .join('\n');
   }
 
@@ -54,11 +56,15 @@ class LauncherDiagnostics {
       'scope=$scope',
       'event=$event',
     ];
-    for (final entry in meta.entries) {
-      fields.add('${entry.key}=${entry.value}');
+    if (kDebugMode) {
+      for (final entry in meta.entries) {
+        fields.add('${entry.key}=${entry.value}');
+      }
     }
-    final line = fields.join(' ');
-    debugPrint(line);
+    final line = SecureAuthDiagnostics.redact(fields.join(' '));
+    if (kDebugMode || DevAuth.devModeEnabled.value) {
+      debugPrint(line);
+    }
     _lines.add(line);
     if (_lines.length > 260) {
       _lines.removeRange(0, _lines.length - 260);
@@ -81,6 +87,7 @@ class LauncherDiagnostics {
       scope: scope,
       meta: <String, Object?>{
         'launcherLines': _lines.length,
+        'authLines': SecureAuthDiagnostics.lines.length,
         'startupLines': StartupTasks.debugLines.length,
         'workStatusNotificationLines':
             WorkStatusNotificationController.debugLines.length,

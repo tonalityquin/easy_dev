@@ -963,7 +963,7 @@ class _UserStatementSideDockState extends State<UserStatementSideDock> {
         ),
       );
 
-      return doc.save();
+      return await doc.save();
     } catch (e) {
       await _logApiError(
         tag: 'UserStatementSideDock._buildPdfBytes',

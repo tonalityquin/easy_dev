@@ -24,16 +24,29 @@ void _debug(Object? message) {
 }
 
 
+enum TabletIdentityFailureKind {
+  none,
+  invalidInput,
+  networkError,
+  accountNotFound,
+  nameMismatch,
+  ambiguousAccount,
+  invalidAccountData,
+  lookupError,
+}
+
 class TabletCredentialAuthenticationResult {
   const TabletCredentialAuthenticationResult({
     required this.success,
     required this.message,
     this.tablet,
+    this.failureKind = TabletIdentityFailureKind.none,
   });
 
   final bool success;
   final String message;
   final TabletModel? tablet;
+  final TabletIdentityFailureKind failureKind;
 }
 
 class TabletLoginController {
@@ -100,6 +113,7 @@ class TabletLoginController {
       return const TabletCredentialAuthenticationResult(
         success: false,
         message: '이름을 다시 확인하세요.',
+        failureKind: TabletIdentityFailureKind.invalidInput,
       );
     }
 
@@ -109,6 +123,7 @@ class TabletLoginController {
       return TabletCredentialAuthenticationResult(
         success: false,
         message: codeNumberError,
+        failureKind: TabletIdentityFailureKind.invalidInput,
       );
     }
 
@@ -117,6 +132,7 @@ class TabletLoginController {
       return const TabletCredentialAuthenticationResult(
         success: false,
         message: '네트워크 연결을 확인하세요.',
+        failureKind: TabletIdentityFailureKind.networkError,
       );
     }
 
@@ -141,9 +157,12 @@ class TabletLoginController {
       );
 
       if (matches.isEmpty) {
-        return const TabletCredentialAuthenticationResult(
+        return TabletCredentialAuthenticationResult(
           success: false,
           message: '입력한 계정 정보를 다시 확인하세요.',
+          failureKind: candidates.isEmpty
+              ? TabletIdentityFailureKind.accountNotFound
+              : TabletIdentityFailureKind.nameMismatch,
         );
       }
 
@@ -161,6 +180,7 @@ class TabletLoginController {
         return const TabletCredentialAuthenticationResult(
           success: false,
           message: '같은 계정 정보의 태블릿 계정이 여러 업무 지역에 존재합니다.',
+          failureKind: TabletIdentityFailureKind.ambiguousAccount,
         );
       }
 
@@ -173,6 +193,7 @@ class TabletLoginController {
         return const TabletCredentialAuthenticationResult(
           success: false,
           message: '태블릿 계정의 지역 정보가 없습니다.',
+          failureKind: TabletIdentityFailureKind.invalidAccountData,
         );
       }
 
@@ -197,6 +218,7 @@ class TabletLoginController {
       return const TabletCredentialAuthenticationResult(
         success: false,
         message: '태블릿형 계정 확인 중 오류가 발생했습니다.',
+        failureKind: TabletIdentityFailureKind.lookupError,
       );
     }
   }

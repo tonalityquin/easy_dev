@@ -1,8 +1,12 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../design_system/common_ui/common_ui_components.dart';
 import '../../design_system/common_ui/common_ui_theme.dart';
+import '../../features/selector/application/dev_auth.dart';
 
 enum StatusDialogTone {
   success,
@@ -11,6 +15,39 @@ enum StatusDialogTone {
 
 class StatusDialog {
   const StatusDialog._();
+
+  static final List<String> _debugLines = <String>[];
+
+  static List<String> get debugLines => List<String>.unmodifiable(_debugLines);
+
+  static String get debugPrintCode => _debugLines
+      .map((line) => 'debugPrint(${jsonEncode(line)});')
+      .join('\n');
+
+  static void _record(
+    String event, {
+    required String title,
+    required StatusDialogTone tone,
+    String description = '',
+  }) {
+    if (!DevAuth.devModeEnabled.value) return;
+    final trimmed = description.length > 400
+        ? '${description.substring(0, 400)}…'
+        : description;
+    final line = <String>[
+      '[STATUS_DIALOG]',
+      'timestamp=${DateTime.now().toIso8601String()}',
+      'event=$event',
+      'tone=${tone.name}',
+      'title=${jsonEncode(title)}',
+      if (trimmed.isNotEmpty) 'description=${jsonEncode(trimmed)}',
+    ].join(' ');
+    debugPrint(line);
+    _debugLines.add(line);
+    if (_debugLines.length > 200) {
+      _debugLines.removeRange(0, _debugLines.length - 200);
+    }
+  }
 
   static const String invalidPlateInput = '번호판 입력을 확인해주세요';
   static const String monthlyDocNotFound = '월정기 문서를 찾을 수 없습니다';
@@ -62,11 +99,34 @@ class StatusDialog {
     final pageNavigator = Navigator.of(context);
     final trimmedDescription = description?.trim() ?? '';
     final trimmedCopyText = copyText?.trim() ?? '';
+    final developerMode = DevAuth.devModeEnabled.value;
+    if (developerMode) {
+      _record(
+        'open',
+        title: title,
+        tone: tone,
+        description: trimmedDescription,
+      );
+    }
+    final currentDebugCode = developerMode ? debugPrintCode : '';
+    final effectiveCopyText = trimmedCopyText.isEmpty
+        ? currentDebugCode
+        : trimmedCopyText;
+    final debugCopyText = developerMode && trimmedCopyText.isNotEmpty &&
+            !trimmedCopyText.contains('debugPrint(')
+        ? currentDebugCode
+        : '';
     final reduceMotion =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final tokens = useCommonUi ? CommonUiTheme.of(context) : null;
     final effectiveTransition =
         reduceMotion ? Duration.zero : transitionDuration;
+    final effectiveVisibleDuration = developerMode &&
+            effectiveCopyText.isNotEmpty &&
+            visibleDuration > Duration.zero &&
+            visibleDuration < const Duration(seconds: 10)
+        ? const Duration(seconds: 10)
+        : visibleDuration;
 
     final route = RawDialogRoute<void>(
       barrierDismissible: false,
@@ -78,8 +138,11 @@ class StatusDialog {
           title: title,
           tone: tone,
           description: trimmedDescription,
-          copyText: trimmedCopyText,
-          copyButtonLabel: copyButtonLabel,
+          copyText: effectiveCopyText,
+          copyButtonLabel: trimmedCopyText.isEmpty && currentDebugCode.isNotEmpty
+              ? 'debugPrint 코드 복사'
+              : copyButtonLabel,
+          debugCopyText: debugCopyText,
           useCommonUi: useCommonUi,
           onClose: () {
             final navigator = Navigator.of(
@@ -120,8 +183,11 @@ class StatusDialog {
 
     final routeFuture = rootNavigator.push<void>(route);
 
-    if (visibleDuration > Duration.zero) {
-      await Future<void>.delayed(visibleDuration);
+    if (effectiveVisibleDuration > Duration.zero) {
+      await Future.any<void>(<Future<void>>[
+        routeFuture,
+        Future<void>.delayed(effectiveVisibleDuration),
+      ]);
 
       if (rootNavigator.mounted && route.isActive) {
         if (route.isCurrent && rootNavigator.canPop()) {
@@ -226,6 +292,7 @@ class _StatusDialogSurface extends StatefulWidget {
     required this.description,
     required this.copyText,
     required this.copyButtonLabel,
+    required this.debugCopyText,
     required this.useCommonUi,
     required this.onClose,
   });
@@ -235,6 +302,7 @@ class _StatusDialogSurface extends StatefulWidget {
   final String description;
   final String copyText;
   final String copyButtonLabel;
+  final String debugCopyText;
   final bool useCommonUi;
   final VoidCallback onClose;
 
@@ -244,12 +312,30 @@ class _StatusDialogSurface extends StatefulWidget {
 
 class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
   bool _copied = false;
+  bool _debugCopied = false;
 
   Future<void> _copy() async {
     if (widget.copyText.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: widget.copyText));
-    if (!mounted) return;
-    setState(() => _copied = true);
+    try {
+      await Clipboard.setData(ClipboardData(text: widget.copyText));
+      if (!mounted) return;
+      setState(() => _copied = true);
+      StatusDialog._record('copy', title: widget.title, tone: widget.tone);
+    } catch (error) {
+      debugPrint('[STATUS_DIALOG] copy_failed: $error');
+    }
+  }
+
+  Future<void> _copyDebug() async {
+    if (widget.debugCopyText.isEmpty) return;
+    try {
+      await Clipboard.setData(ClipboardData(text: widget.debugCopyText));
+      if (!mounted) return;
+      setState(() => _debugCopied = true);
+      StatusDialog._record('debug_copy', title: widget.title, tone: widget.tone);
+    } catch (error) {
+      debugPrint('[STATUS_DIALOG] debug_copy_failed: $error');
+    }
   }
 
   @override
@@ -327,9 +413,13 @@ class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
                   description: widget.description,
                   hasDescription: widget.description.isNotEmpty,
                   hasCopyText: widget.copyText.isNotEmpty,
+                  hasDebugCopyText: widget.debugCopyText.isNotEmpty,
+                  debugCopied: _debugCopied,
+                  onDebugCopy: widget.debugCopyText.isNotEmpty ? _copyDebug : null,
                   copyButtonLabel:
                       _copied ? '복사 완료' : widget.copyButtonLabel,
                   onCopy: widget.copyText.isNotEmpty ? _copy : null,
+                  copied: _copied,
                   onClose: widget.onClose,
                   useCommonUi: widget.useCommonUi,
                 ),
@@ -349,8 +439,12 @@ class _StatusDialogContent extends StatelessWidget {
     required this.description,
     required this.hasDescription,
     required this.hasCopyText,
+    required this.hasDebugCopyText,
+    required this.debugCopied,
+    required this.onDebugCopy,
     required this.copyButtonLabel,
     required this.onCopy,
+    required this.copied,
     required this.onClose,
     required this.useCommonUi,
   });
@@ -360,8 +454,12 @@ class _StatusDialogContent extends StatelessWidget {
   final String description;
   final bool hasDescription;
   final bool hasCopyText;
+  final bool hasDebugCopyText;
+  final bool debugCopied;
+  final VoidCallback? onDebugCopy;
   final String copyButtonLabel;
   final VoidCallback? onCopy;
+  final bool copied;
   final VoidCallback onClose;
   final bool useCommonUi;
 
@@ -416,10 +514,25 @@ class _StatusDialogContent extends StatelessWidget {
                     )
                   : null,
             ),
-            child: Icon(
-              StatusDialog.iconFor(tone),
-              size: 34,
-              color: accent,
+            child: AnimatedScale(
+              scale: copied ? 1.12 : 1,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              curve: CommonUiMotion.enter,
+              child: AnimatedSwitcher(
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                switchInCurve: CommonUiMotion.enter,
+                switchOutCurve: CommonUiMotion.exit,
+                transitionBuilder: (child, animation) => ScaleTransition(
+                  scale: Tween<double>(begin: 0.78, end: 1).animate(animation),
+                  child: FadeTransition(opacity: animation, child: child),
+                ),
+                child: Icon(
+                  copied ? Icons.check_circle_rounded : StatusDialog.iconFor(tone),
+                  key: ValueKey<bool>(copied),
+                  size: 34,
+                  color: accent,
+                ),
+              ),
             ),
           ),
         ),
@@ -436,11 +549,25 @@ class _StatusDialogContent extends StatelessWidget {
           const SizedBox(height: 10),
           Flexible(
             child: SingleChildScrollView(
-              child: SelectableText(
-                description,
-                textAlign: TextAlign.center,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: descriptionColor,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: 1),
+                duration: reduceMotion
+                    ? Duration.zero
+                    : CommonUiMotion.component,
+                curve: CommonUiMotion.enter,
+                builder: (context, progress, child) => Opacity(
+                  opacity: progress,
+                  child: Transform.translate(
+                    offset: Offset(0, 8 * (1 - progress)),
+                    child: child,
+                  ),
+                ),
+                child: SelectableText(
+                  description,
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: descriptionColor,
+                  ),
                 ),
               ),
             ),
@@ -454,25 +581,47 @@ class _StatusDialogContent extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                AnimatedSwitcher(
+                AnimatedScale(
+                  scale: copied ? 1.025 : 1,
                   duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                  switchInCurve: CommonUiMotion.enter,
-                  switchOutCurve: CommonUiMotion.exit,
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: ScaleTransition(
-                      scale: Tween<double>(begin: 0.96, end: 1).animate(animation),
-                      child: child,
+                  curve: CommonUiMotion.enter,
+                  child: AnimatedSwitcher(
+                    duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    switchInCurve: CommonUiMotion.enter,
+                    switchOutCurve: CommonUiMotion.exit,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(begin: 0.96, end: 1).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: CommonButton(
+                      key: ValueKey<String>(copyButtonLabel),
+                      label: copyButtonLabel,
+                      icon: Icons.copy_rounded,
+                      onPressed: onCopy,
+                      haptic: CommonHaptic.selection,
                     ),
                   ),
-                  child: CommonButton(
-                    key: ValueKey<String>(copyButtonLabel),
-                    label: copyButtonLabel,
-                    icon: Icons.copy_rounded,
-                    onPressed: onCopy,
-                    haptic: CommonHaptic.selection,
-                  ),
                 ),
+                if (hasDebugCopyText)
+                  AnimatedSwitcher(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : CommonUiMotion.selection,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(scale: animation, child: child),
+                    ),
+                    child: CommonButton(
+                      key: ValueKey<bool>(debugCopied),
+                      label: debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
+                      icon: debugCopied ? Icons.check_rounded : Icons.code_rounded,
+                      onPressed: onDebugCopy,
+                      haptic: CommonHaptic.selection,
+                    ),
+                  ),
                 CommonButton(
                   label: '닫기',
                   icon: Icons.close_rounded,
@@ -488,24 +637,46 @@ class _StatusDialogContent extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                AnimatedSwitcher(
+                AnimatedScale(
+                  scale: copied ? 1.025 : 1,
                   duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: ScaleTransition(
-                      scale: Tween<double>(begin: 0.96, end: 1).animate(animation),
-                      child: child,
+                  curve: Curves.easeOutCubic,
+                  child: AnimatedSwitcher(
+                    duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(begin: 0.96, end: 1).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: ElevatedButton.icon(
+                      key: ValueKey<String>(copyButtonLabel),
+                      onPressed: onCopy,
+                      icon: const Icon(Icons.copy_rounded, size: 18),
+                      label: Text(copyButtonLabel),
                     ),
                   ),
-                  child: ElevatedButton.icon(
-                    key: ValueKey<String>(copyButtonLabel),
-                    onPressed: onCopy,
-                    icon: const Icon(Icons.copy_rounded, size: 18),
-                    label: Text(copyButtonLabel),
-                  ),
                 ),
+                if (hasDebugCopyText)
+                  AnimatedSwitcher(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180),
+                    child: OutlinedButton.icon(
+                      key: ValueKey<bool>(debugCopied),
+                      onPressed: onDebugCopy,
+                      icon: Icon(
+                        debugCopied ? Icons.check_rounded : Icons.code_rounded,
+                        size: 18,
+                      ),
+                      label: Text(
+                        debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
+                      ),
+                    ),
+                  ),
                 TextButton(
                   onPressed: onClose,
                   child: const Text('닫기'),

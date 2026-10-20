@@ -493,7 +493,7 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
           cachedPlate: null,
           loadPlate: () async {
             final startedAt = DateTime.now();
-            trace!.log(
+            trace?.log(
               'plateDetailLoad=start source=$source plateId=$plateId collection=$collection expectedPlateType=$expectedPlateType cache=disabled repository=PlateRepository.getPlate',
               progress: .42,
             );
@@ -508,7 +508,7 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
               final mismatch = plate != null &&
                   expectedPlateType != '-' &&
                   actualPlateType != expectedPlateType;
-              trace.log(
+              trace?.log(
                 'plateDetailLoad=success source=$source plateId=$plateId found=${plate != null} expectedPlateType=$expectedPlateType actualPlateType=$actualPlateType viewPlateTypeMismatch=$mismatch elapsedMs=$elapsedMs cache=disabled',
                 progress: .62,
               );
@@ -519,7 +519,7 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
             } catch (error, stackTrace) {
               final elapsedMs =
                   DateTime.now().difference(startedAt).inMilliseconds;
-              trace.log(
+              trace?.log(
                 'plateDetailLoad=failure source=$source plateId=$plateId expectedPlateType=$expectedPlateType elapsedMs=$elapsedMs cache=disabled error=$error',
                 progress: .62,
               );
