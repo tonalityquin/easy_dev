@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -34,6 +36,27 @@ import 'features/headquarter/widgets/headquarter_side_dock_edge_handle.dart';
 import 'shared/tts/application/plate_tts_event_hub.dart';
 
 String _ts() => DateTime.now().toIso8601String();
+
+bool _appCheckDebugTokenDiagnosticStarted = false;
+
+Future<void> _diagnoseAppCheckTokenOnce() async {
+  SecureAuthDiagnostics.record(
+    '[APP_CHECK][${_ts()}] token_fetch_started',
+  );
+
+  try {
+    final token = await FirebaseAppCheck.instance.getToken(true);
+    final succeeded = token != null && token.isNotEmpty;
+
+    SecureAuthDiagnostics.record(
+      '[APP_CHECK][${_ts()}] token_fetch_${succeeded ? 'success' : 'empty'}',
+    );
+  } catch (error) {
+    SecureAuthDiagnostics.record(
+      '[APP_CHECK][${_ts()}] token_fetch_failed type=${error.runtimeType}',
+    );
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -168,6 +191,29 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
     SecureAuthDiagnostics.record('[MAIN][${_ts()}] Firebase.initializeApp');
     await Firebase.initializeApp();
+
+    final appCheckProvider =
+        kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity;
+    SecureAuthDiagnostics.record(
+      '[APP_CHECK][${_ts()}] activation_started provider=${kDebugMode ? 'debug' : 'play_integrity'}',
+    );
+    try {
+      await FirebaseAppCheck.instance.activate(
+        androidProvider: appCheckProvider,
+      );
+      SecureAuthDiagnostics.record(
+        '[APP_CHECK][${_ts()}] activation_completed',
+      );
+
+      if (kDebugMode && !_appCheckDebugTokenDiagnosticStarted) {
+        _appCheckDebugTokenDiagnosticStarted = true;
+        unawaited(_diagnoseAppCheckTokenOnce());
+      }
+    } catch (error) {
+      SecureAuthDiagnostics.record(
+        '[APP_CHECK][${_ts()}] activation_failed type=${error.runtimeType}',
+      );
+    }
 
     SecureAuthDiagnostics.record('[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime');
     try {

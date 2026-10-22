@@ -2,7 +2,7 @@ name: easydev
 description: "backend+frontend prototype project"
 publish_to: 'none'
 
-version: 1.1.1+517
+version: 1.1.1+519
 
 environment:
   sdk: ">=3.5.4 <4.0.0"
@@ -26,6 +26,7 @@ dependencies:
   firebase_auth: ^5.5.2
   cloud_firestore: ^5.6.6
   firebase_storage: ^12.4.5
+  firebase_app_check: 0.3.2+10
 
   shared_preferences: ^2.5.3
   flutter_local_notifications: ^19.3.0

@@ -22,29 +22,8 @@ class AppExitService {
     bool useCommonUi = false,
   }) async {
     AppExitFlag.beginExit();
-
     try {
-      await WorkStatusNotificationController.shutdownForAppExit(
-        source: 'app_exit_service_primary',
-      );
-
-      try {
-        await GameQuickActions.terminateSession();
-      } catch (_) {}
-
-      if (Platform.isAndroid) {
-        await _stopAndroidServices();
-      }
-
-      final workNotificationVerified =
-          await WorkStatusNotificationController.shutdownForAppExit(
-        source: 'app_exit_service_verify',
-      );
-      if (!workNotificationVerified) {
-        throw StateError('근무 세션 알림 종료를 확인하지 못했습니다.');
-      }
-
-      await ChillStore.instance.cancelProtectedSubmissionNotifications();
+      await _prepareForAppStop(source: 'app_exit_service');
       await _closeApplication();
     } catch (e) {
       AppExitFlag.reset();
@@ -57,6 +36,61 @@ class AppExitService {
         useCommonUi: useCommonUi,
       );
     }
+  }
+
+  static Future<bool> restartApp(
+    BuildContext context, {
+    bool useCommonUi = false,
+  }) async {
+    AppExitFlag.beginExit();
+    try {
+      if (!Platform.isAndroid) {
+        throw UnsupportedError('Android 앱 자동 재시작만 지원합니다.');
+      }
+      await _prepareForAppStop(source: 'app_restart_service');
+      debugPrint('[AppExitService] restart_native_requested');
+      await _androidExitChannel.invokeMethod<void>('restartApp');
+      debugPrint('[AppExitService] restart_native_accepted');
+      return true;
+    } catch (error) {
+      debugPrint(
+        '[AppExitService] restart_native_failed errorType=${error.runtimeType}',
+      );
+      AppExitFlag.reset();
+      await WorkStatusNotificationController.resumeAfterFailedAppExit(
+        source: 'app_restart_service_failure',
+      );
+      _showFailure(
+        context,
+        '앱 재시작 실패: ${error.runtimeType}',
+        useCommonUi: useCommonUi,
+      );
+      return false;
+    }
+  }
+
+  static Future<void> _prepareForAppStop({required String source}) async {
+    await WorkStatusNotificationController.shutdownForAppExit(
+      source: '${source}_primary',
+    );
+
+    try {
+      await GameQuickActions.terminateSession();
+    } catch (_) {}
+
+    if (Platform.isAndroid) {
+      await _stopAndroidServices();
+    }
+
+    final workNotificationVerified =
+        await WorkStatusNotificationController.shutdownForAppExit(
+      source: '${source}_verify',
+    );
+    if (!workNotificationVerified) {
+      throw StateError('근무 세션 알림 종료를 확인하지 못했습니다.');
+    }
+
+    await ChillStore.instance.cancelProtectedSubmissionNotifications();
   }
 
   static Future<void> _stopAndroidServices() async {

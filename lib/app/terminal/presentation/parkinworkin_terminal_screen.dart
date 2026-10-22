@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../utils/motion_timing_diagnostics.dart';
+import '../../../features/launcher/application/launcher_actions.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
 import '../../../features/launcher/application/mode_launcher_controller.dart';
 import '../../../features/launcher/application/terminal_auth_coordinator.dart';
@@ -685,6 +686,8 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       await _finalizeLauncherAndNavigate(
         result.targetRoute!,
         source: 'launcher_submit_result',
+        requiresManualGoogleLoginRestart:
+            result.requiresManualGoogleLoginRestart,
       );
       return;
     }
@@ -962,6 +965,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   Future<void> _finalizeLauncherAndNavigate(
     String route, {
     required String source,
+    bool requiresManualGoogleLoginRestart = false,
   }) async {
     if (!_isLauncher ||
         !mounted ||
@@ -1037,6 +1041,11 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         },
       );
       if (!mounted || _interactionLocked) return;
+      if (requiresManualGoogleLoginRestart &&
+          await _showManualGoogleLoginRestartNotice()) {
+        return;
+      }
+      if (!mounted || _interactionLocked) return;
       final navigationRoute = await _resolveActiveWorkSessionNavigationTarget(
         route,
         source: source,
@@ -1045,6 +1054,42 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       await _closeLauncherAndNavigate(navigationRoute);
     } finally {
       _launcherNavigationFinalizing = false;
+    }
+  }
+
+  Future<bool> _showManualGoogleLoginRestartNotice() async {
+    if (!_isLauncher || !mounted || _interactionLocked) return false;
+    try {
+      LauncherDiagnostics.record(
+        'manual_google_login_restart_notice_shown',
+        scope: 'auth',
+        meta: const <String, Object?>{
+          'loginMethod': 'google',
+          'automaticSessionRestore': false,
+        },
+      );
+      ParkinWorkinTerminalDiagnostics.record(
+        'manual_google_login_restart_notice_open',
+        context: _contextLabel,
+      );
+      _commandInputFocusNode.unfocus();
+      await _showLauncherDialog(
+        builder: (dialogContext) => _LauncherRestartNoticeDialog(
+          reduceMotion: _reduceMotion,
+          onStatus: _showDeveloperStatus,
+          onOpened: _handleLauncherDialogOpened,
+        ),
+      );
+      return true;
+    } catch (error) {
+      LauncherDiagnostics.record(
+        'manual_google_login_restart_notice_failed',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'errorType': error.runtimeType.toString(),
+        },
+      );
+      return false;
     }
   }
 
@@ -5064,6 +5109,126 @@ class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
     _controller.removeStatusListener(_handleStatus);
     _controller.dispose();
     super.dispose();
+  }
+}
+
+class _LauncherRestartNoticeDialog extends StatefulWidget {
+  const _LauncherRestartNoticeDialog({
+    required this.reduceMotion,
+    required this.onStatus,
+    required this.onOpened,
+  });
+
+  final bool reduceMotion;
+  final VoidCallback onStatus;
+  final VoidCallback onOpened;
+
+  @override
+  State<_LauncherRestartNoticeDialog> createState() =>
+      _LauncherRestartNoticeDialogState();
+}
+
+class _LauncherRestartNoticeDialogState
+    extends State<_LauncherRestartNoticeDialog> {
+  static const String _notice =
+      "로그인한 계정과 앱 사용의 안정화를 위해 하단의 '재시작' 버튼을 눌러 앱을 다시 시작해주세요.";
+
+  bool _opened = false;
+  bool _typingCompleted = false;
+  bool _restarting = false;
+
+  void _handleOpened() {
+    if (!mounted) return;
+    setState(() => _opened = true);
+    widget.onOpened();
+  }
+
+  Future<void> _restart() async {
+    if (_restarting || !_typingCompleted) return;
+    setState(() => _restarting = true);
+    try {
+      await HapticFeedback.mediumImpact();
+      if (!mounted) return;
+      LauncherDiagnostics.record(
+        'manual_google_login_restart_pressed',
+        scope: 'auth',
+      );
+      final accepted = await LauncherActions.restartApp(context);
+      if (!accepted && mounted) {
+        setState(() => _restarting = false);
+      }
+    } catch (error) {
+      LauncherDiagnostics.record(
+        'manual_google_login_restart_request_failed',
+        scope: 'auth',
+        meta: <String, Object?>{'errorType': error.runtimeType.toString()},
+      );
+      if (mounted) setState(() => _restarting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: _MiniTerminalFrame(
+        title: 'APP RESTART',
+        reduceMotion: widget.reduceMotion,
+        onStatus: widget.onStatus,
+        onOpenCompleted: _handleOpened,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'SYSTEM NOTICE',
+              style: TextStyle(
+                color: _terminalWarning,
+                fontFamily: 'monospace',
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_opened)
+              TweenAnimationBuilder<int>(
+                tween: IntTween(begin: 0, end: _notice.length),
+                duration: widget.reduceMotion
+                    ? Duration.zero
+                    : Duration(milliseconds: _notice.length * 24),
+                curve: Curves.linear,
+                builder: (context, visibleLength, _) => Text(
+                  _notice.substring(0, visibleLength),
+                  style: const TextStyle(
+                    color: _terminalText,
+                    fontFamily: 'monospace',
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    height: 1.55,
+                  ),
+                ),
+                onEnd: () {
+                  if (mounted) setState(() => _typingCompleted = true);
+                },
+              )
+            else
+              const SizedBox(height: 72),
+            const SizedBox(height: 18),
+            Align(
+              alignment: Alignment.centerRight,
+              child: _TerminalDialogActionButton(
+                label: '재시작',
+                busy: _restarting,
+                enabled: _typingCompleted && !_restarting,
+                reduceMotion: widget.reduceMotion,
+                onPressed: _restart,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -56,11 +56,13 @@ class ModeLauncherSubmitResult {
     this.routeReplaced = false,
     this.surfaceCompletion,
     this.targetRoute,
+    this.requiresManualGoogleLoginRestart = false,
   });
 
   final bool routeReplaced;
   final Future<void>? surfaceCompletion;
   final String? targetRoute;
+  final bool requiresManualGoogleLoginRestart;
 }
 
 class LauncherCredentialSubmitResult {
@@ -158,6 +160,7 @@ class ModeLauncherController extends ChangeNotifier {
   TerminalAccountKind? _selectedAccountKind;
   TerminalAuthenticatedAccount? _authenticatedAccount;
   TerminalAuthenticatedAccount? _pendingManualAccount;
+  bool _manualGoogleLoginSucceeded = false;
   List<LauncherWorkAreaOption> _availableWorkAreas = <LauncherWorkAreaOption>[];
   LauncherWorkAreaOption? _selectedWorkArea;
   List<AppModeDefinition> _supportedModes = <AppModeDefinition>[];
@@ -3572,8 +3575,10 @@ class ModeLauncherController extends ChangeNotifier {
       },
     );
     notifyListeners();
-    return const ModeLauncherSubmitResult(
+    return ModeLauncherSubmitResult(
       targetRoute: AppRoutes.headquarterCommute,
+      requiresManualGoogleLoginRestart:
+          !restoredSession && _manualGoogleLoginSucceeded,
     );
   }
 
@@ -3685,7 +3690,11 @@ class ModeLauncherController extends ChangeNotifier {
       },
     );
     notifyListeners();
-    return ModeLauncherSubmitResult(targetRoute: targetRoute);
+    return ModeLauncherSubmitResult(
+      targetRoute: targetRoute,
+      requiresManualGoogleLoginRestart:
+          !restoredSession && _manualGoogleLoginSucceeded,
+    );
   }
 
   Future<LauncherCredentialSubmitResult> resolveCredentials(
@@ -3700,6 +3709,7 @@ class ModeLauncherController extends ChangeNotifier {
         authenticationError: '계정 확인을 시작할 수 없습니다.',
       );
     }
+    _manualGoogleLoginSucceeded = false;
     final kind = _selectedAccountKind;
     if (kind == null) {
       _resetAccountSelection();
@@ -4010,6 +4020,7 @@ class ModeLauncherController extends ChangeNotifier {
       context,
       account: authenticated,
       reduceMotion: reduceMotion,
+      manualGoogleLogin: true,
     );
   }
 
@@ -4252,6 +4263,7 @@ class ModeLauncherController extends ChangeNotifier {
       context,
       account: authenticated,
       reduceMotion: reduceMotion,
+      manualGoogleLogin: false,
     );
   }
 
@@ -4346,6 +4358,7 @@ class ModeLauncherController extends ChangeNotifier {
       context,
       account: authenticated,
       reduceMotion: reduceMotion,
+      manualGoogleLogin: true,
     );
   }
 
@@ -4353,8 +4366,18 @@ class ModeLauncherController extends ChangeNotifier {
     BuildContext context, {
     required TerminalAuthenticatedAccount account,
     required bool reduceMotion,
+    required bool manualGoogleLogin,
   }) async {
+    _manualGoogleLoginSucceeded = manualGoogleLogin;
     _authenticatedAccount = account;
+    LauncherDiagnostics.record(
+      'auth_manual_login_method_confirmed',
+      scope: 'auth',
+      meta: <String, Object?>{
+        'loginMethod': manualGoogleLogin ? 'google' : 'developer_password',
+        'requiresRestart': manualGoogleLogin,
+      },
+    );
     _availableWorkAreas = <LauncherWorkAreaOption>[];
     _selectedWorkArea = null;
     _supportedModes = account.supportedModes;

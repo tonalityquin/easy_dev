@@ -83,4 +83,17 @@ class LauncherActions {
     LauncherDiagnostics.record('exit_app');
     await AppExitService.exitApp(context, useCommonUi: true);
   }
+
+  static Future<bool> restartApp(BuildContext context) async {
+    LauncherDiagnostics.record('restart_app_requested', scope: 'auth');
+    final accepted = await AppExitService.restartApp(
+      context,
+      useCommonUi: true,
+    );
+    LauncherDiagnostics.record(
+      accepted ? 'restart_app_native_accepted' : 'restart_app_failed',
+      scope: 'auth',
+    );
+    return accepted;
+  }
 }

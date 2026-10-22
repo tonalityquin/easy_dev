@@ -16,6 +16,7 @@ import '../../init/startup_tasks.dart';
 import '../../init/work_status_notification.dart';
 import '../../theme/theme_debug_trace.dart';
 import '../../utils/status_dialog.dart';
+import '../../utils/secure_auth_diagnostics.dart';
 
 class ParkinWorkinTerminalDiagnostics {
   const ParkinWorkinTerminalDiagnostics._();
@@ -52,6 +53,7 @@ class ParkinWorkinTerminalDiagnostics {
       ...WorkStatusNotificationController.debugLines,
       ...AppStartDebugTrace.lines,
       ...LauncherDiagnostics.lines,
+      ...SecureAuthDiagnostics.lines,
       ...TabletAccountDiagnostics.lines,
       ...AppCommandDiagnostics.lines,
       ...GmailSenderDiagnostics.lines,
