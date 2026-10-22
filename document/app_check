@@ -1,0 +1,9 @@
+1. LogCat 탭의 검색 필드에 'DebugAppCheckProvider' 입력
+
+2. 앱 실행
+
+3. 출력되는 최하단 디버깅 코드를 copy하여 토큰만 별도 복사
+
+4. firestore database->app check->앱->더보기 버튼->디버깅 토큰 관리->삽입
+
+5. app check->API->Cloud Store->요청 단위 짧게 줄여서 요청 상태 확인
