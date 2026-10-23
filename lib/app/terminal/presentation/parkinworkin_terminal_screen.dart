@@ -14,6 +14,7 @@ import '../../auth/gmail_sender_auth.dart';
 import '../../config/email_config.dart';
 import '../../../features/selector/application/dev_auth.dart';
 import '../../../features/dev/application/developer_account_authorization.dart';
+import '../../../features/dev/application/developer_login_gate_service.dart';
 import '../../../shared/auth/account_code_number.dart';
 import '../../../features/dev/presentation/debug_caution_surface.dart';
 import '../../command/application/app_command_registry.dart';
@@ -5508,10 +5509,16 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       },
     );
 
-    final authorized =
+    final gmailAuthorized =
         await DeveloperAccountAuthorization.authorizeInteractive(
       source: 'launcher_terminal_manual_auth',
     );
+    if (!mounted) return;
+
+    final authorized = gmailAuthorized &&
+        await DeveloperLoginGateService.verify(
+          source: 'launcher_terminal_manual_auth',
+        );
     if (!mounted) return;
 
     if (!authorized) {
@@ -5695,20 +5702,26 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
               ),
               const SizedBox(height: 14),
             ],
-            AnimatedSwitcher(
+            AnimatedSize(
               duration: widget.reduceMotion
                   ? Duration.zero
-                  : const Duration(milliseconds: 180),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: .96, end: 1).animate(animation),
-                  child: child,
+                  : const Duration(milliseconds: 220),
+              curve: Curves.easeInOutCubic,
+              alignment: Alignment.topCenter,
+              child: AnimatedSwitcher(
+                duration: widget.reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: .96, end: 1).animate(animation),
+                    child: child,
+                  ),
                 ),
-              ),
-              child: _developerPasswordMode
+                child: _developerPasswordMode
                   ? AnimatedContainer(
                       key: const ValueKey<String>('developer_password_enabled'),
                       duration: widget.reduceMotion
@@ -5753,6 +5766,7 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
                   : const SizedBox.shrink(
                       key: ValueKey<String>('developer_password_disabled'),
                     ),
+              ),
             ),
             _TerminalDialogField(
               label: ModeLauncherController.nameDisplayLabel,

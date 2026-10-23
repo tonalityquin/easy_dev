@@ -26,6 +26,7 @@ import '../../../app/init/work_status_notification.dart';
 import '../../../app/init/startup_tasks.dart';
 import '../../dev/application/debug_session_controller.dart';
 import '../../dev/application/developer_account_authorization.dart';
+import '../../dev/application/developer_login_gate_service.dart';
 import '../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../dev/page/dialogs/plate_billing_count_dialog.dart';
 import '../../dev/page/sheets/dev_quick_actions.dart';
@@ -4196,6 +4197,41 @@ class ModeLauncherController extends ChangeNotifier {
       _enteredPassword = '';
       return const LauncherCredentialSubmitResult(
         authenticationError: '비밀번호 인증을 완료하지 못했습니다.',
+      );
+    }
+
+    final gateAuthorized = await DeveloperLoginGateService.verify(
+      source: 'launcher_developer_password_submit',
+    );
+    if (_disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      _enteredPassword = '';
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '비밀번호 인증을 완료하지 못했습니다.',
+      );
+    }
+    if (!gateAuthorized) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      _enteredPassword = '';
+      _errorSerial += 1;
+      LauncherDiagnostics.record(
+        'auth_developer_server_gate_denied',
+        scope: 'launcher_developer_password_auth',
+      );
+      notifyListeners();
+      await LauncherDiagnostics.showStatus(
+        context,
+        title: '개발자 Firebase 인증 실패',
+        description: '개발자 Google/Firebase 선행 인증 로그를 확인할 수 있습니다.',
+        scope: 'launcher_developer_password_auth',
+        failure: true,
+      );
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '개발자 계정 인증에 실패했습니다.',
       );
     }
 

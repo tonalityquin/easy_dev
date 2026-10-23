@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../app/terminal/application/parkinworkin_terminal_diagnostics.dart';
 import '../../selector/application/dev_auth.dart';
 import 'developer_account_authorization.dart';
+import 'developer_login_gate_service.dart';
 
 class DebugSessionController {
   DebugSessionController._();
@@ -33,6 +34,24 @@ class DebugSessionController {
         source: source,
         meta: const <String, Object?>{
           'reason': 'developer_authorization_required',
+        },
+      );
+      return false;
+    }
+
+    final gateAuthorized = await DeveloperLoginGateService.verify(
+      source: 'debug_session_enable_$source',
+    );
+    if (!gateAuthorized) {
+      final wasEnabled = await DevAuth.isDevModeEnabled();
+      if (wasEnabled) {
+        await DevAuth.setDevModeEnabled(false);
+      }
+      record(
+        'debug_session_enable_denied',
+        source: source,
+        meta: const <String, Object?>{
+          'reason': 'developer_server_gate_denied',
         },
       );
       return false;
