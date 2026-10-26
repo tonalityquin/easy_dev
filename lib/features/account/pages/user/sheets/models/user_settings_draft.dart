@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../../shared/auth/account_code_number.dart';
-import '../widgets/user_role_type_section.dart';
 
 class UserSettingsDraft {
   UserSettingsDraft({
@@ -10,12 +9,13 @@ class UserSettingsDraft {
     required this.codeEntryMode,
     required this.emailLocal,
     required this.position,
-    required this.role,
+    Set<String> permissionKeys = const <String>{},
     required Set<String> modes,
     required Map<String, TimeOfDay?> startByDay,
     required Map<String, TimeOfDay?> endByDay,
     required Set<String> breakDays,
-  })  : modes = Set<String>.unmodifiable(modes),
+  })  : permissionKeys = Set<String>.unmodifiable(permissionKeys),
+        modes = Set<String>.unmodifiable(modes),
         startByDay = Map<String, TimeOfDay?>.unmodifiable(startByDay),
         endByDay = Map<String, TimeOfDay?>.unmodifiable(endByDay),
         breakDays = Set<String>.unmodifiable(breakDays);
@@ -25,7 +25,7 @@ class UserSettingsDraft {
   final UserCodeEntryMode codeEntryMode;
   final String emailLocal;
   final String position;
-  final RoleType role;
+  final Set<String> permissionKeys;
   final Set<String> modes;
   final Map<String, TimeOfDay?> startByDay;
   final Map<String, TimeOfDay?> endByDay;
@@ -37,7 +37,7 @@ class UserSettingsDraft {
     UserCodeEntryMode? codeEntryMode,
     String? emailLocal,
     String? position,
-    RoleType? role,
+    Set<String>? permissionKeys,
     Set<String>? modes,
     Map<String, TimeOfDay?>? startByDay,
     Map<String, TimeOfDay?>? endByDay,
@@ -49,7 +49,7 @@ class UserSettingsDraft {
       codeEntryMode: codeEntryMode ?? this.codeEntryMode,
       emailLocal: emailLocal ?? this.emailLocal,
       position: position ?? this.position,
-      role: role ?? this.role,
+      permissionKeys: permissionKeys ?? this.permissionKeys,
       modes: modes ?? this.modes,
       startByDay: startByDay ?? this.startByDay,
       endByDay: endByDay ?? this.endByDay,
@@ -64,7 +64,7 @@ class UserSettingsDraft {
       codeEntryMode: codeEntryMode,
       emailLocal: emailLocal,
       position: position,
-      role: role,
+      permissionKeys: permissionKeys,
       modes: modes,
       startByDay: startByDay,
       endByDay: endByDay,

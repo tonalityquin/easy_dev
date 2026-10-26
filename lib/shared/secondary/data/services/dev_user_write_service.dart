@@ -72,6 +72,8 @@ class DevUserWriteService {
   Map<String, dynamic> _projectionPayload(UserModel user) {
     final map = Map<String, dynamic>.from(user.toMap());
     map['password'] = FieldValue.delete();
+    map['passwordHash'] = FieldValue.delete();
+    map['passwordSalt'] = FieldValue.delete();
     map['startTime'] = FieldValue.delete();
     map['endTime'] = FieldValue.delete();
     return map;
@@ -178,6 +180,15 @@ class DevUserWriteService {
       return;
     }
 
+    final divisionRef = _firestore.collection('divisions').doc(division);
+    final before = await divisionRef.get(const GetOptions(source: Source.server));
+    if (!before.exists || before.data()?['accountWriteLocked'] == true ||
+        before.data()?['lifecycleStatus'] == 'closed' ||
+        before.data()?['lifecycleStatus'] == 'closing') {
+      throw StateError('COMPANY_ACCOUNT_WRITE_BLOCKED:$division');
+    }
+    final expectedVersion = before.data()?['accountWriteVersion'] is int
+        ? before.data()!['accountWriteVersion'] as int : 0;
     final usersSnap = await showRef.collection('users').get();
     var active = 0;
     var inactive = 0;
@@ -193,15 +204,30 @@ class DevUserWriteService {
       activeCount: active,
       inactiveCount: inactive,
     );
-    await showRef.set(
-      <String, dynamic>{
+    await _firestore.runTransaction((tx) async {
+      final currentDivision = await tx.get(divisionRef);
+      final currentMeta = await tx.get(showRef);
+      final currentVersion = currentDivision.data()?['accountWriteVersion'] is int
+          ? currentDivision.data()!['accountWriteVersion'] as int : 0;
+      if (currentVersion != expectedVersion ||
+          currentDivision.data()?['accountWriteLocked'] == true ||
+          currentDivision.data()?['lifecycleStatus'] == 'closed' ||
+          currentDivision.data()?['lifecycleStatus'] == 'closing' ||
+          currentMeta.data()?['totalCount'] != metaSnap.data()?['totalCount'] ||
+          currentMeta.data()?['activeCount'] != metaSnap.data()?['activeCount'] ||
+          currentMeta.data()?['inactiveCount'] != metaSnap.data()?['inactiveCount']) {
+        throw StateError('COUNT_REBUILD_CONCURRENT_CHANGE:$division/$area');
+      }
+      tx.set(showRef, <String, dynamic>{
         'division': division,
         'area': area,
         ...counts.toMap(),
         'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+      }, SetOptions(merge: true));
+      tx.update(divisionRef, <String, dynamic>{
+        'accountWriteVersion': FieldValue.increment(1),
+      });
+    });
     log?.call(
       'DevUserWriteService count meta 복구: division=$division area=$area active=$active inactive=$inactive total=${counts.totalCount}',
     );
@@ -251,6 +277,23 @@ class DevUserWriteService {
     };
   }
 
+  Future<DocumentReference<Map<String, dynamic>>> _guardCompanyWrite(
+    Transaction tx,
+    String companyId,
+  ) async {
+    final normalized = companyId.trim();
+    if (normalized.isEmpty) throw StateError('ACCOUNT_COMPANY_ID_REQUIRED');
+    final ref = _firestore.collection('divisions').doc(normalized);
+    final company = await tx.get(ref);
+    if (!company.exists ||
+        company.data()?['lifecycleStatus'] == 'closing' ||
+        company.data()?['lifecycleStatus'] == 'closed' ||
+        company.data()?['accountWriteLocked'] == true) {
+      throw StateError('COMPANY_ACCOUNT_WRITE_BLOCKED:$normalized');
+    }
+    return ref;
+  }
+
   Future<void> createUser({
     required UserModel user,
     required String division,
@@ -279,6 +322,7 @@ class DevUserWriteService {
     );
 
     await _firestore.runTransaction((tx) async {
+      final companyRef = await _guardCompanyWrite(tx, user.companyId);
       final rootSnap = await tx.get(rootRef);
       final codeSnap = await tx.get(codeRef);
       if (rootSnap.exists) {
@@ -331,6 +375,9 @@ class DevUserWriteService {
             ? FieldValue.delete()
             : FieldValue.serverTimestamp();
 
+      tx.update(companyRef, <String, dynamic>{
+        'accountWriteVersion': FieldValue.increment(1),
+      });
       tx.set(rootRef, rootMap);
       tx.set(
         codeRef,
@@ -412,6 +459,10 @@ class DevUserWriteService {
     }
 
     await _firestore.runTransaction((tx) async {
+      await _guardCompanyWrite(tx, oldDivision);
+      if (newDivision != oldDivision) {
+        await _guardCompanyWrite(tx, newDivision);
+      }
       final oldRootSnap = await tx.get(oldRootRef);
       if (!oldRootSnap.exists || oldRootSnap.data() == null) {
         throw StateError('USER_NOT_FOUND:$oldUserId');
@@ -567,6 +618,12 @@ class DevUserWriteService {
           oldCodeSnap.exists &&
           (oldCodeSnap.data()?['userId'] ?? '').toString() == oldUserId) {
         tx.delete(oldCodeRef);
+      }
+      tx.update(_firestore.collection('divisions').doc(oldDivision),
+          <String, dynamic>{'accountWriteVersion': FieldValue.increment(1)});
+      if (oldDivision != newDivision) {
+        tx.update(_firestore.collection('divisions').doc(newDivision),
+            <String, dynamic>{'accountWriteVersion': FieldValue.increment(1)});
       }
     });
 

@@ -12,17 +12,17 @@ class LauncherWorkAreaResolver {
     required UserModel user,
     required List<AppModeDefinition> accountModes,
   }) async {
-    final division = user.divisions.firstOrNull?.trim() ?? '';
-    if (division.isEmpty) {
-      LauncherDiagnostics.record(
-        'auth_work_areas_unavailable',
-        meta: const <String, Object?>{
-          'reason': 'division_empty',
-          'firebaseReads': 0,
-          'firebaseWrites': 0,
-          'dataSource': 'none',
-        },
-      );
+    final divisions = user.divisions
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    final homeCompany = user.companyId.trim();
+    final ordered = <String>[
+      if (homeCompany.isNotEmpty && divisions.contains(homeCompany)) homeCompany,
+      ...divisions.where((value) => value != homeCompany),
+    ];
+    if (ordered.isEmpty) {
       return const LauncherWorkAreaResolution(
         hasSnapshot: false,
         division: '',
@@ -31,53 +31,34 @@ class LauncherWorkAreaResolver {
       );
     }
 
-    final snapshot = await AreaMasterCache.readSnapshot(division);
-    if (snapshot == null) {
-      LauncherDiagnostics.record(
-        'auth_work_areas_snapshot_missing',
-        meta: <String, Object?>{
-          'division': division,
-          'authorizedAreaCount': user.areas
-              .map((value) => value.trim())
-              .where((value) => value.isNotEmpty)
-              .toSet()
-              .length,
-          'firebaseReads': 0,
-          'firebaseWrites': 0,
-          'dataSource': 'sqlite_miss',
-        },
-      );
-      return LauncherWorkAreaResolution(
-        hasSnapshot: false,
-        division: division,
-        areas: const <LauncherWorkAreaOption>[],
-        dataSource: 'sqlite_miss',
-      );
-    }
-
-    final allowedAreaNames = user.areas
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet();
+    final allowedAreaNames = user.areas.map((value) => value.trim()).toSet();
+    final allowedIds = user.areaIds.map((value) => value.trim()).toSet();
     final accountModeIds = accountModes.map((mode) => mode.id).toSet();
     final areas = <LauncherWorkAreaOption>[];
-
-    for (final item in snapshot.items) {
-      if (!allowedAreaNames.contains(item.name.trim())) continue;
-      final modes = AppModeRegistry.supportedModes(
-        item.modes,
-        allowedIds: accountModeIds,
-      );
-      if (!item.isHeadquarter && modes.isEmpty) continue;
-      areas.add(
-        LauncherWorkAreaOption(
+    var complete = true;
+    for (final division in ordered) {
+      final snapshot = await AreaMasterCache.readSnapshot(division);
+      if (snapshot == null) {
+        complete = false;
+        continue;
+      }
+      for (final item in snapshot.items) {
+        if (!allowedAreaNames.contains(item.name.trim())) continue;
+        if (allowedIds.isNotEmpty &&
+            !allowedIds.contains('$division-${item.name.trim()}')) continue;
+        final modes = AppModeRegistry.supportedModes(
+          item.modes,
+          allowedIds: accountModeIds,
+        );
+        if (!item.isHeadquarter && modes.isEmpty) continue;
+        areas.add(LauncherWorkAreaOption(
           division: division,
           areaName: item.name.trim(),
           isHeadquarter: item.isHeadquarter,
           supportedModes: List<AppModeDefinition>.unmodifiable(modes),
           dataSource: 'sqlite',
-        ),
-      );
+        ));
+      }
     }
 
     areas.sort((a, b) {
@@ -90,15 +71,10 @@ class LauncherWorkAreaResolver {
     LauncherDiagnostics.record(
       'auth_work_areas_ready',
       meta: <String, Object?>{
-        'division': division,
+        'division': homeCompany,
+        'authorizedCompanyCount': ordered.length,
         'areaCount': areas.length,
-        'headquarterCount': areas.where((area) => area.isHeadquarter).length,
-        'areas': areas
-            .map(
-              (area) =>
-                  '${area.areaName}:${area.isHeadquarter ? 'hq' : 'field'}:${area.supportedModes.map((mode) => mode.id).join('+')}',
-            )
-            .join(','),
+        'allCompanySnapshotsLoaded': complete,
         'firebaseReads': 0,
         'firebaseWrites': 0,
         'dataSource': 'sqlite',
@@ -106,8 +82,8 @@ class LauncherWorkAreaResolver {
     );
 
     return LauncherWorkAreaResolution(
-      hasSnapshot: true,
-      division: division,
+      hasSnapshot: complete,
+      division: homeCompany,
       areas: List<LauncherWorkAreaOption>.unmodifiable(areas),
       dataSource: 'sqlite',
     );

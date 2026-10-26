@@ -13,101 +13,79 @@ class LauncherWorkAreaServerResolver {
     required List<AppModeDefinition> accountModes,
     required AreaRepository areaRepository,
   }) async {
-    final division = user.divisions.firstOrNull?.trim() ?? '';
-    final authorizedAreas = user.areas
+    final homeCompany = user.companyId.trim();
+    final divisions = user.divisions
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toSet()
-        .toList(growable: false);
-
-    if (division.isEmpty || authorizedAreas.isEmpty) {
-      LauncherDiagnostics.record(
-        'auth_work_area_server_bootstrap_blocked',
-        meta: <String, Object?>{
-          'division': division,
-          'authorizedAreaCount': authorizedAreas.length,
-          'reason': division.isEmpty ? 'division_empty' : 'authorized_area_empty',
-          'firebaseAreaDocumentReads': 0,
-          'firebaseWrites': 0,
-        },
-      );
-      return LauncherWorkAreaResolution(
-        hasSnapshot: false,
-        division: division,
-        areas: const <LauncherWorkAreaOption>[],
-        dataSource: 'server_bootstrap_unavailable',
-        serverFallbackUsed: true,
-      );
+        .toList(growable: false)
+      ..sort((a, b) => b.length.compareTo(a.length));
+    final allowedNames = user.areas.map((value) => value.trim()).toSet();
+    final ids = user.areaIds.map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final options = <LauncherWorkAreaOption>[];
+    if (ids.isNotEmpty) {
+      for (final id in ids) {
+        for (final division in divisions) {
+          final prefix = '$division-';
+          if (!id.startsWith(prefix)) continue;
+          final name = id.substring(prefix.length).trim();
+          if (!allowedNames.contains(name)) break;
+          final isHeadquarter = name == division;
+          options.add(LauncherWorkAreaOption(
+            division: division,
+            areaName: name,
+            isHeadquarter: isHeadquarter,
+            supportedModes: const <AppModeDefinition>[],
+            requiresServerHeadquarterVerification: isHeadquarter,
+            requiresServerAreaResolution: true,
+            dataSource: 'account_area_ids',
+          ));
+          break;
+        }
+      }
+    } else if (homeCompany.isNotEmpty && divisions.contains(homeCompany)) {
+      for (final name in allowedNames) {
+        final isHeadquarter = name == homeCompany;
+        options.add(LauncherWorkAreaOption(
+          division: homeCompany,
+          areaName: name,
+          isHeadquarter: isHeadquarter,
+          supportedModes: const <AppModeDefinition>[],
+          requiresServerHeadquarterVerification: isHeadquarter,
+          requiresServerAreaResolution: true,
+          dataSource: 'legacy_area_names_pending_verification',
+        ));
+      }
     }
-
-    if (authorizedAreas.length == 1) {
-      final areaName = authorizedAreas.first;
-      LauncherDiagnostics.record(
-        'auth_work_area_single_server_fetch_start',
-        meta: <String, Object?>{
-          'division': division,
-          'area': areaName,
-          'documentId': '$division-$areaName',
-          'authorizedAreaCount': 1,
-          'firebaseAreaDocumentReadAttempt': 1,
-          'firebaseWrites': 0,
-        },
-      );
-      final option = await verifyArea(
-        division: division,
-        areaName: areaName,
-        accountModes: accountModes,
-        areaRepository: areaRepository,
-        source: 'single_area_snapshot_miss',
-      );
-      return LauncherWorkAreaResolution(
-        hasSnapshot: false,
-        division: division,
-        areas: option == null
-            ? const <LauncherWorkAreaOption>[]
-            : <LauncherWorkAreaOption>[option],
-        dataSource: option == null
-            ? 'server_single_area_missing'
-            : 'server_single_area',
-        firebaseAreaDocumentReads: 1,
-        serverFallbackUsed: true,
-        headquarterFastPath: option?.isHeadquarter == true,
-      );
-    }
-
-    final firstArea = authorizedAreas.first;
-    final headquarterCandidate = firstArea == division;
-    final option = LauncherWorkAreaOption(
-      division: division,
-      areaName: firstArea,
-      isHeadquarter: headquarterCandidate,
-      supportedModes: const <AppModeDefinition>[],
-      requiresServerHeadquarterVerification: headquarterCandidate,
-      requiresServerAreaResolution: true,
-      dataSource: 'user_profile_first_area',
-    );
+    options.sort((a, b) {
+      final homeA = a.division == homeCompany;
+      final homeB = b.division == homeCompany;
+      if (homeA != homeB) return homeA ? -1 : 1;
+      if (a.isHeadquarter != b.isHeadquarter) {
+        return a.isHeadquarter ? -1 : 1;
+      }
+      return '${a.division}/${a.areaName}'
+          .compareTo('${b.division}/${b.areaName}');
+    });
     LauncherDiagnostics.record(
-      'auth_work_area_multi_first_bootstrap_ready',
+      'auth_work_area_server_bootstrap_ready',
       meta: <String, Object?>{
-        'division': division,
-        'authorizedAreaCount': authorizedAreas.length,
-        'authorizedAreas': authorizedAreas.join(','),
-        'selectedArrayIndex': 0,
-        'selectedArea': firstArea,
-        'headquarterCandidate': headquarterCandidate,
+        'division': homeCompany,
+        'authorizedAreaCount': options.length,
+        'dataSource': 'account_area_ids',
         'firebaseAreaDocumentReads': 0,
         'firebaseWrites': 0,
-        'dataSource': 'user_profile_first_area',
       },
     );
     return LauncherWorkAreaResolution(
       hasSnapshot: false,
-      division: division,
-      areas: <LauncherWorkAreaOption>[option],
-      dataSource: 'user_profile_first_area',
-      firebaseAreaDocumentReads: 0,
+      division: homeCompany,
+      areas: List<LauncherWorkAreaOption>.unmodifiable(options),
+      dataSource: 'account_area_ids',
       serverFallbackUsed: true,
-      headquarterFastPath: headquarterCandidate,
+      headquarterFastPath: options.isNotEmpty && options.first.isHeadquarter,
     );
   }
 

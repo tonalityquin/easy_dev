@@ -58,6 +58,10 @@ class UserRoleDropdownSection extends StatelessWidget {
         return const <Capability>{};
 
       case RoleType.dev:
+      case RoleType.areaManager:
+      case RoleType.divisionManager:
+      case RoleType.superAdmin:
+      case RoleType.specialist:
         return const <Capability>{};
     }
   }
@@ -70,26 +74,17 @@ class UserRoleDropdownSection extends StatelessWidget {
     final CapSet areaCaps =
         context.select<AreaState, CapSet>((s) => s.capabilitiesOfCurrentArea);
 
-    final List<RoleType> effectiveRoles = allowedRoles
-        .where((r) => Cap.supports(areaCaps, _requiredCapsForRole(r)))
-        .toList(growable: false);
+    final List<RoleType> effectiveRoles = <RoleType>{
+      selectedRole,
+      ...allowedRoles.where(
+        (role) => role != RoleType.superAdmin && role != RoleType.dev &&
+            Cap.supports(areaCaps, _requiredCapsForRole(role)),
+      ),
+    }.toList(growable: false);
 
-    final RoleType safeValue = effectiveRoles.contains(selectedRole)
-        ? selectedRole
-        : (effectiveRoles.isNotEmpty ? effectiveRoles.first : selectedRole);
-
-    if (safeValue != selectedRole && effectiveRoles.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        onChanged(safeValue);
-      });
-    }
+    final RoleType safeValue = selectedRole;
 
     final Color dropdownBgColor = cs.surface;
-
-    final String capsHuman = showAreaCapabilityHint ? Cap.human(areaCaps) : '';
-    final String helper = showAreaCapabilityHint
-        ? '현재 지역 기능: $capsHuman (해당 기능에 맞는 권한만 표시됩니다)'
-        : '';
 
     final decoration = InputDecoration(
       labelText: label,
@@ -97,8 +92,6 @@ class UserRoleDropdownSection extends StatelessWidget {
         color: cs.primary,
         fontWeight: FontWeight.w700,
       ),
-      helperText: showAreaCapabilityHint ? helper : null,
-      helperMaxLines: 2,
       filled: true,
       fillColor: cs.surfaceVariant.withOpacity(.45),
       isDense: true,

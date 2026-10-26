@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
+import '../../../applications/user_state.dart';
+import '../../../domain/models/account_permission_policy.dart';
 
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../../app/utils/snackbar_helper.dart';
@@ -10,7 +14,6 @@ import '../../../../../shared/auth/account_code_number.dart';
 import '../../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import 'models/user_settings_draft.dart';
-import 'widgets/user_role_type_section.dart';
 
 class UserSettingSectionEditorDialog extends StatefulWidget {
   const UserSettingSectionEditorDialog({
@@ -51,7 +54,7 @@ class _UserSettingSectionEditorDialogState
   late final TextEditingController _codeNumberController;
   late final TextEditingController _emailController;
   late final TextEditingController _positionController;
-  late RoleType _role;
+  late Set<String> _permissionKeys;
   late UserCodeEntryMode _codeEntryMode;
   late Set<String> _modes;
   late Map<String, TimeOfDay?> _startByDay;
@@ -73,7 +76,7 @@ class _UserSettingSectionEditorDialogState
     );
     _emailController = TextEditingController(text: draft.emailLocal);
     _positionController = TextEditingController(text: draft.position);
-    _role = draft.role;
+    _permissionKeys = AccountPermissionPolicy.sanitize(draft.permissionKeys);
     _modes = Set<String>.of(draft.modes);
     _startByDay = Map<String, TimeOfDay?>.of(draft.startByDay);
     _endByDay = Map<String, TimeOfDay?>.of(draft.endByDay);
@@ -210,7 +213,7 @@ class _UserSettingSectionEditorDialogState
         );
       case UserSettingsSection.permission:
         return base.copyWith(
-          role: _role,
+          permissionKeys: _permissionKeys,
           modes: _modes,
         );
       case UserSettingsSection.position:
@@ -579,39 +582,85 @@ class _UserSettingSectionEditorDialogState
   }
 
   Widget _permissionEditor(BuildContext context) {
+    final actor = context.read<UserState>();
+    final selectedPreset = AccountPermissionPolicy.presetIdFor(_permissionKeys);
+    final editable = actor.hasPermission('accounts.grantPermissions');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DropdownButtonFormField<RoleType>(
-          value: _role,
-          isExpanded: true,
-          decoration: opsInputDecoration(
-            context,
-            label: '권한',
-            prefixIcon: const Icon(Icons.verified_user_rounded),
+        Text('계정 등급', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 10),
+        AnimatedSize(
+          duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          curve: CommonUiMotion.enter,
+          alignment: Alignment.topLeft,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: AccountPermissionPolicy.presets.entries.map((entry) {
+              final selected = selectedPreset == entry.key;
+              final canApply = editable &&
+                  AccountPermissionPolicy.mayGrant(actor.permissionKeys, entry.value);
+              return OpsFormChip(
+                label: AccountPermissionPolicy.presetLabels[entry.key]!,
+                selected: selected,
+                icon: selected ? Icons.check_circle_rounded : Icons.shield_outlined,
+                onTap: () {
+                  if (!canApply) {
+                    widget.trace.log('계정 등급 선택 거부: preset=${entry.key}');
+                    return;
+                  }
+                  setState(() => _permissionKeys = Set<String>.of(entry.value));
+                  widget.trace.log('계정 등급 선택: preset=${entry.key} count=${entry.value.length}');
+                },
+              );
+            }).toList(growable: false),
           ),
-          items: RoleType.values
-              .map(
-                (role) => DropdownMenuItem<RoleType>(
-                  value: role,
-                  child: Text(role.label, overflow: TextOverflow.ellipsis),
-                ),
-              )
-              .toList(growable: false),
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() => _role = value);
-            widget.trace.log('권한 선택 변경: role=${value.name}');
-          },
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
+        AnimatedSwitcher(
+          duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SizeTransition(sizeFactor: animation, child: child),
+          ),
+          child: Column(
+            key: ValueKey<String>(selectedPreset ?? 'custom_permissions'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                selectedPreset == null
+                    ? '기존 권한 구성 · 등급을 선택하면 해당 권한으로 변경됩니다.'
+                    : '${AccountPermissionPolicy.presetLabels[selectedPreset]} · ${_permissionKeys.length}개 권한',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: (AccountPermissionPolicy.keys.where(_permissionKeys.contains).toList()
+                      ..sort())
+                    .map((permission) => Chip(
+                          label: Text(AccountPermissionPolicy.permissionLabel(permission)),
+                          avatar: const Icon(Icons.check_rounded, size: 16),
+                        ))
+                    .toList(growable: false),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text('허용 모드', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
           children: _availableModes.map((mode) {
             final selected = _modes.contains(mode);
             return OpsFormChip(
-              label: mode,
+              label: AccountPermissionPolicy.modeLabel(mode),
               selected: selected,
               icon: Icons.widgets_rounded,
               onTap: () {

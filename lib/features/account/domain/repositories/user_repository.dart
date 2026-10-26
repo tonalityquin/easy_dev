@@ -1,4 +1,3 @@
-
 import '../models/tablet/tablet_model.dart';
 import '../models/user/user_model.dart';
 
@@ -35,7 +34,7 @@ abstract class UserRepository {
   Future<void> addTabletCard(TabletModel tablet);
   Future<void> updateUser(UserModel user, {String? previousId});
   Future<void> updateTablet(TabletModel tablet, {String? previousId});
-  Future<void> deleteUsers(List<String> ids);
+  Future<void> deleteUsers(List<String> ids, {void Function(String)? onDiagnostic});
   Future<void> deleteTablets(List<String> ids);
 
   Future<List<UserModel>> getUsersByAreaOnceWithCache(String selectedArea);
@@ -53,3 +52,4 @@ abstract class UserRepository {
 
   Future<String?> getEnglishNameByArea(String area, String division);
 }
+

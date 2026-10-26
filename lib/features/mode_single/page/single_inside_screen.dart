@@ -61,10 +61,6 @@ enum SingleInsideContentDockContent {
   restTimeSubmit,
 }
 
-bool _singleOperationsRoleAllowed(RoleType role) {
-  return role == RoleType.dev || role == RoleType.adminBillMonthlyTablet;
-}
-
 const String _tSingle = 'Single';
 const String _tSingleInside = 'Single/inside';
 const String _tPrefs = 'prefs';
@@ -683,11 +679,11 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
     final areaState = context.read<AreaState>();
     final secondaryState = context.read<SecondaryState>();
     final operationsVisible =
-        _singleOperationsRoleAllowed(secondaryState.role) &&
+        secondaryState.hasPermission('single.operations.enter') &&
             secondaryState.canAccess(Section.user);
     SingleInsideDiagnostics.log(
       'status',
-      'snapshot viewport=${media?.size.width.toStringAsFixed(1)}x${media?.size.height.toStringAsFixed(1)} role=${userState.session?.role ?? ''} normalizedRole=${secondaryState.role.name} area=${userState.currentArea} division=${userState.division} areaStateCapabilities=${LocalAreaCapabilityRefresh.keys(areaState.capabilitiesOfCurrentArea)} locationAccess=${secondaryState.canAccess(Section.location)} locationAccessReason=${secondaryState.accessDebugReason(Section.location)} operationsVisible=$operationsVisible scheduleRevision=$_scheduleRevision spatialRevision=$_spatialRefreshRevision ruleRevision=$_ruleRefreshRevision hotKeyRevision=$_hotKeyRefreshRevision dashboardMode=compact_only railWidth=${_lastRailWidth.toStringAsFixed(1)} workspaceWidth=${_lastWorkspaceWidth.toStringAsFixed(1)} contentDockWidth=${_lastContentDockWidth.toStringAsFixed(1)} contentDock=${_contentDockContent?.name ?? 'closed'} contentDockProgress=${_contentDockController.value.toStringAsFixed(3)} contentDockCloseEnabled=$_contentDockCloseEnabled mountedContentDocks=${_mountedContentDocks.map((item) => item.name).join(',')} parkingDetailOpen=$_parkingDetailOpen parkingControllerDetailOpen=${_parkingSpatialController.detailOpen} dashboardActionRunning=$_dashboardActionRunning workspaceContent=punchRecorder punchContentPlacement=workspace_home workspaceBackPolicy=detail_then_content_dock_then_punch scheduleSaveMode=explicit notificationRevealPending=$_notificationRevealPending notificationRevealFrameScheduled=$_notificationRevealFrameScheduled pendingNotificationTapId=${_pendingNotificationTapId ?? '-'} lastConsumedNotificationTapId=$_lastConsumedNotificationTapId notificationVisibleFrameAt=${_notificationVisibleFrameAt?.toIso8601String() ?? '-'} notificationTapConsumeCount=$_notificationTapConsumeCount notificationTapRevision=${WorkStatusNotificationController.notificationTapRevision.value} workStatusLastNotificationTapId=${WorkStatusNotificationController.lastNotificationTapId} workStatusPendingNotificationTapId=${WorkStatusNotificationController.pendingNotificationTap?.id ?? '-'} workStatusPendingNotificationTapAt=${WorkStatusNotificationController.pendingNotificationTap?.tappedAt.toIso8601String() ?? '-'} lastHandledNotificationTapRevision=$_lastHandledNotificationTapRevision notificationRevealCount=$_notificationRevealCount lastNotificationTapSource=$_lastNotificationTapSource lastNotificationTapEvent=$_lastNotificationTapEvent lastNotificationTapAt=${_lastNotificationTapAt?.toIso8601String() ?? '-'} lastNotificationRevealAt=${_lastNotificationRevealAt?.toIso8601String() ?? '-'} pendingNotificationDeveloperStatus=$_pendingNotificationDeveloperStatus initialRevealCompleted=$_initialWorkspaceRevealCompleted rulesAutoOpen=false auxiliaryPresentation=embedded_content_side_dock',
+      'snapshot viewport=${media?.size.width.toStringAsFixed(1)}x${media?.size.height.toStringAsFixed(1)} permissionCount=${userState.permissionKeys.length} area=${userState.currentArea} division=${userState.division} areaStateCapabilities=${LocalAreaCapabilityRefresh.keys(areaState.capabilitiesOfCurrentArea)} locationAccess=${secondaryState.canAccess(Section.location)} locationAccessReason=${secondaryState.accessDebugReason(Section.location)} operationsVisible=$operationsVisible scheduleRevision=$_scheduleRevision spatialRevision=$_spatialRefreshRevision ruleRevision=$_ruleRefreshRevision hotKeyRevision=$_hotKeyRefreshRevision dashboardMode=compact_only railWidth=${_lastRailWidth.toStringAsFixed(1)} workspaceWidth=${_lastWorkspaceWidth.toStringAsFixed(1)} contentDockWidth=${_lastContentDockWidth.toStringAsFixed(1)} contentDock=${_contentDockContent?.name ?? 'closed'} contentDockProgress=${_contentDockController.value.toStringAsFixed(3)} contentDockCloseEnabled=$_contentDockCloseEnabled mountedContentDocks=${_mountedContentDocks.map((item) => item.name).join(',')} parkingDetailOpen=$_parkingDetailOpen parkingControllerDetailOpen=${_parkingSpatialController.detailOpen} dashboardActionRunning=$_dashboardActionRunning workspaceContent=punchRecorder punchContentPlacement=workspace_home workspaceBackPolicy=detail_then_content_dock_then_punch scheduleSaveMode=explicit notificationRevealPending=$_notificationRevealPending notificationRevealFrameScheduled=$_notificationRevealFrameScheduled pendingNotificationTapId=${_pendingNotificationTapId ?? '-'} lastConsumedNotificationTapId=$_lastConsumedNotificationTapId notificationVisibleFrameAt=${_notificationVisibleFrameAt?.toIso8601String() ?? '-'} notificationTapConsumeCount=$_notificationTapConsumeCount notificationTapRevision=${WorkStatusNotificationController.notificationTapRevision.value} workStatusLastNotificationTapId=${WorkStatusNotificationController.lastNotificationTapId} workStatusPendingNotificationTapId=${WorkStatusNotificationController.pendingNotificationTap?.id ?? '-'} workStatusPendingNotificationTapAt=${WorkStatusNotificationController.pendingNotificationTap?.tappedAt.toIso8601String() ?? '-'} lastHandledNotificationTapRevision=$_lastHandledNotificationTapRevision notificationRevealCount=$_notificationRevealCount lastNotificationTapSource=$_lastNotificationTapSource lastNotificationTapEvent=$_lastNotificationTapEvent lastNotificationTapAt=${_lastNotificationTapAt?.toIso8601String() ?? '-'} lastNotificationRevealAt=${_lastNotificationRevealAt?.toIso8601String() ?? '-'} pendingNotificationDeveloperStatus=$_pendingNotificationDeveloperStatus initialRevealCompleted=$_initialWorkspaceRevealCompleted rulesAutoOpen=false auxiliaryPresentation=embedded_content_side_dock',
     );
     await SingleInsideDiagnostics.showStatus(
       context,
@@ -698,11 +694,11 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
 
   SingleInsideMode _resolveMode(UserState userState) {
     if (widget.mode != null) return widget.mode!;
-    final role = userState.session?.role.trim() ?? '';
-    final mode = role == 'fieldCommon'
-        ? SingleInsideMode.fieldUser
-        : SingleInsideMode.leader;
-    final signature = 'role=$role mode=${mode.name}';
+    final canManage = userState.hasPermission('single.operations.enter');
+    final mode = canManage
+        ? SingleInsideMode.leader
+        : SingleInsideMode.fieldUser;
+    final signature = 'operationsAllowed=$canManage mode=${mode.name}';
     if (_lastModeSignature != signature) {
       _lastModeSignature = signature;
       SingleInsideDiagnostics.log('screen', 'mode_resolved $signature');
@@ -981,13 +977,14 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
   }
 
   Future<void> _openOperations(BuildContext context) async {
+    final userState = context.read<UserState>();
     final state = context.read<SecondaryState>();
-    final roleAllowed = _singleOperationsRoleAllowed(state.role);
+    final roleAllowed = state.hasPermission('single.operations.enter');
     final sectionAllowed = state.canAccess(Section.user);
     final allowed = roleAllowed && sectionAllowed;
     SingleInsideDiagnostics.log(
       'work',
-      'open target=user_management allowed=$allowed role=${state.role.name} roleAllowed=$roleAllowed sectionAllowed=$sectionAllowed reason=${state.accessDebugReason(Section.user)}',
+      'open target=user_management allowed=$allowed permissionCount=${userState.permissionKeys.length} roleAllowed=$roleAllowed sectionAllowed=$sectionAllowed reason=${state.accessDebugReason(Section.user)}',
     );
     if (!allowed) return;
     await showSecondarySideDock<void>(
@@ -1067,7 +1064,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
 
 
                   final roleAllowed =
-                      _singleOperationsRoleAllowed(secondaryState.role);
+                      secondaryState.hasPermission('single.operations.enter');
                   final sectionAllowed =
                       secondaryState.canAccess(Section.user);
                   final showOperations = roleAllowed && sectionAllowed;
@@ -1080,7 +1077,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen>
                       ? areaStateArea
                       : userState.currentArea.trim();
                   final userSignature =
-                      'userId=${session.id} userName=${session.displayName} area=$currentArea division=$currentDivision mode=${mode.name} normalizedRole=${secondaryState.role.name} operationsVisible=$showOperations roleAllowed=$roleAllowed secondaryUserAccess=$sectionAllowed';
+                      'userId=${session.id} userName=${session.displayName} area=$currentArea division=$currentDivision mode=${mode.name} permissionCount=${userState.permissionKeys.length} operationsVisible=$showOperations roleAllowed=$roleAllowed secondaryUserAccess=$sectionAllowed';
                   if (_lastUserSignature != userSignature) {
                     _lastUserSignature = userSignature;
                     SingleInsideDiagnostics.log('screen', userSignature);

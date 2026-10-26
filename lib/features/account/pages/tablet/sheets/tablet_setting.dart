@@ -16,11 +16,11 @@ import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../../dev/application/area_state.dart';
 import '../../../applications/tablet_account_diagnostics.dart';
 import '../../../applications/user_state.dart';
+import '../../../data/services/company_bootstrap_service.dart';
 import '../../../domain/models/tablet/tablet_model.dart';
 import '../../../domain/repositories/user_repository.dart';
 import 'models/tablet_settings_draft.dart';
 import 'tablet_setting_section_editor_dialog.dart';
-import 'widgets/tablet_role_type.dart';
 
 class TabletSettingWorkspace extends StatefulWidget {
   const TabletSettingWorkspace({
@@ -44,8 +44,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
       <TabletSettingsSection, GlobalKey>{
     for (final section in TabletSettingsSection.values) section: GlobalKey(),
   };
-
-  TabletRoleType _selectedRole = TabletRoleType.lowField;
+  final Set<String> _selectedPermissionKeys = <String>{};
   String? _saveError;
   bool _saving = false;
   bool _validationSubmitted = false;
@@ -106,18 +105,20 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
   void _populateInitialValues() {
     final tablet = _initialTabletSnapshot;
     if (tablet == null) {
+      _selectedPermissionKeys.clear();
       _nameController.clear();
       _codeNumberController.text = AccountCodeNumber.format(
         AccountCodeNumber.generate(),
       );
       _emailController.clear();
-      _selectedRole = TabletRoleType.lowField;
       return;
     }
     _nameController.text = tablet.name;
     _codeNumberController.text = AccountCodeNumber.format(tablet.codeNumber);
     _emailController.text = tablet.email.split('@').first;
-    _selectedRole = TabletRoleType.fromName(tablet.role);
+    _selectedPermissionKeys
+      ..clear()
+      ..addAll(tablet.permissionKeys);
   }
 
   bool get _nameOk => _nameController.text.trim().isNotEmpty;
@@ -160,7 +161,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
       name: _nameController.text.trim(),
       codeNumber: AccountCodeNumber.normalize(_codeNumberController.text),
       emailLocal: _emailController.text.trim(),
-      role: _selectedRole,
+      permissionKeys: Set<String>.of(_selectedPermissionKeys),
     );
   }
 
@@ -176,7 +177,9 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
           _emailController.text = draft.emailLocal;
           break;
         case TabletSettingsSection.permission:
-          _selectedRole = draft.role;
+          _selectedPermissionKeys
+            ..clear()
+            ..addAll(draft.permissionKeys);
           break;
       }
       _saveError = null;
@@ -371,7 +374,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
     return '${_maskName(_nameController.text)} · ${AccountCodeNumber.mask(_codeNumberController.text)} · ${_maskEmailLocal(_emailController.text)}';
   }
 
-  String _permissionSummary() => _selectedRole.label;
+  String _permissionSummary() => _selectedPermissionKeys.isEmpty ? '기능 권한 없음' : _selectedPermissionKeys.join(' · ');
 
   String _friendlySaveError(String message) {
     final value = message.trim();
@@ -432,7 +435,7 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
         throw StateError('현재 지역 정보가 없습니다.');
       }
       trace.log(
-        '입력값 검증 통과: nameLength=${_nameController.text.trim().length}, codeNumber=${AccountCodeNumber.mask(_codeNumberController.text)}, emailSet=${_emailController.text.trim().isNotEmpty}, emailDomain=gmail.com, role=${_selectedRole.name}',
+        '입력값 검증 통과: nameLength=${_nameController.text.trim().length}, codeNumber=${AccountCodeNumber.mask(_codeNumberController.text)}, emailSet=${_emailController.text.trim().isNotEmpty}, emailDomain=gmail.com, permissions=${_selectedPermissionKeys.length}',
         progress: .14,
       );
       final englishName = await repository.getEnglishNameByArea(area, division);
@@ -498,7 +501,8 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
               name: _nameController.text.trim(),
               codeNumber: codeNumber,
               email: email,
-              role: _selectedRole.name,
+              permissionKeys: _selectedPermissionKeys.toList(growable: false),
+              companyId: division,
               position: null,
               areas: <String>[area],
               divisions: <String>[division],
@@ -514,7 +518,8 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
               name: _nameController.text.trim(),
               codeNumber: codeNumber,
               email: email,
-              role: _selectedRole.name,
+              permissionKeys: _selectedPermissionKeys.toList(growable: false),
+              companyId: division,
               areas: <String>[area],
               divisions: <String>[division],
               currentArea: area,
@@ -522,6 +527,11 @@ class _TabletSettingWorkspaceState extends State<TabletSettingWorkspace> {
               englishSelectedAreaName: englishName ?? area,
             );
 
+      await CompanyBootstrapService.requireDeveloper(
+        source: 'tablet_account_write',
+        forceAccountSelection: false,
+      );
+      trace.log('server_developer_write_approved');
       trace.log('태블릿 모델 구성 완료: Firestore 저장을 요청합니다.', progress: .58);
       String? saveError;
       bool saved = true;

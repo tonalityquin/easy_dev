@@ -1,15 +1,21 @@
-import 'dart:math' as math;
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../../../features/account/domain/models/account_permission_policy.dart';
+import '../../../application/account_assignment_resolver.dart';
+import '../../../application/account_primary_assignment.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../../app/utils/status_dialog.dart';
 import '../../../data/services/dev_user_write_service.dart';
 import '../../../../../features/account/domain/models/user/user_model.dart';
-import '../../../../../features/dev/application/developer_account_authorization.dart';
+import '../../../../../features/dev/application/account_group_authorization.dart';
+import '../../../../../features/account/data/services/company_bootstrap_service.dart';
 import '../../../../../features/selector/application/dev_auth.dart';
+import '../../../../../features/account/applications/user_state.dart';
 import '../../../../../shared/auth/account_code_number.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
@@ -38,19 +44,60 @@ class UserAccountsTab extends StatefulWidget {
 }
 
 class _UserAccountsTabState extends State<UserAccountsTab> {
-  static const List<String> _roles = <String>[
-    'dev',
-    'adminBillMonthly',
-    'adminBillMonthlyTablet',
-    'adminBill',
-    'adminBillTablet',
-    'adminCommon',
-    'adminCommonTablet',
-    'userLocationMonthly',
-    'userMonthly',
-    'userCommon',
-    'fieldCommon',
-  ];
+  bool _groupAuthorized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _refreshGroupAuthorization(source: 'secondary_user_tab_init');
+      }
+    });
+  }
+
+  Future<bool> _refreshGroupAuthorization({required String source}) async {
+    final approved = await AccountGroupAuthorization.verify(source: source);
+    if (mounted && _groupAuthorized != approved) {
+      setState(() => _groupAuthorized = approved);
+    }
+    return approved;
+  }
+
+  List<String> _assignablePermissions(UserState actor) {
+    if (!actor.hasPermission('accounts.grantPermissions')) {
+      return const <String>[];
+    }
+    return (AccountPermissionPolicy.keys.intersection(actor.permissionKeys).toList()..sort());
+  }
+
+  String? _validatePermissionChange(
+    UserState actor, {
+    required Iterable<String> permissions,
+    required String division,
+    required String area,
+    Map<String, dynamic>? previous,
+  }) {
+    final oldPermissions = List<String>.from(previous?['permissionKeys'] ?? const <String>[]);
+    final nextPermissions = AccountPermissionPolicy.sanitize(permissions);
+    final scopes = AccountPermissionPolicy.validateAssignments(
+      actorPermissions: actor.permissionKeys,
+      actorDivisions: actor.assignedDivisions,
+      actorAreas: actor.assignedAreas,
+      newDivisions: <String>[division],
+      newAreas: <String>[area],
+    );
+    if (scopes != null) return scopes;
+    return AccountPermissionPolicy.validateChange(
+      actorPermissions: actor.permissionKeys,
+      previousPermissions: oldPermissions,
+      nextPermissions: nextPermissions,
+      isCreating: previous == null,
+      changesPermissions: previous == null && nextPermissions.isNotEmpty ||
+          oldPermissions.toSet().difference(nextPermissions).isNotEmpty ||
+          nextPermissions.difference(oldPermissions.toSet()).isNotEmpty,
+    );
+  }
 
   final Map<String, Map<String, dynamic>> _editedUsers = <String, Map<String, dynamic>>{};
   final DevUserWriteService _devUserWriteService = DevUserWriteService();
@@ -63,14 +110,11 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   Future<List<String>>? _scopeAreasFuture;
 
   Future<bool> _isManualCodeAuthorized({bool interactive = false}) async {
-    final enabled = await DevAuth.isDevModeEnabled();
-    if (!enabled) return false;
-    if (interactive) {
-      return DeveloperAccountAuthorization.authorizeInteractive(
-        source: 'secondary_user_manual_code_entry',
-      );
-    }
-    return DeveloperAccountAuthorization.isAuthorized;
+    return _refreshGroupAuthorization(
+      source: interactive
+          ? 'secondary_user_manual_code_interactive'
+          : 'secondary_user_manual_code',
+    );
   }
 
   Map<String, dynamic> _normalizedWeekMapFromData(
@@ -130,14 +174,12 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           ];
     final divisions = List<String>.from(d['divisions'] ?? const <String>[]);
     final areas = List<String>.from(d['areas'] ?? const <String>[]);
-    final storedPrimaryDivision = (d['_primaryDivision'] ?? '').toString().trim();
+    final storedPrimaryDivision = (d['companyId'] ?? d['_primaryDivision'] ?? '').toString().trim();
     final resolvedPrimaryDivision = (primaryDivision ?? '').trim().isNotEmpty
         ? primaryDivision!.trim()
         : storedPrimaryDivision.isNotEmpty
             ? storedPrimaryDivision
-            : divisions.isNotEmpty
-                ? divisions.first.trim()
-                : '';
+            : '';
     final hasCurrentAreaKey = d.containsKey('currentArea');
     final storedCurrentArea = hasCurrentAreaKey ? (d['currentArea'] ?? '').toString().trim() : '';
     final storedSelectedArea = (d['selectedArea'] ?? '').toString().trim();
@@ -156,12 +198,13 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       'email': d['email'] ?? '',
       'divisions': divisions,
       'areas': areas,
-      'role': d['role'] ?? 'fieldCommon',
+      'permissionKeys': d['permissionKeys'] ?? const <String>[],
       'modes': List<String>.from(d['modes'] ?? const <String>[]),
       'position': d['position'] ?? '',
       'currentArea': resolvedPrimaryArea.isEmpty ? null : resolvedPrimaryArea,
       'selectedArea': resolvedPrimaryArea.isEmpty ? null : resolvedPrimaryArea,
       '_primaryDivision': resolvedPrimaryDivision,
+      '_retainPreviousPrimary': d['_retainPreviousPrimary'] == true,
       'englishSelectedAreaName': d['englishSelectedAreaName'],
       'startTimeByWeekday': startByWeekday,
       'endTimeByWeekday': endByWeekday,
@@ -177,25 +220,12 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   }
 
   Future<List<String>> getAreasByDivisions(List<String> divisions) async {
-    if (divisions.isEmpty) return <String>[];
-    final fs = FirebaseFirestore.instance;
-    final set = <String>{};
-
-    for (var i = 0; i < divisions.length; i += 10) {
-      final end = math.min(i + 10, divisions.length);
-      final chunk = divisions.sublist(i, end);
-      final qs = await fs
-          .collection('areas')
-          .where('division', whereIn: chunk)
-          .get(const GetOptions(source: Source.server));
-
-
-      for (final d in qs.docs) {
-        final name = (d.data()['name'] ?? '').toString().trim();
-        if (name.isNotEmpty) set.add(name);
-      }
-    }
-    return set.toList()..sort();
+    final relations = await AccountAssignmentResolver.load(divisions);
+    return relations.entries
+        .where((entry) => entry.value.length == 1)
+        .map((entry) => entry.key)
+        .toList(growable: false)
+      ..sort();
   }
 
   Future<QuerySnapshot<Map<String, dynamic>>> _fetchAreasForDivision(
@@ -251,10 +281,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   }
 
   String _primaryDivisionOf(Map<String, dynamic> data) {
-    final explicit = (data['_primaryDivision'] ?? '').toString().trim();
+    final explicit = (data['companyId'] ?? data['_primaryDivision'] ?? '').toString().trim();
     if (explicit.isNotEmpty) return explicit;
-    final divisions = List<String>.from(data['divisions'] ?? const <String>[]);
-    if (divisions.isNotEmpty) return divisions.first.trim();
     return '';
   }
 
@@ -433,6 +461,94 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     );
 
     try {
+      final approved = await _refreshGroupAuthorization(
+        source: 'secondary_user_update',
+      );
+      trace.log('server_access_gate approved=$approved');
+      if (!approved) throw StateError('GROUP_ACCESS_DENIED');
+      await CompanyBootstrapService.requireDeveloper(
+        source: 'secondary_user_account_write',
+        forceAccountSelection: false,
+      );
+      trace.log('server_developer_write_approved');
+      final actor = context.read<UserState>();
+      final permissionKeys = AccountPermissionPolicy.sanitize(List<String>.from(newData['permissionKeys'] ?? const <String>[]));
+      final previousDivision = (widget.selectedDivision ?? '').trim();
+      final previousArea = (widget.selectedArea ?? '').trim();
+      final oldDivisions = _withPrimaryFirst(
+        List<String>.from(oldData['divisions'] ?? const <String>[]),
+        previousDivision,
+      );
+      final oldAreas = _withPrimaryFirst(
+        List<String>.from(oldData['areas'] ?? const <String>[]),
+        previousArea,
+      );
+      final retainPreviousPrimary = newData['_retainPreviousPrimary'] == true;
+      final changedPrimary = AccountPrimaryAssignment.primaryChanged(
+        oldDivision: previousDivision,
+        oldArea: previousArea,
+        newDivision: primaryDivision,
+        newArea: primaryArea,
+      );
+      var nextDivisions = AccountPrimaryAssignment.replacePrimary(
+        existing: List<String>.from(newData['divisions'] ?? const <String>[]),
+        previousPrimary: previousDivision,
+        nextPrimary: primaryDivision,
+        retainPreviousPrimary: retainPreviousPrimary,
+      );
+      final nextAreas = AccountPrimaryAssignment.replacePrimary(
+        existing: List<String>.from(newData['areas'] ?? const <String>[]),
+        previousPrimary: previousArea,
+        nextPrimary: primaryArea,
+        retainPreviousPrimary: retainPreviousPrimary,
+      );
+      final assignmentsChanged =
+          !AccountPermissionPolicy.normalizedAssignments(nextDivisions)
+              .containsAll(AccountPermissionPolicy.normalizedAssignments(oldDivisions)) ||
+          !AccountPermissionPolicy.normalizedAssignments(oldDivisions)
+              .containsAll(AccountPermissionPolicy.normalizedAssignments(nextDivisions)) ||
+          !AccountPermissionPolicy.normalizedAssignments(nextAreas)
+              .containsAll(AccountPermissionPolicy.normalizedAssignments(oldAreas)) ||
+          !AccountPermissionPolicy.normalizedAssignments(oldAreas)
+              .containsAll(AccountPermissionPolicy.normalizedAssignments(nextAreas));
+      final relations = assignmentsChanged || changedPrimary
+          ? await AccountAssignmentResolver.load(<String>{...nextDivisions, ...oldDivisions})
+          : <String, Set<String>>{};
+      if (relations.isNotEmpty) {
+        final supportingDivisions = <String>{...nextDivisions};
+        for (final assignedArea in nextAreas) {
+          final related = relations[assignedArea] ?? const <String>{};
+          final covered = related.intersection(supportingDivisions);
+          if (covered.isNotEmpty) continue;
+          if (related.length == 1 && oldDivisions.contains(related.first)) {
+            supportingDivisions.add(related.first);
+          }
+        }
+        nextDivisions = AccountPrimaryAssignment.replacePrimary(
+          existing: supportingDivisions,
+          previousPrimary: primaryDivision,
+          nextPrimary: primaryDivision,
+        );
+      }
+      final assignmentDenied = AccountPermissionPolicy.validateAssignments(
+        actorPermissions: actor.permissionKeys,
+        actorDivisions: actor.assignedDivisions,
+        actorAreas: actor.assignedAreas,
+        newDivisions: nextDivisions,
+        newAreas: nextAreas,
+      );
+      trace.log('primary_assignment_check old=$previousDivision/$previousArea new=$primaryDivision/$primaryArea moved=$changedPrimary retainOld=$retainPreviousPrimary');
+      trace.log('assignment_list_check allowed=${assignmentDenied == null} reason=${assignmentDenied ?? 'ok'} divisions=${nextDivisions.length} areas=${nextAreas.length}');
+      if (assignmentDenied != null) throw StateError(assignmentDenied);
+      final denied = _validatePermissionChange(
+        actor,
+        permissions: permissionKeys,
+        division: primaryDivision,
+        area: primaryArea,
+        previous: oldData,
+      );
+      trace.log('permission_policy_update allowed=${denied == null} reason=${denied ?? 'ok'}');
+      if (denied != null) throw StateError(denied);
       if (primaryDivision.isEmpty || primaryArea.isEmpty) {
         throw StateError('PRIMARY_ASSIGNMENT_REQUIRED');
       }
@@ -459,20 +575,23 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       newData.remove('phone');
       final englishName = await _fetchEnglishNameByArea(primaryDivision, primaryArea) ?? primaryArea;
       final normalizedNewData = Map<String, dynamic>.from(newData);
-      normalizedNewData['divisions'] = _withPrimaryFirst(
-        List<String>.from(normalizedNewData['divisions'] ?? const <String>[]),
-        primaryDivision,
-      );
-      normalizedNewData['areas'] = _withPrimaryFirst(
-        List<String>.from(normalizedNewData['areas'] ?? const <String>[]),
-        primaryArea,
-      );
+      normalizedNewData['divisions'] = nextDivisions;
+      normalizedNewData['areas'] = nextAreas;
       normalizedNewData['currentArea'] = primaryArea;
       normalizedNewData['selectedArea'] = primaryArea;
       normalizedNewData['englishSelectedAreaName'] = englishName;
+      normalizedNewData['permissionKeys'] = permissionKeys.toList(growable: false);
+      normalizedNewData['companyId'] = (oldData['companyId'] ?? primaryDivision).toString();
+      normalizedNewData.remove('role');
+      normalizedNewData.remove('roleProfileId');
+      normalizedNewData.remove('managementScopeType');
       normalizedNewData.remove('_primaryDivision');
+      normalizedNewData.remove('_retainPreviousPrimary');
 
       final user = UserModel.fromMap(newId, normalizedNewData);
+      trace.log(
+        'permission_policy_update count=${user.permissionKeys.length}',
+      );
       trace.log(
         '현재 소속 검증 완료: division=$primaryDivision area=$primaryArea oldId=$oldId newId=$newId',
         progress: 0.18,
@@ -481,8 +600,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         'DevUserWriteService 전용 경로로 원본/projection/count/limit 업데이트를 요청합니다. breakDays=${user.breakDays.join(',')}',
         progress: 0.38,
       );
-      final previousDivision = (widget.selectedDivision ?? '').trim();
-      final previousArea = (widget.selectedArea ?? '').trim();
       if (previousDivision.isEmpty || previousArea.isEmpty) {
         throw StateError('PREVIOUS_PRIMARY_ASSIGNMENT_REQUIRED');
       }
@@ -549,18 +666,38 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 
   Future<void> _openCreateDialog(List<String> divisionList) async {
     if (_creating) return;
+    final groupApproved = await AccountGroupAuthorization.verifyWithStatus(
+      context,
+      source: 'secondary_user_open_create',
+    );
+    if (!mounted || !groupApproved) return;
+    if (_groupAuthorized != groupApproved) {
+      setState(() => _groupAuthorized = groupApproved);
+    }
     final manualCodeAllowed = await _isManualCodeAuthorized();
     if (!mounted) return;
+    final actor = context.read<UserState>();
+    final assignablePermissions = _assignablePermissions(actor);
+    if (!actor.hasPermission('accounts.create')) {
+      await StatusDialog.showFailure(
+        context,
+        title: '계정 생성 권한 없음',
+        description: '계정 생성 권한이 확인되지 않았습니다.',
+        useCommonUi: true,
+      );
+      return;
+    }
 
     final draft = await showCommonOverlayDialog<_CreateUserAccountDraft>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => _CreateUserAccountDialog(
         divisionList: divisionList,
-        roleList: _roles,
+        permissionList: assignablePermissions,
         initialDivision: widget.selectedDivision,
         initialArea: widget.selectedArea,
         manualCodeAllowed: manualCodeAllowed,
+        groupApproved: _groupAuthorized,
         onRequestManualCodeEntry: () =>
             _isManualCodeAuthorized(interactive: true),
         fetchAreasForDivision: _fetchAreaNamesForDivision,
@@ -586,6 +723,25 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     trace.log('passwordPolicy=manual_firestore_only appPasswordWrite=false');
 
     try {
+      final approved = await _refreshGroupAuthorization(
+        source: 'secondary_user_create',
+      );
+      trace.log('server_access_gate approved=$approved');
+      if (!approved) throw StateError('GROUP_ACCESS_DENIED');
+      await CompanyBootstrapService.requireDeveloper(
+        source: 'secondary_user_account_write',
+        forceAccountSelection: false,
+      );
+      trace.log('server_developer_write_approved');
+      final actor = context.read<UserState>();
+      final denied = _validatePermissionChange(
+        actor,
+        permissions: draft.permissionKeys,
+        division: draft.division,
+        area: draft.area,
+      );
+      trace.log('permission_policy_create allowed=${denied == null} reason=${denied ?? 'ok'}');
+      if (denied != null) throw StateError(denied);
       if (draft.codeEntryMode == UserCodeEntryMode.developerManual) {
         final authorized = await _isManualCodeAuthorized();
         if (!authorized) {
@@ -600,6 +756,9 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         progress: 0.1,
       );
       final englishName = await _fetchEnglishNameByArea(draft.division, draft.area) ?? draft.area;
+      trace.log(
+        'permission_policy_create count=${draft.permissionKeys.length}',
+      );
       final user = UserModel(
         id: draft.documentId,
         areas: <String>[draft.area],
@@ -615,7 +774,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         name: draft.name,
         codeNumber: draft.codeNumber,
         position: draft.position,
-        role: draft.role,
+        companyId: draft.division,
+        permissionKeys: draft.permissionKeys.toList(growable: false),
         selectedArea: draft.area,
         startTimeByWeekday: Map<String, TimeOfDay?>.from(draft.startTimeByWeekday),
         endTimeByWeekday: Map<String, TimeOfDay?>.from(draft.endTimeByWeekday),
@@ -870,12 +1030,23 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     BuildContext context, {
     required String id,
     required Map<String, dynamic> updated,
+    required Map<String, dynamic> original,
     required List<String> divisionList,
   }) {
     final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final divisions = List<String>.from(updated['divisions'] ?? const <String>[]);
     final primaryDivision = _primaryDivisionOf(updated);
+    final originalDivision = _primaryDivisionOf(original);
+    final originalArea = _primaryAreaOf(original);
+    final retainPreviousPrimary = updated['_retainPreviousPrimary'] == true;
+    final movingPrimary = _primaryAreaOf(updated).isNotEmpty &&
+        AccountPrimaryAssignment.primaryChanged(
+          oldDivision: originalDivision,
+          oldArea: originalArea,
+          newDivision: primaryDivision,
+          newArea: _primaryAreaOf(updated),
+        );
     final divisionValue = divisionList.contains(primaryDivision) ? primaryDivision : null;
     return OpsDockListSurface(
       child: Padding(
@@ -905,9 +1076,18 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
               onChanged: (value) {
                 if (value == null) return;
                 setState(() {
-                  final nextDivisions = divisions.contains(value)
-                      ? divisions
-                      : <String>[...divisions, value];
+                  if (primaryDivision == value) return;
+                  final withoutIntermediate = AccountPrimaryAssignment.replacePrimary(
+                    existing: divisions,
+                    previousPrimary: primaryDivision,
+                    nextPrimary: value,
+                  );
+                  final nextDivisions = AccountPrimaryAssignment.replacePrimary(
+                    existing: withoutIntermediate,
+                    previousPrimary: originalDivision,
+                    nextPrimary: value,
+                    retainPreviousPrimary: retainPreviousPrimary,
+                  );
                   updated['_primaryDivision'] = value;
                   updated['divisions'] = nextDivisions;
                   updated['currentArea'] = null;
@@ -986,8 +1166,20 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                             if (value == null) return;
                             setState(() {
                               final currentAreas = List<String>.from(updated['areas'] ?? const <String>[]);
-                              if (!currentAreas.contains(value)) currentAreas.add(value);
-                              updated['areas'] = currentAreas;
+                              final precedingArea = _primaryAreaOf(updated).isNotEmpty
+                                  ? _primaryAreaOf(updated)
+                                  : originalArea;
+                              final withoutIntermediate = AccountPrimaryAssignment.replacePrimary(
+                                existing: currentAreas,
+                                previousPrimary: precedingArea,
+                                nextPrimary: value,
+                              );
+                              updated['areas'] = AccountPrimaryAssignment.replacePrimary(
+                                existing: withoutIntermediate,
+                                previousPrimary: originalArea,
+                                nextPrimary: value,
+                                retainPreviousPrimary: retainPreviousPrimary,
+                              );
                               updated['currentArea'] = value;
                               updated['selectedArea'] = value;
                               _editedUsers[id] = _copyUser(updated);
@@ -1001,6 +1193,45 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                         );
                       },
                     ),
+            ),
+            AnimatedSwitcher(
+              duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SizeTransition(sizeFactor: animation, child: child),
+              ),
+              child: movingPrimary
+                  ? SwitchListTile.adaptive(
+                      key: ValueKey<String>('retain_primary_${primaryDivision}_${_primaryAreaOf(updated)}'),
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('이전 주 소속을 추가 소속으로 유지'),
+                      value: retainPreviousPrimary,
+                      onChanged: (value) {
+                        setState(() {
+                          updated['_retainPreviousPrimary'] = value;
+                          updated['divisions'] = AccountPrimaryAssignment.replacePrimary(
+                            existing: <String>[
+                              ...List<String>.from(updated['divisions'] ?? const <String>[]),
+                              if (value) originalDivision,
+                            ],
+                            previousPrimary: originalDivision,
+                            nextPrimary: _primaryDivisionOf(updated),
+                            retainPreviousPrimary: value,
+                          );
+                          updated['areas'] = AccountPrimaryAssignment.replacePrimary(
+                            existing: <String>[
+                              ...List<String>.from(updated['areas'] ?? const <String>[]),
+                              if (value) originalArea,
+                            ],
+                            previousPrimary: originalArea,
+                            nextPrimary: _primaryAreaOf(updated),
+                            retainPreviousPrimary: value,
+                          );
+                          _editedUsers[id] = _copyUser(updated);
+                        });
+                      },
+                    )
+                  : const SizedBox.shrink(key: ValueKey<String>('retain_primary_none')),
             ),
           ],
         ),
@@ -1025,6 +1256,11 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           context,
           id: id,
           updated: updated,
+          original: _copyUser(
+            data,
+            primaryDivision: widget.selectedDivision,
+            primaryArea: widget.selectedArea,
+          ),
           divisionList: divisionList,
         ),
         const SizedBox(height: 10),
@@ -1036,7 +1272,12 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
               ),
         ),
         const SizedBox(height: 6),
-        Wrap(
+        AnimatedSize(
+          duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+              ? Duration.zero
+              : const Duration(milliseconds: 220),
+          alignment: Alignment.topLeft,
+          child: Wrap(
           spacing: 7,
           runSpacing: 7,
           children: [
@@ -1084,6 +1325,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
               },
             ),
           ],
+          ),
         ),
         const SizedBox(height: 10),
         Text(
@@ -1094,7 +1336,12 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
               ),
         ),
         const SizedBox(height: 6),
-        Wrap(
+        AnimatedSize(
+          duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+              ? Duration.zero
+              : const Duration(milliseconds: 220),
+          alignment: Alignment.topLeft,
+          child: Wrap(
           spacing: 7,
           runSpacing: 7,
           children: [
@@ -1145,34 +1392,72 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
               },
             ),
           ],
+          ),
         ),
         const SizedBox(height: 10),
-        DropdownButtonFormField<String>(
-          value: _roles.contains(updated['role']) ? updated['role'] as String : _roles.last,
-          items: _roles
-              .map(
-                (role) => DropdownMenuItem<String>(
-                  value: role,
-                  child: Text(role),
+        AnimatedSize(
+          duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+              ? Duration.zero
+              : CommonUiMotion.selection,
+          curve: Curves.easeInOutCubic,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              for (final entry in AccountPermissionPolicy.presets.entries)
+                ChoiceChip(
+                  label: Text(AccountPermissionPolicy.presetLabels[entry.key]!),
+                  selected: AccountPermissionPolicy.presetIdFor(
+                    List<String>.from(updated['permissionKeys'] ?? const <String>[]),
+                  ) == entry.key,
+                  onSelected: AccountPermissionPolicy.mayGrant(
+                    context.read<UserState>().permissionKeys,
+                    entry.value,
+                  )
+                      ? (_) {
+                          setState(() {
+                            updated['permissionKeys'] = entry.value.toList(growable: false);
+                            _editedUsers[id] = _copyUser(updated);
+                          });
+                        }
+                      : null,
                 ),
-              )
-              .toList(growable: false),
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() {
-              updated['role'] = value;
-              _editedUsers[id] = _copyUser(updated);
-            });
-          },
-          decoration: opsInputDecoration(
-            context,
-            label: 'Role',
-            prefixIcon: const Icon(Icons.admin_panel_settings_rounded),
+            ],
           ),
+        ),
+        const SizedBox(height: 6),
+        AnimatedSwitcher(
+          duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+              ? Duration.zero
+              : CommonUiMotion.selection,
+          child: Text(
+            AccountPermissionPolicy.presetLabelFor(
+              List<String>.from(updated['permissionKeys'] ?? const <String>[]),
+            ),
+            key: ValueKey<String>(
+              AccountPermissionPolicy.presetIdFor(
+                List<String>.from(updated['permissionKeys'] ?? const <String>[]),
+              ) ?? 'legacy_account_permissions',
+            ),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Wrap(
+          spacing: 6,
+          runSpacing: 4,
+          children: (AccountPermissionPolicy.sanitize(
+            List<String>.from(updated['permissionKeys'] ?? const <String>[]),
+          ).toList()..sort())
+              .map((key) => Text(
+                    AccountPermissionPolicy.permissionLabel(key),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ))
+              .toList(growable: false),
         ),
         const SizedBox(height: 8),
         Text(
-          '허용 모드: ${List<String>.from(updated['modes'] ?? const <String>[]).join(', ')}',
+          '허용 모드: ${List<String>.from(updated['modes'] ?? const <String>[]).map(AccountPermissionPolicy.modeLabel).join(', ')}',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: tokens.textSecondary,
               ),
@@ -1282,7 +1567,9 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
               final updated = _copyUser(base);
               final selected = _selectedUserId == id;
               final active = (updated['isActive'] as bool?) ?? true;
-              final role = (updated['role'] ?? '').toString();
+              final permissionSummary = AccountPermissionPolicy.presetLabelFor(
+                List<String>.from(updated['permissionKeys'] ?? const <String>[]),
+              );
               final position = (updated['position'] ?? '').toString().trim();
               return CommonAnimatedReveal(
                 delay: reduceMotion ? Duration.zero : Duration(milliseconds: index * 22),
@@ -1343,7 +1630,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  '$role${position.isEmpty ? '' : ' · $position'} · ${active ? '활성' : '비활성'}',
+                                  '$permissionSummary${position.isEmpty ? '' : ' · $position'} · ${active ? '활성' : '비활성'}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1454,7 +1741,7 @@ class _CreateUserAccountDraft {
     required this.email,
     required this.division,
     required this.area,
-    required this.role,
+    required this.permissionKeys,
     required this.modes,
     required this.position,
     required this.startTimeByWeekday,
@@ -1470,7 +1757,7 @@ class _CreateUserAccountDraft {
   final String email;
   final String division;
   final String area;
-  final String role;
+  final Set<String> permissionKeys;
   final List<String> modes;
   final String position;
   final Map<String, TimeOfDay?> startTimeByWeekday;
@@ -1485,19 +1772,21 @@ class _CreateUserAccountDraft {
 class _CreateUserAccountDialog extends StatefulWidget {
   const _CreateUserAccountDialog({
     required this.divisionList,
-    required this.roleList,
+    required this.permissionList,
     required this.initialDivision,
     required this.initialArea,
     required this.manualCodeAllowed,
+    required this.groupApproved,
     required this.onRequestManualCodeEntry,
     required this.fetchAreasForDivision,
   });
 
   final List<String> divisionList;
-  final List<String> roleList;
+  final List<String> permissionList;
   final String? initialDivision;
   final String? initialArea;
   final bool manualCodeAllowed;
+  final bool groupApproved;
   final Future<bool> Function() onRequestManualCodeEntry;
   final Future<List<String>> Function(String division) fetchAreasForDivision;
 
@@ -1516,7 +1805,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
 
   String? _selectedDivision;
   String? _selectedArea;
-  String _selectedRole = 'fieldCommon';
+  final Set<String> _selectedPermissionKeys = <String>{};
   UserCodeEntryMode _codeEntryMode = UserCodeEntryMode.generated;
   final Set<String> _selectedModes = <String>{'single'};
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
@@ -1532,9 +1821,6 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     _selectedDivision = widget.divisionList.contains(widget.initialDivision)
         ? widget.initialDivision
         : (widget.divisionList.isNotEmpty ? widget.divisionList.first : null);
-    _selectedRole = widget.roleList.contains('fieldCommon')
-        ? 'fieldCommon'
-        : (widget.roleList.isNotEmpty ? widget.roleList.last : 'fieldCommon');
     _codeNumberController.text = AccountCodeNumber.format(AccountCodeNumber.generate());
     _startByDay = <String, TimeOfDay?>{
       for (final day in _days) day: null,
@@ -1671,6 +1957,12 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     if ((_selectedDivision ?? '').trim().isEmpty) return '회사를 선택하세요';
     if ((_selectedArea ?? '').trim().isEmpty) return '지역을 선택하세요';
     if (_selectedModes.isEmpty) return '허용 모드를 1개 이상 선택하세요';
+    if (AccountPermissionPolicy.presetIdFor(_selectedPermissionKeys) == null) {
+      return '계정 등급을 선택하세요';
+    }
+    if (!_selectedPermissionKeys.every(widget.permissionList.contains)) {
+      return '부여할 수 없는 권한이 포함되어 있습니다.';
+    }
 
     for (final day in _days) {
       final start = _startByDay[day];
@@ -1688,10 +1980,24 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     return null;
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     final error = _validate();
     if (error != null) {
+      final message = 'account_create_validation_failed permissionCount=${_selectedPermissionKeys.length} reason=$error';
+      debugPrint(message);
       setState(() => _errorText = error);
+      if (DevAuth.devModeEnabled.value && mounted) {
+        await StatusDialog.showFailure(
+          context,
+          title: '운영 계정 입력 검증 실패',
+          description: error,
+          copyText: 'debugPrint(${jsonEncode(message)});',
+          copyButtonLabel: 'debugPrint 코드 복사',
+          visibleDuration: Duration.zero,
+          useCommonUi: true,
+          awaitManualClose: true,
+        );
+      }
       return;
     }
 
@@ -1703,7 +2009,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
         email: '${_emailController.text.trim()}@gmail.com',
         division: _selectedDivision!.trim(),
         area: _selectedArea!.trim(),
-        role: _selectedRole,
+        permissionKeys: Set<String>.of(_selectedPermissionKeys),
         modes: _selectedModes.toList(growable: false)..sort(),
         position: _positionController.text.trim(),
         startTimeByWeekday: Map<String, TimeOfDay?>.from(_startByDay),
@@ -1747,13 +2053,13 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
       if (!authorized) {
         const logLine = 'secondary user manual code entry authorization failed';
         debugPrint(logLine);
-        setState(() => _errorText = '개발자 계정 인증에 실패했습니다');
+        setState(() => _errorText = '서버 접근 승인이 확인되지 않았습니다');
         final developerMode = await DevAuth.isDevModeEnabled();
         if (developerMode && mounted) {
           await StatusDialog.showFailure(
             context,
             title: '코드번호 직접 입력 인증 실패',
-            description: '개발자 계정 재인증에 실패했습니다.',
+            description: '서버 접근 승인이 확인되지 않았습니다.',
             copyText: "debugPrint('secondary user manual code entry authorization failed');",
             copyButtonLabel: 'debugPrint 코드 복사',
             visibleDuration: Duration.zero,
@@ -1823,7 +2129,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
           children: _availableModes.map((mode) {
             final selected = _selectedModes.contains(mode);
             return FilterChip(
-              label: Text(mode),
+              label: Text(AccountPermissionPolicy.modeLabel(mode)),
               selected: selected,
               onSelected: (value) {
                 setState(() {
@@ -2173,36 +2479,63 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        value: widget.roleList.contains(_selectedRole)
-                            ? _selectedRole
-                            : widget.roleList.last,
-                        isExpanded: true,
-                        decoration: opsInputDecoration(
-                          context,
-                          label: 'Role',
-                          prefixIcon: const Icon(Icons.admin_panel_settings_rounded),
-                        ),
-                        items: widget.roleList
-                            .map(
-                              (role) => DropdownMenuItem<String>(
-                                value: role,
-                                child: Text(
-                                  role,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                      AnimatedSize(
+                        duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 240),
+                        curve: Curves.easeInOutCubic,
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            for (final entry in AccountPermissionPolicy.presets.entries)
+                              ChoiceChip(
+                                label: Text(AccountPermissionPolicy.presetLabels[entry.key]!),
+                                selected: AccountPermissionPolicy.presetIdFor(
+                                      _selectedPermissionKeys,
+                                    ) == entry.key,
+                                onSelected: entry.value.every(widget.permissionList.contains)
+                                    ? (_) => setState(() {
+                                        _errorText = null;
+                                        _selectedPermissionKeys
+                                          ..clear()
+                                          ..addAll(entry.value);
+                                      })
+                                    : null,
                               ),
-                            )
-                            .toList(growable: false),
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() {
-                            _errorText = null;
-                            _selectedRole = value;
-                          });
-                        },
+                          ],
+                        ),
                       ),
+                      AnimatedSwitcher(
+                        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                        child: Column(
+                          key: ValueKey<String>(
+                            AccountPermissionPolicy.presetIdFor(_selectedPermissionKeys) ??
+                                'new_account_no_preset',
+                          ),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              AccountPermissionPolicy.presetIdFor(_selectedPermissionKeys) == null
+                                  ? '계정 등급을 선택하세요.'
+                                  : AccountPermissionPolicy.presetLabelFor(_selectedPermissionKeys),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 5),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: (AccountPermissionPolicy.sanitize(
+                                _selectedPermissionKeys,
+                              ).toList()..sort())
+                                  .map((key) => Text(
+                                        AccountPermissionPolicy.permissionLabel(key),
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                      ))
+                                  .toList(growable: false),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                       const SizedBox(height: 12),
                       _buildTextField(
                         controller: _positionController,

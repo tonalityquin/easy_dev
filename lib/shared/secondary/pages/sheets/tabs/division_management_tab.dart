@@ -49,9 +49,9 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
     if (_adding || _deletingDivisionName != null) return;
     final ok = await showOpsConfirmDialog(
       context: context,
-      title: '회사 삭제',
-      message: '"$division" 회사와 소속 지역, 비어 있는 계정 메타 문서를 삭제합니다. 계정이나 운영 데이터가 남아 있으면 먼저 정리해야 합니다.',
-      confirmLabel: '삭제',
+      title: '회사 폐쇄',
+      message: '"$division" 회사를 폐쇄하고 초기 관리자 로그인을 비활성화합니다. 기존 기록은 보존하고 다른 관리자들의 접근 목록을 재동기화합니다. 다른 소속 계정이 남아 있으면 폐쇄하지 않습니다.',
+      confirmLabel: '폐쇄',
       icon: Icons.delete_forever_rounded,
       destructive: true,
     );
@@ -223,15 +223,20 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      CommonIconButton(
-                        icon: Icons.delete_outline_rounded,
-                        tooltip: '회사 삭제',
-                        destructive: true,
-                        loading: deleting,
-                        onPressed: _adding || _deletingDivisionName != null
-                            ? null
-                            : () => _handleDeleteDivision(division),
-                        haptic: CommonHaptic.medium,
+                      AnimatedScale(
+                        scale: deleting ? .9 : 1,
+                        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                        curve: Curves.easeOutCubic,
+                        child: CommonIconButton(
+                          icon: Icons.business_outlined,
+                          tooltip: '회사 폐쇄',
+                          destructive: true,
+                          loading: deleting,
+                          onPressed: _adding || _deletingDivisionName != null
+                              ? null
+                              : () => _handleDeleteDivision(division),
+                          haptic: CommonHaptic.medium,
+                        ),
                       ),
                     ],
                   ),

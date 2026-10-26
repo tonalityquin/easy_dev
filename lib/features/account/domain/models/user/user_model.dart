@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
+import '../account_permission_policy.dart';
 
 class UserModel {
   static const List<String> weekdays = <String>['월', '화', '수', '목', '금', '토', '일'];
 
   final String id;
+  final String companyId;
+  final bool isInitialAdmin;
+  final List<String> permissionKeys;
+  final int permissionSchemaVersion;
+  final List<String> areaIds;
+  final String? passwordSalt;
+  final String? passwordHash;
   final List<String> areas;
   final String? currentArea;
   final List<String> divisions;
@@ -20,7 +28,6 @@ class UserModel {
   final String codeNumber;
 
   final String? position;
-  final String role;
   final String? selectedArea;
   final Map<String, TimeOfDay?> startTimeByWeekday;
   final Map<String, TimeOfDay?> endTimeByWeekday;
@@ -28,6 +35,13 @@ class UserModel {
 
   UserModel({
     required this.id,
+    this.companyId = '',
+    this.isInitialAdmin = false,
+    this.permissionKeys = const <String>[],
+    this.permissionSchemaVersion = 1,
+    this.areaIds = const <String>[],
+    this.passwordSalt,
+    this.passwordHash,
     required this.areas,
     this.currentArea,
     required this.divisions,
@@ -42,7 +56,6 @@ class UserModel {
     this.password,
     required this.codeNumber,
     this.position,
-    required this.role,
     this.selectedArea,
     Map<String, TimeOfDay?> startTimeByWeekday = const <String, TimeOfDay?>{},
     Map<String, TimeOfDay?> endTimeByWeekday = const <String, TimeOfDay?>{},
@@ -57,6 +70,13 @@ class UserModel {
 
   UserModel copyWith({
     String? id,
+    String? companyId,
+    bool? isInitialAdmin,
+    List<String>? permissionKeys,
+    int? permissionSchemaVersion,
+    List<String>? areaIds,
+    String? passwordSalt,
+    String? passwordHash,
     List<String>? areas,
     String? currentArea,
     List<String>? divisions,
@@ -71,7 +91,6 @@ class UserModel {
     String? password,
     String? codeNumber,
     String? position,
-    String? role,
     String? selectedArea,
     Map<String, TimeOfDay?>? startTimeByWeekday,
     Map<String, TimeOfDay?>? endTimeByWeekday,
@@ -81,6 +100,13 @@ class UserModel {
     final nextEnd = _normalizeWeekdayMap(endTimeByWeekday ?? this.endTimeByWeekday);
     return UserModel(
       id: id ?? this.id,
+      companyId: companyId ?? this.companyId,
+      isInitialAdmin: isInitialAdmin ?? this.isInitialAdmin,
+      permissionKeys: permissionKeys ?? this.permissionKeys,
+      permissionSchemaVersion: permissionSchemaVersion ?? this.permissionSchemaVersion,
+      areaIds: areaIds ?? this.areaIds,
+      passwordSalt: passwordSalt ?? this.passwordSalt,
+      passwordHash: passwordHash ?? this.passwordHash,
       areas: areas ?? this.areas,
       currentArea: currentArea ?? this.currentArea,
       divisions: divisions ?? this.divisions,
@@ -95,7 +121,6 @@ class UserModel {
       password: password ?? this.password,
       codeNumber: codeNumber ?? this.codeNumber,
       position: position ?? this.position,
-      role: role ?? this.role,
       selectedArea: selectedArea ?? this.selectedArea,
       startTimeByWeekday: nextStart,
       endTimeByWeekday: nextEnd,
@@ -125,6 +150,13 @@ class UserModel {
 
     return UserModel(
       id: id,
+      companyId: (data['companyId'] ?? '').toString(),
+      isInitialAdmin: data['isInitialAdmin'] == true,
+      permissionKeys: AccountPermissionPolicy.sanitize(List<String>.from(data['permissionKeys'] ?? const <String>[])).toList(growable: false),
+      permissionSchemaVersion: data['permissionSchemaVersion'] is int ? data['permissionSchemaVersion'] as int : 1,
+      areaIds: List<String>.from(data['areaIds'] ?? const <String>[]),
+      passwordSalt: data['passwordSalt']?.toString(),
+      passwordHash: data['passwordHash']?.toString(),
       areas: List<String>.from(data['areas'] ?? const <String>[]),
       currentArea: data['currentArea'],
       divisions: List<String>.from(data['divisions'] ?? const <String>[]),
@@ -139,7 +171,6 @@ class UserModel {
       password: data['password']?.toString(),
       codeNumber: (data['codeNumber'] ?? data['phone'] ?? '').toString(),
       position: data['position'],
-      role: data['role'] ?? '',
       selectedArea: data['selectedArea'],
       startTimeByWeekday: startByWeekday,
       endTimeByWeekday: endByWeekday,
@@ -149,6 +180,13 @@ class UserModel {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
+      'companyId': companyId.trim(),
+      'isInitialAdmin': isInitialAdmin,
+      'permissionKeys': permissionKeys,
+      'permissionSchemaVersion': permissionSchemaVersion,
+      'areaIds': areaIds,
+      if (passwordSalt != null && passwordSalt!.isNotEmpty) 'passwordSalt': passwordSalt,
+      if (passwordHash != null && passwordHash!.isNotEmpty) 'passwordHash': passwordHash,
       'areas': areas,
       'currentArea': currentArea,
       'divisions': divisions,
@@ -163,7 +201,6 @@ class UserModel {
       'name': name,
       'codeNumber': codeNumber,
       'position': position,
-      'role': role,
       'selectedArea': selectedArea,
       'startTimeByWeekday': _encodeWeekdayMap(startTimeByWeekday),
       'endTimeByWeekday': _encodeWeekdayMap(endTimeByWeekday),

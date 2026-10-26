@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../shared/auth/account_code_number.dart';
 import '../../applications/tablet_account_diagnostics.dart';
 import '../../domain/models/tablet/tablet_model.dart';
@@ -137,8 +138,9 @@ class UserWriteService {
   }
 
   String _divisionOfUser(UserModel u) {
-    final d = (u.divisions.isNotEmpty ? u.divisions.first : '').trim();
-    return d.isNotEmpty ? d : 'unknownDivision';
+    final company = u.companyId.trim();
+    if (company.isEmpty) throw StateError('ACCOUNT_COMPANY_ID_REQUIRED');
+    return company;
   }
 
   String _areaOfUser(UserModel u) {
@@ -287,7 +289,10 @@ class UserWriteService {
     required String division,
     required String area,
     required bool strict,
+    bool failOnError = false,
+    void Function(String)? onDiagnostic,
   }) async {
+    var stage = 'meta_get';
     try {
       final metaSnap = await showDocRef.get();
       final meta = metaSnap.data() ?? <String, dynamic>{};
@@ -295,6 +300,17 @@ class UserWriteService {
         return _countsFromMeta(meta);
       }
 
+      stage = 'company_write_guard';
+      final divisionRef = _firestore.collection('divisions').doc(division);
+      final before = await divisionRef.get(const GetOptions(source: Source.server));
+      if (!before.exists || before.data()?['accountWriteLocked'] == true ||
+          before.data()?['lifecycleStatus'] == 'closed' ||
+          before.data()?['lifecycleStatus'] == 'closing') {
+        throw StateError('COMPANY_ACCOUNT_WRITE_BLOCKED:$division');
+      }
+      final expectedVersion = before.data()?['accountWriteVersion'] is int
+          ? before.data()!['accountWriteVersion'] as int : 0;
+      stage = 'user_projection_list';
       final qSnap = await showDocRef.collection('users').get();
       var active = 0;
       var inactive = 0;
@@ -309,17 +325,40 @@ class UserWriteService {
       }
 
       final counts = _ShowAccountCounts(activeCount: active, inactiveCount: inactive);
-      await showDocRef.set(
-        {
+      stage = 'meta_set';
+      await _firestore.runTransaction((tx) async {
+        final currentDivision = await tx.get(divisionRef);
+        final currentMeta = await tx.get(showDocRef);
+        final currentVersion = currentDivision.data()?['accountWriteVersion'] is int
+            ? currentDivision.data()!['accountWriteVersion'] as int : 0;
+        if (currentVersion != expectedVersion ||
+            currentDivision.data()?['accountWriteLocked'] == true ||
+            currentDivision.data()?['lifecycleStatus'] == 'closed' ||
+            currentDivision.data()?['lifecycleStatus'] == 'closing' ||
+            currentMeta.data()?['totalCount'] != metaSnap.data()?['totalCount'] ||
+            currentMeta.data()?['activeCount'] != metaSnap.data()?['activeCount'] ||
+            currentMeta.data()?['inactiveCount'] != metaSnap.data()?['inactiveCount']) {
+          throw StateError('COUNT_REBUILD_CONCURRENT_CHANGE:$division/$area');
+        }
+        tx.set(showDocRef, <String, dynamic>{
           'division': division,
           'area': area,
           ...counts.toMap(),
           'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+        }, SetOptions(merge: true));
+        tx.update(divisionRef, <String, dynamic>{
+          'accountWriteVersion': FieldValue.increment(1),
+        });
+      });
+      onDiagnostic?.call('count_sync_success stage=$stage');
       return counts;
-    } catch (_) {
+    } on FirebaseException catch (error) {
+      onDiagnostic?.call('count_sync_denied_or_failed stage=$stage code=${error.code}');
+      if (failOnError || strict) rethrow;
+      return const _ShowAccountCounts(activeCount: 0, inactiveCount: 0);
+    } catch (error) {
+      onDiagnostic?.call('count_sync_exception stage=$stage type=${error.runtimeType}');
+      if (failOnError || strict) rethrow;
       return const _ShowAccountCounts(activeCount: 0, inactiveCount: 0);
     }
   }
@@ -359,6 +398,23 @@ class UserWriteService {
     };
   }
 
+  Future<DocumentReference<Map<String, dynamic>>> _guardCompanyWrite(
+    Transaction tx,
+    String companyId,
+  ) async {
+    final normalized = companyId.trim();
+    if (normalized.isEmpty) throw StateError('ACCOUNT_COMPANY_ID_REQUIRED');
+    final ref = _firestore.collection('divisions').doc(normalized);
+    final company = await tx.get(ref);
+    if (!company.exists ||
+        company.data()?['lifecycleStatus'] == 'closing' ||
+        company.data()?['lifecycleStatus'] == 'closed' ||
+        company.data()?['accountWriteLocked'] == true) {
+      throw StateError('COMPANY_ACCOUNT_WRITE_BLOCKED:$normalized');
+    }
+    return ref;
+  }
+
   Future<void> addUserCard(UserModel user) async {
     await _assertUniqueUserCodeNumber(user.codeNumber);
     final normalizedCode = AccountCodeNumber.normalize(user.codeNumber);
@@ -383,6 +439,7 @@ class UserWriteService {
 
     try {
       await _firestore.runTransaction((tx) async {
+        final companyRef = await _guardCompanyWrite(tx, division);
         final rootSnap = await tx.get(userDocRef);
         final codeSnap = await tx.get(codeDocRef);
         if (rootSnap.exists) {
@@ -429,6 +486,9 @@ class UserWriteService {
           inactiveDelta: inactiveDelta,
         );
 
+        tx.update(companyRef, <String, dynamic>{
+          'accountWriteVersion': FieldValue.increment(1),
+        });
         tx.set(userDocRef, _toUserAccountsMap(user, isActive: wantActive));
         tx.set(
           codeDocRef,
@@ -445,6 +505,9 @@ class UserWriteService {
         );
 
         final userMap = _removeLegacyScheduleFields(user.toMap());
+        userMap.remove('passwordHash');
+        userMap.remove('passwordSalt');
+        userMap.remove('password');
         userMap['updatedAt'] = FieldValue.serverTimestamp();
         userMap['isActive'] = wantActive;
         if (!wantActive) {
@@ -476,10 +539,14 @@ class UserWriteService {
     );
     try {
       await _firestore.runTransaction((tx) async {
+        final companyRef = await _guardCompanyWrite(tx, tablet.companyId);
         final existing = await tx.get(docRef);
         if (existing.exists) {
           throw StateError('해당 코드번호와 업무 지역으로 등록된 태블릿이 이미 있습니다.');
         }
+        tx.update(companyRef, <String, dynamic>{
+          'accountWriteVersion': FieldValue.increment(1),
+        });
         tx.set(docRef, tablet.toMap());
       });
       TabletAccountDiagnostics.record(
@@ -566,6 +633,10 @@ class UserWriteService {
 
     try {
       await _firestore.runTransaction((tx) async {
+        await _guardCompanyWrite(tx, oldDivision);
+        if (newDivision != oldDivision) {
+          await _guardCompanyWrite(tx, newDivision);
+        }
         final previousRootSnap = await tx.get(previousUserDocRef);
         if (!previousRootSnap.exists || previousRootSnap.data() == null) {
           throw StateError('USER_NOT_FOUND:$previousUserId');
@@ -592,6 +663,9 @@ class UserWriteService {
         final newTotalLimit = _normalizeLimit(newShowData['totalLimit']);
         final newCounts0 = _countsFromMeta(newShowData);
         final userMap = _removeLegacyScheduleFields(user.toMap());
+        userMap.remove('passwordHash');
+        userMap.remove('passwordSalt');
+        userMap.remove('password');
         userMap.remove('isActive');
         userMap.remove('disabledAt');
         userMap['updatedAt'] = FieldValue.serverTimestamp();
@@ -664,6 +738,12 @@ class UserWriteService {
               previousCodeSnap.exists &&
               (previousCodeSnap.data()?['userId'] ?? '').toString() == previousUserId) {
             tx.delete(previousCodeDocRef);
+          }
+          tx.update(_firestore.collection('divisions').doc(oldDivision),
+              <String, dynamic>{'accountWriteVersion': FieldValue.increment(1)});
+          if (oldDivision != newDivision) {
+            tx.update(_firestore.collection('divisions').doc(newDivision),
+                <String, dynamic>{'accountWriteVersion': FieldValue.increment(1)});
           }
           return;
         }
@@ -745,6 +825,12 @@ class UserWriteService {
               previousCodeSnap.exists &&
               (previousCodeSnap.data()?['userId'] ?? '').toString() == previousUserId) {
             tx.delete(previousCodeDocRef);
+          }
+          tx.update(_firestore.collection('divisions').doc(oldDivision),
+              <String, dynamic>{'accountWriteVersion': FieldValue.increment(1)});
+          if (oldDivision != newDivision) {
+            tx.update(_firestore.collection('divisions').doc(newDivision),
+                <String, dynamic>{'accountWriteVersion': FieldValue.increment(1)});
           }
           return;
         }
@@ -862,6 +948,12 @@ class UserWriteService {
             (previousCodeSnap.data()?['userId'] ?? '').toString() == previousUserId) {
           tx.delete(previousCodeDocRef);
         }
+        tx.update(_firestore.collection('divisions').doc(oldDivision),
+            <String, dynamic>{'accountWriteVersion': FieldValue.increment(1)});
+        if (oldDivision != newDivision) {
+          tx.update(_firestore.collection('divisions').doc(newDivision),
+              <String, dynamic>{'accountWriteVersion': FieldValue.increment(1)});
+        }
       });
     } on FirebaseException {
       rethrow;
@@ -896,6 +988,7 @@ class UserWriteService {
     );
     try {
       await _firestore.runTransaction((tx) async {
+        await _guardCompanyWrite(tx, tablet.companyId);
         if (moving) {
           final existing = await tx.get(nextRef);
           if (existing.exists) {
@@ -966,6 +1059,7 @@ class UserWriteService {
       );
 
       await _firestore.runTransaction((tx) async {
+        await _guardCompanyWrite(tx, division);
         final showSnap = await tx.get(showDocRef);
         final showData = showSnap.data() ?? <String, dynamic>{};
 
@@ -1058,43 +1152,58 @@ class UserWriteService {
     }
   }
 
-  Future<void> deleteUsers(List<String> ids) async {
+  Future<void> deleteUsers(
+    List<String> ids, {
+    void Function(String)? onDiagnostic,
+  }) async {
+    final authUser = FirebaseAuth.instance.currentUser;
+    onDiagnostic?.call(
+      'firebase_identity present=${authUser != null} anonymous=${authUser?.isAnonymous ?? false} providers=${authUser?.providerData.map((provider) => provider.providerId).join(',') ?? 'none'}',
+    );
     for (final id in ids) {
       final userDocRef = _getUserCollectionRef().doc(id);
-
+      var stage = 'account_get';
       try {
-        UserModel? prevUser;
-        try {
-          final snap = await userDocRef.get();
-          if (snap.exists && snap.data() != null) {
-            prevUser = UserModel.fromMap(snap.id, snap.data()!);
-          }
-        } catch (_) {}
-
-        if (prevUser == null) {
+        onDiagnostic?.call('account_get_started collection=user_accounts');
+        final snap = await userDocRef.get();
+        if (!snap.exists || snap.data() == null) {
+          onDiagnostic?.call('account_missing_delete_attempt collection=user_accounts');
+          stage = 'missing_account_delete';
           await userDocRef.delete();
+          onDiagnostic?.call('account_missing_delete_completed');
           continue;
         }
-
+        final prevUser = UserModel.fromMap(snap.id, snap.data()!);
+        onDiagnostic?.call('account_get_success');
         final division = _divisionOfUser(prevUser);
         final area = _areaOfUser(prevUser);
         final showId = _showDocId(division, area);
-
         final showDocRef = _getUserShowCollectionRef().doc(showId);
         final showUserDocRef = showDocRef.collection('users').doc(id);
         final normalizedCode = AccountCodeNumber.normalize(prevUser.codeNumber);
         final codeDocRef = normalizedCode.isEmpty
             ? null
             : _getUserCodeCollectionRef().doc(normalizedCode);
+        onDiagnostic?.call(
+          'delete_plan projection=true code_reservation=${codeDocRef != null} developer_manual_code=${AccountCodeNumber.isDeveloperManualCode(normalizedCode)}',
+        );
 
+        stage = 'count_sync';
+        onDiagnostic?.call('count_sync_started collection=user_accounts_show');
         await _ensureOrSyncAccountCounts(
           showDocRef: showDocRef,
           division: division,
           area: area,
           strict: true,
+          failOnError: true,
+          onDiagnostic: onDiagnostic,
         );
 
+        stage = 'transaction_start';
+        onDiagnostic?.call('transaction_started');
         await _firestore.runTransaction((tx) async {
+          await _guardCompanyWrite(tx, division);
+          stage = 'transaction_code_get';
           final codeSnap = codeDocRef == null ? null : await tx.get(codeDocRef);
           if (codeSnap != null && codeSnap.exists) {
             final owner = (codeSnap.data()?['userId'] ?? '').toString();
@@ -1102,10 +1211,11 @@ class UserWriteService {
               throw StateError('USER_CODE_RESERVATION_MISMATCH:$normalizedCode');
             }
           }
+          stage = 'transaction_meta_get';
           final showSnap = await tx.get(showDocRef);
           final showData = showSnap.data() ?? <String, dynamic>{};
           final counts0 = _countsFromMeta(showData);
-
+          stage = 'transaction_projection_get';
           final showUserSnap = await tx.get(showUserDocRef);
           var counts1 = counts0;
           if (showUserSnap.exists) {
@@ -1116,7 +1226,7 @@ class UserWriteService {
               inactiveDelta: wasActive ? 0 : -1,
             );
           }
-
+          stage = 'transaction_commit';
           tx.delete(showUserDocRef);
           tx.delete(userDocRef);
           if (codeDocRef != null && codeSnap != null && codeSnap.exists) {
@@ -1128,10 +1238,14 @@ class UserWriteService {
             SetOptions(merge: true),
           );
         });
-
-      } on FirebaseException {
+        onDiagnostic?.call('transaction_committed account_delete_success');
+      } on FirebaseException catch (error) {
+        onDiagnostic?.call(
+          'delete_firestore_failure stage=$stage code=${error.code} message=${error.message ?? 'unknown'}',
+        );
         rethrow;
-      } catch (_) {
+      } catch (error) {
+        onDiagnostic?.call('delete_exception stage=$stage type=${error.runtimeType}');
         rethrow;
       }
     }
@@ -1141,8 +1255,16 @@ class UserWriteService {
     for (final id in ids) {
       final docRef = _getTabletCollectionRef().doc(id);
       try {
-        await docRef.delete();
-
+        await _firestore.runTransaction((tx) async {
+          final tablet = await tx.get(docRef);
+          if (!tablet.exists) return;
+          final company = (tablet.data()?['companyId'] ?? '').toString();
+          final companyRef = await _guardCompanyWrite(tx, company);
+          tx.update(companyRef, <String, dynamic>{
+            'accountWriteVersion': FieldValue.increment(1),
+          });
+          tx.delete(docRef);
+        });
       } on FirebaseException {
         rethrow;
       } catch (_) {

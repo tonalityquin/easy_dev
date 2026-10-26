@@ -95,7 +95,8 @@ class FirestoreUserRepository implements UserRepository {
       _writeService.updateTablet(tablet, previousId: previousId);
 
   @override
-  Future<void> deleteUsers(List<String> ids) => _writeService.deleteUsers(ids);
+  Future<void> deleteUsers(List<String> ids, {void Function(String)? onDiagnostic}) =>
+      _writeService.deleteUsers(ids, onDiagnostic: onDiagnostic);
 
   @override
   Future<void> deleteTablets(List<String> ids) => _writeService.deleteTablets(ids);

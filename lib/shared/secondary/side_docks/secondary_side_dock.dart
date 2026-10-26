@@ -266,7 +266,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       );
     }
     _debugLog.log(
-      'access_snapshot role=${state.role.name} devMode=$_devModeEnabled devLoggedIn=${state.devLoggedIn} entryMode=${widget.entryMode.name} railScope=$_railScope ${access.join('|')}',
+      'access_snapshot permissionDriven=true devMode=$_devModeEnabled devLoggedIn=${state.devLoggedIn} entryMode=${widget.entryMode.name} railScope=$_railScope ${access.join('|')}',
     );
   }
 

@@ -82,7 +82,6 @@ class UserState extends ChangeNotifier {
     'handle',
     'tabletPhone',
     'tabletCodeNumber',
-    'role',
     'division',
     'position',
     'fixedHolidays',
@@ -115,11 +114,29 @@ class UserState extends ChangeNotifier {
 
   bool get hasClockInToday => _hasClockInToday;
 
-  String get role => _session?.role ?? '';
+  List<String> get assignedAreas => List<String>.unmodifiable(
+    _session?.areas ?? const <String>[],
+  );
+
+  List<String> get assignedDivisions => List<String>.unmodifiable(
+    _session?.divisions ?? const <String>[],
+  );
 
   String get position => _user?.position ?? _tablet?.position ?? '';
 
   String get name => _session?.displayName ?? '';
+
+  String _divisionForAccountArea(UserModel user, String areaName) {
+    final area = areaName.trim();
+    final allowedIds = user.areaIds.map((value) => value.trim()).toSet();
+    if (area.isNotEmpty && allowedIds.isNotEmpty) {
+      final matches = user.divisions.map((value) => value.trim())
+          .where((division) =>
+              allowedIds.contains('$division-$area')).toList(growable: false);
+      if (matches.length == 1) return matches.single;
+    }
+    return user.companyId.trim();
+  }
 
   String get codeNumber => _user?.codeNumber ?? _tablet?.codeNumber ?? '';
 
@@ -130,7 +147,14 @@ class UserState extends ChangeNotifier {
       _user?.areas.firstOrNull ?? _tablet?.areas.firstOrNull ?? '';
 
   String get division =>
-      _user?.divisions.firstOrNull ?? _tablet?.divisions.firstOrNull ?? '';
+      _session?.companyId.isNotEmpty == true
+          ? _session!.companyId
+          : (_user?.companyId ?? _tablet?.companyId ?? '');
+
+  Set<String> get permissionKeys =>
+      Set<String>.unmodifiable(_session?.permissionKeys ?? const <String>[]);
+
+  bool hasPermission(String permission) => permissionKeys.contains(permission);
 
   String get selectedArea => _session?.selectedArea ?? '';
 
@@ -772,6 +796,13 @@ class UserState extends ChangeNotifier {
     final current = _user!;
     final updatedUser = UserModel(
       id: current.id,
+      companyId: current.companyId,
+      isInitialAdmin: current.isInitialAdmin,
+      permissionKeys: current.permissionKeys,
+      permissionSchemaVersion: current.permissionSchemaVersion,
+      areaIds: current.areaIds,
+      passwordHash: current.passwordHash,
+      passwordSalt: current.passwordSalt,
       areas: current.areas,
       currentArea: current.currentArea,
       divisions: current.divisions,
@@ -785,7 +816,6 @@ class UserState extends ChangeNotifier {
       name: current.name,
       codeNumber: current.codeNumber,
       position: current.position,
-      role: current.role,
       selectedArea: current.selectedArea,
       startTimeByWeekday: normalizedStart,
       endTimeByWeekday: normalizedEnd,
@@ -1240,9 +1270,10 @@ class UserState extends ChangeNotifier {
   Future<void> deleteUserCard(
     List<String> ids, {
     void Function(String)? onError,
+    void Function(String)? onDiagnostic,
   }) async {
     try {
-      await _repository.deleteUsers(ids);
+      await _repository.deleteUsers(ids, onDiagnostic: onDiagnostic);
 
       final area = _areaState.currentArea.trim();
       _userList =
@@ -1287,8 +1318,8 @@ class UserState extends ChangeNotifier {
     await prefs.setString('codeNumber', user.codeNumber);
     await prefs.remove('phone');
     await prefs.setString('selectedArea', user.selectedArea ?? '');
-    await prefs.setString('division', user.divisions.firstOrNull ?? '');
-    await prefs.setString('role', user.role);
+    await prefs.setString('division', user.companyId);
+    await prefs.remove('role');
     await prefs.setString('position', user.position ?? '');
     await WorkSchedulePrefs.saveUserSchedule(prefs: prefs, user: user);
 
@@ -1325,8 +1356,8 @@ class UserState extends ChangeNotifier {
     await prefs.setString('selectedArea', areaName);
     await prefs.setString(
         'englishSelectedAreaName', tablet.englishSelectedAreaName ?? areaName);
-    await prefs.setString('division', tablet.divisions.firstOrNull ?? '');
-    await prefs.setString('role', tablet.role);
+    await prefs.setString('division', tablet.companyId);
+    await prefs.remove('role');
     await prefs.setString('position', tablet.position ?? '');
   }
 
@@ -1402,7 +1433,7 @@ class UserState extends ChangeNotifier {
         prefs: prefs,
       );
 
-      final cachedDivision = userData.divisions.firstOrNull?.trim() ?? '';
+      final cachedDivision = userData.companyId.trim();
       final effectiveDivision = storedDivision != null && storedDivision.isNotEmpty
           ? storedDivision
           : cachedDivision;
@@ -1413,9 +1444,11 @@ class UserState extends ChangeNotifier {
         breakDays: effectiveBreakDays,
         startTimeByWeekday: effectiveStartByWeekday,
         endTimeByWeekday: effectiveEndByWeekday,
-        divisions: effectiveDivision.isNotEmpty
-            ? <String>[effectiveDivision]
-            : userData.divisions,
+        divisions: userData.divisions.isNotEmpty
+            ? userData.divisions
+            : (effectiveDivision.isNotEmpty
+                ? <String>[effectiveDivision]
+                : const <String>[]),
         isSaved: true,
         isWorking: localIsWorking,
       );
@@ -1424,7 +1457,7 @@ class UserState extends ChangeNotifier {
         scope: 'auth',
         meta: <String, Object?>{
           'source': 'cached_user',
-          'rolePresent': userData.role.trim().isNotEmpty,
+          'permissionsPresent': userData.permissionKeys.isNotEmpty,
           'preferenceOverrideApplied': false,
         },
       );
@@ -1470,7 +1503,6 @@ class UserState extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final codeNumber = (prefs.getString('codeNumber') ?? prefs.getString('phone'))?.trim();
       final selectedArea = prefs.getString('selectedArea')?.trim();
-      final division = prefs.getString('division')?.trim();
       final hadStoredSchedule = WorkSchedulePrefs.hasStoredSchedulePrefs(prefs);
       await WorkSchedulePrefs.migrateLegacySchedulePrefs(prefs);
       final startTimeByWeekday = WorkSchedulePrefs.readDayTimeMapFromPrefs(
@@ -1551,7 +1583,7 @@ class UserState extends ChangeNotifier {
         breakDays: effectiveBreakDays,
         startTimeByWeekday: effectiveStartByWeekday,
         endTimeByWeekday: effectiveEndByWeekday,
-        divisions: division != null ? [division] : userData.divisions,
+        divisions: userData.divisions,
         isSaved: true,
         isWorking: localIsWorking,
       );
@@ -1560,7 +1592,7 @@ class UserState extends ChangeNotifier {
         scope: 'auth',
         meta: <String, Object?>{
           'source': 'server',
-          'rolePresent': userData.role.trim().isNotEmpty,
+          'permissionsPresent': userData.permissionKeys.isNotEmpty,
         },
       );
       LauncherDiagnostics.record(
@@ -1573,7 +1605,7 @@ class UserState extends ChangeNotifier {
           'effective': userData.isWorking,
         },
       );
-      final loginDivision = userData.divisions.firstOrNull ?? '';
+      final loginDivision = _divisionForAccountArea(userData, trimmedArea);
       await _areaState.refreshAreaForLogin(
         area: trimmedArea,
         division: loginDivision,
@@ -1612,7 +1644,6 @@ class UserState extends ChangeNotifier {
         prefs.getString('tabletCodeNumber') ?? '',
       );
       final selectedArea = prefs.getString('selectedArea')?.trim();
-      final division = prefs.getString('division')?.trim();
       final position = prefs.getString('position');
       final englishSelectedAreaName =
           prefs.getString('englishSelectedAreaName')?.trim();
@@ -1695,7 +1726,7 @@ class UserState extends ChangeNotifier {
         currentArea: selectedArea,
         selectedArea: selectedArea,
         position: position ?? tablet.position,
-        divisions: division != null ? <String>[division] : tablet.divisions,
+        divisions: tablet.divisions,
         englishSelectedAreaName: (englishSelectedAreaName?.isNotEmpty ?? false)
             ? englishSelectedAreaName
             : tablet.englishSelectedAreaName,
@@ -1707,7 +1738,7 @@ class UserState extends ChangeNotifier {
         scope: 'auth',
         meta: <String, Object?>{
           'source': 'server',
-          'rolePresent': tabletData.role.trim().isNotEmpty,
+          'permissionsPresent': tabletData.permissionKeys.isNotEmpty,
         },
       );
       LauncherDiagnostics.record(
@@ -1744,7 +1775,7 @@ class UserState extends ChangeNotifier {
         );
       }
 
-      final loginDivision = tabletData.divisions.firstOrNull ?? '';
+      final loginDivision = tabletData.companyId;
       await _areaState.refreshAreaForLogin(
         area: selectedArea,
         division: loginDivision,

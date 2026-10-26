@@ -16,6 +16,7 @@ import '../../init/startup_tasks.dart';
 import '../../init/work_status_notification.dart';
 import '../../theme/theme_debug_trace.dart';
 import '../../utils/status_dialog.dart';
+import '../../utils/access_gate_diagnostics.dart';
 import '../../utils/secure_auth_diagnostics.dart';
 
 class ParkinWorkinTerminalDiagnostics {
@@ -62,6 +63,7 @@ class ParkinWorkinTerminalDiagnostics {
       ...MotionTimingDiagnostics.lines,
       ...BuildOptimizationDiagnostics.lines,
       ...StatusDialog.debugLines,
+      ...AccessGateDiagnostics.lines,
       ..._lines,
     ];
     if (merged.isEmpty) {
@@ -99,6 +101,7 @@ class ParkinWorkinTerminalDiagnostics {
         'motionTimingLines': MotionTimingDiagnostics.lines.length,
         'buildOptimizationLines': BuildOptimizationDiagnostics.lines.length,
         'statusDialogLines': StatusDialog.debugLines.length,
+        'accessGateLines': AccessGateDiagnostics.lines.length,
       },
     );
     await StatusDialog.showSuccess(

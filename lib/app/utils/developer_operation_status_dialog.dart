@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../design_system/common_ui/common_ui_overlays.dart';
 import '../../features/selector/application/dev_auth.dart';
 import 'status_dialog.dart';
+import 'access_gate_diagnostics.dart';
 
 enum DeveloperOperationState {
   running,
@@ -38,9 +39,10 @@ class DeveloperOperationTrace extends ChangeNotifier {
   List<String> get lines => List<String>.unmodifiable(_lines);
 
   String get debugPrintCode {
-    return _lines
-        .map((line) => 'debugPrint(${jsonEncode(line)});')
-        .join('\n');
+    return <String>[
+      ...AccessGateDiagnostics.lines,
+      ..._lines,
+    ].map((line) => 'debugPrint(${jsonEncode(line)});').join('\n');
   }
 
   static Future<DeveloperOperationTrace> start({

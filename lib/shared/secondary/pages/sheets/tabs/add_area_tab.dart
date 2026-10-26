@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../../../../features/account/data/services/company_bootstrap_service.dart';
 
 import '../../../../../app/models/capability.dart';
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
@@ -110,6 +111,10 @@ class _AddAreaTabState extends State<AddAreaTab> {
       standardModeMessage: '개발자 모드 OFF: 지역 생성 로그를 콘솔에 기록합니다.',
     );
     try {
+      await CompanyBootstrapService.requireDeveloper(
+        source: 'area_structure_write',
+        forceAccountSelection: false,
+      );
       final firestore = FirebaseFirestore.instance;
       final areaRef = firestore.collection('areas').doc('$division-$areaName');
       final showRef = firestore.collection('user_accounts_show').doc('$division-$areaName');
@@ -132,6 +137,14 @@ class _AddAreaTabState extends State<AddAreaTab> {
           ),
         );
         transaction.set(
+          firestore.doc('access_catalog/current'),
+          <String, dynamic>{
+            'version': FieldValue.increment(1),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+        transaction.set(
           showRef,
           result.settings.accountMetaPayload(
             division: division,
@@ -141,7 +154,25 @@ class _AddAreaTabState extends State<AddAreaTab> {
           ),
         );
       });
-      trace.log('Firestore transaction commit 완료: writes=2', progress: 0.9);
+      trace.log('Firestore transaction commit 완료: writes=2', progress: 0.86);
+      try {
+        await const CompanyBootstrapService().synchronizeInitialAdmins(
+          onProgress: (message) => trace.log(message),
+        );
+        trace.log('초기 관리자 전체 지역 접근 목록 동기화 완료', progress: 0.94);
+      } catch (syncError, syncStack) {
+        trace.log('지역은 생성됐지만 접근 목록이 일부 동기화되지 않았습니다: ${syncError.runtimeType}');
+        _refreshAreas();
+        await trace.fail(
+          '지역 생성은 완료됐지만 초기 관리자 접근 목록 동기화가 필요합니다.',
+          error: syncError,
+          stackTrace: syncStack,
+        );
+        if (mounted && !trace.developerMode) {
+          showFailedSnackbar(context, '지역이 생성됐지만 초기 관리자 접근 목록은 재동기화가 필요합니다.', useCommonUi: true);
+        }
+        return;
+      }
       _refreshAreas();
       await trace.succeed('지역과 계정 메타 생성이 완료되었습니다.');
       if (!mounted) return;
@@ -243,6 +274,10 @@ class _AddAreaTabState extends State<AddAreaTab> {
       standardModeMessage: '개발자 모드 OFF: 지역 수정 로그를 콘솔에 기록합니다.',
     );
     try {
+      await CompanyBootstrapService.requireDeveloper(
+        source: 'area_structure_write',
+        forceAccountSelection: false,
+      );
       final firestore = FirebaseFirestore.instance;
       final areaRef = firestore.collection('areas').doc(item.documentId);
       final showRef = firestore.collection('user_accounts_show').doc('${item.division}-${item.name}');
@@ -337,6 +372,10 @@ class _AddAreaTabState extends State<AddAreaTab> {
       standardModeMessage: '개발자 모드 OFF: 지역 삭제 로그를 콘솔에 기록합니다.',
     );
     try {
+      await CompanyBootstrapService.requireDeveloper(
+        source: 'area_structure_write',
+        forceAccountSelection: false,
+      );
       final firestore = FirebaseFirestore.instance;
       final showRef = firestore.collection('user_accounts_show').doc('${item.division}-${item.name}');
       final projectionSnap = await showRef
@@ -351,6 +390,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
           .where('areas', arrayContains: item.name)
           .get(const GetOptions(source: Source.server));
       final accountExists = accountCandidates.docs.any((doc) {
+        if (doc.data()['isInitialAdmin'] == true) return false;
         final divisions = List<dynamic>.from(doc.data()['divisions'] ?? const <dynamic>[])
             .map((value) => value.toString().trim())
             .toSet();
@@ -364,8 +404,30 @@ class _AddAreaTabState extends State<AddAreaTab> {
       final batch = firestore.batch();
       batch.delete(firestore.collection('areas').doc(item.documentId));
       batch.delete(showRef);
+      batch.set(firestore.doc('access_catalog/current'), <String, dynamic>{
+        'version': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       await batch.commit();
-      trace.log('Area 및 계정 메타 삭제 commit 완료: writes=2', progress: 0.9);
+      trace.log('Area 및 계정 메타 삭제 commit 완료: writes=2', progress: 0.86);
+      try {
+        await const CompanyBootstrapService().synchronizeInitialAdmins(
+          onProgress: (message) => trace.log(message),
+        );
+        trace.log('초기 관리자 전체 지역 접근 목록 동기화 완료', progress: 0.94);
+      } catch (syncError, syncStack) {
+        trace.log('지역은 삭제됐지만 접근 목록이 일부 동기화되지 않았습니다: ${syncError.runtimeType}');
+        _refreshAreas();
+        await trace.fail(
+          '지역 삭제는 완료됐지만 초기 관리자 접근 목록 동기화가 필요합니다.',
+          error: syncError,
+          stackTrace: syncStack,
+        );
+        if (mounted && !trace.developerMode) {
+          showFailedSnackbar(context, '지역이 삭제됐지만 초기 관리자 접근 목록은 재동기화가 필요합니다.', useCommonUi: true);
+        }
+        return;
+      }
       _refreshAreas();
       await trace.succeed('지역 삭제가 완료되었습니다.');
       if (!mounted) return;

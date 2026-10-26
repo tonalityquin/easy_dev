@@ -457,7 +457,7 @@ class PersonalLoginController {
       'gmail': _normalizeGmail(email),
       'mode': 'personal',
       'modes': const <String>['personal'],
-      'role': 'personal',
+      'accountKind': 'personal',
       'areas': <String>[normalizedArea],
       'divisions': <String>[normalizedDivision],
       'currentArea': normalizedArea,
@@ -810,8 +810,8 @@ class PersonalLoginController {
       await prefs.setString('selectedArea', account.selectedArea);
       await prefs.setString('division', account.division);
       await prefs.setString(
-        'role',
-        (account.data['role'] ?? 'personal').toString(),
+        'accountKind',
+        'personal',
       );
       await prefs.setString(
         'position',

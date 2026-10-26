@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../design_system/common_ui/common_ui_components.dart';
 import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/selector/application/dev_auth.dart';
+import 'access_gate_diagnostics.dart';
 
 enum StatusDialogTone {
   success,
@@ -20,9 +21,10 @@ class StatusDialog {
 
   static List<String> get debugLines => List<String>.unmodifiable(_debugLines);
 
-  static String get debugPrintCode => _debugLines
-      .map((line) => 'debugPrint(${jsonEncode(line)});')
-      .join('\n');
+  static String get debugPrintCode => <String>[
+        ...AccessGateDiagnostics.lines,
+        ..._debugLines,
+      ].map((line) => 'debugPrint(${jsonEncode(line)});').join('\n');
 
   static void _record(
     String event, {
@@ -112,8 +114,10 @@ class StatusDialog {
     final effectiveCopyText = trimmedCopyText.isEmpty
         ? currentDebugCode
         : trimmedCopyText;
-    final debugCopyText = developerMode && trimmedCopyText.isNotEmpty &&
-            !trimmedCopyText.contains('debugPrint(')
+    final debugCopyText = developerMode &&
+            trimmedCopyText.isNotEmpty &&
+            currentDebugCode.isNotEmpty &&
+            trimmedCopyText != currentDebugCode
         ? currentDebugCode
         : '';
     final reduceMotion =
@@ -537,12 +541,24 @@ class _StatusDialogContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: titleColor,
+        TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0, end: 1),
+          duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+          curve: CommonUiMotion.enter,
+          builder: (context, value, child) => Opacity(
+            opacity: value,
+            child: Transform.translate(
+              offset: Offset(0, 10 * (1 - value)),
+              child: child,
+            ),
+          ),
+          child: Text(
+            title,
+            textAlign: TextAlign.center,
+            style: textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: titleColor,
+            ),
           ),
         ),
         if (hasDescription) ...[

@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/auth/google_auth_session.dart';
+import '../../../app/models/capability.dart';
 import '../../../app/init/app_start_user_purpose.dart';
 import '../../../app/init/work_schedule_prefs.dart';
 import '../../account/applications/user_state.dart';
@@ -18,7 +21,6 @@ import '../../login/controllers/area_login_session_refresher.dart';
 import '../../login/controllers/personal/personal_login_controller.dart';
 import '../../login/controllers/tablet/tablet_login_controller.dart';
 import '../../tablet/applications/tablet_pad_mode_state.dart';
-import '../../dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../dev/application/area_state.dart';
 import '../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../headquarter/application/headquarter_dashboard_context.dart';
@@ -464,74 +466,21 @@ class TerminalAuthCoordinator {
     );
 
     if (debugDeveloperAnonymousAuth) {
+      await FirebaseAuth.instance.signOut();
       LauncherDiagnostics.record(
-        'auth_firebase_prelookup_debug_developer_anonymous_start',
+        'auth_debug_local_developer_session',
         meta: <String, Object?>{
           'accountKind': accountKindId(kind),
-          'developerPasswordMode': true,
-          'interactiveGoogle': false,
+          'firebaseReads': 0,
+          'firebaseWrites': 0,
+          'googleAuth': false,
+          'scope': 'local_only',
         },
       );
-      try {
-        final firebaseUser = await FirebaseGoogleAuthBridge.instance
-            .ensureDebugDeveloperFirebaseAuthenticated();
-        final authenticated = firebaseUser != null;
-        LauncherDiagnostics.record(
-          authenticated
-              ? 'auth_firebase_prelookup_debug_developer_anonymous_success'
-              : 'auth_firebase_prelookup_debug_developer_anonymous_failed',
-          meta: <String, Object?>{
-            'accountKind': accountKindId(kind),
-            'developerPasswordMode': true,
-            'interactiveGoogle': false,
-            'firebaseAuthenticated': authenticated,
-            'firebaseAnonymous': firebaseUser?.isAnonymous,
-            'firebaseUidPresent': firebaseUser != null,
-          },
-        );
-        if (!authenticated) {
-          return const TerminalFirebasePreAuthenticationResult(
-            success: false,
-            message: 'Debug Firebase 인증을 완료하지 못했습니다.',
-          );
-        }
-        return const TerminalFirebasePreAuthenticationResult(
-          success: true,
-          message: 'Debug Firebase 인증을 확인했습니다.',
-        );
-      } on FirebaseAuthException catch (error, stackTrace) {
-        LauncherDiagnostics.record(
-          'auth_firebase_prelookup_debug_developer_anonymous_error',
-          meta: <String, Object?>{
-            'accountKind': accountKindId(kind),
-            'developerPasswordMode': true,
-            'interactiveGoogle': false,
-            'firebaseAuthCode': error.code,
-            'firebaseAuthMessage': error.message ?? '',
-            'stack': stackTrace,
-          },
-        );
-        return const TerminalFirebasePreAuthenticationResult(
-          success: false,
-          message: 'Debug Firebase 인증을 완료하지 못했습니다.',
-        );
-      } catch (error, stackTrace) {
-        LauncherDiagnostics.record(
-          'auth_firebase_prelookup_debug_developer_anonymous_error',
-          meta: <String, Object?>{
-            'accountKind': accountKindId(kind),
-            'developerPasswordMode': true,
-            'interactiveGoogle': false,
-            'errorType': error.runtimeType.toString(),
-            'error': error,
-            'stack': stackTrace,
-          },
-        );
-        return const TerminalFirebasePreAuthenticationResult(
-          success: false,
-          message: 'Debug Firebase 인증을 완료하지 못했습니다.',
-        );
-      }
+      return const TerminalFirebasePreAuthenticationResult(
+        success: true,
+        message: '디버그 개발자 로컬 세션을 시작했습니다.',
+      );
     }
 
     try {
@@ -565,6 +514,58 @@ class TerminalAuthCoordinator {
         message: 'Google 계정 인증을 다시 확인하세요.',
       );
     }
+  }
+
+  static TerminalAccountIdentityResolutionResult resolveLocalDebugDeveloperIdentity({
+    required TerminalAccountKind kind,
+    required String name,
+    required String codeNumber,
+  }) {
+    if (!kDebugMode || kind != TerminalAccountKind.user) {
+      return const TerminalAccountIdentityResolutionResult(
+        success: false,
+        message: '디버그 로컬 개발자 로그인은 일반 계정에서만 지원합니다.',
+      );
+    }
+    final local = UserModel.fromMap('debug-local-developer', <String, dynamic>{
+      'name': name.trim(),
+      'codeNumber': AccountCodeNumber.normalize(codeNumber),
+      'companyId': 'debug-local',
+      'divisions': <String>['debug-local'],
+      'areas': <String>['debug-local'],
+      'areaIds': <String>[],
+      'modes': <String>['single', 'double', 'triple', 'minor'],
+      'email': '',
+      'position': '개발 테스트',
+      'permissionKeys': <String>[
+        'accounts.read', 'accounts.create', 'accounts.update',
+        'accounts.delete', 'accounts.activate', 'accounts.grantPermissions',
+        'sector.manage', 'location.manage', 'rule.manage',
+        'tablet.manage', 'bill.manage', 'monthly.manage',
+        'company.manage', 'voice.delete.any', 'single.operations.enter',
+      ],
+      'isActive': true,
+      'isInitialAdmin': false,
+      'isSaved': false,
+      'isSelected': false,
+      'isWorking': false,
+    });
+    LauncherDiagnostics.record('auth_debug_local_developer_identity',
+      meta: const <String, Object?>{
+        'source': 'local_only', 'firestoreReads': 0,
+        'serverPermissions': false,
+      });
+    return TerminalAccountIdentityResolutionResult(
+      success: true,
+      message: '운영 Firestore 접근 권한이 없는 디버그 로컬 개발자 세션입니다.',
+      account: TerminalAuthenticatedAccount(
+        kind: TerminalAccountKind.user,
+        displayName: local.name,
+        supportedModes: _userSupportedModes(local.modes),
+        activated: false,
+        user: local,
+      ),
+    );
   }
 
   static Future<TerminalAccountIdentityResolutionResult> resolveAccountIdentity(
@@ -819,6 +820,9 @@ class TerminalAuthCoordinator {
         TerminalSessionPersistence.persistent,
   }) async {
     final normalizedPassword = password.trim();
+    final localDebugSession = kDebugMode &&
+        account.kind == TerminalAccountKind.user &&
+        account.user?.id == 'debug-local-developer';
     final storedPassword = switch (account.kind) {
       TerminalAccountKind.user => account.user?.password?.trim() ?? '',
       TerminalAccountKind.personal =>
@@ -833,12 +837,20 @@ class TerminalAuthCoordinator {
         'passwordLength': normalizedPassword.length,
         'passwordProtected': true,
         'temporaryPasswordPresent': storedPassword.isNotEmpty,
-        'passwordSource': 'manual_firestore_field',
+        'passwordSource': localDebugSession
+            ? 'debug_local_only' : 'manual_firestore_field',
         'firebaseReads': 0,
       },
     );
 
-    if (storedPassword.isEmpty || storedPassword != normalizedPassword) {
+    final user = account.user;
+    final storedHash = user?.passwordHash ?? '';
+    final storedSalt = user?.passwordSalt ?? '';
+    final hashedValid = account.kind == TerminalAccountKind.user &&
+        storedHash.isNotEmpty && storedSalt.isNotEmpty &&
+        sha256.convert(utf8.encode('$storedSalt:$normalizedPassword')).toString() == storedHash;
+    final legacyValid = storedPassword.isNotEmpty && storedPassword == normalizedPassword;
+    if (!localDebugSession && !hashedValid && !legacyValid) {
       LauncherDiagnostics.record(
         'auth_account_password_verify_failed',
         meta: <String, Object?>{
@@ -846,7 +858,8 @@ class TerminalAuthCoordinator {
           'passwordLength': normalizedPassword.length,
           'passwordProtected': true,
           'temporaryPasswordPresent': storedPassword.isNotEmpty,
-          'passwordSource': 'manual_firestore_field',
+          'passwordSource': localDebugSession
+            ? 'debug_local_only' : 'manual_firestore_field',
           'firebaseReads': 0,
         },
       );
@@ -993,6 +1006,52 @@ class TerminalAuthCoordinator {
     }
   }
 
+  static String _workDivisionForUser({
+    required UserModel user,
+    required String area,
+    AreaRecord? verifiedRecord,
+  }) {
+    final normalized = area.trim();
+    final allowed = user.divisions.map((item) => item.trim()).toSet();
+    final ids = user.areaIds.map((item) => item.trim()).toSet();
+    if (verifiedRecord != null) {
+      final division = verifiedRecord.division.trim();
+      if (verifiedRecord.name.trim() != normalized ||
+          !allowed.contains(division) ||
+          (ids.isNotEmpty && !ids.contains('$division-$normalized'))) {
+        return '';
+      }
+      return division;
+    }
+    if (ids.isNotEmpty) {
+      final matches = allowed.where((division) =>
+          ids.contains('$division-$normalized')).toList(growable: false);
+      return matches.length == 1 ? matches.single : '';
+    }
+    return allowed.contains(user.companyId.trim())
+        ? user.companyId.trim() : '';
+  }
+
+  static bool _isEphemeralDebugDeveloper(
+    TerminalAuthenticatedAccount account,
+    TerminalSessionPersistence persistence,
+  ) => kDebugMode &&
+      persistence == TerminalSessionPersistence.ephemeral &&
+      account.kind == TerminalAccountKind.user &&
+      account.user?.id == 'debug-local-developer';
+
+  static AreaRecord _debugLocalAreaRecord({
+    required String area,
+    required bool headquarter,
+  }) => AreaRecord(
+    name: area,
+    division: 'debug-local',
+    email: '',
+    capabilities: Capability.values.toSet(),
+    modes: const <String>['single', 'double', 'triple', 'minor'],
+    isHeadquarter: headquarter,
+  );
+
   static Future<TerminalModeActivationResult> activateHeadquarterContext(
     BuildContext context, {
     required TerminalAuthenticatedAccount account,
@@ -1015,8 +1074,15 @@ class TerminalAuthCoordinator {
       );
     }
     final areaToSet = targetArea.trim();
-    final divisionToSet = user.divisions.firstOrNull ?? '';
-    if (areaToSet.isEmpty ||
+    final effectiveRecord = _isEphemeralDebugDeveloper(account, persistence)
+        ? _debugLocalAreaRecord(area: areaToSet, headquarter: true)
+        : verifiedAreaRecord;
+    final divisionToSet = _workDivisionForUser(
+      user: user,
+      area: areaToSet,
+      verifiedRecord: effectiveRecord,
+    );
+    if (areaToSet.isEmpty || divisionToSet.isEmpty ||
         !user.areas.any((value) => value.trim() == areaToSet)) {
       return const TerminalModeActivationResult(
         success: false,
@@ -1035,9 +1101,9 @@ class TerminalAuthCoordinator {
         'persistMode': false,
         'storedModeFallback': false,
         'sessionPersistence': sessionPersistenceId(persistence),
-        'firebaseAreaValidationReads': verifiedAreaRecord == null ? 1 : 0,
+        'firebaseAreaValidationReads': effectiveRecord == null ? 1 : 0,
         'firebaseWorkAreaListReads': 0,
-        'verifiedAreaRecordProvided': verifiedAreaRecord != null,
+        'effectiveRecordProvided': effectiveRecord != null,
       },
     );
 
@@ -1059,9 +1125,9 @@ class TerminalAuthCoordinator {
             );
       final areaState = context.read<AreaState>();
       var firebaseAreaValidationReads = 0;
-      var verifiedAreaRecordReused = false;
-      if (verifiedAreaRecord != null) {
-        final record = verifiedAreaRecord;
+      var effectiveRecordReused = false;
+      if (effectiveRecord != null) {
+        final record = effectiveRecord;
         final recordMatches = record.name.trim() == areaToSet &&
             record.division.trim() == divisionToSet.trim() &&
             record.isHeadquarter;
@@ -1075,7 +1141,7 @@ class TerminalAuthCoordinator {
               'verifiedRecordDivision': record.division,
               'verifiedRecordIsHeadquarter': record.isHeadquarter,
               'firebaseAreaValidationReads': 0,
-              'verifiedAreaRecordReused': false,
+              'effectiveRecordReused': false,
             },
           );
           return const TerminalModeActivationResult(
@@ -1088,7 +1154,7 @@ class TerminalAuthCoordinator {
           source: 'launcher_verified_headquarter',
           syncWorkSession: false,
         );
-        verifiedAreaRecordReused = true;
+        effectiveRecordReused = true;
       } else {
         firebaseAreaValidationReads = 1;
         await AreaLoginSessionRefresher.refresh(
@@ -1106,7 +1172,7 @@ class TerminalAuthCoordinator {
               'division': divisionToSet,
               'serverIsHeadquarter': areaState.currentRecord?.isHeadquarter,
               'firebaseAreaValidationReads': firebaseAreaValidationReads,
-              'verifiedAreaRecordReused': false,
+              'effectiveRecordReused': false,
             },
           );
           return TerminalModeActivationResult(
@@ -1129,9 +1195,9 @@ class TerminalAuthCoordinator {
       await prefs.setString('selectedArea', areaToSet);
       await prefs.setString(
         'division',
-        updatedUser.divisions.firstOrNull ?? '',
+        updatedUser.companyId,
       );
-      await prefs.setString('role', updatedUser.role);
+      await prefs.remove('role');
       await prefs.setString('position', updatedUser.position ?? '');
       await WorkSchedulePrefs.saveUserSchedule(
         prefs: prefs,
@@ -1185,7 +1251,7 @@ class TerminalAuthCoordinator {
           'appFallbackListening': sessionResult.appFallbackListening,
           'firebaseAreaValidationReads': firebaseAreaValidationReads,
           'firebaseWorkAreaListReads': 0,
-          'verifiedAreaRecordReused': verifiedAreaRecordReused,
+          'effectiveRecordReused': effectiveRecordReused,
           'firebaseUserWrites': account.activated ||
                   persistence == TerminalSessionPersistence.ephemeral
               ? 0
@@ -1197,7 +1263,7 @@ class TerminalAuthCoordinator {
         success: true,
         message: '본사 대시보드를 시작합니다.',
         firebaseAreaValidationReads: firebaseAreaValidationReads,
-        verifiedAreaRecordReused: verifiedAreaRecordReused,
+        verifiedAreaRecordReused: effectiveRecordReused,
       );
     } catch (error, stackTrace) {
       LauncherDiagnostics.record(
@@ -1262,11 +1328,22 @@ class TerminalAuthCoordinator {
           );
         }
         final requestedArea = targetArea.trim();
+        final isLocalDebug = _isEphemeralDebugDeveloper(account, persistence);
+        final effectiveRecord = isLocalDebug
+            ? _debugLocalAreaRecord(
+                area: requestedArea.isNotEmpty ? requestedArea : 'debug-local',
+                headquarter: false,
+              )
+            : verifiedAreaRecord;
         final areaToSet = requestedArea.isNotEmpty
             ? requestedArea
             : user.areas.firstOrNull ?? '';
-        final divisionToSet = user.divisions.firstOrNull ?? '';
-        if (areaToSet.isEmpty ||
+        final divisionToSet = _workDivisionForUser(
+          user: user,
+          area: areaToSet,
+          verifiedRecord: effectiveRecord,
+        );
+        if (areaToSet.isEmpty || divisionToSet.isEmpty ||
             !user.areas.any((value) => value.trim() == areaToSet)) {
           return const TerminalModeActivationResult(
             success: false,
@@ -1287,8 +1364,8 @@ class TerminalAuthCoordinator {
         final areaState = context.read<AreaState>();
         var firebaseAreaValidationReads = 0;
         var verifiedAreaRecordReused = false;
-        if (verifiedAreaRecord != null) {
-          final record = verifiedAreaRecord;
+        if (effectiveRecord != null) {
+          final record = effectiveRecord;
           final recordMatches = record.name.trim() == areaToSet &&
               record.division.trim() == divisionToSet.trim() &&
               !record.isHeadquarter;
@@ -1374,9 +1451,9 @@ class TerminalAuthCoordinator {
         await prefs.setString('selectedArea', areaToSet);
         await prefs.setString(
           'division',
-          updatedUser.divisions.firstOrNull ?? '',
+          updatedUser.companyId,
         );
-        await prefs.setString('role', updatedUser.role);
+        await prefs.remove('role');
         await prefs.setString('position', updatedUser.position ?? '');
         await WorkSchedulePrefs.saveUserSchedule(
           prefs: prefs,
@@ -1478,14 +1555,14 @@ class TerminalAuthCoordinator {
       if (account.user != null) {
         homeArea = account.user!.areas.firstOrNull ?? '';
         if (division.isEmpty) {
-          division = account.user!.divisions.firstOrNull ?? '';
+          division = account.user!.companyId;
         }
       } else if (account.personalAccount != null) {
         homeArea = account.personalAccount!.selectedArea.trim();
       } else if (account.tablet != null) {
         homeArea = account.tablet!.areas.firstOrNull ?? '';
         if (division.isEmpty) {
-          division = account.tablet!.divisions.firstOrNull ?? '';
+          division = account.tablet!.companyId;
         }
       }
       final currentRecord = areaState.currentRecord;

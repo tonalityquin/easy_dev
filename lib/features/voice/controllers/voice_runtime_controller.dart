@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import '../../../../../features/account/domain/models/session_account.dart';
+import '../../../features/account/domain/models/session_account.dart';
 import '../../dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../data/repositories/firestore_voice_channel_repository.dart';
 import '../data/repositories/firestore_voice_message_repository.dart';
@@ -286,7 +286,10 @@ class VoiceRuntimeController extends ChangeNotifier {
     if (session == null || channel == null || repository == null) {
       return;
     }
-    final canDeleteAnyMessage = session.role.contains('admin');
+    final permissions = session is UserSessionAccount
+        ? session.user.permissionKeys
+        : const <String>[];
+    final canDeleteAnyMessage = permissions.contains('voice.delete.any');
     if (message.senderId != session.id && !canDeleteAnyMessage) {
       _errorMessage = '본인이 보낸 음성만 삭제할 수 있습니다.';
       notifyListeners();

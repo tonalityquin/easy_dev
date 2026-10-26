@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../../../../shared/secondary/application/account_assignment_resolver.dart';
+import '../../../../../shared/secondary/application/account_primary_assignment.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -14,15 +16,15 @@ import '../../../../../shared/auth/account_code_number.dart';
 import '../../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../../dev/application/area_state.dart';
-import '../../../../dev/application/developer_account_authorization.dart';
+import '../../../../dev/application/account_group_authorization.dart';
 import '../../../../launcher/application/app_mode_registry.dart';
-import '../../../../selector/application/dev_auth.dart';
 import '../../../applications/user_state.dart';
+import '../../../data/services/company_bootstrap_service.dart';
 import '../../../domain/models/user/user_model.dart';
+import '../../../domain/models/account_permission_policy.dart';
 import '../../../domain/repositories/user_repository.dart';
 import 'models/user_settings_draft.dart';
 import 'user_setting_section_editor_dialog.dart';
-import 'widgets/user_role_type_section.dart';
 
 class UserSettingWorkspace extends StatefulWidget {
   const UserSettingWorkspace({
@@ -56,8 +58,8 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       <UserSettingsSection, GlobalKey>{
     for (final section in UserSettingsSection.values) section: GlobalKey(),
   };
-
-  RoleType _selectedRole = RoleType.fieldCommon;
+  final Set<String> _selectedPermissionKeys = <String>{};
+  bool _permissionChanged = false;
   UserCodeEntryMode _codeEntryMode = UserCodeEntryMode.generated;
   final Set<String> _selectedModes = <String>{};
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
@@ -65,6 +67,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   Set<String> _breakDays = <String>{};
   String? _saveError;
   bool _saving = false;
+  bool _groupAuthorized = false;
   bool _validationSubmitted = false;
   bool _reduceMotion = false;
   int _handledNavigationRequestId = -1;
@@ -75,39 +78,23 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
 
   bool get isEditMode => widget.initialUser != null;
 
-  bool get _manualCodeAllowedNow =>
-      !isEditMode &&
-      DevAuth.devModeEnabled.value &&
-      DeveloperAccountAuthorization.isAuthorized;
+  bool get _manualCodeAllowedNow => !isEditMode && _groupAuthorized;
+
+  Future<bool> _refreshGroupAuthorization({required String source}) async {
+    final approved = await AccountGroupAuthorization.verify(source: source);
+    if (mounted && _groupAuthorized != approved) {
+      setState(() => _groupAuthorized = approved);
+    }
+    return approved;
+  }
 
   Future<bool> _isManualCodeAuthorized({bool interactive = false}) async {
     if (isEditMode) return false;
-    final enabled = await DevAuth.isDevModeEnabled();
-    if (!enabled) return false;
-    if (interactive) {
-      return DeveloperAccountAuthorization.authorizeInteractive(
-        source: 'user_account_manual_code_entry',
-      );
-    }
-    return DeveloperAccountAuthorization.isAuthorized;
-  }
-
-  void _handleDevModeChanged() {
-    if (!mounted || isEditMode) return;
-    if (DevAuth.devModeEnabled.value ||
-        _codeEntryMode != UserCodeEntryMode.developerManual) {
-      setState(() {});
-      return;
-    }
-    setState(() {
-      _codeEntryMode = UserCodeEntryMode.generated;
-      _codeNumberController.text = AccountCodeNumber.format(
-        AccountCodeNumber.generate(),
-      );
-      _saveError = null;
-    });
-    _syncSectionStates(source: 'developer_mode_disabled');
-    _workspace?.log('manual_code_entry_disabled reason=developer_mode_off');
+    return _refreshGroupAuthorization(
+      source: interactive
+          ? 'user_account_manual_code_interactive'
+          : 'user_account_manual_code',
+    );
   }
 
   @override
@@ -119,7 +106,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     _endByDay = <String, TimeOfDay?>{
       for (final day in _days) day: null,
     };
-    DevAuth.devModeEnabled.addListener(_handleDevModeChanged);
+    unawaited(_refreshGroupAuthorization(source: 'user_setting_init'));
     _populateInitialValues();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -154,7 +141,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     _emailController.dispose();
     _positionController.dispose();
     _scrollController.dispose();
-    DevAuth.devModeEnabled.removeListener(_handleDevModeChanged);
     super.dispose();
   }
 
@@ -166,7 +152,10 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       _codeNumberController.text = AccountCodeNumber.format(AccountCodeNumber.generate());
       _emailController.clear();
       _positionController.clear();
-      _selectedRole = RoleType.fieldCommon;
+      _selectedPermissionKeys
+        ..clear()
+        ..addAll(AccountPermissionPolicy.presetPermissions('branchWorker'));
+      _permissionChanged = false;
       _selectedModes
         ..clear()
         ..add('single');
@@ -189,10 +178,10 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     );
     _emailController.text = user.email.split('@').first;
     _positionController.text = user.position ?? '';
-    _selectedRole = RoleType.values.firstWhere(
-      (role) => role.name == user.role,
-      orElse: () => RoleType.fieldCommon,
-    );
+    _permissionChanged = false;
+    _selectedPermissionKeys
+      ..clear()
+      ..addAll(AccountPermissionPolicy.sanitize(user.permissionKeys));
     _selectedModes
       ..clear()
       ..addAll(_normalizeAndFilterModes(user.modes));
@@ -347,7 +336,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       codeEntryMode: _codeEntryMode,
       emailLocal: _emailController.text.trim(),
       position: _positionController.text.trim(),
-      role: _selectedRole,
+      permissionKeys: Set<String>.of(_selectedPermissionKeys),
       modes: Set<String>.of(_selectedModes),
       startByDay: Map<String, TimeOfDay?>.of(_startByDay),
       endByDay: Map<String, TimeOfDay?>.of(_endByDay),
@@ -372,7 +361,13 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
           _emailController.text = draft.emailLocal;
           break;
         case UserSettingsSection.permission:
-          _selectedRole = draft.role;
+          if (!(_selectedPermissionKeys.length == draft.permissionKeys.length &&
+              _selectedPermissionKeys.containsAll(draft.permissionKeys))) {
+            _permissionChanged = true;
+          }
+          _selectedPermissionKeys
+            ..clear()
+            ..addAll(AccountPermissionPolicy.sanitize(draft.permissionKeys));
           _selectedModes
             ..clear()
             ..addAll(_normalizeAndFilterModes(draft.modes));
@@ -605,8 +600,9 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
           ? '선택한 지역의 활성 계정 한도에 도달했습니다.'
           : '선택한 지역의 활성 계정은 최대 $limit개까지 사용할 수 있습니다.';
     }
-    if (message.contains('MANUAL_CODE_NOT_AUTHORIZED')) {
-      return '개발자 모드와 개발자 계정 인증을 다시 확인하세요.';
+    if (message.contains('MANUAL_CODE_NOT_AUTHORIZED') ||
+        message.contains('GROUP_ACCESS_DENIED')) {
+      return '현재 계정의 서버 접근 승인을 확인하세요.';
     }
     if (message.contains('MANUAL_CODE_INVALID')) {
       return '직접 입력 코드번호는 숫자 11자리여야 합니다.';
@@ -651,11 +647,26 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
     final repository = context.read<UserRepository>();
-    final area = areaState.currentArea.trim();
-    final division = areaState.currentDivision.trim();
+    final initialUser = widget.initialUser;
+    final previousDivision = initialUser?.companyId.trim() ?? '';
+    final previousArea = initialUser == null
+        ? ''
+        : <String?>[
+            initialUser.currentArea,
+            initialUser.selectedArea,
+            initialUser.areas.firstOrNull,
+          ].whereType<String>().map((value) => value.trim()).firstWhere(
+            (value) => value.isNotEmpty,
+            orElse: () => '',
+          );
+    final area = initialUser == null || previousArea.isEmpty
+        ? areaState.currentArea.trim()
+        : previousArea;
+    final division = initialUser == null || previousDivision.isEmpty
+        ? areaState.currentDivision.trim()
+        : previousDivision;
     final selectedArea = area;
     final normalizedModes = _normalizeAndFilterModes(_selectedModes);
-    final initialUser = widget.initialUser;
     final operationTitle = isEditMode ? '계정 수정' : '계정 생성';
 
     setState(() => _saving = true);
@@ -678,6 +689,16 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     trace.log('passwordPolicy=manual_firestore_only appPasswordWrite=false');
 
     try {
+      final approved = await _refreshGroupAuthorization(
+        source: 'user_setting_save',
+      );
+      trace.log('server_access_gate approved=$approved');
+      if (!approved) throw StateError('GROUP_ACCESS_DENIED');
+      await CompanyBootstrapService.requireDeveloper(
+        source: 'user_account_write',
+        forceAccountSelection: false,
+      );
+      trace.log('server_developer_write_approved');
       if (_codeEntryMode == UserCodeEntryMode.developerManual) {
         final authorized = await _isManualCodeAuthorized();
         if (!authorized) {
@@ -741,6 +762,56 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         progress: 0.42,
       );
 
+      final previousDivisions = initialUser?.divisions ?? const <String>[];
+      final previousAreas = initialUser?.areas ?? const <String>[];
+      final nextDivisions = initialUser != null && previousDivisions.isNotEmpty
+          ? AccountPrimaryAssignment.normalize(previousDivisions)
+          : AccountPrimaryAssignment.replacePrimary(
+              existing: previousDivisions,
+              previousPrimary: previousDivision,
+              nextPrimary: division,
+            );
+      final nextAreas = initialUser != null && previousAreas.isNotEmpty
+          ? AccountPrimaryAssignment.normalize(previousAreas)
+          : AccountPrimaryAssignment.replacePrimary(
+              existing: previousAreas,
+              previousPrimary: previousArea,
+              nextPrimary: area,
+            );
+      final hasAssignmentChange = !AccountPermissionPolicy.normalizedAssignments(nextDivisions)
+              .containsAll(AccountPermissionPolicy.normalizedAssignments(previousDivisions)) ||
+          !AccountPermissionPolicy.normalizedAssignments(previousDivisions)
+              .containsAll(AccountPermissionPolicy.normalizedAssignments(nextDivisions)) ||
+          !AccountPermissionPolicy.normalizedAssignments(nextAreas)
+              .containsAll(AccountPermissionPolicy.normalizedAssignments(previousAreas)) ||
+          !AccountPermissionPolicy.normalizedAssignments(previousAreas)
+              .containsAll(AccountPermissionPolicy.normalizedAssignments(nextAreas));
+      final changedPrimary = initialUser != null &&
+          AccountPrimaryAssignment.primaryChanged(
+            oldDivision: previousDivision,
+            oldArea: previousArea,
+            newDivision: division,
+            newArea: area,
+          );
+      final assignmentRelations = hasAssignmentChange || changedPrimary || initialUser == null
+          ? await AccountAssignmentResolver.load(<String>{...nextDivisions, ...previousDivisions})
+          : <String, Set<String>>{};
+      if (assignmentRelations.isNotEmpty || hasAssignmentChange || changedPrimary || initialUser == null) {
+        if (!(assignmentRelations[area]?.contains(division) ?? false)) {
+          throw StateError('PRIMARY_AREA_NOT_IN_DIVISION');
+        }
+      }
+      final assignmentDenied = AccountPermissionPolicy.validateAssignments(
+        actorPermissions: userState.permissionKeys,
+        actorDivisions: userState.assignedDivisions,
+        actorAreas: userState.assignedAreas,
+        newDivisions: nextDivisions,
+        newAreas: nextAreas,
+      );
+      trace.log('primary_assignment_check old=$previousDivision/$previousArea new=$division/$area moved=$changedPrimary divisions=${nextDivisions.length} areas=${nextAreas.length}');
+      trace.log('assignment_list_check allowed=${assignmentDenied == null} reason=${assignmentDenied ?? 'ok'} divisions=${nextDivisions.length} areas=${nextAreas.length}');
+      if (assignmentDenied != null) throw StateError(assignmentDenied);
+
       final user = UserModel(
         id: AccountCodeNumber.documentId(
           codeNumber: _codeNumberController.text,
@@ -749,11 +820,15 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         name: _nameController.text.trim(),
         codeNumber: AccountCodeNumber.normalize(_codeNumberController.text),
         email: '${_emailController.text.trim()}@gmail.com',
-        role: _selectedRole.name,
+        companyId: initialUser?.companyId.isNotEmpty == true
+            ? initialUser!.companyId : division,
+        isInitialAdmin: initialUser?.isInitialAdmin ?? false,
+        areaIds: initialUser?.areaIds ?? const <String>[],
+        permissionKeys: _selectedPermissionKeys.toList(growable: false),
         modes: normalizedModes,
         position: _positionController.text.trim(),
-        areas: <String>[area],
-        divisions: <String>[division],
+        areas: nextAreas,
+        divisions: nextDivisions,
         currentArea: area,
         selectedArea: selectedArea,
         englishSelectedAreaName: englishName ?? area,
@@ -766,11 +841,24 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         isActive: initialUser?.isActive ?? true,
       );
 
+      final reason = AccountPermissionPolicy.validateChange(
+        actorPermissions: userState.permissionKeys,
+        previousPermissions: initialUser?.permissionKeys ?? const <String>[],
+        nextPermissions: user.permissionKeys,
+        isCreating: initialUser == null,
+        changesPermissions: _permissionChanged,
+      );
+      trace.log('permission_policy_final_check allowed=${reason == null} reason=${reason ?? 'ok'}');
+      if (reason != null) throw StateError(reason);
+
       trace.log(
         '전역 코드 인덱스 정책 적용: user_account_codes reservation과 일반 User 저장을 동일 transaction으로 요청합니다.',
         progress: 0.54,
       );
       trace.log('계정 모델 구성 완료: Firestore 저장을 요청합니다.', progress: 0.58);
+      trace.log(
+        'permissions_saved count=${user.permissionKeys.length}',
+      );
       String? saveError;
       bool saved = true;
       if (isEditMode && initialUser != null) {
@@ -989,8 +1077,10 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     final modes = _normalizeAndFilterModes(_selectedModes)
         .map(_modeLabel)
         .toList(growable: false);
-    if (modes.isEmpty) return '${_selectedRole.label} · 허용 모드 입력 필요';
-    return '${_selectedRole.label} · ${modes.join(' · ')}';
+    final permissions = _selectedPermissionKeys.length;
+    final profile = AccountPermissionPolicy.presetLabelFor(_selectedPermissionKeys);
+    if (modes.isEmpty) return '$profile · 권한 $permissions개 · 허용 모드 입력 필요';
+    return '$profile · 권한 $permissions개 · ${modes.join(' · ')}';
   }
 
   String _positionSummary() {

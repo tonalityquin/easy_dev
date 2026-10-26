@@ -3216,6 +3216,22 @@ class ModeLauncherController extends ChangeNotifier {
         dataSource: 'user_missing',
       );
     }
+    if (kDebugMode && user.id == 'debug-local-developer') {
+      return LauncherWorkAreaResolution(
+        hasSnapshot: true,
+        division: 'debug-local',
+        areas: <LauncherWorkAreaOption>[
+          LauncherWorkAreaOption(
+            division: 'debug-local',
+            areaName: 'debug-local',
+            isHeadquarter: false,
+            supportedModes: account.supportedModes,
+            dataSource: 'debug_local_only',
+          ),
+        ],
+        dataSource: 'debug_local_only',
+      );
+    }
     final local = await LauncherWorkAreaResolver.resolve(
       user: user,
       accountModes: account.supportedModes,
@@ -3787,12 +3803,12 @@ class ModeLauncherController extends ChangeNotifier {
     final debugDeveloperAnonymousAuth = kDebugMode && developerPasswordMode;
     _loginStage = TerminalLoginStage.authenticating;
     _busy = true;
-    _runningCommand = debugDeveloperAnonymousAuth ? 'AUTH_DEBUG_ANON' : 'AUTH';
+    _runningCommand = debugDeveloperAnonymousAuth ? 'AUTH_DEBUG_LOCAL' : 'AUTH';
     _append(TerminalLineType.system, 'Account identity received');
     _append(
       TerminalLineType.running,
       debugDeveloperAnonymousAuth
-          ? 'Authenticating debug Firebase session'
+          ? 'Preparing local debug developer session'
           : 'Authenticating Google and Firebase',
     );
     notifyListeners();
@@ -3852,18 +3868,24 @@ class ModeLauncherController extends ChangeNotifier {
     _append(
       TerminalLineType.success,
       debugDeveloperAnonymousAuth
-          ? '[ OK ] Debug Firebase authentication ready'
+          ? '[ OK ] Local debug developer session ready'
           : '[ OK ] Firebase authentication ready',
     );
     _append(TerminalLineType.running, 'Resolving account identity');
     notifyListeners();
 
-    final result = await TerminalAuthCoordinator.resolveAccountIdentity(
-      context,
-      kind: kind,
-      name: _enteredName,
-      codeNumber: _enteredCodeNumber,
-    );
+    final result = debugDeveloperAnonymousAuth
+        ? TerminalAuthCoordinator.resolveLocalDebugDeveloperIdentity(
+            kind: kind,
+            name: _enteredName,
+            codeNumber: _enteredCodeNumber,
+          )
+        : await TerminalAuthCoordinator.resolveAccountIdentity(
+            context,
+            kind: kind,
+            name: _enteredName,
+            codeNumber: _enteredCodeNumber,
+          );
     if (_disposed || !context.mounted) {
       _busy = false;
       _runningCommand = '';
@@ -3916,6 +3938,10 @@ class ModeLauncherController extends ChangeNotifier {
     }
 
     _pendingManualAccount = account;
+    if (debugDeveloperAnonymousAuth &&
+        account.user?.id == 'debug-local-developer') {
+      _sessionPersistence = TerminalSessionPersistence.ephemeral;
+    }
     _enteredName = account.displayName;
     _append(TerminalLineType.success, '[ OK ] Account identity resolved');
     LauncherDiagnostics.record(
@@ -3933,8 +3959,8 @@ class ModeLauncherController extends ChangeNotifier {
       if (debugDeveloperAnonymousAuth) {
         await LauncherDiagnostics.showStatus(
           context,
-          title: 'Debug 개발자 Firebase 인증 완료',
-          description: 'Google 계정 선택 없이 Firebase 인증 후 Firestore 계정 조회를 완료한 로그를 확인할 수 있습니다.',
+          title: 'Debug 개발자 로컬 세션 준비',
+          description: 'Google Auth 및 운영 Firestore 조회 없이 로컬 개발자 세션을 준비했습니다. 서버 데이터 권한은 별개입니다.',
           scope: 'launcher_debug_developer_anonymous_auth',
         );
         if (_disposed || !context.mounted) {
@@ -4270,7 +4296,9 @@ class ModeLauncherController extends ChangeNotifier {
       await LauncherDiagnostics.showStatus(
         context,
         title: '개발자 비밀번호 인증 실패',
-        description: '임시 Firestore password 필드 인증 로그를 확인할 수 있습니다.',
+        description: kDebugMode && account.user?.id == 'debug-local-developer'
+            ? '로컬 디버그 비밀번호 입력은 서버 계정을 검증하지 않습니다. 운영 Firestore 권한은 부여되지 않습니다.'
+            : '계정 비밀번호 확인 결과를 진단 로그로 볼 수 있습니다.',
         scope: 'launcher_developer_password_auth',
         failure: true,
       );
@@ -4282,7 +4310,9 @@ class ModeLauncherController extends ChangeNotifier {
     await LauncherDiagnostics.showStatus(
       context,
       title: '개발자 비밀번호 인증 성공',
-      description: '임시 Firestore password 필드 인증 로그를 확인할 수 있습니다.',
+      description: kDebugMode && account.user?.id == 'debug-local-developer'
+            ? '로컬 디버그 비밀번호 입력은 서버 계정을 검증하지 않습니다. 운영 Firestore 권한은 부여되지 않습니다.'
+            : '계정 비밀번호 확인 결과를 진단 로그로 볼 수 있습니다.',
       scope: 'launcher_developer_password_auth',
     );
     if (_disposed || !context.mounted) {

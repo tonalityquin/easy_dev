@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../../../features/account/data/services/company_bootstrap_service.dart';
 
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/snackbar_helper.dart';
@@ -49,6 +50,7 @@ class _AreaManagementState extends State<AreaManagement>
           .orderBy('name')
           .get(const GetOptions(source: Source.serverAndCache));
       final divisions = snap.docs
+          .where((doc) => doc.data()['lifecycleStatus'] != 'closed')
           .map((doc) => (doc.data()['name'] ?? '').toString().trim())
           .where((value) => value.isNotEmpty)
           .toSet()
@@ -88,10 +90,7 @@ class _AreaManagementState extends State<AreaManagement>
       standardModeMessage: '개발자 모드 OFF: 회사 생성 로그를 콘솔에 기록합니다.',
     );
     try {
-      final firestore = FirebaseFirestore.instance;
-      final divisionRef = firestore.collection('divisions').doc(name);
-      final headquarterRef = firestore.collection('areas').doc('$name-$name');
-      final accountMetaRef = firestore.collection('user_accounts_show').doc('$name-$name');
+
       final settings = request.settings;
       trace.log(
         '생성 스키마 확인: division=$name modes=${DevAreaModePolicy.canonicalModes.join(',')} capabilities=${settings.capabilityKeys.join(',')} thirdPartyFields=excluded limits=${settings.activeLimit ?? 'unset'}/${settings.totalLimit ?? 'unset'}',
@@ -101,45 +100,21 @@ class _AreaManagementState extends State<AreaManagement>
         '본사 정책 적용: canonicalModes=single,double,triple,minor modeSelector=disabled',
         progress: 0.2,
       );
-      await firestore.runTransaction((transaction) async {
-        final divisionSnap = await transaction.get(divisionRef);
-        final headquarterSnap = await transaction.get(headquarterRef);
-        final accountMetaSnap = await transaction.get(accountMetaRef);
-        if (divisionSnap.exists) {
-          throw StateError('DIVISION_ALREADY_EXISTS');
-        }
-        if (headquarterSnap.exists) {
-          throw StateError('HEADQUARTER_ALREADY_EXISTS');
-        }
-        if (accountMetaSnap.exists) {
-          throw StateError('HEADQUARTER_ACCOUNT_META_ALREADY_EXISTS');
-        }
-        trace.log('중복 문서 검사 완료: reads=3', progress: 0.38);
-        transaction.set(
-          divisionRef,
-          <String, dynamic>{
-            'name': name,
-            'createdAt': FieldValue.serverTimestamp(),
-          },
-        );
-        transaction.set(
-          headquarterRef,
-          settings.headquarterAreaPayload(
-            name: name,
-            division: name,
-          ),
-        );
-        transaction.set(
-          accountMetaRef,
-          settings.accountMetaPayload(
-            division: name,
-            area: name,
-            activeCount: 0,
-            inactiveCount: 0,
-          ),
-        );
-      });
-      trace.log('Firestore transaction commit 완료: writes=3', progress: 0.88);
+      await const CompanyBootstrapService().createCompany(
+        company: name,
+        divisionData: <String, dynamic>{
+          'name': name,
+          'createdAt': FieldValue.serverTimestamp(),
+        },
+        areaData: settings.headquarterAreaPayload(name: name, division: name),
+        metaData: settings.accountMetaPayload(
+          division: name,
+          area: name,
+          activeCount: 0,
+          inactiveCount: 0,
+        ),
+      );
+      trace.log('Firestore transaction commit 완료: company_bootstrap included', progress: 0.88);
       await _loadDivisions();
       await trace.succeed('회사와 본사 지역 생성이 완료되었습니다.');
       if (!mounted) return true;
@@ -176,89 +151,36 @@ class _AreaManagementState extends State<AreaManagement>
   Future<bool> _deleteDivision(String name) async {
     final trace = await DeveloperOperationTrace.start(
       context: context,
-      title: '회사 삭제',
-      initialMessage: '회사 삭제 전 연관 문서 검사를 시작합니다.',
+      title: '회사 폐쇄',
+      initialMessage: '회사 폐쇄 전 계정과 초기화 기록을 검증합니다.',
       useCommonUi: true,
-      developerModeMessage: '개발자 모드 ON: 회사 삭제 로그를 debugPrint 코드로 복사할 수 있습니다.',
-      standardModeMessage: '개발자 모드 OFF: 회사 삭제 로그를 콘솔에 기록합니다.',
+      developerModeMessage: '개발자 모드 ON: 회사 폐쇄 로그의 debugPrint 코드를 복사할 수 있습니다.',
+      standardModeMessage: '개발자 모드 OFF: 회사 폐쇄 로그를 콘솔에 기록합니다.',
     );
     try {
-      final firestore = FirebaseFirestore.instance;
-      final divisionRef = firestore.collection('divisions').doc(name);
-      final areasSnap = await firestore
-          .collection('areas')
-          .where('division', isEqualTo: name)
-          .get(const GetOptions(source: Source.server));
-      final accountSnap = await firestore
-          .collection('user_accounts')
-          .where('divisions', arrayContains: name)
-          .limit(1)
-          .get(const GetOptions(source: Source.server));
-      trace.log(
-        '연관 문서 검사: areas=${areasSnap.docs.length} accountExists=${accountSnap.docs.isNotEmpty}',
-        progress: 0.24,
-      );
-      if (accountSnap.docs.isNotEmpty) {
-        throw StateError('RELATED_USER_ACCOUNT_EXISTS');
-      }
-      for (final areaDoc in areasSnap.docs) {
-        final areaName = (areaDoc.data()['name'] ?? '').toString().trim();
-        if (areaName.isEmpty) continue;
-        final showRef = firestore.collection('user_accounts_show').doc('$name-$areaName');
-        final projectionSnap = await showRef
-            .collection('users')
-            .limit(1)
-            .get(const GetOptions(source: Source.server));
-        if (projectionSnap.docs.isNotEmpty) {
-          throw StateError('RELATED_USER_PROJECTION_EXISTS:$areaName');
-        }
-      }
-      trace.log('계정 원본 및 projection 비어 있음 확인 완료', progress: 0.46);
-      final refs = <DocumentReference<Map<String, dynamic>>>[
-        divisionRef,
-        for (final areaDoc in areasSnap.docs) areaDoc.reference,
-        for (final areaDoc in areasSnap.docs)
-          if ((areaDoc.data()['name'] ?? '').toString().trim().isNotEmpty)
-            firestore
-                .collection('user_accounts_show')
-                .doc('$name-${(areaDoc.data()['name'] ?? '').toString().trim()}'),
-      ];
-      var index = 0;
-      while (index < refs.length) {
-        final end = (index + 430 < refs.length) ? index + 430 : refs.length;
-        final batch = firestore.batch();
-        for (final ref in refs.sublist(index, end)) {
-          batch.delete(ref);
-        }
-        await batch.commit();
-        index = end;
-        trace.log('삭제 batch commit: $index/${refs.length}', progress: 0.46 + 0.42 * (index / refs.length));
-      }
+      trace.log('회사 폐쇄 요청: company=$name', progress: 0.12);
+      await const CompanyBootstrapService().closeCompany(company: name);
+      trace.log('회사 폐쇄 및 전체 초기 관리자 접근 목록 동기화 완료', progress: 0.9);
       await _loadDivisions();
-      await trace.succeed('회사, 소속 지역, 계정 메타 삭제가 완료되었습니다.');
+      await trace.succeed('회사 폐쇄와 접근 목록 동기화가 완료되었습니다.');
       if (!mounted) return true;
       if (!trace.developerMode) {
-        showSuccessSnackbar(
-          context,
-          '회사 "$name"이 삭제되었습니다.',
-          useCommonUi: true,
-        );
+        showSuccessSnackbar(context, '회사 "$name"이 폐쇄되었습니다.', useCommonUi: true);
       }
       return true;
     } catch (error, stackTrace) {
-      await trace.fail(
-        '회사 삭제에 실패했습니다.',
-        error: error,
-        stackTrace: stackTrace,
-      );
+      await trace.fail('회사 폐쇄 또는 접근 목록 동기화에 실패했습니다.',
+        error: error, stackTrace: stackTrace);
       if (!mounted) return false;
       if (!trace.developerMode) {
         final raw = error.toString();
-        final message = raw.contains('RELATED_USER_ACCOUNT_EXISTS')
-            ? '소속 계정이 남아 있어 회사를 삭제할 수 없습니다.'
-            : raw.contains('RELATED_USER_PROJECTION_EXISTS')
-                ? '계정 projection이 남아 있어 회사를 삭제할 수 없습니다.'
-                : '회사 삭제 실패: $error';
+        final message = raw.contains('COMPANY_CLOSED_SYNC_PENDING')
+            ? '회사 폐쇄는 완료됐지만 다른 관리자 접근 목록 동기화가 남아 있습니다. 런처 도움말에서 재동기화하세요.'
+            : raw.contains('COMPANY_CLOSE_RELATED_ACCOUNT_EXISTS')
+                ? '다른 소속 계정이 남아 있어 회사를 폐쇄할 수 없습니다.'
+            : raw.contains('COMPANY_CLOSE_INTEGRITY_REVIEW_REQUIRED')
+                ? '초기 관리자 또는 계정 메타데이터 정합성을 확인해야 합니다.'
+                : '회사 폐쇄 또는 접근 목록 동기화 실패: $error';
         showFailedSnackbar(context, message, useCommonUi: true);
       }
       return false;

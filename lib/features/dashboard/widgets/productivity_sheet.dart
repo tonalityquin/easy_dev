@@ -124,11 +124,10 @@ class _MonthlyProductivityBody extends StatelessWidget {
       if (stateArea.isEmpty || stateArea != area) return true;
       return state.capabilitiesOfCurrentArea.contains(Capability.monthly);
     });
-    final roleName = context.select<UserState, String>((state) => state.role.trim());
-    final roleType = RoleType.fromName(roleName);
-    final roleAllowed =
-        (kRolePolicy[roleType] ?? const <Section>{}).contains(Section.monthly);
-    final canUseMonthly = hasCapability && roleAllowed && roleName != 'fieldCommon';
+    final roleAllowed = context.select<UserState, bool>(
+      (state) => state.hasPermission('monthly.manage'),
+    );
+    final canUseMonthly = hasCapability && roleAllowed;
 
     return AnimatedSwitcher(
       duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false

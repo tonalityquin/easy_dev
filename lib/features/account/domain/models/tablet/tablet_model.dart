@@ -1,7 +1,11 @@
 import '../../../../../shared/auth/account_code_number.dart';
+import '../account_permission_policy.dart';
 
 class TabletModel {
   final String id;
+  final String companyId;
+  final List<String> permissionKeys;
+  final int permissionSchemaVersion;
   final List<String> areas;
   final String? currentArea;
   final List<String> divisions;
@@ -14,11 +18,13 @@ class TabletModel {
   final String? password;
   final String codeNumber;
   final String? position;
-  final String role;
   final String? selectedArea;
 
   const TabletModel({
     required this.id,
+    this.companyId = '',
+    this.permissionKeys = const <String>[],
+    this.permissionSchemaVersion = 1,
     required this.areas,
     this.currentArea,
     required this.divisions,
@@ -31,12 +37,14 @@ class TabletModel {
     this.password,
     required this.codeNumber,
     this.position,
-    required this.role,
     this.selectedArea,
   });
 
   TabletModel copyWith({
     String? id,
+    String? companyId,
+    List<String>? permissionKeys,
+    int? permissionSchemaVersion,
     List<String>? areas,
     String? currentArea,
     List<String>? divisions,
@@ -49,11 +57,13 @@ class TabletModel {
     String? password,
     String? codeNumber,
     String? position,
-    String? role,
     String? selectedArea,
   }) {
     return TabletModel(
       id: id ?? this.id,
+      companyId: companyId ?? this.companyId,
+      permissionKeys: permissionKeys ?? this.permissionKeys,
+      permissionSchemaVersion: permissionSchemaVersion ?? this.permissionSchemaVersion,
       areas: areas ?? this.areas,
       currentArea: currentArea ?? this.currentArea,
       divisions: divisions ?? this.divisions,
@@ -67,7 +77,6 @@ class TabletModel {
       password: password ?? this.password,
       codeNumber: codeNumber ?? this.codeNumber,
       position: position ?? this.position,
-      role: role ?? this.role,
       selectedArea: selectedArea ?? this.selectedArea,
     );
   }
@@ -83,6 +92,12 @@ class TabletModel {
     final normalizedCodeNumber = AccountCodeNumber.normalize(rawCodeNumber);
     return TabletModel(
       id: id,
+      companyId: (data['companyId'] ?? '').toString(),
+      permissionKeys: AccountPermissionPolicy.sanitize(
+        List<String>.from(data['permissionKeys'] ?? const <String>[]),
+      ).toList(growable: false),
+      permissionSchemaVersion: data['permissionSchemaVersion'] is int
+          ? data['permissionSchemaVersion'] as int : 1,
       areas: List<String>.from(data['areas'] ?? const <String>[]),
       currentArea: data['currentArea'],
       divisions: List<String>.from(data['divisions'] ?? const <String>[]),
@@ -96,13 +111,15 @@ class TabletModel {
       password: data['password']?.toString(),
       codeNumber: normalizedCodeNumber,
       position: data['position'],
-      role: data['role'] ?? '',
       selectedArea: data['selectedArea'],
     );
   }
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
+      'companyId': companyId.trim(),
+      'permissionKeys': permissionKeys,
+      'permissionSchemaVersion': permissionSchemaVersion,
       'areas': areas,
       'currentArea': currentArea,
       'divisions': divisions,
@@ -114,7 +131,6 @@ class TabletModel {
       'codeNumber': AccountCodeNumber.normalize(codeNumber),
       'email': email.trim(),
       'position': position,
-      'role': role,
       'selectedArea': selectedArea,
     };
   }

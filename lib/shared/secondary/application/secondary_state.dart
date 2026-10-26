@@ -4,10 +4,11 @@ import '../../../app/models/capability.dart';
 import '../../../features/selector/application/dev_auth.dart';
 import 'secondary_info.dart';
 
+
 class SecondaryState with ChangeNotifier {
   bool _isLoading = false;
-  RoleType _role = RoleType.userCommon;
   CapSet _areaCaps = const <Capability>{};
+  Set<String> _permissionKeys = <String>{};
   bool _devLoggedIn = false;
   bool _hasLoadedDevLogin = false;
   bool _devRefreshScheduled = false;
@@ -15,12 +16,15 @@ class SecondaryState with ChangeNotifier {
 
   bool get isLoading => _isLoading;
   bool get devLoggedIn => _devLoggedIn;
-  RoleType get role => _role;
   CapSet get areaCaps => Set<Capability>.unmodifiable(_areaCaps);
 
-  bool roleAllows(Section section) {
-    return (kRolePolicy[_role] ?? const <Section>{}).contains(section);
+  bool permissionAllows(Section section) {
+    if (section == Section.local || section == Section.backend) return true;
+    final requiredPermission = kSectionPermissions[section];
+    return requiredPermission != null && _permissionKeys.contains(requiredPermission);
   }
+
+  bool hasPermission(String permission) => _permissionKeys.contains(permission);
 
   CapSet requiredCapabilities(Section section) {
     return Set<Capability>.unmodifiable(
@@ -33,13 +37,13 @@ class SecondaryState with ChangeNotifier {
   }
 
   bool canAccess(Section section) {
-    if (!roleAllows(section)) return false;
+    if (!permissionAllows(section)) return false;
     if (section == Section.backend && !_devLoggedIn) return false;
     return capabilityAllows(section);
   }
 
   String disabledReason(Section section) {
-    if (!roleAllows(section)) {
+    if (!permissionAllows(section)) {
       return '현재 계정 권한으로 ${_sectionLabel(section)}을 사용할 수 없습니다.';
     }
     if (section == Section.backend && !_devLoggedIn) {
@@ -57,8 +61,8 @@ class SecondaryState with ChangeNotifier {
   }
 
   String accessDebugReason(Section section) {
-    if (!roleAllows(section)) {
-      return 'role_denied role=${_role.name} section=${section.name}';
+    if (!permissionAllows(section)) {
+      return 'permission_denied section=${section.name}';
     }
     if (section == Section.backend && !_devLoggedIn) {
       return 'developer_login_required section=${section.name}';
@@ -75,29 +79,22 @@ class SecondaryState with ChangeNotifier {
   }
 
   void updateAccess({
-    required RoleType role,
+    required Set<String> permissionKeys,
     required CapSet areaCaps,
   }) {
-    final roleChanged = _role != role;
+    final permissionsChanged =
+        _permissionKeys.length != permissionKeys.length ||
+        !_permissionKeys.containsAll(permissionKeys);
     final capsChanged = !_sameCaps(_areaCaps, areaCaps);
-
-    if (roleChanged) {
-      _role = role;
-    }
-    if (capsChanged) {
-      _areaCaps = Set<Capability>.from(areaCaps);
-    }
-
-    if (roleChanged || capsChanged) {
+    if (permissionsChanged) _permissionKeys = Set<String>.from(permissionKeys);
+    if (capsChanged) _areaCaps = Set<Capability>.from(areaCaps);
+    if (permissionsChanged || capsChanged) {
       debugPrint(
-        '[SecondaryState] access_updated role=${_role.name} caps=${_areaCaps.map((capability) => capability.name).join(',')}',
+        '[SecondaryState] access_updated permissionCount=${_permissionKeys.length} caps=${_areaCaps.map((cap) => cap.name).join(',')}',
       );
       notifyListeners();
     }
-
-    if (!_hasLoadedDevLogin) {
-      _scheduleDeveloperLoginRefresh();
-    }
+    if (!_hasLoadedDevLogin) _scheduleDeveloperLoginRefresh();
   }
 
   void _scheduleDeveloperLoginRefresh() {

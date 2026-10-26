@@ -243,7 +243,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     final user = _selectedUser;
     final area = user?.selectedArea?.trim() ?? '';
     final division = user != null && user.divisions.isNotEmpty
-        ? user.divisions.first
+        ? user.companyId
         : '';
     final complete = _completeDayCount;
     final partial = _partialDayCount;
@@ -702,7 +702,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     final user = _selectedUser!;
     final userId = _userIdOf(user);
     final area = (user.selectedArea ?? '').trim();
-    final division = user.divisions.isNotEmpty ? user.divisions.first : '';
+    final division = user.companyId;
 
     final changed = !_mapEquals(_clockInMap, _loadedClockInMap) ||
         !_mapEquals(_clockOutMap, _loadedClockOutMap) ||
@@ -1301,7 +1301,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
               final user = _candidateUsers[index];
               final area = user.selectedArea?.trim() ?? '';
               final division =
-                  user.divisions.isNotEmpty ? user.divisions.first : '';
+                  user.companyId;
               final meta = <String>[
                 AccountCodeNumber.format(user.codeNumber),
                 if (area.isNotEmpty) area,
@@ -1553,7 +1553,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     final user = _selectedUser;
     if (user != null) {
       final area = user.selectedArea?.trim() ?? '';
-      final division = user.divisions.isNotEmpty ? user.divisions.first : '';
+      final division = user.companyId;
       final meta = <String>[
         AccountCodeNumber.format(user.codeNumber),
         if (area.isNotEmpty) area,

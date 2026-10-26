@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../utils/motion_timing_diagnostics.dart';
+import '../../../features/account/presentation/initial_account_setup_dialog.dart';
 import '../../../features/launcher/application/launcher_actions.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
 import '../../../features/launcher/application/mode_launcher_controller.dart';
@@ -1282,6 +1283,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       },
     );
     var openDeveloperPassword = false;
+    var openInitialAccountSetup = false;
     await _showLauncherDialog(
       builder: (dialogContext) => _LauncherAccountDialog(
         accountKind: _launcherController!.selectedAccountKindLabel,
@@ -1292,6 +1294,9 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         onStatus: _showDeveloperStatus,
         onOpened: _handleLauncherDialogOpened,
         onClosing: _handleLauncherDialogClosing,
+        onOpenInitialAccountSetup: () {
+          openInitialAccountSetup = true;
+        },
         onResolveIdentity: (name, accountIdentifier, developerPasswordMode) async {
           final result = await _resolveLauncherAccount(
             name,
@@ -1309,6 +1314,37 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       ),
     );
     if (!mounted) return;
+    if (openInitialAccountSetup) {
+      LauncherDiagnostics.record(
+        'developer_initial_account_setup_open',
+        scope: 'launcher_terminal_manual_auth',
+      );
+      try {
+        await InitialAccountSetupDialog.open(context);
+        LauncherDiagnostics.record(
+          'developer_initial_account_setup_closed',
+          scope: 'launcher_terminal_manual_auth',
+        );
+      } catch (error) {
+        LauncherDiagnostics.record(
+          'developer_initial_account_setup_failed',
+          scope: 'launcher_terminal_manual_auth',
+          meta: <String, Object?>{
+            'errorType': error.runtimeType.toString(),
+          },
+        );
+        if (mounted) {
+          await LauncherDiagnostics.showStatus(
+            context,
+            title: '최초 계정 설정 열기 실패',
+            description: '최초 계정 설정 화면을 열지 못했습니다.',
+            scope: 'launcher_terminal_manual_auth',
+            failure: true,
+          );
+        }
+      }
+      return;
+    }
     if (openDeveloperPassword) {
       await _showLauncherPasswordDialog();
     }
@@ -1669,6 +1705,32 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     Navigator.of(context).pop();
   }
 
+  Future<void> _showLauncherHelp() async {
+    if (!_isLauncher || _interactionLocked) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('런처 도움말'),
+        content: const Text('로그인 도움말과 최초 계정 설정을 이용할 수 있습니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('닫기'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              if (!mounted) return;
+              await InitialAccountSetupDialog.open(context);
+            },
+            icon: const Icon(Icons.admin_panel_settings_outlined),
+            label: const Text('최초 계정 설정'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showDeveloperStatus() async {
     if (_interactionLocked) return;
     _commandInputFocusNode.unfocus();
@@ -1915,6 +1977,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
             reduceMotion: _reduceMotion,
             onCloseTerminal: () => _submitHeaderCommand('out'),
             onAbout: _isLauncher ? null : () => _submitHeaderCommand('about'),
+            onLauncherHelp: _isLauncher ? _showLauncherHelp : null,
             onAppExit: _isLauncher ? () => _submitHeaderCommand('exit') : null,
             onSetting: () => _submitHeaderCommand('setting'),
             appExiting: _exitInProgress,
@@ -2086,6 +2149,7 @@ class _TerminalHeader extends StatelessWidget {
     required this.reduceMotion,
     required this.onCloseTerminal,
     required this.onAbout,
+    required this.onLauncherHelp,
     required this.onAppExit,
     required this.onSetting,
     required this.appExiting,
@@ -2098,6 +2162,7 @@ class _TerminalHeader extends StatelessWidget {
   final bool reduceMotion;
   final VoidCallback onCloseTerminal;
   final VoidCallback? onAbout;
+  final VoidCallback? onLauncherHelp;
   final VoidCallback? onAppExit;
   final VoidCallback onSetting;
   final bool appExiting;
@@ -2176,6 +2241,19 @@ class _TerminalHeader extends StatelessWidget {
               ),
             ),
           ),
+          if (onLauncherHelp != null) ...[
+            const SizedBox(width: 2),
+            _TerminalHeaderAction(
+              semanticLabel: '도움말 및 최초 계정 설정',
+              onPressed: busy ? null : onLauncherHelp,
+              reduceMotion: reduceMotion,
+              child: const Icon(
+                Icons.help_outline_rounded,
+                size: 17,
+                color: _terminalAccent,
+              ),
+            ),
+          ],
           const SizedBox(width: 2),
           AnimatedSwitcher(
             duration:
@@ -4831,6 +4909,7 @@ class _MiniTerminalFrame extends StatefulWidget {
     required this.title,
     required this.reduceMotion,
     required this.onStatus,
+    this.onHelp,
     required this.onOpenCompleted,
     required this.child,
   });
@@ -4838,6 +4917,7 @@ class _MiniTerminalFrame extends StatefulWidget {
   final String title;
   final bool reduceMotion;
   final VoidCallback onStatus;
+  final VoidCallback? onHelp;
   final VoidCallback onOpenCompleted;
   final Widget child;
 
@@ -5028,6 +5108,51 @@ class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
                                       letterSpacing: .55,
                                     ),
                                   ),
+                                ),
+                                AnimatedSwitcher(
+                                  duration: widget.reduceMotion
+                                      ? Duration.zero
+                                      : const Duration(milliseconds: 220),
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  transitionBuilder: (child, animation) =>
+                                      FadeTransition(
+                                    opacity: animation,
+                                    child: ScaleTransition(
+                                      scale: Tween<double>(
+                                        begin: .82,
+                                        end: 1,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                                  child: widget.onHelp == null
+                                      ? const SizedBox.shrink(
+                                          key: ValueKey<String>(
+                                            'initial_account_help_hidden',
+                                          ),
+                                        )
+                                      : Padding(
+                                          key: const ValueKey<String>(
+                                            'initial_account_help_visible',
+                                          ),
+                                          padding:
+                                              const EdgeInsets.only(right: 8),
+                                          child: IconButton(
+                                            tooltip: '최초 계정 설정',
+                                            onPressed: widget.onHelp,
+                                            icon: const Icon(
+                                              Icons.help_outline_rounded,
+                                              color: _terminalAccent,
+                                              size: 19,
+                                            ),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(
+                                              minWidth: 32,
+                                              minHeight: 32,
+                                            ),
+                                          ),
+                                        ),
                                 ),
                                 ValueListenableBuilder<bool>(
                                   valueListenable: DevAuth.devModeEnabled,
@@ -5249,6 +5374,7 @@ class _LauncherAccountDialog extends StatefulWidget {
     required this.onStatus,
     required this.onOpened,
     required this.onClosing,
+    required this.onOpenInitialAccountSetup,
     required this.onResolveIdentity,
   });
 
@@ -5260,6 +5386,7 @@ class _LauncherAccountDialog extends StatefulWidget {
   final VoidCallback onStatus;
   final VoidCallback onOpened;
   final VoidCallback onClosing;
+  final VoidCallback onOpenInitialAccountSetup;
   final Future<LauncherCredentialSubmitResult> Function(
     String name,
     String accountIdentifier,
@@ -5456,8 +5583,7 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
     );
   }
 
-  int get _requiredDeveloperTapCount =>
-      widget.accountKindType == TerminalAccountKind.tablet ? 3 : 5;
+  int get _requiredDeveloperTapCount => 5;
 
   Future<void> _registerEmptyDeveloperTap() async {
     if (_busy || _developerPasswordMode) return;
@@ -5545,8 +5671,8 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       );
       await LauncherDiagnostics.showStatus(
         context,
-        title: '개발자 Firebase 인증 실패',
-        description: '개발자 Google/Firebase 선행 인증 로그를 확인할 수 있습니다.',
+        title: '개발자 계정 인증 실패',
+        description: '개발자 계정 인증 상태와 오류 내용을 확인할 수 있습니다.',
         scope: 'launcher_terminal_manual_auth',
         failure: true,
       );
@@ -5659,6 +5785,25 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
     }
   }
 
+  Future<void> _openInitialAccountSetup() async {
+    if (_busy || !_developerPasswordMode) return;
+    setState(() => _busy = true);
+    FocusManager.instance.primaryFocus?.unfocus();
+    LauncherDiagnostics.record(
+      'developer_initial_account_setup_help_tapped',
+      scope: 'launcher_terminal_manual_auth',
+      meta: <String, Object?>{
+        'accountKind': widget.accountKind,
+      },
+    );
+    widget.onClosing();
+    await WidgetsBinding.instance.endOfFrame;
+    await _frameKey.currentState?.close();
+    if (!mounted) return;
+    widget.onOpenInitialAccountSetup();
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -5668,6 +5813,7 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
         title: 'ACCOUNT VERIFICATION',
         reduceMotion: widget.reduceMotion,
         onStatus: widget.onStatus,
+        onHelp: _developerPasswordMode ? _openInitialAccountSetup : null,
         onOpenCompleted: _handleOpened,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -5856,9 +6002,9 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
                           child: Text(
                             _developerPasswordMode
                                 ? (kDebugMode
-                                    ? 'FIREBASE ANON AUTH → ACCOUNT LOOKUP'
-                                    : 'FIREBASE AUTH → ACCOUNT LOOKUP')
-                                : 'GOOGLE → FIREBASE → ACCOUNT LOOKUP',
+                                    ? '개발자 로그인 확인 중'
+                                    : '개발자 계정 정보 확인 중')
+                                : '계정 인증 및 정보 확인 중',
                             style: const TextStyle(
                               color: _terminalMuted,
                               fontFamily: 'monospace',

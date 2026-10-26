@@ -27,7 +27,10 @@ void minorAreaPickerBottomSheet({
   }
 
   final divisions = userState.session?.divisions ?? const <String>[];
-  final userDivision = divisions.isNotEmpty ? divisions.first : '';
+  final activeDivision = areaState.currentDivision.trim();
+  final userDivision = divisions.contains(activeDivision)
+      ? activeDivision
+      : (userState.session?.companyId ?? '').trim();
   if (userDivision.trim().isEmpty) {
     debugPrint('⚠️ 사용자 소속 회사 없음 (userDivision)');
     return;

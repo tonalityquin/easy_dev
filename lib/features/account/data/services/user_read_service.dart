@@ -63,7 +63,7 @@ class UserReadService {
     final user = UserModel.fromMap(id, source);
     if (source['isActive'] is bool) return user;
 
-    final division = user.divisions.isNotEmpty ? user.divisions.first.trim() : '';
+    final division = user.companyId.trim();
     final area = (user.currentArea ?? '').trim().isNotEmpty
         ? user.currentArea!.trim()
         : (user.selectedArea ?? '').trim().isNotEmpty

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../domain/models/account_permission_policy.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
@@ -9,7 +10,6 @@ import '../../../../../shared/auth/account_code_number.dart';
 import '../../../../../shared/secondary/application/secondary_tablet_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import 'models/tablet_settings_draft.dart';
-import 'widgets/tablet_role_type.dart';
 
 class TabletSettingSectionEditorDialog extends StatefulWidget {
   const TabletSettingSectionEditorDialog({
@@ -37,7 +37,7 @@ class _TabletSettingSectionEditorDialogState
   late final TextEditingController _nameController;
   late final TextEditingController _codeNumberController;
   late final TextEditingController _emailController;
-  late TabletRoleType _role;
+  late Set<String> _permissionKeys;
   bool _submitted = false;
   bool _reduceMotion = false;
 
@@ -48,7 +48,7 @@ class _TabletSettingSectionEditorDialogState
     _nameController = TextEditingController(text: draft.name);
     _codeNumberController = TextEditingController(text: AccountCodeNumber.format(draft.codeNumber));
     _emailController = TextEditingController(text: draft.emailLocal);
-    _role = draft.role;
+    _permissionKeys = AccountPermissionPolicy.sanitize(draft.permissionKeys);
     widget.trace.log('편집 화면이 열렸습니다: section=${widget.section.name}');
   }
 
@@ -115,7 +115,7 @@ class _TabletSettingSectionEditorDialogState
           emailLocal: _emailController.text.trim(),
         );
       case TabletSettingsSection.permission:
-        return base.copyWith(role: _role);
+        return base.copyWith(permissionKeys: _permissionKeys);
     }
   }
 
@@ -130,7 +130,7 @@ class _TabletSettingSectionEditorDialogState
     }
     final result = _resultDraft();
     widget.trace.log(
-      '편집 적용: section=${widget.section.name} nameLength=${result.name.length} codeNumber=${AccountCodeNumber.mask(result.codeNumber)} emailSet=${result.emailLocal.isNotEmpty} emailDomain=gmail.com role=${result.role.name} passwordPolicy=manual_firestore_only',
+      '편집 적용: section=${widget.section.name} nameLength=${result.name.length} codeNumber=${AccountCodeNumber.mask(result.codeNumber)} emailSet=${result.emailLocal.isNotEmpty} emailDomain=gmail.com permissionCount=${result.permissionKeys.length} passwordPolicy=manual_firestore_only',
     );
     widget.onApply(result);
     if (!mounted) return;
@@ -290,27 +290,33 @@ class _TabletSettingSectionEditorDialogState
   }
 
   Widget _permissionEditor(BuildContext context) {
-    return DropdownButtonFormField<TabletRoleType>(
-      value: _role,
-      isExpanded: true,
-      decoration: opsInputDecoration(
-        context,
-        label: '권한',
-        prefixIcon: const Icon(Icons.admin_panel_settings_rounded),
+    final keys = AccountPermissionPolicy.keys.toList()..sort();
+    return AnimatedSize(
+      duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+      curve: CommonUiMotion.enter,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: keys.map((permission) {
+          final selected = _permissionKeys.contains(permission);
+          return OpsFormChip(
+            label: permission,
+            selected: selected,
+            icon: selected ? Icons.check_rounded : Icons.lock_outline_rounded,
+            onTap: () {
+              setState(() {
+                _permissionKeys = <String>{..._permissionKeys};
+                if (selected) {
+                  _permissionKeys.remove(permission);
+                } else {
+                  _permissionKeys.add(permission);
+                }
+              });
+              widget.trace.log('태블릿 권한 변경: key=$permission selected=${!selected}');
+            },
+          );
+        }).toList(growable: false),
       ),
-      items: TabletRoleType.values
-          .map(
-            (role) => DropdownMenuItem<TabletRoleType>(
-              value: role,
-              child: Text(role.label, overflow: TextOverflow.ellipsis),
-            ),
-          )
-          .toList(growable: false),
-      onChanged: (role) {
-        if (role == null) return;
-        setState(() => _role = role);
-        widget.trace.log('권한 변경: role=${role.name}');
-      },
     );
   }
 

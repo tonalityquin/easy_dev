@@ -230,7 +230,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final user = _selectedUser;
     final area = user?.selectedArea?.trim() ?? '';
     final division = user != null && user.divisions.isNotEmpty
-        ? user.divisions.first
+        ? user.companyId
         : '';
     _recordDebug(
       'developer_status_open presentation=${widget.presentation.name} user=${user?.name ?? '-'} area=$area division=$division month=${_monthKey(_focusedDay)} selectedDay=${_selectedDay?.day ?? -1} records=${_breakTimeMap.length} dirty=$_dirtyDayCount deletes=${_pendingDeleteBreakDates.length} cache=${_breakTimeCache.length} loading=$_isLoadingMonth monthError=${_monthLoadError != null} searching=$_isSearching searchError=${_searchError != null} candidates=${_candidateUsers.length} view=${_dockView.name} bulkBreak=${_bulkGeneratedBreakTimes.length} editDialogOpen=$_editDialogOpen save=${_saveState.name} mail=$_isSendingMail reduceMotion=${media?.disableAnimations ?? false}',
@@ -605,7 +605,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final user = _selectedUser!;
     final userId = _userIdOf(user);
     final area = (user.selectedArea ?? '').trim();
-    final division = user.divisions.isNotEmpty ? user.divisions.first : '';
+    final division = user.companyId;
 
     final changed = !_mapEquals(_breakTimeMap, _loadedBreakTimeMap) ||
         _pendingDeleteBreakDates.isNotEmpty;
@@ -1168,7 +1168,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
               final user = _candidateUsers[index];
               final area = user.selectedArea?.trim() ?? '';
               final division =
-                  user.divisions.isNotEmpty ? user.divisions.first : '';
+                  user.companyId;
               final meta = <String>[
                 AccountCodeNumber.format(user.codeNumber),
                 if (area.isNotEmpty) area,
@@ -1414,7 +1414,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final user = _selectedUser;
     if (user != null) {
       final area = user.selectedArea?.trim() ?? '';
-      final division = user.divisions.isNotEmpty ? user.divisions.first : '';
+      final division = user.companyId;
       final meta = <String>[
         AccountCodeNumber.format(user.codeNumber),
         if (area.isNotEmpty) area,

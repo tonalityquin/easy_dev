@@ -235,7 +235,7 @@ class _TabletManagementState extends State<TabletManagement> {
       tablet.codeNumber,
       AccountCodeNumber.format(tablet.codeNumber),
       tablet.email,
-      tablet.role,
+      tablet.permissionKeys.join(' · '),
       tablet.position ?? '',
       tablet.areas.join(' '),
       tablet.divisions.join(' '),
@@ -652,7 +652,7 @@ class _TabletManagementState extends State<TabletManagement> {
             key: ValueKey<String>(tablet.id),
             name: tablet.name.trim().isEmpty ? AccountCodeNumber.mask(tablet.codeNumber) : tablet.name,
             codeNumber: _maskedCodeNumber(tablet),
-            role: tablet.role,
+            permissionSummary: tablet.permissionKeys.join(' · '),
             division: tablet.divisions.join(', '),
             working: tablet.isWorking,
             selected: userState.selectedUserId == tablet.id,
@@ -868,7 +868,7 @@ class _TabletDockRow extends StatelessWidget {
     super.key,
     required this.name,
     required this.codeNumber,
-    required this.role,
+    required this.permissionSummary,
     required this.division,
     required this.working,
     required this.selected,
@@ -878,7 +878,7 @@ class _TabletDockRow extends StatelessWidget {
 
   final String name;
   final String codeNumber;
-  final String role;
+  final String permissionSummary;
   final String division;
   final bool working;
   final bool selected;
@@ -898,7 +898,7 @@ class _TabletDockRow extends StatelessWidget {
         working ? tokens.statusSynchronized : tokens.statusOffline;
     final statusLabel = working ? '운영 중' : '오프라인';
     final displayCodeNumber = codeNumber.trim().isEmpty ? '코드번호 없음' : codeNumber.trim();
-    final displayRole = role.trim().isEmpty ? '역할 없음' : role.trim();
+    final displayRole = permissionSummary.trim().isEmpty ? '권한 없음' : permissionSummary.trim();
 
     return OpsDockSelectableRowSurface(
       selected: selected,
