@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -27,14 +28,14 @@ class UserStatusService {
     
 
     try {
-      await docRef.update(updates);
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.update, () => docRef.update(updates), source: 'user_status_service.update');
 
       
     } on FirebaseException catch (e) {
       
       if (e.code == 'not-found') {
         try {
-          await docRef.set(updates, SetOptions(merge: true));
+          await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => docRef.set(updates, SetOptions(merge: true)), source: 'user_status_service.set');
 
           
         } on FirebaseException {
@@ -117,7 +118,7 @@ class UserStatusService {
     );
 
     try {
-      await _getUserCollectionRef().doc(normalizedUserId).update(updates);
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.update, () => _getUserCollectionRef().doc(normalizedUserId).update(updates), source: 'user_status_service.update');
       final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
       debugPrint(
         '[USER-STATUS][${DateTime.now().toIso8601String()}] loginSession update success document=user_accounts/$normalizedUserId fields=$fields elapsedMs=$elapsedMs firebaseRead=0 firebaseWrite=1 userAccountsShowRead=0 userAccountsShowWrite=0',

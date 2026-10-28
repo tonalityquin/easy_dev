@@ -1,9 +1,12 @@
+import '../../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import '../../../../../features/account/presentation/widgets/permission_detail_list.dart';
 import 'package:provider/provider.dart';
 import '../../../../../features/account/domain/models/account_permission_policy.dart';
+import '../../../../../features/account/data/services/company_grade_policy_service.dart';
 import '../../../application/account_assignment_resolver.dart';
 import '../../../application/account_primary_assignment.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +24,8 @@ import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../widgets/ops_console_widgets.dart';
+import 'account_grade_policy_dialog.dart';
+import 'document_access_policy_dialog.dart';
 
 
 class UserAccountsTab extends StatefulWidget {
@@ -56,8 +61,16 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     });
   }
 
-  Future<bool> _refreshGroupAuthorization({required String source}) async {
-    final approved = await AccountGroupAuthorization.verify(source: source);
+  Future<bool> _refreshGroupAuthorization({
+    required String source,
+    bool showStatus = false,
+  }) async {
+    final approved = showStatus
+        ? await AccountGroupAuthorization.verifyWithStatus(
+            context,
+            source: source,
+          )
+        : await AccountGroupAuthorization.verify(source: source);
     if (mounted && _groupAuthorized != approved) {
       setState(() => _groupAuthorized = approved);
     }
@@ -68,7 +81,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     if (!actor.hasPermission('accounts.grantPermissions')) {
       return const <String>[];
     }
-    return (AccountPermissionPolicy.keys.intersection(actor.permissionKeys).toList()..sort());
+    return (AccountPermissionPolicy.generalPermissionKeys.intersection(actor.permissionKeys).toList()..sort());
   }
 
   String? _validatePermissionChange(
@@ -102,6 +115,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   final Map<String, Map<String, dynamic>> _editedUsers = <String, Map<String, dynamic>>{};
   final DevUserWriteService _devUserWriteService = DevUserWriteService();
   final Map<String, Future<List<String>>> _primaryAreaFutures = <String, Future<List<String>>>{};
+  final Map<String, Future<Map<String, CompanyGradePolicy>>> _gradePolicyFutures =
+      <String, Future<Map<String, CompanyGradePolicy>>>{};
   final Set<String> _savingIds = <String>{};
   bool _creating = false;
   String? _selectedUserId;
@@ -114,6 +129,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       source: interactive
           ? 'secondary_user_manual_code_interactive'
           : 'secondary_user_manual_code',
+      showStatus: interactive,
     );
   }
 
@@ -199,6 +215,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       'divisions': divisions,
       'areas': areas,
       'permissionKeys': d['permissionKeys'] ?? const <String>[],
+      'accountGradeId': d['accountGradeId'] ?? '',
       'modes': List<String>.from(d['modes'] ?? const <String>[]),
       'position': d['position'] ?? '',
       'currentArea': resolvedPrimaryArea.isEmpty ? null : resolvedPrimaryArea,
@@ -231,10 +248,10 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   Future<QuerySnapshot<Map<String, dynamic>>> _fetchAreasForDivision(
     String division,
   ) async {
-    final qs = await FirebaseFirestore.instance
+    final qs = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => FirebaseFirestore.instance
         .collection('areas')
         .where('division', isEqualTo: division)
-        .get(const GetOptions(source: Source.serverAndCache));
+        .get(const GetOptions(source: Source.serverAndCache)), source: 'user_account_tab.get');
 
     return qs;
   }
@@ -308,10 +325,10 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   Future<String?> _fetchEnglishNameByArea(String division, String area) async {
     final docId = '${division.trim()}-${area.trim()}';
     try {
-      final snap = await FirebaseFirestore.instance
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => FirebaseFirestore.instance
           .collection('areas')
           .doc(docId)
-          .get(const GetOptions(source: Source.server));
+          .get(const GetOptions(source: Source.server)), source: 'user_account_tab.get');
 
 
       final data = snap.data();
@@ -327,11 +344,15 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     String area,
   ) async {
     final showId = _showDocId(division, area);
-    return FirebaseFirestore.instance
-        .collection('user_accounts_show')
-        .doc(showId)
-        .collection('users')
-        .get(const GetOptions(source: Source.serverAndCache));
+    return FirebaseActivityMonitor.track(
+      FirebaseActivityKind.read,
+      () => FirebaseFirestore.instance
+          .collection('user_accounts_show')
+          .doc(showId)
+          .collection('users')
+          .get(const GetOptions(source: Source.serverAndCache)),
+      source: 'accounts.display.fetch',
+    );
   }
 
   String _showDocId(String? division, String? area) {
@@ -466,13 +487,24 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       );
       trace.log('server_access_gate approved=$approved');
       if (!approved) throw StateError('GROUP_ACCESS_DENIED');
-      await CompanyBootstrapService.requireDeveloper(
-        source: 'secondary_user_account_write',
-        forceAccountSelection: false,
-      );
-      trace.log('server_developer_write_approved');
+      final actorForWrite = context.read<UserState>();
+      if (!actorForWrite.hasPermission('accounts.update')) {
+        await CompanyBootstrapService.requireDeveloper(
+          source: 'secondary_user_account_write',
+          forceAccountSelection: false,
+        );
+      }
+      trace.log('server_account_write_gate_approved');
       final actor = context.read<UserState>();
-      final permissionKeys = AccountPermissionPolicy.sanitize(List<String>.from(newData['permissionKeys'] ?? const <String>[]));
+      if (oldData['isInitialAdmin'] != true) {
+        final gradeId = (newData['accountGradeId'] ?? '').toString();
+        final companyId = (newData['companyId'] ?? oldData['companyId'] ?? '').toString();
+        final policy = await CompanyGradePolicyService().load(companyId, gradeId);
+        newData['permissionKeys'] = policy.permissionKeys.toList(growable: false)..sort();
+        trace.log('현재 회사 등급 정책 적용: company=$companyId grade=$gradeId version=${policy.version} permissions=${policy.permissionKeys.length}');
+      }
+      final permissionKeys = AccountPermissionPolicy.sanitize(
+          List<String>.from(newData['permissionKeys'] ?? const <String>[]));
       final previousDivision = (widget.selectedDivision ?? '').trim();
       final previousArea = (widget.selectedArea ?? '').trim();
       final oldDivisions = _withPrimaryFirst(
@@ -540,12 +572,18 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       trace.log('primary_assignment_check old=$previousDivision/$previousArea new=$primaryDivision/$primaryArea moved=$changedPrimary retainOld=$retainPreviousPrimary');
       trace.log('assignment_list_check allowed=${assignmentDenied == null} reason=${assignmentDenied ?? 'ok'} divisions=${nextDivisions.length} areas=${nextAreas.length}');
       if (assignmentDenied != null) throw StateError(assignmentDenied);
+      final oldGrade = (oldData['accountGradeId'] ?? '').toString();
+      final nextGrade = (newData['accountGradeId'] ?? '').toString();
+      final validationPrevious = oldGrade == nextGrade &&
+              oldData['isInitialAdmin'] != true
+          ? <String, dynamic>{...oldData, 'permissionKeys': permissionKeys.toList()}
+          : oldData;
       final denied = _validatePermissionChange(
         actor,
         permissions: permissionKeys,
         division: primaryDivision,
         area: primaryArea,
-        previous: oldData,
+        previous: validationPrevious,
       );
       trace.log('permission_policy_update allowed=${denied == null} reason=${denied ?? 'ok'}');
       if (denied != null) throw StateError(denied);
@@ -581,6 +619,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       normalizedNewData['selectedArea'] = primaryArea;
       normalizedNewData['englishSelectedAreaName'] = englishName;
       normalizedNewData['permissionKeys'] = permissionKeys.toList(growable: false);
+      normalizedNewData['accountGradeId'] = newData['accountGradeId'] ?? oldData['accountGradeId'] ?? ''; 
       normalizedNewData['companyId'] = (oldData['companyId'] ?? primaryDivision).toString();
       normalizedNewData.remove('role');
       normalizedNewData.remove('roleProfileId');
@@ -728,15 +767,22 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       );
       trace.log('server_access_gate approved=$approved');
       if (!approved) throw StateError('GROUP_ACCESS_DENIED');
-      await CompanyBootstrapService.requireDeveloper(
-        source: 'secondary_user_account_write',
-        forceAccountSelection: false,
-      );
-      trace.log('server_developer_write_approved');
+      final actorForWrite = context.read<UserState>();
+      if (!actorForWrite.hasPermission('accounts.create')) {
+        await CompanyBootstrapService.requireDeveloper(
+          source: 'secondary_user_account_write',
+          forceAccountSelection: false,
+        );
+      }
+      trace.log('server_account_write_gate_approved');
       final actor = context.read<UserState>();
+      final livePolicy = await CompanyGradePolicyService()
+          .load(draft.division, draft.accountGradeId);
+      final currentPermissions = livePolicy.permissionKeys;
+      trace.log('현재 등급 정책 조회: grade=${draft.accountGradeId} version=${livePolicy.version} count=${currentPermissions.length}');
       final denied = _validatePermissionChange(
         actor,
-        permissions: draft.permissionKeys,
+        permissions: currentPermissions,
         division: draft.division,
         area: draft.area,
       );
@@ -757,7 +803,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       );
       final englishName = await _fetchEnglishNameByArea(draft.division, draft.area) ?? draft.area;
       trace.log(
-        'permission_policy_create count=${draft.permissionKeys.length}',
+        'permission_policy_create count=${currentPermissions.length}',
       );
       final user = UserModel(
         id: draft.documentId,
@@ -775,7 +821,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         codeNumber: draft.codeNumber,
         position: draft.position,
         companyId: draft.division,
-        permissionKeys: draft.permissionKeys.toList(growable: false),
+        permissionKeys: currentPermissions.toList(growable: false),
+        accountGradeId: draft.accountGradeId,
         selectedArea: draft.area,
         startTimeByWeekday: Map<String, TimeOfDay?>.from(draft.startTimeByWeekday),
         endTimeByWeekday: Map<String, TimeOfDay?>.from(draft.endTimeByWeekday),
@@ -1395,35 +1442,49 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           ),
         ),
         const SizedBox(height: 10),
-        AnimatedSize(
-          duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
-              ? Duration.zero
-              : CommonUiMotion.selection,
-          curve: Curves.easeInOutCubic,
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            children: [
-              for (final entry in AccountPermissionPolicy.presets.entries)
-                ChoiceChip(
-                  label: Text(AccountPermissionPolicy.presetLabels[entry.key]!),
-                  selected: AccountPermissionPolicy.presetIdFor(
-                    List<String>.from(updated['permissionKeys'] ?? const <String>[]),
-                  ) == entry.key,
-                  onSelected: AccountPermissionPolicy.mayGrant(
-                    context.read<UserState>().permissionKeys,
-                    entry.value,
-                  )
-                      ? (_) {
-                          setState(() {
-                            updated['permissionKeys'] = entry.value.toList(growable: false);
-                            _editedUsers[id] = _copyUser(updated);
-                          });
-                        }
-                      : null,
-                ),
-            ],
+        FutureBuilder<Map<String, CompanyGradePolicy>>(
+          future: _gradePolicyFutures.putIfAbsent(
+            (updated['companyId'] ?? widget.selectedDivision ?? '').toString(),
+            () => CompanyGradePolicyService().loadAll(
+              (updated['companyId'] ?? widget.selectedDivision ?? '').toString(),
+            ),
           ),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) return Text('등급 정책 조회 실패: ${snapshot.error}');
+            if (!snapshot.hasData) return const LinearProgressIndicator();
+            final policies = snapshot.data!;
+            return AnimatedSize(
+              duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
+                  ? Duration.zero : CommonUiMotion.selection,
+              curve: Curves.easeInOutCubic,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  for (final entry in policies.entries)
+                    ChoiceChip(
+                      label: Text(entry.value.name),
+                      selected: updated['accountGradeId'] == entry.key,
+                      onSelected: updated['isInitialAdmin'] != true &&
+                              entry.value.enabled &&
+                              AccountPermissionPolicy.mayGrant(
+                                context.read<UserState>().permissionKeys,
+                                entry.value.permissionKeys,
+                              )
+                          ? (_) {
+                              setState(() {
+                                updated['accountGradeId'] = entry.key;
+                                updated['permissionKeys'] =
+                                    entry.value.permissionKeys.toList(growable: false)..sort();
+                                _editedUsers[id] = _copyUser(updated);
+                              });
+                            }
+                          : null,
+                    ),
+                ],
+              ),
+            );
+          },
         ),
         const SizedBox(height: 6),
         AnimatedSwitcher(
@@ -1431,29 +1492,25 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
               ? Duration.zero
               : CommonUiMotion.selection,
           child: Text(
-            AccountPermissionPolicy.presetLabelFor(
-              List<String>.from(updated['permissionKeys'] ?? const <String>[]),
+            AccountPermissionPolicy.gradeLabel(
+              (updated['accountGradeId'] ?? '').toString(),
             ),
             key: ValueKey<String>(
-              AccountPermissionPolicy.presetIdFor(
-                List<String>.from(updated['permissionKeys'] ?? const <String>[]),
-              ) ?? 'legacy_account_permissions',
+              (updated['accountGradeId'] ?? '').toString(),
             ),
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
         const SizedBox(height: 5),
-        Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children: (AccountPermissionPolicy.sanitize(
+        PermissionDetailList(
+          permissions: ((updated['isInitialAdmin'] == true)
+              ? AccountPermissionPolicy.keys
+              : AccountPermissionPolicy.generalPermissionKeys).toList()..sort(),
+          selected: AccountPermissionPolicy.sanitize(
             List<String>.from(updated['permissionKeys'] ?? const <String>[]),
-          ).toList()..sort())
-              .map((key) => Text(
-                    AccountPermissionPolicy.permissionLabel(key),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ))
-              .toList(growable: false),
+          ),
+          enabled: false,
+          height: 264,
         ),
         const SizedBox(height: 8),
         Text(
@@ -1567,8 +1624,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
               final updated = _copyUser(base);
               final selected = _selectedUserId == id;
               final active = (updated['isActive'] as bool?) ?? true;
-              final permissionSummary = AccountPermissionPolicy.presetLabelFor(
-                List<String>.from(updated['permissionKeys'] ?? const <String>[]),
+              final permissionSummary = AccountPermissionPolicy.gradeLabel(
+                (updated['accountGradeId'] ?? '').toString(),
               );
               final position = (updated['position'] ?? '').toString().trim();
               return CommonAnimatedReveal(
@@ -1723,6 +1780,41 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                     ),
                   ),
                   const SizedBox(height: 9),
+                  if (widget.selectedDivision != null &&
+                      context.watch<UserState>().session?.isInitialAdmin == true)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 9),
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          await AccountGradePolicyDialog.open(
+                            context, widget.selectedDivision!,
+                          );
+                          if (!mounted) return;
+                          setState(() {
+                            _gradePolicyFutures.clear();
+                            _refreshTick++;
+                          });
+                        },
+                        icon: const Icon(Icons.admin_panel_settings_outlined),
+                        label: const Text('등급별 컬렉션 권한 설정'),
+                      ),
+                    ),
+                  if (widget.selectedDivision != null &&
+                      context.watch<UserState>().hasPermission('security.acl.manage'))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 9),
+                      child: OutlinedButton.icon(
+                        onPressed: () => DocumentAccessPolicyDialog.open(
+                          context,
+                          companyId: widget.selectedDivision!,
+                          initialDocumentPath: _selectedUserId == null
+                              ? ''
+                              : 'user_accounts/$_selectedUserId',
+                        ),
+                        icon: const Icon(Icons.shield_outlined),
+                        label: const Text('문서별 접근 권한 설정'),
+                      ),
+                    ),
                   Expanded(
                     child: _buildUserList(divisionList: divisionList),
                   ),
@@ -1742,6 +1834,7 @@ class _CreateUserAccountDraft {
     required this.division,
     required this.area,
     required this.permissionKeys,
+    required this.accountGradeId,
     required this.modes,
     required this.position,
     required this.startTimeByWeekday,
@@ -1758,6 +1851,7 @@ class _CreateUserAccountDraft {
   final String division;
   final String area;
   final Set<String> permissionKeys;
+  final String accountGradeId;
   final List<String> modes;
   final String position;
   final Map<String, TimeOfDay?> startTimeByWeekday;
@@ -1806,6 +1900,11 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   String? _selectedDivision;
   String? _selectedArea;
   final Set<String> _selectedPermissionKeys = <String>{};
+  String _accountGradeId = '';
+  final CompanyGradePolicyService _policyService = CompanyGradePolicyService();
+  Map<String, CompanyGradePolicy> _gradePolicies = <String, CompanyGradePolicy>{};
+  bool _loadingGradePolicies = false;
+  String? _gradePolicyError;
   UserCodeEntryMode _codeEntryMode = UserCodeEntryMode.generated;
   final Set<String> _selectedModes = <String>{'single'};
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
@@ -1830,6 +1929,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     };
     _breakDays = Set<String>.of(_days);
     _loadAreas(keepInitialArea: true);
+    _loadGradePolicies();
   }
 
   @override
@@ -1888,6 +1988,51 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
       _selectedArea = areas.contains(candidate) ? candidate : (areas.isNotEmpty ? areas.first : null);
       _loadingAreas = false;
     });
+  }
+
+  Future<void> _loadGradePolicies() async {
+    final company = _selectedDivision?.trim() ?? '';
+    setState(() {
+      _loadingGradePolicies = true;
+      _gradePolicyError = null;
+      _gradePolicies = <String, CompanyGradePolicy>{};
+      _selectedPermissionKeys.clear();
+      _accountGradeId = '';
+    });
+    if (company.isEmpty) {
+      if (mounted) setState(() => _loadingGradePolicies = false);
+      return;
+    }
+    try {
+      final policies = await _policyService.loadAll(company);
+      if (!mounted || _selectedDivision != company) return;
+      setState(() {
+        _gradePolicies = <String, CompanyGradePolicy>{
+          for (final entry in policies.entries)
+            if (entry.value.enabled) entry.key: entry.value,
+        };
+        _loadingGradePolicies = false;
+      });
+    } catch (error, stackTrace) {
+      debugPrint('[ACCOUNT-CREATE] grade policies failed: $error\n$stackTrace');
+      if (!mounted || _selectedDivision != company) return;
+      setState(() {
+        _loadingGradePolicies = false;
+        _gradePolicyError = error.toString();
+      });
+      if (DevAuth.devModeEnabled.value) {
+        await StatusDialog.showFailure(
+          context,
+          title: '계정 등급 정책 조회 실패',
+          description: '회사별 등급 정책을 확인하지 못했습니다.',
+          copyText: 'debugPrint(${jsonEncode('[ACCOUNT-CREATE] policy company=$company error=$error')});\ndebugPrint(${jsonEncode(stackTrace.toString())});',
+          copyButtonLabel: 'debugPrint 코드 복사',
+          visibleDuration: Duration.zero,
+          awaitManualClose: true,
+          useCommonUi: true,
+        );
+      }
+    }
   }
 
   Future<void> _pickTime(String day, {required bool isStart}) async {
@@ -1957,11 +2102,16 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     if ((_selectedDivision ?? '').trim().isEmpty) return '회사를 선택하세요';
     if ((_selectedArea ?? '').trim().isEmpty) return '지역을 선택하세요';
     if (_selectedModes.isEmpty) return '허용 모드를 1개 이상 선택하세요';
-    if (AccountPermissionPolicy.presetIdFor(_selectedPermissionKeys) == null) {
-      return '계정 등급을 선택하세요';
+    if (_loadingGradePolicies || _gradePolicyError != null) {
+      return '회사별 등급 정책을 확인할 수 없습니다. 다시 조회하세요.';
     }
-    if (!_selectedPermissionKeys.every(widget.permissionList.contains)) {
-      return '부여할 수 없는 권한이 포함되어 있습니다.';
+    final policy = _gradePolicies[_accountGradeId];
+    if (policy == null || !policy.enabled) return '계정 등급을 선택하세요';
+    if (!policy.permissionKeys.every(widget.permissionList.contains)) {
+      return '현재 계정으로 부여할 수 없는 권한이 등급에 포함되어 있습니다.';
+    }
+    if (!policy.matches(_selectedPermissionKeys)) {
+      return '현재 회사 등급 정책과 선택된 권한이 일치하지 않습니다.';
     }
 
     for (final day in _days) {
@@ -2001,6 +2151,32 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
       return;
     }
 
+    try {
+      final policy = await _policyService.load(_selectedDivision!, _accountGradeId);
+      if (!policy.matches(_selectedPermissionKeys)) {
+        await _loadGradePolicies();
+        throw StateError('ACCOUNT_GRADE_POLICY_CHANGED');
+      }
+    } catch (error, stackTrace) {
+      final message = 'account_create_policy_validation_failed grade=$_accountGradeId error=$error';
+      debugPrint('[ACCOUNT-CREATE] $message\n$stackTrace');
+      if (!mounted) return;
+      setState(() => _errorText = '회사별 등급 정책이 변경됐거나 조회되지 않습니다. 등급을 다시 선택하세요.');
+      if (DevAuth.devModeEnabled.value) {
+        await StatusDialog.showFailure(
+          context,
+          title: '회사별 등급 정책 확인 실패',
+          description: _errorText!,
+          copyText: 'debugPrint(${jsonEncode(message)});\ndebugPrint(${jsonEncode(stackTrace.toString())});',
+          copyButtonLabel: 'debugPrint 코드 복사',
+          useCommonUi: true,
+          visibleDuration: Duration.zero,
+          awaitManualClose: true,
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
     Navigator.of(context).pop(
       _CreateUserAccountDraft(
         name: _nameController.text.trim(),
@@ -2010,6 +2186,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
         division: _selectedDivision!.trim(),
         area: _selectedArea!.trim(),
         permissionKeys: Set<String>.of(_selectedPermissionKeys),
+        accountGradeId: _accountGradeId,
         modes: _selectedModes.toList(growable: false)..sort(),
         position: _positionController.text.trim(),
         startTimeByWeekday: Map<String, TimeOfDay?>.from(_startByDay),
@@ -2420,6 +2597,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                             _selectedArea = null;
                           });
                           _loadAreas();
+                          _loadGradePolicies();
                         },
                       ),
                       const SizedBox(height: 12),
@@ -2486,51 +2664,49 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                           spacing: 8,
                           runSpacing: 6,
                           children: [
-                            for (final entry in AccountPermissionPolicy.presets.entries)
+                            for (final entry in _gradePolicies.entries)
                               ChoiceChip(
-                                label: Text(AccountPermissionPolicy.presetLabels[entry.key]!),
-                                selected: AccountPermissionPolicy.presetIdFor(
-                                      _selectedPermissionKeys,
-                                    ) == entry.key,
-                                onSelected: entry.value.every(widget.permissionList.contains)
+                                label: Text(entry.value.name),
+                                selected: _accountGradeId == entry.key,
+                                onSelected: !_loadingGradePolicies &&
+                                        entry.value.permissionKeys.every(widget.permissionList.contains)
                                     ? (_) => setState(() {
                                         _errorText = null;
+                                        _accountGradeId = entry.key;
                                         _selectedPermissionKeys
                                           ..clear()
-                                          ..addAll(entry.value);
+                                          ..addAll(entry.value.permissionKeys);
                                       })
                                     : null,
                               ),
                           ],
                         ),
                       ),
+                      if (_loadingGradePolicies)
+                        const LinearProgressIndicator(),
+                      if (_gradePolicyError != null)
+                        Text('등급 정책 조회 실패: $_gradePolicyError'),
                       AnimatedSwitcher(
                         duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
                         child: Column(
                           key: ValueKey<String>(
-                            AccountPermissionPolicy.presetIdFor(_selectedPermissionKeys) ??
-                                'new_account_no_preset',
+                            _accountGradeId,
                           ),
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              AccountPermissionPolicy.presetIdFor(_selectedPermissionKeys) == null
+                              _accountGradeId.isEmpty
                                   ? '계정 등급을 선택하세요.'
-                                  : AccountPermissionPolicy.presetLabelFor(_selectedPermissionKeys),
+                                  : (_gradePolicies[_accountGradeId]?.name ??
+                                      AccountPermissionPolicy.gradeLabel(_accountGradeId)),
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                             const SizedBox(height: 5),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              children: (AccountPermissionPolicy.sanitize(
-                                _selectedPermissionKeys,
-                              ).toList()..sort())
-                                  .map((key) => Text(
-                                        AccountPermissionPolicy.permissionLabel(key),
-                                        style: Theme.of(context).textTheme.bodySmall,
-                                      ))
-                                  .toList(growable: false),
+                            PermissionDetailList(
+                              permissions: AccountPermissionPolicy.generalPermissionKeys.toList()..sort(),
+                              selected: _selectedPermissionKeys,
+                              enabled: false,
+                              height: 264,
                             ),
                           ],
                         ),

@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../../../dev/application/area_state.dart';
+import '../../../../../shared/operational_cache/domain/location_cache_scope.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -337,9 +339,11 @@ class _ParkingStatusPreviewCardAreaState
   Future<List<LocationModel>> _loadLocationsFromLocal(String area) async {
     final resolvedArea = area.trim();
     if (resolvedArea.isEmpty) return const <LocationModel>[];
+    final scopeKey = LocationCacheScope.maybeKey(context.read<AreaState>().currentDivision, resolvedArea);
+    if (scopeKey == null) return const <LocationModel>[];
     final locations = await context
         .read<OperationalLocalRepository>()
-        .readLocations(resolvedArea);
+        .readLocations(resolvedArea, cacheKey: scopeKey);
     TabletDebugTrace.record(
       'TabletParkingGuide',
       'sqlite_locations_loaded',
@@ -626,6 +630,7 @@ class _ParkingStatusPreviewCardAreaState
   @override
   Widget build(BuildContext context) {
     final resolvedArea = widget.area.trim();
+    final companyScope = LocationCacheScope.maybeKey(context.watch<AreaState>().currentDivision, resolvedArea) ?? '';
     final liveLocations = List<LocationModel>.of(
       context.watch<LocationState>().locations,
     );
@@ -634,8 +639,8 @@ class _ParkingStatusPreviewCardAreaState
       return SizedBox.expand(child: _buildPreview(liveLocations));
     }
 
-    if (_localFuture == null || _localArea != resolvedArea) {
-      _localArea = resolvedArea;
+    if (_localFuture == null || _localArea != companyScope) {
+      _localArea = companyScope;
       _localFuture = _loadLocationsFromLocal(resolvedArea);
     }
 

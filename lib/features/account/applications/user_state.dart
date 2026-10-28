@@ -1,7 +1,10 @@
+import '../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../domain/models/account_permission_policy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../../../app/auth/google_auth_session.dart';
@@ -55,6 +58,46 @@ class UserState extends ChangeNotifier {
   final AreaState _areaState;
 
   SessionAccount? _session;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _gradeSubscription;
+  String _observedGradeKey = '';
+  Set<String>? _gradePermissions;
+
+  void _watchGradePolicy() {
+    final session = _session;
+    final key = session == null || session.isInitialAdmin || session.isTablet ||
+            session.companyId.isEmpty || session.accountGradeId.isEmpty
+        ? ''
+        : '${session.companyId}/${session.accountGradeId}';
+    if (_observedGradeKey == key) return;
+    _gradeSubscription?.cancel();
+    _gradeSubscription = null;
+    _observedGradeKey = key;
+    _gradePermissions = null;
+    if (key.isEmpty) return;
+    _gradeSubscription = FirebaseActivityMonitor.observe(
+      FirebaseFirestore.instance
+        .collection('company_grade_policies')
+        .doc(session!.companyId)
+        .collection('grades')
+        .doc(session.accountGradeId)
+        .snapshots(),
+      origin: 'account.grade.snapshots',
+    ).listen((snapshot) {
+      if (_observedGradeKey != key) return;
+      final data = snapshot.data();
+      _gradePermissions = data != null && data['enabled'] == true
+          ? AccountPermissionPolicy.sanitize(
+              List<String>.from(data['permissionKeys'] ?? const <String>[]))
+          : <String>{};
+      notifyListeners();
+    }, onError: (Object error, StackTrace stackTrace) {
+      debugPrint('Account grade policy stream failed: $error\n$stackTrace');
+      if (_observedGradeKey == key) {
+        _gradePermissions = <String>{};
+        notifyListeners();
+      }
+    });
+  }
   UserModel? _user;
   TabletModel? _tablet;
 
@@ -151,8 +194,11 @@ class UserState extends ChangeNotifier {
           ? _session!.companyId
           : (_user?.companyId ?? _tablet?.companyId ?? '');
 
-  Set<String> get permissionKeys =>
-      Set<String>.unmodifiable(_session?.permissionKeys ?? const <String>[]);
+  Set<String> get permissionKeys => Set<String>.unmodifiable(
+    _session?.isInitialAdmin == true
+        ? AccountPermissionPolicy.keys
+        : _gradePermissions ?? _session?.permissionKeys ?? const <String>[],
+  );
 
   bool hasPermission(String permission) => permissionKeys.contains(permission);
 
@@ -329,6 +375,7 @@ class UserState extends ChangeNotifier {
       );
       _tablet = _tablet!.copyWith(isWorking: isWorking);
       _session = TabletSessionAccount(_tablet!);
+    _watchGradePolicy();
       notifyListeners();
       LauncherDiagnostics.record(
         'working_state_applied',
@@ -350,6 +397,7 @@ class UserState extends ChangeNotifier {
     );
     _user = _user!.copyWith(isWorking: isWorking);
     _session = UserSessionAccount(_user!);
+    _watchGradePolicy();
     notifyListeners();
     LauncherDiagnostics.record(
       'working_state_applied',
@@ -598,6 +646,7 @@ class UserState extends ChangeNotifier {
     _user = updatedUser;
     _tablet = null;
     _session = UserSessionAccount(updatedUser);
+    _watchGradePolicy();
     notifyListeners();
 
     final startedAt = DateTime.now();
@@ -688,6 +737,7 @@ class UserState extends ChangeNotifier {
     _user = updatedUser;
     _tablet = null;
     _session = UserSessionAccount(updatedUser);
+    _watchGradePolicy();
 
     _hasClockInToday = false;
     _hasClockInTodayForDate = null;
@@ -708,6 +758,7 @@ class UserState extends ChangeNotifier {
     _user = updatedUser;
     _tablet = null;
     _session = UserSessionAccount(updatedUser);
+    _watchGradePolicy();
     _hasClockInToday = false;
     _hasClockInTodayForDate = null;
     _userList = _replaceItem(_userList, updatedUser);
@@ -724,6 +775,7 @@ class UserState extends ChangeNotifier {
     _user = updatedUser;
     _tablet = null;
     _session = UserSessionAccount(updatedUser);
+    _watchGradePolicy();
     _userList = _replaceItem(_userList, updatedUser);
     notifyListeners();
 
@@ -948,6 +1000,7 @@ class UserState extends ChangeNotifier {
     _user = null;
     _tablet = updatedTablet;
     _session = TabletSessionAccount(updatedTablet);
+    _watchGradePolicy();
     notifyListeners();
 
     final firebaseOk = await FirebaseGoogleAuthBridge.instance
@@ -982,6 +1035,7 @@ class UserState extends ChangeNotifier {
     _user = null;
     _tablet = updatedTablet;
     _session = TabletSessionAccount(updatedTablet);
+    _watchGradePolicy();
     _hasClockInToday = false;
     _hasClockInTodayForDate = null;
     _tabletList = _replaceTabletItem(_tabletList, updatedTablet);
@@ -1079,6 +1133,7 @@ class UserState extends ChangeNotifier {
     _user = null;
     _tablet = null;
     _session = null;
+    _watchGradePolicy();
     _isTablet = false;
     notifyListeners();
 
@@ -1193,6 +1248,7 @@ class UserState extends ChangeNotifier {
     _user = null;
     _tablet = null;
     _session = null;
+    _watchGradePolicy();
     _isTablet = false;
     notifyListeners();
 
@@ -1479,6 +1535,7 @@ class UserState extends ChangeNotifier {
       _user = userData;
       _tablet = null;
       _session = UserSessionAccount(userData);
+    _watchGradePolicy();
       LauncherDiagnostics.record(
         'auth_user_restore_session_created',
         scope: 'auth',
@@ -1623,6 +1680,7 @@ class UserState extends ChangeNotifier {
       _user = userData;
       _tablet = null;
       _session = UserSessionAccount(userData);
+    _watchGradePolicy();
       LauncherDiagnostics.record(
         'auth_user_restore_session_created',
         scope: 'auth',
@@ -1790,6 +1848,7 @@ class UserState extends ChangeNotifier {
       _user = null;
       _tablet = tabletData;
       _session = TabletSessionAccount(tabletData);
+    _watchGradePolicy();
       LauncherDiagnostics.record(
         'auth_tablet_restore_session_created',
         scope: 'auth',
@@ -1841,6 +1900,7 @@ class UserState extends ChangeNotifier {
       if (_tablet == null) return;
       _tablet = _tablet!.copyWith(currentArea: normalizedArea);
       _session = TabletSessionAccount(_tablet!);
+    _watchGradePolicy();
       notifyListeners();
       AreaContextDebugTrace.record(
         'UserState',
@@ -1862,6 +1922,7 @@ class UserState extends ChangeNotifier {
     if (_user == null) return;
     _user = _user!.copyWith(currentArea: normalizedArea);
     _session = UserSessionAccount(_user!);
+    _watchGradePolicy();
     notifyListeners();
     AreaContextDebugTrace.record(
       'UserState',
@@ -1899,6 +1960,7 @@ class UserState extends ChangeNotifier {
       if (_tablet == null) return;
       _tablet = _tablet!.copyWith(currentArea: normalizedArea);
       _session = TabletSessionAccount(_tablet!);
+    _watchGradePolicy();
       notifyListeners();
       AreaContextDebugTrace.record(
         'UserState',
@@ -1955,6 +2017,7 @@ class UserState extends ChangeNotifier {
 
     _user = _user!.copyWith(currentArea: normalizedArea);
     _session = UserSessionAccount(_user!);
+    _watchGradePolicy();
     notifyListeners();
     AreaContextDebugTrace.record(
       'UserState',
@@ -2115,6 +2178,7 @@ class UserState extends ChangeNotifier {
   @override
   void dispose() {
     _subscription?.cancel();
+    _gradeSubscription?.cancel();
     _areaState.removeListener(_fetchUsersByAreaWithCache);
     super.dispose();
   }

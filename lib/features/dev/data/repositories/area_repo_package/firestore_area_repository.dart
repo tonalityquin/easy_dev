@@ -1,3 +1,4 @@
+import '../../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -127,7 +128,7 @@ class FirestoreAreaRepository implements AreaRepository {
     }
 
     final docId = '$trimmedDivision-$trimmedArea';
-    final doc = await _firestore.collection('areas').doc(docId).get();
+    final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('areas').doc(docId).get(), source: 'firestore_area_repository.get');
     if (!doc.exists) return false;
     final record = _toAreaRecord(doc.data());
     if (record == null ||
@@ -157,7 +158,7 @@ class FirestoreAreaRepository implements AreaRepository {
     if (trimmedDivision.isNotEmpty) {
       final docId = '$trimmedDivision-$trimmedArea';
       final ref = _firestore.collection('areas').doc(docId);
-      final doc = options == null ? await ref.get() : await ref.get(options);
+      final doc = options == null ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => ref.get(), source: 'firestore_area_repository.get') : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => ref.get(options), source: 'firestore_area_repository.get');
       if (!doc.exists) return null;
 
       final record = _toAreaRecord(doc.data());
@@ -178,7 +179,7 @@ class FirestoreAreaRepository implements AreaRepository {
         .collection('areas')
         .where('name', isEqualTo: trimmedArea)
         .limit(1);
-    final qs = options == null ? await query.get() : await query.get(options);
+    final qs = options == null ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(), source: 'firestore_area_repository.get') : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(options), source: 'firestore_area_repository.get');
 
     if (qs.docs.isEmpty) return null;
     final record = _toAreaRecord(qs.docs.first.data());
@@ -207,7 +208,7 @@ class FirestoreAreaRepository implements AreaRepository {
         .collection('areas')
         .where('division', isEqualTo: trimmedDivision);
     final options = _getOptions(serverOnly);
-    final qs = options == null ? await query.get() : await query.get(options);
+    final qs = options == null ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(), source: 'firestore_area_repository.get') : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(options), source: 'firestore_area_repository.get');
 
     final records = qs.docs
         .map((doc) => _toAreaRecord(doc.data()))

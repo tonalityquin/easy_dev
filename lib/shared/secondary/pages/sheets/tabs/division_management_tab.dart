@@ -98,7 +98,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '회사와 본사 지역, 계정 메타를 함께 생성합니다.',
+                    '회사를 먼저 등록합니다. 본사와 계정은 최초 계정 생성 시 추가됩니다.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: tokens.textSecondary,
                           height: 1.3,
@@ -212,7 +212,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '본사 지역 포함 · 상세 설정은 지역 탭에서 관리',
+                              '최초 계정 생성 시 본사 자동 생성 · 기본 한도 5/10',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -284,8 +284,8 @@ class _DivisionCreateDialog extends StatefulWidget {
 class _DivisionCreateDialogState extends State<_DivisionCreateDialog> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _englishController = TextEditingController();
-  final TextEditingController _activeLimitController = TextEditingController();
-  final TextEditingController _totalLimitController = TextEditingController();
+  final TextEditingController _activeLimitController = TextEditingController(text: '5');
+  final TextEditingController _totalLimitController = TextEditingController(text: '10');
 
   Set<Capability> _capabilities = <Capability>{};
   String? _errorText;
@@ -401,6 +401,7 @@ class _DivisionCreateDialogState extends State<_DivisionCreateDialog> {
                         selectedModes: DevAreaModePolicy.headquarterModes,
                         selectedCapabilities: _capabilities,
                         showModeSelector: false,
+                        lockLimits: true,
                         onModesChanged: (_) {},
                         onCapabilitiesChanged: (value) => setState(() {
                           _errorText = null;

@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 
@@ -17,7 +18,7 @@ class BillDeleteService {
       
 
       
-      await docRef.delete();
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.delete, () => docRef.delete(), source: 'bill_delete_service.delete');
 
       
     } catch (_) {

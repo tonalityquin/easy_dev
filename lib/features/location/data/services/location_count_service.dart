@@ -1,6 +1,8 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../shared/plate/domain/enums/plate_type.dart';
+import 'location_company_scope.dart';
 
 
 
@@ -79,13 +81,16 @@ class LocationCountService {
     }
 
     try {
-      final snapshot = await _firestore
+      final company = await LocationCompanyScope.resolve(_firestore);
+      Query<Map<String, dynamic>> query = _firestore
           .collection('plates')
           .where(fieldPath, isEqualTo: value)
           .where('area', isEqualTo: _area)
-          .where('type', isEqualTo: _type)
-          .count()
-          .get();
+          .where('type', isEqualTo: _type);
+      if (company != null) {
+        query = query.where('companyId', isEqualTo: company);
+      }
+      final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.count().get(), source: 'location_count_service.get');
 
       final int safeCount = snapshot.count ?? 0;
       return safeCount;

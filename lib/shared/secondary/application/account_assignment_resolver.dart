@@ -1,3 +1,4 @@
+import '../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AccountAssignmentResolver {
@@ -16,10 +17,10 @@ class AccountAssignmentResolver {
       final end = index + 10 < normalized.length
           ? index + 10
           : normalized.length;
-      final snapshot = await FirebaseFirestore.instance
+      final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => FirebaseFirestore.instance
           .collection('areas')
           .where('division', whereIn: normalized.sublist(index, end))
-          .get(const GetOptions(source: Source.server));
+          .get(const GetOptions(source: Source.server)), source: 'account_assignment_resolver.get');
       for (final document in snapshot.docs) {
         final data = document.data();
         final name = (data['name'] ?? '').toString().trim();

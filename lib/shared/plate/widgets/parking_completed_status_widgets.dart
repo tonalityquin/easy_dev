@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../../features/dev/application/area_state.dart';
+import '../../operational_cache/domain/location_cache_scope.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -208,6 +210,7 @@ class _ParkingStatusVehicleLocationCardState
   late final DateTime _fallbackBillingSnapshotAt;
   Future<_ParkingStatusLocationResolution>? _future;
   String _signature = '';
+  String _boundDivision = '';
 
   @override
   void initState() {
@@ -227,6 +230,17 @@ class _ParkingStatusVehicleLocationCardState
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final division = context.watch<AreaState>().currentDivision.trim();
+    if (_boundDivision != division) {
+      _boundDivision = division;
+      _signature = '';
+      _scheduleResolution();
+    }
+  }
+
+  @override
   void dispose() {
     _markerController.dispose();
     super.dispose();
@@ -241,7 +255,7 @@ class _ParkingStatusVehicleLocationCardState
   }
 
   void _scheduleResolution() {
-    final signature = '${_resolvedArea}|${widget.plate.location.trim()}';
+    final signature = '$_boundDivision|${_resolvedArea}|${widget.plate.location.trim()}';
     if (_future != null && signature == _signature) return;
     _signature = signature;
     _markerController.reset();
@@ -257,8 +271,13 @@ class _ParkingStatusVehicleLocationCardState
       );
     }
     try {
+      final division = context.read<AreaState>().currentDivision.trim();
+      if (LocationCacheScope.maybeKey(division, key) == null) {
+        return const _ParkingStatusLocationSnapshot(locations: <LocationModel>[], source: 'scope_unavailable');
+      }
       final memoryLocations = context.read<LocationState>().locations;
       final matchingMemory = memoryLocations.where((item) {
+        if (item.companyId.trim().isNotEmpty && item.companyId.trim() != division) return false;
         final itemArea = item.area.trim();
         return itemArea.isEmpty || itemArea == key;
       }).toList(growable: false);
@@ -270,9 +289,13 @@ class _ParkingStatusVehicleLocationCardState
       }
     } catch (_) {}
     try {
+      final scopeKey = LocationCacheScope.maybeKey(context.read<AreaState>().currentDivision, key);
+      if (scopeKey == null) {
+        return const _ParkingStatusLocationSnapshot(locations: <LocationModel>[], source: 'scope_unavailable');
+      }
       final stored = await context
           .read<OperationalLocalRepository>()
-          .readLocations(key);
+          .readLocations(key, cacheKey: scopeKey);
       return _ParkingStatusLocationSnapshot(
         locations: List<LocationModel>.unmodifiable(stored),
         source: stored.isEmpty ? 'sqlite_empty' : 'sqlite',

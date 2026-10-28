@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../account/applications/user_state.dart';
+import '../../../shared/secondary/pages/sheets/tabs/document_access_policy_dialog.dart';
+
 import '../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../app/utils/snackbar_helper.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
@@ -598,6 +601,24 @@ class _BillManagementState extends State<BillManagement> {
     return OpsDockContextFooter(
       key: ValueKey<String>('bill_footer_${selected.id}'),
       children: [
+        if (context.watch<UserState>().hasPermission('security.acl.manage')) ...[
+          CommonIconButton(
+            icon: Icons.shield_outlined,
+            tooltip: '정산 문서 접근 권한',
+            onPressed: _mutating ? null : () async {
+              final company = context.read<UserState>().session?.companyId ?? '';
+              if (company.isEmpty) return;
+              await DocumentAccessPolicyDialog.open(
+                context,
+                companyId: company,
+                initialDocumentPath: 'bill/${selected.id}',
+              );
+            },
+            size: 40,
+            iconSize: 20,
+          ),
+          const SizedBox(width: 8),
+        ],
         Expanded(
           child: CommonButton(
             label: '삭제',

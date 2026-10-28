@@ -145,6 +145,10 @@ class DevAreaSettingsDraft {
       'modes': modeKeys,
       'capabilities': capabilityKeys,
       'isHeadquarter': isHeadquarter,
+      if (activeLimit != null) 'activeLimit': activeLimit,
+      if (totalLimit != null) 'totalLimit': totalLimit,
+      if (activeLimit == null && !includeCreatedAt) 'activeLimit': FieldValue.delete(),
+      if (totalLimit == null && !includeCreatedAt) 'totalLimit': FieldValue.delete(),
       if (includeCreatedAt) 'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -265,11 +269,10 @@ class DevManagementValidation {
     final total = parseOptionalLimit(totalText);
     if (active == -1) return '활성 계정 제한값을 확인하세요.';
     if (total == -1) return '전체 계정 제한값을 확인하세요.';
-    final eitherConfigured = active != null || total != null;
-    if (eitherConfigured && (active == null || total == null)) {
-      return '계정 제한은 활성과 전체 값을 함께 입력하세요.';
+    if (active == null || total == null) {
+      return '계정 제한은 활성과 전체 값을 모두 입력하세요.';
     }
-    if (active != null && total != null && active > total) {
+    if (active > total) {
       return '활성 계정 제한은 전체 계정 제한보다 클 수 없습니다.';
     }
     return null;
@@ -300,6 +303,7 @@ class DevAreaSettingsFields extends StatelessWidget {
     required this.onCapabilitiesChanged,
     this.showModeSelector = true,
     this.enabled = true,
+    this.lockLimits = false,
   });
 
   final TextEditingController englishNameController;
@@ -311,6 +315,7 @@ class DevAreaSettingsFields extends StatelessWidget {
   final ValueChanged<Set<Capability>> onCapabilitiesChanged;
   final bool showModeSelector;
   final bool enabled;
+  final bool lockLimits;
 
   Widget _sectionLabel(BuildContext context, String text, IconData icon) {
     final tokens = CommonUiTheme.of(context);
@@ -467,7 +472,7 @@ class DevAreaSettingsFields extends StatelessWidget {
                   final narrow = constraints.maxWidth < 430;
                   final activeField = TextField(
                     controller: activeLimitController,
-                    enabled: enabled,
+                    enabled: enabled && !lockLimits,
                     keyboardType: TextInputType.number,
                     textInputAction: narrow ? TextInputAction.next : TextInputAction.done,
                     decoration: opsInputDecoration(
@@ -478,7 +483,7 @@ class DevAreaSettingsFields extends StatelessWidget {
                   );
                   final totalField = TextField(
                     controller: totalLimitController,
-                    enabled: enabled,
+                    enabled: enabled && !lockLimits,
                     keyboardType: TextInputType.number,
                     textInputAction: TextInputAction.done,
                     decoration: opsInputDecoration(
@@ -507,7 +512,9 @@ class DevAreaSettingsFields extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                '두 값을 비우면 리밋 미설정 상태로 저장됩니다.',
+                lockLimits
+                    ? '본사는 최초 관리자 생성 시 활성 5명 · 전체 10명으로 설정됩니다.'
+                    : '두 제한값을 모두 정수로 입력해야 지역을 저장할 수 있습니다.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: tokens.textSecondary,
                       height: 1.35,

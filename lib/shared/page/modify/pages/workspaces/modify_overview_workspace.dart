@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../../features/account/applications/user_state.dart';
+import '../../../../secondary/pages/sheets/tabs/document_access_policy_dialog.dart';
+
 import '../../../../../features/location/applications/location_state.dart';
 import '../../../../plate/domain/models/plate_model.dart';
 import '../../../../plate/editor/domain/plate_editor_workspace.dart';
@@ -143,6 +146,22 @@ class ModifyOverviewWorkspace extends StatelessWidget {
               ? PlateEditorSectionStatus.complete
               : PlateEditorSectionStatus.none,
           onTap: null,
+        ),
+      if (plate.id.trim().isNotEmpty &&
+          context.watch<UserState>().hasPermission('security.acl.manage'))
+        PlateEditorOverviewSection(
+          icon: Icons.shield_outlined,
+          title: '차량 문서 접근 권한',
+          value: '조회 · 수정 · 삭제 권한 설정',
+          onTap: () {
+            final company = context.read<UserState>().session?.companyId ?? '';
+            if (company.isEmpty) return;
+            DocumentAccessPolicyDialog.open(
+              context,
+              companyId: company,
+              initialDocumentPath: 'plates/${plate.id}',
+            );
+          },
         ),
       PlateEditorOverviewSection(
         icon: statusContextError != null

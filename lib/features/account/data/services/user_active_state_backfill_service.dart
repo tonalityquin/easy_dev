@@ -1,3 +1,5 @@
+import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -66,9 +68,9 @@ class UserActiveStateBackfillService {
   }) async {
     onLog?.call('user_accounts_show 계정 상태 수집을 시작합니다.', 0.02);
 
-    final viewRootSnapshot = await _viewRoots.get(
+    final viewRootSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _viewRoots.get(
       const GetOptions(source: Source.server),
-    );
+    ), source: 'user_active_state_backfill_service.get');
     final activeByUserId = <String, bool>{};
     final conflictIds = <String>{};
     final viewIds = <String>{};
@@ -79,9 +81,9 @@ class UserActiveStateBackfillService {
 
     for (var index = 0; index < viewRootSnapshot.docs.length; index += 1) {
       final parent = viewRootSnapshot.docs[index];
-      final users = await parent.reference.collection('users').get(
+      final users = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => parent.reference.collection('users').get(
         const GetOptions(source: Source.server),
-      );
+      ), source: 'user_active_state_backfill_service.get');
       for (final userDoc in users.docs) {
         viewTotal += 1;
         viewIds.add(userDoc.id);
@@ -131,14 +133,14 @@ class UserActiveStateBackfillService {
             : passwordRefs.length;
         final batch = _firestore.batch();
         for (final reference in passwordRefs.sublist(offset, end)) {
-          batch.set(
+          FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(
             reference,
             <String, dynamic>{'password': FieldValue.delete()},
             SetOptions(merge: true),
-          );
+          ));
         }
         try {
-          await batch.commit();
+          await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'user_active_state_backfill_service.commit');
           viewPasswordsRemoved += end - offset;
         } on FirebaseException catch (error) {
           failedWrites += end - offset;
@@ -154,9 +156,9 @@ class UserActiveStateBackfillService {
     }
 
     onLog?.call('user_accounts 원본 계정 조회를 시작합니다.', 0.32);
-    final rootSnapshot = await _rootUsers.get(
+    final rootSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _rootUsers.get(
       const GetOptions(source: Source.server),
-    );
+    ), source: 'user_active_state_backfill_service.get');
     final rootIds = rootSnapshot.docs.map((doc) => doc.id).toSet();
     final orphanViews = viewIds.difference(rootIds).length;
     final rootWithoutView = rootIds.difference(viewIds).length;
@@ -182,17 +184,17 @@ class UserActiveStateBackfillService {
             : pendingUpdates.length;
         final batch = _firestore.batch();
         for (final entry in pendingUpdates.sublist(offset, end)) {
-          batch.set(
+          FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(
             entry.key,
             <String, dynamic>{
               'isActive': entry.value,
               'updatedAt': FieldValue.serverTimestamp(),
             },
             SetOptions(merge: true),
-          );
+          ));
         }
         try {
-          await batch.commit();
+          await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'user_active_state_backfill_service.commit');
           updatedRoots += end - offset;
         } on FirebaseException catch (error) {
           failedWrites += end - offset;
@@ -208,9 +210,9 @@ class UserActiveStateBackfillService {
     }
 
     onLog?.call('Root/View isActive 일치 여부를 재검증합니다.', 0.78);
-    final verifySnapshot = await _rootUsers.get(
+    final verifySnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _rootUsers.get(
       const GetOptions(source: Source.server),
-    );
+    ), source: 'user_active_state_backfill_service.get');
     var verificationMismatches = 0;
     for (final rootDoc in verifySnapshot.docs) {
       final expected = activeByUserId[rootDoc.id];

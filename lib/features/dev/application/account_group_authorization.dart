@@ -1,3 +1,4 @@
+import '../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -5,15 +6,17 @@ import 'package:flutter/material.dart';
 
 import '../../../app/utils/access_gate_diagnostics.dart';
 import '../../../app/utils/status_dialog.dart';
+import '../../selector/application/dev_auth.dart';
+import 'login_gate_paths.dart';
 import 'developer_account_authorization.dart';
 
 class AccountGroupAuthorization {
   AccountGroupAuthorization._();
 
   static const String developerPath =
-      'developer_login_gate/authorization';
+      LoginGatePaths.developer;
   static const String administratorPath =
-      'administrator_login_gate/authorization';
+      LoginGatePaths.administrator;
 
   static final ValueNotifier<bool> lastVerified = ValueNotifier<bool>(false);
 
@@ -74,12 +77,15 @@ class AccountGroupAuthorization {
         return false;
       }
       AccessGateDiagnostics.record(
-        'started', source: source, group: group,
+        'started',
+        source: source,
+        group: group,
+        reason: isDeveloper ? developerPath : administratorPath,
       );
-      final document = await FirebaseFirestore.instance
+      final document = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => FirebaseFirestore.instance
           .doc(isDeveloper ? developerPath : administratorPath)
-          .get(const GetOptions(source: Source.server));
-      final allowed = document.data()?['allowedEmails'];
+          .get(const GetOptions(source: Source.server)), source: 'account_group_authorization.get');
+      final allowed = document.data()?['allow'];
       final approved = document.exists && document.data()?['enabled'] == true &&
           (isDeveloper || (allowed is List && allowed.contains(email)));
       lastVerified.value = approved;
@@ -106,7 +112,35 @@ class AccountGroupAuthorization {
     required String source,
   }) async {
     final approved = await verify(source: source);
-    if (!approved && context.mounted) {
+    if (!context.mounted) return approved;
+
+    final developerMode = await DevAuth.isDevModeEnabled();
+    if (!context.mounted) return approved;
+
+    if (developerMode) {
+      AccessGateDiagnostics.record(
+        'status_open',
+        source: source,
+        reason: approved ? 'approved' : 'denied',
+      );
+      await StatusDialog.show(
+        context,
+        title: approved ? '서버 접근 승인 완료' : '서버 접근 승인 실패',
+        tone: approved ? StatusDialogTone.success : StatusDialogTone.failure,
+        description: approved
+            ? '서버 접근 승인이 확인되었습니다.'
+            : '현재 계정의 서버 접근 승인이 확인되지 않았습니다.',
+        copyText: AccessGateDiagnostics.debugPrintCode,
+        copyButtonLabel: 'debugPrint 코드 복사',
+        visibleDuration: Duration.zero,
+        transitionDuration: const Duration(milliseconds: 320),
+        useCommonUi: true,
+        awaitManualClose: true,
+      );
+      return approved;
+    }
+
+    if (!approved) {
       await StatusDialog.showFailure(
         context,
         title: '서버 접근 승인 실패',

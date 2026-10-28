@@ -1,15 +1,17 @@
+import '../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../app/terminal/application/parkinworkin_terminal_diagnostics.dart';
+import '../../../app/utils/access_gate_diagnostics.dart';
 import '../../launcher/application/launcher_diagnostics.dart';
 import 'developer_account_authorization.dart';
+import 'login_gate_paths.dart';
 
 class DeveloperLoginGateService {
   DeveloperLoginGateService._();
 
-  static const String documentPath =
-      'developer_login_gate/authorization';
+  static const String documentPath = LoginGatePaths.developer;
 
   static Future<bool> verify({required String source}) async {
     if (kDebugMode) {
@@ -25,9 +27,9 @@ class DeveloperLoginGateService {
 
     _record('started', source: source);
     try {
-      final document = await FirebaseFirestore.instance
+      final document = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => FirebaseFirestore.instance
           .doc(documentPath)
-          .get(const GetOptions(source: Source.server));
+          .get(const GetOptions(source: Source.server)), source: 'developer_login_gate_service.get');
       final approved = document.exists &&
           document.data()?['enabled'] == true &&
           DeveloperAccountAuthorization.isAuthorized;
@@ -54,6 +56,12 @@ class DeveloperLoginGateService {
       'source': source,
       if (reason != null) 'reason': reason,
     };
+    AccessGateDiagnostics.record(
+      'developer_login_server_gate_$outcome',
+      source: source,
+      group: 'developer',
+      reason: reason ?? documentPath,
+    );
     LauncherDiagnostics.record(
       'developer_login_server_gate_$outcome',
       scope: source,

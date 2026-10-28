@@ -1,4 +1,6 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../features/account/data/services/account_initialization_guard.dart';
 import 'package:flutter/material.dart';
 import '../../../../features/account/data/services/company_bootstrap_service.dart';
 
@@ -45,10 +47,10 @@ class _AreaManagementState extends State<AreaManagement>
     if (_loadingDivisions) return;
     setState(() => _loadingDivisions = true);
     try {
-      final snap = await FirebaseFirestore.instance
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => FirebaseFirestore.instance
           .collection('divisions')
           .orderBy('name')
-          .get(const GetOptions(source: Source.serverAndCache));
+          .get(const GetOptions(source: Source.serverAndCache)), source: 'area_management.get');
       final divisions = snap.docs
           .where((doc) => doc.data()['lifecycleStatus'] != 'closed')
           .map((doc) => (doc.data()['name'] ?? '').toString().trim())
@@ -83,8 +85,8 @@ class _AreaManagementState extends State<AreaManagement>
     final name = request.name.trim();
     final trace = await DeveloperOperationTrace.start(
       context: context,
-      title: '회사 및 본사 생성',
-      initialMessage: '회사와 본사 지역 생성 요청을 시작합니다.',
+      title: '회사 등록',
+      initialMessage: '회사 등록을 시작합니다. 본사는 최초 계정 생성 시 추가됩니다.',
       useCommonUi: true,
       developerModeMessage: '개발자 모드 ON: 회사 생성 로그를 debugPrint 코드로 복사할 수 있습니다.',
       standardModeMessage: '개발자 모드 OFF: 회사 생성 로그를 콘솔에 기록합니다.',
@@ -114,14 +116,24 @@ class _AreaManagementState extends State<AreaManagement>
           inactiveCount: 0,
         ),
       );
-      trace.log('Firestore transaction commit 완료: company_bootstrap included', progress: 0.88);
+      final inspection = await AccountInitializationGuard.inspect(
+        firestore: FirebaseFirestore.instance, companyId: name);
+      inspection.requireConsistent();
+      trace.log(
+        inspection.isInitialized
+            ? '회사·본사·최초 관리자 생성 및 정합성 확인 완료'
+            : '회사 등록 완료, 본사·최초 계정 생성 대기',
+        progress: 0.88,
+      );
       await _loadDivisions();
-      await trace.succeed('회사와 본사 지역 생성이 완료되었습니다.');
+      await trace.succeed(inspection.isInitialized
+          ? '회사와 최초 관리자 생성이 완료되었습니다.'
+          : '회사만 등록되었습니다. 최초 계정 생성 시 본사(활성 5명·전체 10명)가 추가됩니다.');
       if (!mounted) return true;
       if (!trace.developerMode) {
         showSuccessSnackbar(
           context,
-          '회사 "$name"과 본사 지역이 생성되었습니다.',
+          '회사 "$name"이 등록되었습니다. 본사는 최초 계정 생성 시 추가됩니다.',
           useCommonUi: true,
         );
       }
@@ -152,7 +164,7 @@ class _AreaManagementState extends State<AreaManagement>
     final trace = await DeveloperOperationTrace.start(
       context: context,
       title: '회사 폐쇄',
-      initialMessage: '회사 폐쇄 전 계정과 초기화 기록을 검증합니다.',
+      initialMessage: '회사 폐쇄 전 최초 관리자 계정과 회사 참조 정보를 검증합니다.',
       useCommonUi: true,
       developerModeMessage: '개발자 모드 ON: 회사 폐쇄 로그의 debugPrint 코드를 복사할 수 있습니다.',
       standardModeMessage: '개발자 모드 OFF: 회사 폐쇄 로그를 콘솔에 기록합니다.',
@@ -160,7 +172,7 @@ class _AreaManagementState extends State<AreaManagement>
     try {
       trace.log('회사 폐쇄 요청: company=$name', progress: 0.12);
       await const CompanyBootstrapService().closeCompany(company: name);
-      trace.log('회사 폐쇄 및 전체 초기 관리자 접근 목록 동기화 완료', progress: 0.9);
+      trace.log('회사 폐쇄 및 회사별 최초 관리자 담당 지역 동기화 완료', progress: 0.9);
       await _loadDivisions();
       await trace.succeed('회사 폐쇄와 접근 목록 동기화가 완료되었습니다.');
       if (!mounted) return true;

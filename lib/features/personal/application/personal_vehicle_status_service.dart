@@ -1,3 +1,4 @@
+import '../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../app/utils/dev_firebase_debug_dialog.dart';
@@ -23,12 +24,12 @@ class PersonalVehicleStatusService {
     final candidates = <PlateModel>[];
 
     try {
-      final snap = await _firestore
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection('plates')
           .where(PlateFields.area, isEqualTo: normalizedArea)
           .where(PlateFields.plateNumber, whereIn: variants)
           .limit(20)
-          .get();
+          .get(), source: 'personal_vehicle_status_service.get');
 
       for (final doc in snap.docs) {
         try {
@@ -83,12 +84,12 @@ class PersonalVehicleStatusService {
     if (candidates.isEmpty) {
       final tail = compact.length >= 4 ? compact.substring(compact.length - 4) : compact;
       try {
-        final snap = await _firestore
+        final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
             .collection('plates')
             .where(PlateFields.area, isEqualTo: normalizedArea)
             .where(PlateFields.plateFourDigit, isEqualTo: tail)
             .limit(20)
-            .get();
+            .get(), source: 'personal_vehicle_status_service.get');
 
         for (final doc in snap.docs) {
           try {
@@ -160,7 +161,7 @@ class PersonalVehicleStatusService {
     final docId = '${canonical}_$normalizedArea';
 
     try {
-      final doc = await _firestore.collection('monthly_plate_status').doc(docId).get();
+      final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('monthly_plate_status').doc(docId).get(), source: 'personal_vehicle_status_service.get');
       if (!doc.exists) return null;
       final data = doc.data();
       if (data == null) return null;

@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CommuteLogRepository {
@@ -101,17 +102,19 @@ class CommuteLogRepository {
     required String userName,
     required String status,
     required String yearMonth,
+    required String division,
   }) async {
-    await _rootDocRef(userId: userId, status: status).set(
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _rootDocRef(userId: userId, status: status).set(
       <String, dynamic>{
         'userId': userId,
         'userName': userName,
         'status': status,
+        'companyId': division,
         'latestYearMonth': yearMonth,
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
-    );
+    ), source: 'commute_log_repository.set');
   }
 
   Future<Map<String, dynamic>> _readMonthLogs({
@@ -119,11 +122,11 @@ class CommuteLogRepository {
     required String userId,
     required String yearMonth,
   }) async {
-    final snap = await _monthDocRef(
+    final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _monthDocRef(
       userId: userId,
       status: status,
       yearMonth: yearMonth,
-    ).get();
+    ).get(), source: 'commute_log_repository.get');
     if (!snap.exists) return <String, dynamic>{};
     return _extractLogsMap(snap.data());
   }
@@ -132,7 +135,7 @@ class CommuteLogRepository {
     required String status,
     required String userId,
   }) async {
-    final snap = await _rootDocRef(userId: userId, status: status).get();
+    final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _rootDocRef(userId: userId, status: status).get(), source: 'commute_log_repository.get');
     if (!snap.exists) return <String, dynamic>{};
     return _extractLogsMap(snap.data());
   }
@@ -276,9 +279,10 @@ class CommuteLogRepository {
         userName: userName,
         status: status,
         yearMonth: yearMonth,
+        division: division,
       );
 
-      await _monthDocRef(
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _monthDocRef(
         userId: userId,
         status: status,
         yearMonth: yearMonth,
@@ -287,12 +291,14 @@ class CommuteLogRepository {
           'userId': userId,
           'userName': userName,
           'status': status,
+          'companyId': division,
+          'area': area,
           'yearMonth': yearMonth,
           'updatedAt': FieldValue.serverTimestamp(),
           'logs': logsPayload,
         },
         SetOptions(merge: true),
-      );
+      ), source: 'commute_log_repository.set');
     }
   }
 
@@ -324,7 +330,7 @@ class CommuteLogRepository {
         logsPayload[dateStr] = FieldValue.delete();
       }
 
-      await _monthDocRef(
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _monthDocRef(
         userId: userId,
         status: status,
         yearMonth: yearMonth,
@@ -334,7 +340,7 @@ class CommuteLogRepository {
           'logs': logsPayload,
         },
         SetOptions(merge: true),
-      );
+      ), source: 'commute_log_repository.set');
 
       await _deleteMonthDocIfEmpty(
         status: status,
@@ -348,13 +354,13 @@ class CommuteLogRepository {
       legacyLogsPayload[dateStr] = FieldValue.delete();
     }
 
-    await _rootDocRef(userId: userId, status: status).set(
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _rootDocRef(userId: userId, status: status).set(
       <String, dynamic>{
         'updatedAt': FieldValue.serverTimestamp(),
         'logs': legacyLogsPayload,
       },
       SetOptions(merge: true),
-    );
+    ), source: 'commute_log_repository.set');
   }
 
   Future<void> _deleteMonthDocIfEmpty({
@@ -367,12 +373,12 @@ class CommuteLogRepository {
       status: status,
       yearMonth: yearMonth,
     );
-    final snap = await docRef.get();
+    final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => docRef.get(), source: 'commute_log_repository.get');
     if (!snap.exists) return;
 
     final logs = _extractLogsMap(snap.data());
     if (logs.isEmpty) {
-      await docRef.delete();
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.delete, () => docRef.delete(), source: 'commute_log_repository.delete');
     }
   }
 

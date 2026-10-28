@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../../dev/application/area_state.dart';
+import '../../../../shared/operational_cache/domain/location_cache_scope.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -71,6 +73,7 @@ class _SingleInsideSpatialDotMapState extends State<SingleInsideSpatialDotMap>
   bool _childDetailOpen = false;
   int _pageIndex = 0;
   int _loadToken = 0;
+  String _boundCompany = '';
   String? _focusedChildKey;
   String _childCloseSource = 'embedded';
   _SingleSpatialMapEntry? _focusedEntry;
@@ -88,6 +91,19 @@ class _SingleInsideSpatialDotMapState extends State<SingleInsideSpatialDotMap>
     );
     widget.controller?._attach(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final company = context.watch<AreaState>().currentDivision.trim();
+    if (_boundCompany != company) {
+      _boundCompany = company;
+      _clearChildFocusImmediately(source: 'company_changed');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load();
+      });
+    }
   }
 
   @override
@@ -163,8 +179,14 @@ class _SingleInsideSpatialDotMapState extends State<SingleInsideSpatialDotMap>
     }
 
     try {
+      final scopeKey = LocationCacheScope.maybeKey(context.read<AreaState>().currentDivision, area);
+      if (scopeKey == null) {
+        if (!mounted || token != _loadToken) return;
+        setState(() { _entries = const <_SingleSpatialMapEntry>[]; _loading = false; });
+        return;
+      }
       final locations =
-          await context.read<OperationalLocalRepository>().readLocations(area);
+          await context.read<OperationalLocalRepository>().readLocations(area, cacheKey: scopeKey);
       final hierarchy = resolveParkingSpatialHierarchy(locations);
       final entries = <_SingleSpatialMapEntry>[];
       var childCount = 0;

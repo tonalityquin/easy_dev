@@ -1,3 +1,5 @@
+import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -441,14 +443,14 @@ class FirestorePlateRepository implements PlateRepository {
         updatedAt: data['updatedAt'],
       );
     }
-    await _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea).set(
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea).set(
       <String, dynamic>{
         'area': safeArea,
         'updatedAt': FieldValue.serverTimestamp(),
         'items': items,
       },
       SetOptions(merge: true),
-    );
+    ), source: 'firestore_plate_repository.set');
   }
 
   Future<void> _syncMonthlyViewItemFromSource({
@@ -459,7 +461,7 @@ class FirestorePlateRepository implements PlateRepository {
     if (safeArea.isEmpty) return;
     final canonicalPlate = _canonicalPlateNumber(plateNumber);
     final docId = _plateDocId(canonicalPlate, safeArea);
-    final doc = await _firestore.collection(_monthlyPlateStatusCollection).doc(docId).get();
+    final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection(_monthlyPlateStatusCollection).doc(docId).get(), source: 'firestore_plate_repository.get');
     if (!doc.exists) {
       await _removeMonthlyViewItem(area: safeArea, docId: docId);
       return;
@@ -591,7 +593,7 @@ class FirestorePlateRepository implements PlateRepository {
               final sourceRef = sourcePath.isEmpty
                   ? targetRef
                   : _firestore.doc(sourcePath);
-              final sourceSnapshot = await transaction.get(sourceRef);
+              final sourceSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(sourceRef), source: 'firestore_plate_repository.get');
               final latestDraft = PlateStatusDraft.fromMap(
                 sourceSnapshot.data(),
               );
@@ -605,7 +607,7 @@ class FirestorePlateRepository implements PlateRepository {
               if (statusScope == PlateStatusScope.monthly) {
                 final monthlySnapshot = sourceRef.path == monthlyRef.path
                     ? sourceSnapshot
-                    : await transaction.get(monthlyRef);
+                    : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(monthlyRef), source: 'firestore_plate_repository.get');
                 final monthlyData = monthlySnapshot.data();
                 if (!monthlySnapshot.exists || monthlyData == null) {
                   throw const PlateStatusScopeException(
@@ -621,7 +623,7 @@ class FirestorePlateRepository implements PlateRepository {
                     '정기 주차 기간이 만료되어 정기 상태 문서에 저장하지 않았습니다.',
                   );
                 }
-                transaction.set(
+                FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
                   monthlyRef,
                   <String, dynamic>{
                     'customStatus': draft.customStatus,
@@ -632,11 +634,11 @@ class FirestorePlateRepository implements PlateRepository {
                     'area': safeArea,
                   },
                   SetOptions(merge: true),
-                );
+                ));
                 return;
               }
 
-              final monthlySnapshot = await transaction.get(monthlyRef);
+              final monthlySnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(monthlyRef), source: 'firestore_plate_repository.get');
               final monthlyData = monthlySnapshot.data();
               if (monthlySnapshot.exists && monthlyData != null) {
                 final monthlyRecord = PlateStatusRecord.fromMap(
@@ -652,7 +654,7 @@ class FirestorePlateRepository implements PlateRepository {
 
               final currentSnapshot = sourceRef.path == currentHistoryRef.path
                   ? sourceSnapshot
-                  : await transaction.get(currentHistoryRef);
+                  : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(currentHistoryRef), source: 'firestore_plate_repository.get');
               if (sourceRef.path != currentHistoryRef.path &&
                   currentSnapshot.exists) {
                 final currentDraft = PlateStatusDraft.fromMap(
@@ -666,16 +668,16 @@ class FirestorePlateRepository implements PlateRepository {
               }
 
               if (draft.isEmpty) {
-                transaction.delete(currentHistoryRef);
-                transaction.delete(previousHistoryRef);
+                FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(currentHistoryRef));
+                FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(previousHistoryRef));
                 if (sourceRef.path != currentHistoryRef.path &&
                     sourceRef.path != previousHistoryRef.path) {
-                  transaction.delete(sourceRef);
+                  FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(sourceRef));
                 }
                 return;
               }
 
-              transaction.set(
+              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
                 currentHistoryRef,
                 <String, dynamic>{
                   'plateNumber': canonicalPlate,
@@ -694,7 +696,7 @@ class FirestorePlateRepository implements PlateRepository {
                     'createdAt': FieldValue.serverTimestamp(),
                 },
                 SetOptions(merge: true),
-              );
+              ));
             }
           : null,
     );
@@ -821,12 +823,12 @@ class FirestorePlateRepository implements PlateRepository {
     }
 
     try {
-      final snap = await _firestore
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection('plates')
           .where('isSelected', isEqualTo: true)
           .where('selectedBy', isEqualTo: trimmedUserName)
           .where('type', whereIn: types)
-          .get();
+          .get(), source: 'firestore_plate_repository.get');
 
       final out = snap.docs.map((d) => PlateModel.fromDocument(d)).toList(growable: false);
       out.sort((a, b) {
@@ -838,11 +840,11 @@ class FirestorePlateRepository implements PlateRepository {
     } catch (_) {}
 
     try {
-      final snap = await _firestore
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection('plates')
           .where('isSelected', isEqualTo: true)
           .where('selectedBy', isEqualTo: trimmedUserName)
-          .get();
+          .get(), source: 'firestore_plate_repository.get');
 
       final out = snap.docs
           .map((d) => PlateModel.fromDocument(d))
@@ -879,12 +881,12 @@ class FirestorePlateRepository implements PlateRepository {
     );
 
     try {
-      final snapServer = await query.get(const GetOptions(source: Source.server));
+      final snapServer = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(const GetOptions(source: Source.server)), source: 'firestore_plate_repository.get');
       final serverResults = _plateModelsFromSnapshot(snapServer, type);
       return PlateFetchResult(items: serverResults, sourceLabel: 'server');
     } catch (_) {
       if (!cacheFirst) rethrow;
-      final snapCache = await query.get(const GetOptions(source: Source.cache));
+      final snapCache = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(const GetOptions(source: Source.cache)), source: 'firestore_plate_repository.get');
       final cacheResults = _plateModelsFromSnapshot(snapCache, type);
       return PlateFetchResult(items: cacheResults, sourceLabel: 'cache');
     }
@@ -905,7 +907,7 @@ class FirestorePlateRepository implements PlateRepository {
     final docId = plateDocId.trim();
     if (c.isEmpty || a.isEmpty || docId.isEmpty) return;
 
-    await _firestore.collection(c).doc(a).set(
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _firestore.collection(c).doc(a).set(
       <String, dynamic>{
         'area': a,
         'updatedAt': FieldValue.serverTimestamp(),
@@ -922,7 +924,7 @@ class FirestorePlateRepository implements PlateRepository {
         },
       },
       SetOptions(merge: true),
-    );
+    ), source: 'firestore_plate_repository.set');
 
     debugPrint(
       '✅ [FirestorePlateRepository.upsertViewItem] collection=$c area=$a plateId=$docId createdAtSource=transition_snapshot createdAtAvailable=${createdAt != null} additionalPlateRead=0',
@@ -940,7 +942,7 @@ class FirestorePlateRepository implements PlateRepository {
     final docId = plateDocId.trim();
     if (c.isEmpty || a.isEmpty || docId.isEmpty) return;
 
-    await _firestore.collection(c).doc(a).set(
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _firestore.collection(c).doc(a).set(
       <String, dynamic>{
         'area': a,
         'updatedAt': FieldValue.serverTimestamp(),
@@ -949,7 +951,7 @@ class FirestorePlateRepository implements PlateRepository {
         },
       },
       SetOptions(merge: true),
-    );
+    ), source: 'firestore_plate_repository.set');
   }
 
   @override
@@ -990,7 +992,10 @@ class FirestorePlateRepository implements PlateRepository {
       return Stream<List<ViewRowData>>.value(const <ViewRowData>[]);
     }
 
-    return _firestore.collection(c).doc(a).snapshots().map(
+    return FirebaseActivityMonitor.observe(
+      _firestore.collection(c).doc(a).snapshots(),
+      origin: 'plates.view.snapshots',
+    ).map(
           (snap) => _viewRowsFromSnapshot(
             snap,
             primaryAtField: primaryAtField,
@@ -1012,7 +1017,7 @@ class FirestorePlateRepository implements PlateRepository {
     );
 
     try {
-      final snap = await _firestore.collection('plates').doc(docId).get();
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('plates').doc(docId).get(), source: 'firestore_plate_repository.get');
 
       if (!snap.exists) {
         throw StateError('문서를 찾을 수 없습니다.');
@@ -1064,9 +1069,9 @@ class FirestorePlateRepository implements PlateRepository {
       throw ArgumentError('plateId is empty');
     }
 
-    await _firestore.collection('plates').doc(docId).update({
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.update, () => _firestore.collection('plates').doc(docId).update({
       'logs': FieldValue.arrayUnion([log]),
-    });
+    }), source: 'firestore_plate_repository.update');
   }
 
   @override
@@ -1118,7 +1123,7 @@ class FirestorePlateRepository implements PlateRepository {
     if (scope == PlateStatusScope.monthly) {
       final ref = _firestore.collection('monthly_plate_status').doc(docId);
       try {
-        final doc = await ref.get();
+        final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => ref.get(), source: 'firestore_plate_repository.get');
         final data = doc.data();
         if (!doc.exists || data == null) {
           return const PlateStatusLookupResult.notFound();
@@ -1164,7 +1169,7 @@ class FirestorePlateRepository implements PlateRepository {
             .doc(monthKey)
             .collection('plates')
             .doc(docId);
-        final doc = await ref.get();
+        final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => ref.get(), source: 'firestore_plate_repository.get');
         final data = doc.data();
         if (doc.exists && data != null) {
           return PlateStatusLookupResult.found(
@@ -1202,7 +1207,7 @@ class FirestorePlateRepository implements PlateRepository {
       area: safeArea,
     );
     try {
-      final monthlySnapshot = await monthlyRef.get();
+      final monthlySnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => monthlyRef.get(), source: 'firestore_plate_repository.get');
       final monthlyData = monthlySnapshot.data();
       if (monthlySnapshot.exists && monthlyData != null) {
         final record = PlateStatusRecord.fromMap(
@@ -1427,7 +1432,7 @@ class FirestorePlateRepository implements PlateRepository {
       return const <String>[];
     }
 
-    final doc = await _firestore.collection(collectionName).doc(safeArea).get();
+    final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection(collectionName).doc(safeArea).get(), source: 'firestore_plate_repository.get');
     if (!doc.exists) {
       return const <String>[];
     }
@@ -1461,11 +1466,11 @@ class FirestorePlateRepository implements PlateRepository {
     }
 
     try {
-      final qs = await _firestore
+      final qs = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection('monthly_plate_status')
           .where('area', isEqualTo: safeArea)
           .limit(1)
-          .get();
+          .get(), source: 'firestore_plate_repository.get');
 
       return qs.docs.isNotEmpty;
     } catch (e, st) {
@@ -1494,13 +1499,15 @@ class FirestorePlateRepository implements PlateRepository {
       return Stream.value(const <PlateStatusRecord>[]);
     }
 
-    final stream = _firestore
+    final stream = FirebaseActivityMonitor.observe(
+      _firestore
         .collection('monthly_plate_status')
         .where('type', isEqualTo: '정기')
         .where('area', isEqualTo: safeArea)
         .orderBy('updatedAt', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
+        .snapshots(),
+      origin: 'plates.monthly.snapshots',
+    ).map((snapshot) => snapshot.docs
             .map((doc) => PlateStatusRecord.fromMap(doc.data(), docId: doc.id))
             .toList(growable: false));
 
@@ -1542,10 +1549,10 @@ class FirestorePlateRepository implements PlateRepository {
     }
 
     try {
-      final doc = await _firestore
+      final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection(_monthlyPlateStatusViewCollection)
           .doc(safeArea)
-          .get()
+          .get(), source: 'firestore_plate_repository.get')
           .timeout(const Duration(seconds: 10));
       final data = doc.data() ?? const <String, dynamic>{};
       final items = data['items'];
@@ -1574,12 +1581,12 @@ class FirestorePlateRepository implements PlateRepository {
         return List<Map<String, dynamic>>.unmodifiable(out);
       }
 
-      final source = await _firestore
+      final source = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection(_monthlyPlateStatusCollection)
           .where('type', isEqualTo: '정기')
           .where('area', isEqualTo: safeArea)
           .orderBy('updatedAt', descending: true)
-          .get()
+          .get(), source: 'firestore_plate_repository.get')
           .timeout(const Duration(seconds: 10));
       if (source.docs.isEmpty) {
         return const <Map<String, dynamic>>[];
@@ -1651,10 +1658,10 @@ class FirestorePlateRepository implements PlateRepository {
   @override
   Future<MonthlyPlateViewRebuildResult> rebuildAllMonthlyPlateStatusViews() async {
     try {
-      final source = await _firestore
+      final source = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection(_monthlyPlateStatusCollection)
           .where('type', isEqualTo: '정기')
-          .get()
+          .get(), source: 'firestore_plate_repository.get')
           .timeout(const Duration(seconds: 30));
 
       final grouped = <String, Map<String, dynamic>>{};
@@ -1678,9 +1685,9 @@ class FirestorePlateRepository implements PlateRepository {
         itemCount++;
       }
 
-      final existingViews = await _firestore
+      final existingViews = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection(_monthlyPlateStatusViewCollection)
-          .get()
+          .get(), source: 'firestore_plate_repository.get')
           .timeout(const Duration(seconds: 30));
 
       WriteBatch batch = _firestore.batch();
@@ -1689,13 +1696,13 @@ class FirestorePlateRepository implements PlateRepository {
 
       Future<void> commitIfFull() async {
         if (pendingWrites < 450) return;
-        await batch.commit().timeout(const Duration(seconds: 30));
+        await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'firestore_plate_repository.commit').timeout(const Duration(seconds: 30));
         batch = _firestore.batch();
         pendingWrites = 0;
       }
 
       for (final entry in grouped.entries) {
-        batch.set(
+        FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(
           _firestore.collection(_monthlyPlateStatusViewCollection).doc(entry.key),
           <String, dynamic>{
             'area': entry.key,
@@ -1703,21 +1710,21 @@ class FirestorePlateRepository implements PlateRepository {
             'totalCount': entry.value.length,
             'items': entry.value,
           },
-        );
+        ));
         pendingWrites++;
         await commitIfFull();
       }
 
       for (final doc in existingViews.docs) {
         if (grouped.containsKey(doc.id)) continue;
-        batch.delete(doc.reference);
+        FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.delete, () => batch.delete(doc.reference));
         pendingWrites++;
         deletedViewCount++;
         await commitIfFull();
       }
 
       if (pendingWrites > 0) {
-        await batch.commit().timeout(const Duration(seconds: 30));
+        await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'firestore_plate_repository.commit').timeout(const Duration(seconds: 30));
       }
 
       return MonthlyPlateViewRebuildResult(
@@ -1788,16 +1795,17 @@ class FirestorePlateRepository implements PlateRepository {
     final monthlyRef = _firestore.collection(_monthlyPlateStatusCollection).doc(trimmed);
 
     try {
-      await _firestore.runTransaction((tx) async {
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
         final monthlySnap = await tx.get(monthlyRef).timeout(const Duration(seconds: 10));
         final data = monthlySnap.data() ?? <String, dynamic>{};
         final storedArea = _textValue(data['area']);
         final area = storedArea.isNotEmpty ? storedArea : fallbackArea;
         final markerMonths = _markerMonthsFromData(data);
 
-        tx.delete(monthlyRef);
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => tx.delete(monthlyRef));
         if (area.isNotEmpty) {
-          tx.set(
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             _firestore.collection(_monthlyPlateStatusViewCollection).doc(area),
             <String, dynamic>{
               'area': area,
@@ -1807,21 +1815,21 @@ class FirestorePlateRepository implements PlateRepository {
               },
             },
             SetOptions(merge: true),
-          );
+          ));
           for (final monthKey in markerMonths) {
-            tx.delete(
+            FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => tx.delete(
               _statusHistoryRefForMonthKey(
                 docId: trimmed,
                 area: area,
                 monthKey: monthKey,
               ),
-            );
+            ));
           }
         }
         debugPrint(
           '[FirestorePlateRepository][MonthlyMarker] action=delete docId=$trimmed area=$area months=${markerMonths.join(',')}',
         );
-      }).timeout(const Duration(seconds: 10));
+      }), source: 'firestore_plate_repository.runTransaction').timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.deleteMonthlyPlateStatus',
@@ -1890,7 +1898,8 @@ class FirestorePlateRepository implements PlateRepository {
     }
 
     try {
-      await _firestore.runTransaction((tx) async {
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
         final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
         final existing = snap.data() ?? <String, dynamic>{};
         final currentMonthKey = _monthKey(DateTime.now());
@@ -1900,16 +1909,16 @@ class FirestorePlateRepository implements PlateRepository {
         if (!markerExistsForCurrentMonth) {
           transactionPayload[_plateStatusMarkerMonthsField] =
               FieldValue.arrayUnion(<String>[currentMonthKey]);
-          tx.set(
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             _statusHistoryRefForMonthKey(
               docId: docId,
               area: safeArea,
               monthKey: currentMonthKey,
             ),
             const <String, dynamic>{'type': _monthlyParkingMarkerType},
-          );
+          ));
         }
-        tx.update(ref, transactionPayload);
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(ref, transactionPayload));
         debugPrint(
           '[FirestorePlateRepository][MonthlyMarker] action=payment month=$currentMonthKey docId=$docId write=${!markerExistsForCurrentMonth}',
         );
@@ -1927,7 +1936,7 @@ class FirestorePlateRepository implements PlateRepository {
           viewData['startDate'] = startDate.trim();
           viewData['endDate'] = endDate.trim();
         }
-        tx.set(
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
           viewRef,
           <String, dynamic>{
             'area': safeArea,
@@ -1941,8 +1950,8 @@ class FirestorePlateRepository implements PlateRepository {
             },
           },
           SetOptions(merge: true),
-        );
-      }).timeout(const Duration(seconds: 10));
+        ));
+      }), source: 'firestore_plate_repository.runTransaction').timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.recordMonthlyPaymentAndMaybeExtend',
@@ -1986,7 +1995,8 @@ class FirestorePlateRepository implements PlateRepository {
     final ref = _firestore.collection(_monthlyPlateStatusCollection).doc(docId);
     final viewRef = _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea);
     try {
-      await _firestore.runTransaction((tx) async {
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
         final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
         final existing = snap.data() ?? <String, dynamic>{};
         final payload = <String, dynamic>{
@@ -1996,14 +2006,14 @@ class FirestorePlateRepository implements PlateRepository {
           'extendedAt': FieldValue.serverTimestamp(),
           'extendedBy': extendedBy,
         };
-        tx.update(ref, payload);
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(ref, payload));
         final viewData = Map<String, dynamic>.from(existing);
         viewData['plateNumber'] = canonicalPlate;
         viewData['area'] = safeArea;
         viewData['startDate'] = startDate;
         viewData['endDate'] = endDate;
         viewData['updatedAt'] = FieldValue.serverTimestamp();
-        tx.set(
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
           viewRef,
           <String, dynamic>{
             'area': safeArea,
@@ -2017,8 +2027,8 @@ class FirestorePlateRepository implements PlateRepository {
             },
           },
           SetOptions(merge: true),
-        );
-      }).timeout(const Duration(seconds: 10));
+        ));
+      }), source: 'firestore_plate_repository.runTransaction').timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.extendMonthlyDateRange',
@@ -2052,7 +2062,8 @@ class FirestorePlateRepository implements PlateRepository {
     final ref = _firestore.collection(_monthlyPlateStatusCollection).doc(docId);
     final viewRef = _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea);
     try {
-      await _firestore.runTransaction((tx) async {
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
         final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
         final existing = snap.data() ?? <String, dynamic>{};
         final payload = <String, dynamic>{
@@ -2061,14 +2072,14 @@ class FirestorePlateRepository implements PlateRepository {
           'clearedAt': FieldValue.serverTimestamp(),
           'clearedBy': clearedBy,
         };
-        tx.update(ref, payload);
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(ref, payload));
         final viewData = Map<String, dynamic>.from(existing);
         viewData['plateNumber'] = canonicalPlate;
         viewData['area'] = safeArea;
         viewData['customStatus'] = '';
         viewData['hasMemo'] = false;
         viewData['updatedAt'] = FieldValue.serverTimestamp();
-        tx.set(
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
           viewRef,
           <String, dynamic>{
             'area': safeArea,
@@ -2082,8 +2093,8 @@ class FirestorePlateRepository implements PlateRepository {
             },
           },
           SetOptions(merge: true),
-        );
-      }).timeout(const Duration(seconds: 10));
+        ));
+      }), source: 'firestore_plate_repository.runTransaction').timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.clearMonthlyMemoAndStatusWithAudit',
@@ -2115,7 +2126,7 @@ class FirestorePlateRepository implements PlateRepository {
       return null;
     }
 
-    final doc = await _firestore.collection(safeCollection).doc(safeArea).get();
+    final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection(safeCollection).doc(safeArea).get(), source: 'firestore_plate_repository.get');
     return doc.data();
   }
 
@@ -2130,12 +2141,12 @@ class FirestorePlateRepository implements PlateRepository {
       return 0;
     }
 
-    final aggregate = await _firestore
+    final aggregate = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
         .collection('plates')
         .where('area', isEqualTo: trimmedArea)
         .where('type', isEqualTo: plateType.firestoreValue)
         .count()
-        .get();
+        .get(), source: 'firestore_plate_repository.get');
 
     return aggregate.count ?? 0;
   }
@@ -2163,12 +2174,12 @@ class FirestorePlateRepository implements PlateRepository {
       return const <PlateOutLogSearchResult>[];
     }
 
-    final snapshot = await _firestore
+    final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
         .collectionGroup('plates')
         .where('logScope', isEqualTo: 'plate_out_log')
         .where('area', isEqualTo: safeArea)
         .where('plate_four_digit', isEqualTo: fourDigit)
-        .get();
+        .get(), source: 'firestore_plate_repository.get');
 
     final items = snapshot.docs
         .map((doc) => PlateOutLogSearchResult(
@@ -2280,23 +2291,24 @@ class FirestorePlateRepository implements PlateRepository {
         isExtended: isExtended,
       );
 
-      await _firestore.runTransaction((tx) async {
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
         final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
         final existing = snap.data() ?? <String, dynamic>{};
 
         if (emptyMonthly) {
-          tx.delete(ref);
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => tx.delete(ref));
           for (final monthKey in _markerMonthsFromData(existing)) {
-            tx.delete(
+            FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => tx.delete(
               _statusHistoryRefForMonthKey(
                 docId: docId,
                 area: safeArea,
                 monthKey: monthKey,
               ),
-            );
+            ));
           }
           if (safeArea.isNotEmpty) {
-            tx.set(
+            FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
               viewRef,
               <String, dynamic>{
                 'area': safeArea,
@@ -2306,7 +2318,7 @@ class FirestorePlateRepository implements PlateRepository {
                 },
               },
               SetOptions(merge: true),
-            );
+            ));
           }
           return;
         }
@@ -2333,17 +2345,17 @@ class FirestorePlateRepository implements PlateRepository {
         if (!snap.exists) {
           base['createdAt'] = FieldValue.serverTimestamp();
           base[_plateStatusMarkerMonthsField] = <String>[currentMonthKey];
-          tx.set(
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             currentMarkerRef,
             const <String, dynamic>{'type': _monthlyParkingMarkerType},
-          );
+          ));
           debugPrint(
             '[FirestorePlateRepository][MonthlyMarker] action=create month=$currentMonthKey docId=$docId',
           );
         }
 
-        tx.set(ref, base, SetOptions(merge: true));
-        tx.set(
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(ref, base, SetOptions(merge: true)));
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
           viewRef,
           <String, dynamic>{
             'area': safeArea,
@@ -2367,8 +2379,8 @@ class FirestorePlateRepository implements PlateRepository {
             },
           },
           SetOptions(merge: true),
-        );
-      }).timeout(const Duration(seconds: 10));
+        ));
+      }), source: 'firestore_plate_repository.runTransaction').timeout(const Duration(seconds: 10));
     } on FirebaseException catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.setMonthlyPlateStatus',

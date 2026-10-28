@@ -1,3 +1,4 @@
+import '../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -163,7 +164,7 @@ class NovelCloudBackupStore {
         'rawBytes': '${raw.length}',
       },
     );
-    await _storage.ref(path).putData(compressed, metadata);
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.storage, () => _storage.ref(path).putData(compressed, metadata), source: 'novel_cloud_backup_store.putData');
 
     final resultMetadata = NovelCloudBackupMetadata(
       projectId: projectId,
@@ -192,7 +193,7 @@ class NovelCloudBackupStore {
     log?.call('cloud_restore_download_started path=$path');
     Uint8List? compressed;
     try {
-      compressed = await _storage.ref(path).getData(maxDownloadBytes);
+      compressed = await FirebaseActivityMonitor.track(FirebaseActivityKind.storage, () => _storage.ref(path).getData(maxDownloadBytes), source: 'novel_cloud_backup_store.getData');
     } on FirebaseException catch (error) {
       if (error.code == 'object-not-found') {
         throw StateError('클라우드 백업이 없습니다. 먼저 클라우드 백업을 실행하세요.');

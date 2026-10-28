@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -71,12 +72,13 @@ class CommuteTrueFalseRepository {
       final docRef =
       _firestore.collection('commute_true_false').doc(trimmedCompany);
 
-      await docRef.set(
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => docRef.set(
         <String, Object?>{
+          'companyId': trimmedCompany,
           '$trimmedArea.$trimmedWorkerName': Timestamp.fromDate(clockInAt),
         },
         SetOptions(merge: true),
-      );
+      ), source: 'commute_true_false_repository.set');
 
       debugPrint(
         '[CommuteTrueFalseRepository] 출근 시각 업데이트 완료 '
@@ -138,7 +140,7 @@ class CommuteTrueFalseRepository {
     final trimmedDivision = division.trim();
     if (trimmedDivision.isEmpty) return <String, Map<String, Object?>>{};
 
-    final doc = await _firestore.collection('commute_true_false').doc(trimmedDivision).get();
+    final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('commute_true_false').doc(trimmedDivision).get(), source: 'commute_true_false_repository.get');
     if (!doc.exists) return <String, Map<String, Object?>>{};
     return _normalizeByArea(doc.data() ?? <String, dynamic>{});
   }
@@ -156,10 +158,10 @@ class CommuteTrueFalseRepository {
     }
 
     final docRef = _firestore.collection('commute_true_false').doc(trimmedDivision);
-    await docRef.update(<Object, Object?>{
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.update, () => docRef.update(<Object, Object?>{
       FieldPath(<String>[trimmedArea, trimmedWorker]): FieldValue.delete(),
       FieldPath(<String>['$trimmedArea.$trimmedWorker']): FieldValue.delete(),
-    });
+    }), source: 'commute_true_false_repository.update');
   }
 
 }

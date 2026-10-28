@@ -7,6 +7,8 @@ sealed class SessionAccount {
   String get displayName;
   String get companyId;
   List<String> get permissionKeys;
+  String get accountGradeId;
+  bool get isInitialAdmin;
   String get currentArea;
   String get selectedArea;
   List<String> get areas;
@@ -34,6 +36,12 @@ final class UserSessionAccount implements SessionAccount {
 
   @override
   List<String> get permissionKeys => user.permissionKeys;
+
+  @override
+  String get accountGradeId => user.accountGradeId;
+
+  @override
+  bool get isInitialAdmin => user.isInitialAdmin;
 
   @override
   String get currentArea => user.currentArea ?? selectedArea;
@@ -79,6 +87,12 @@ final class TabletSessionAccount implements SessionAccount {
 
   @override
   List<String> get permissionKeys => tablet.permissionKeys;
+
+  @override
+  String get accountGradeId => '';
+
+  @override
+  bool get isInitialAdmin => false;
 
   @override
   String get currentArea => tablet.currentArea ?? selectedArea;

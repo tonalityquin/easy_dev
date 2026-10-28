@@ -1,3 +1,5 @@
+import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../shared/auth/account_code_number.dart';
@@ -84,7 +86,7 @@ class LegacyAccountCodeNumberMigrationService {
   }) async {
     final collection = _firestore.collection(collectionName);
     onLog?.call('$collectionName 전체 계정 조회를 시작합니다.', 0.04);
-    final snapshot = await collection.get();
+    final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => collection.get(), source: 'legacy_account_code_number_migration_service.get');
     final usedCodes = <String>{};
     for (final doc in snapshot.docs) {
       final code = AccountCodeNumber.normalize(
@@ -220,7 +222,7 @@ class LegacyAccountCodeNumberMigrationService {
   }) {
     return _firestore.runTransaction<_LegacyMigrationStepResult>(
       (transaction) async {
-        final freshSource = await transaction.get(sourceReference);
+        final freshSource = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(sourceReference), source: 'legacy_account_code_number_migration_service.get');
         if (!freshSource.exists) {
           throw StateError('SOURCE_DOCUMENT_NOT_FOUND');
         }
@@ -274,7 +276,7 @@ class LegacyAccountCodeNumberMigrationService {
           for (final field in fieldsToDelete) {
             updates[field] = FieldValue.delete();
           }
-          transaction.update(sourceReference, updates);
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => transaction.update(sourceReference, updates));
           return _LegacyMigrationStepResult(
             action: _LegacyMigrationAction.cleaned,
             codeNumber: codeNumber,
@@ -283,7 +285,7 @@ class LegacyAccountCodeNumberMigrationService {
         }
 
         final targetReference = collection.doc(targetId);
-        final freshTarget = await transaction.get(targetReference);
+        final freshTarget = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(targetReference), source: 'legacy_account_code_number_migration_service.get');
         if (freshTarget.exists) {
           throw StateError('TARGET_DOCUMENT_CONFLICT');
         }
@@ -295,8 +297,8 @@ class LegacyAccountCodeNumberMigrationService {
           migratedData.remove(field);
         }
 
-        transaction.set(targetReference, migratedData);
-        transaction.delete(sourceReference);
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(targetReference, migratedData));
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(sourceReference));
 
         return _LegacyMigrationStepResult(
           action: AccountCodeNumber.isGeneratedCode(freshCodeNumber)
@@ -316,10 +318,10 @@ class LegacyAccountCodeNumberMigrationService {
     for (var attempt = 0; attempt < 24; attempt += 1) {
       final candidate = AccountCodeNumber.generate();
       if (usedCodes.contains(candidate)) continue;
-      final duplicate = await collection
+      final duplicate = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => collection
           .where('codeNumber', isEqualTo: candidate)
           .limit(1)
-          .get();
+          .get(), source: 'legacy_account_code_number_migration_service.get');
       if (duplicate.docs.isNotEmpty) continue;
       usedCodes.add(candidate);
       return candidate;

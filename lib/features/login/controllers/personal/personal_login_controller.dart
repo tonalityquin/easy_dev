@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -139,7 +140,7 @@ class PersonalLoginController {
       accountId = _accountDocId(codeNumber: codeNumber, area: selectedArea);
       if (accountId.isEmpty) return false;
 
-      final snap = await _personalAccountsRef.doc(accountId).get();
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _personalAccountsRef.doc(accountId).get(), source: 'personal_login_controller.get');
       final data = snap.data();
       final active = (data?['isActive'] as bool?) ?? true;
       if (!snap.exists || data == null || !active) return false;
@@ -286,10 +287,14 @@ class PersonalLoginController {
     );
     final snapshots = await Future.wait(
       fields.map(
-        (field) => _personalAccountsRef
-            .where(field, isEqualTo: normalized)
-            .limit(20)
-            .get(),
+        (field) => FirebaseActivityMonitor.track(
+            FirebaseActivityKind.read,
+            () => _personalAccountsRef
+                .where(field, isEqualTo: normalized)
+                .limit(20)
+                .get(),
+            source: 'personal.login.lookup',
+          ),
       ),
     );
     final byId =
@@ -516,10 +521,10 @@ class PersonalLoginController {
     try {
       var attempts = 0;
       while (attempts < 8) {
-        final duplicate = await _personalAccountsRef
+        final duplicate = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _personalAccountsRef
             .where('codeNumber', isEqualTo: normalizedCodeNumber)
             .limit(1)
-            .get();
+            .get(), source: 'personal_login_controller.get');
         if (duplicate.docs.isEmpty) break;
         attempts += 1;
         normalizedCodeNumber = AccountCodeNumber.generate();
@@ -532,10 +537,10 @@ class PersonalLoginController {
         );
       }
 
-      final duplicate = await _personalAccountsRef
+      final duplicate = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _personalAccountsRef
           .where('codeNumber', isEqualTo: normalizedCodeNumber)
           .limit(1)
-          .get();
+          .get(), source: 'personal_login_controller.get');
       if (duplicate.docs.isNotEmpty) {
         throw StateError('CODE_NUMBER_GENERATION_FAILED');
       }
@@ -548,12 +553,12 @@ class PersonalLoginController {
         throw StateError('INVALID_PERSONAL_DOCUMENT_ID');
       }
       final docRef = _personalAccountsRef.doc(docId);
-      final existingDoc = await docRef.get();
+      final existingDoc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => docRef.get(), source: 'personal_login_controller.get');
       if (existingDoc.exists) {
         throw StateError('PERSONAL_DOCUMENT_ID_CONFLICT');
       }
 
-      await docRef.set(
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => docRef.set(
         _newPersonalAccountMap(
           name: name,
           codeNumber: normalizedCodeNumber,
@@ -561,7 +566,7 @@ class PersonalLoginController {
           area: normalizedArea,
           division: division,
         ),
-      );
+      ), source: 'personal_login_controller.set');
       PersonalAccountDiagnostics.record(
         'create_success',
         meta: <String, Object?>{
@@ -824,14 +829,14 @@ class PersonalLoginController {
       await prefs.remove('personalPhone');
 
       if (persistSession) {
-        await _personalAccountsRef.doc(account.documentId).set(
+        await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _personalAccountsRef.doc(account.documentId).set(
           <String, dynamic>{
             'isSaved': true,
             'lastLoginAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true),
-        );
+        ), source: 'personal_login_controller.set');
       }
       debugPrint(
         '[LOGIN-PERSONAL][${_ts()}] session activated persistence=${persistSession ? 'persistent' : 'ephemeral'} accountId=${account.documentId} area=${account.selectedArea}',

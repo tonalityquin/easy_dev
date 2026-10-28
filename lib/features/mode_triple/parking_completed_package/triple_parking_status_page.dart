@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../../shared/operational_cache/domain/location_cache_scope.dart';
+import '../../../app/utils/location_debug_status.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -186,7 +188,6 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
   List<LocationModel> _cachedLocations = <LocationModel>[];
   bool _isLocationsLoading = true;
   bool _hadLocationsError = false;
-  String? _lastLocationsArea;
 
   int _occupiedCount = 0;
   int _departureRequestsCount = 0;
@@ -195,7 +196,8 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
 
   bool _isCountLoading = true;
   bool _hadError = false;
-  String? _lastArea;
+  String? _lastScope;
+  bool _scopeInitialized = false;
 
   int _locationsReqSeq = 0;
   int _countReqSeq = 0;
@@ -212,10 +214,6 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
       duration: const Duration(milliseconds: 240),
       value: 1,
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _syncForCurrentArea(refreshLocationsSource: false);
-    });
   }
 
   @override
@@ -231,7 +229,13 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    final currentArea = context.read<AreaState>().currentArea.trim();
+    final areaState = context.watch<AreaState>();
+    final currentArea = areaState.currentArea.trim();
+    final currentDivision = areaState.currentDivision.trim();
+    final currentScope = LocationCacheScope.maybeKey(
+      currentDivision,
+      currentArea,
+    );
     final operationalRevision = context
         .watch<OperationalSnapshotRevisionState>()
         .revisionOf(currentArea);
@@ -239,11 +243,33 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
         _lastOperationalRevision != operationalRevision;
     _lastOperationalRevision = operationalRevision;
 
-    final bool areaChanged =
-        (_lastLocationsArea != null && _lastLocationsArea != currentArea) ||
-            (_lastArea != null && _lastArea != currentArea);
+    final scopeChanged = !_scopeInitialized || _lastScope != currentScope;
+    _scopeInitialized = true;
+    _lastScope = currentScope;
 
-    if (areaChanged) {
+    if (scopeChanged) {
+      ++_locationsReqSeq;
+      ++_countReqSeq;
+      ++_viewListenSeq;
+      _viewDebounce?.cancel();
+      _pcSub?.cancel();
+      _drSub?.cancel();
+      _pcSub = null;
+      _drSub = null;
+      _latestParkingCompleted = <_ViewRow>[];
+      _latestDepartureRequests = <_ViewRow>[];
+      _pcReady = false;
+      _drReady = false;
+      _occupiedCount = 0;
+      _departureRequestsCount = 0;
+      _departureInProgressCount = 0;
+      _cachedLocations = <LocationModel>[];
+      _gridOverlay = const ParkingGridOverlay.empty();
+      _hadLocationsError = false;
+      _hadError = false;
+      _isLocationsLoading = currentScope != null;
+      _isCountLoading = currentScope != null;
+      debugPrint('[TripleParkingStatusPage] area_scope_changed company=$currentDivision area=$currentArea');
       if (_syncScheduled) return;
       _syncScheduled = true;
       Future.microtask(() {
@@ -274,12 +300,19 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
   Future<void> _syncForCurrentArea({
     required bool refreshLocationsSource,
   }) async {
-    final area = context.read<AreaState>().currentArea.trim();
-    _lastLocationsArea = area;
-    _lastArea = area;
+    if (!mounted) return;
+    final areaState = context.read<AreaState>();
+    final area = areaState.currentArea.trim();
+    final company = areaState.currentDivision.trim();
+    final scope = LocationCacheScope.maybeKey(company, area);
+    if (scope == null) return;
+    context.read<ViewDocRowsStore>().switchCompanyScope(company);
 
     await Future.wait(<Future<void>>[
-      _runLoadLocationsFromLocal(forceRefresh: refreshLocationsSource),
+      _runLoadLocationsFromLocal(
+        forceRefresh: refreshLocationsSource,
+        animateOnSuccess: true,
+      ),
       _runAggregateCount(forceRefresh: false),
     ]);
   }
@@ -297,7 +330,6 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
     final division = context.read<AreaState>().currentDivision.trim();
 
     final requestedArea = area;
-    _lastLocationsArea = requestedArea;
 
     if (showLoading) {
       setState(() {
@@ -331,13 +363,16 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
       if (seq != _locationsReqSeq) return true;
       final nowArea = context.read<AreaState>().currentArea.trim();
       if (nowArea != requestedArea) return true;
+      if (context.read<AreaState>().currentDivision.trim() != division) return true;
       return false;
     }
 
     try {
+      final scopeKey = LocationCacheScope.maybeKey(division, requestedArea);
+      if (scopeKey == null) throw StateError('LOCATION_CACHE_COMPANY_AREA_REQUIRED');
       final next = await context
           .read<OperationalLocalRepository>()
-          .readLocations(requestedArea);
+          .readLocations(requestedArea, cacheKey: scopeKey);
 
       if (shouldDropResult()) return;
 
@@ -367,6 +402,17 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
       );
 
       if (shouldDropResult()) return;
+      if (!mounted) return;
+      LocationDebugStatus.report(
+        context: context,
+        title: '주차 위치 캐시 오류',
+        operation: 'TripleParkingStatusPage._runLoadLocationsFromLocal',
+        error: e,
+        details: <String, Object?>{
+          'companyId': division,
+          'area': requestedArea,
+        },
+      );
       setState(() {
         _cachedLocations = <LocationModel>[];
         _isLocationsLoading = false;
@@ -417,7 +463,6 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
     final repo = context.read<PlateRepository>();
 
     final requestedArea = area;
-    _lastArea = requestedArea;
 
     setState(() {
       _isCountLoading = true;
@@ -436,8 +481,12 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
     _pcReady = false;
     _drReady = false;
 
+    if (!mounted || seq != _countReqSeq ||
+        context.read<AreaState>().currentDivision.trim() != division ||
+        context.read<AreaState>().currentArea.trim() != requestedArea) return;
+
     final int myListenSeq = ++_viewListenSeq;
-    if (requestedArea.isEmpty) {
+    if (requestedArea.isEmpty || division.isEmpty) {
       debugPrint('[TripleParkingStatusPage] empty area, skip subscribe');
       if (!mounted) return;
       setState(() {
@@ -459,6 +508,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
       if (seq != _countReqSeq) return true;
       final nowArea = context.read<AreaState>().currentArea.trim();
       if (nowArea != requestedArea) return true;
+      if (context.read<AreaState>().currentDivision.trim() != division) return true;
       if (myListenSeq != _viewListenSeq) return true;
       return false;
     }
@@ -502,6 +552,18 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
         tags: const <String>[_tParking, _tParkingStatus, _tFirestore, _tUi],
       );
       if (shouldDropResult()) return;
+      if (!mounted) return;
+      LocationDebugStatus.report(
+        context: context,
+        title: '주차 현황 조회 오류',
+        operation: 'TripleParkingStatusPage._runAggregateCount',
+        error: e,
+        details: <String, Object?>{
+          'companyId': division,
+          'area': requestedArea,
+          'collection': which,
+        },
+      );
       setState(() {
         _occupiedCount = 0;
         _departureRequestsCount = 0;
@@ -526,6 +588,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
           context.read<ViewDocRowsStore>().setRows(
                 collection: 'parking_completed_view',
                 area: requestedArea,
+                companyId: division,
                 rows: rowData,
                 source: 'TripleParkingStatusPage',
               );
@@ -555,6 +618,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
           context.read<ViewDocRowsStore>().setRows(
                 collection: 'departure_requests_view',
                 area: requestedArea,
+                companyId: division,
                 rows: rowData,
                 source: 'TripleParkingStatusPage',
               );
@@ -573,8 +637,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
 
   @override
   Widget build(BuildContext context) {
-    final currentArea =
-        context.select<AreaState, String>((s) => s.currentArea.trim());
+    final currentArea = context.watch<AreaState>().currentArea.trim();
     final cs = Theme.of(context).colorScheme;
 
     if (_isLocationsLoading || _isCountLoading) {

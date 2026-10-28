@@ -1,5 +1,7 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 
@@ -17,10 +19,14 @@ class BillReadService {
     QuerySnapshot<Map<String, dynamic>> snapshot;
 
     try {
-      snapshot = await _firestore
+      final prefs = await SharedPreferences.getInstance();
+      final company = (prefs.getString('division') ?? '').trim();
+      if (company.isEmpty) throw StateError('BILL_COMPANY_REQUIRED');
+      snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection('bill')
+          .where('companyId', isEqualTo: company)
           .where('area', isEqualTo: area)
-          .get();
+          .get(), source: 'bill_read_service.get');
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint('❌ Firestore bill.read 실패(area=$area): $e');
@@ -33,11 +39,12 @@ class BillReadService {
         details: <String, Object?>{
           'collection': 'bill',
           'area': area,
-          'query': 'where(area == $area)',
-          'filters': 'area == $area',
+          'companyId': (await SharedPreferences.getInstance()).getString('division') ?? '',
+          'query': 'where(companyId == division).where(area == $area)',
+          'filters': 'companyId == division AND area == $area',
           'orderBy': 'none',
-          'queryShape': 'single-field-equality',
-          'compositeIndex': 'not-required-for-this-shape-unless-console-error-requires-it',
+          'queryShape': 'two-field-equality',
+          'compositeIndex': 'check-firestore-index-status',
         },
       );
       rethrow;

@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -32,11 +33,13 @@ class FirestoreVoiceMessageRepository implements VoiceMessageRepository {
 
   @override
   Stream<List<voice_message>> watchMessages(String channelId) {
-    return _messagesRef(channelId)
+    return FirebaseActivityMonitor.observe(
+      _messagesRef(channelId)
         .orderBy('createdAt', descending: true)
         .limit(retainedMessageCount)
-        .snapshots()
-        .map(
+        .snapshots(),
+      origin: 'voice.messages.snapshots',
+    ).map(
           (snapshot) => snapshot.docs
               .map(
                 (doc) => voice_message.fromMap(
@@ -63,11 +66,11 @@ class FirestoreVoiceMessageRepository implements VoiceMessageRepository {
     final storagePath =
         'voice_messages/${channel.areaKey}/${timestamp}_$messageId$extension';
     final ref = _storage.ref(storagePath);
-    await ref.putFile(
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.storage, () => ref.putFile(
       audioFile,
       SettableMetadata(contentType: 'audio/mp4'),
-    );
-    final audioUrl = await ref.getDownloadURL();
+    ), source: 'firestore_voice_message_repository.putFile');
+    final audioUrl = await FirebaseActivityMonitor.track(FirebaseActivityKind.storage, () => ref.getDownloadURL(), source: 'firestore_voice_message_repository.getDownloadURL');
     final message = voice_message(
       id: messageId,
       areaKey: channel.areaKey,
@@ -80,16 +83,22 @@ class FirestoreVoiceMessageRepository implements VoiceMessageRepository {
       durationMs: durationMs,
       createdAt: DateTime.now(),
     );
-    await _messagesRef(channel.id).doc(messageId).set(message.toMap());
-    await _firestore.collection('voice_channels').doc(channel.id).set(
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _messagesRef(channel.id).doc(messageId).set(<String, dynamic>{
+      ...message.toMap(),
+      'companyId': session.companyId,
+      'area': channel.areaName,
+    }), source: 'firestore_voice_message_repository.set');
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _firestore.collection('voice_channels').doc(channel.id).set(
       <String, dynamic>{
+        'companyId': session.companyId,
+        'area': channel.areaName,
         'areaKey': channel.areaKey,
         'areaName': channel.areaName,
         'lastMessageAt': FieldValue.serverTimestamp(),
         'lastSenderName': session.displayName,
       },
       SetOptions(merge: true),
-    );
+    ), source: 'firestore_voice_message_repository.set');
     await pruneOldMessages(channel.id);
   }
 
@@ -98,18 +107,18 @@ class FirestoreVoiceMessageRepository implements VoiceMessageRepository {
     String channelId,
     voice_message message,
   ) async {
-    await _messagesRef(channelId).doc(message.id).delete();
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.delete, () => _messagesRef(channelId).doc(message.id).delete(), source: 'firestore_voice_message_repository.delete');
     if (message.storagePath.isNotEmpty) {
-      await _storage.ref(message.storagePath).delete();
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.storage, () => _storage.ref(message.storagePath).delete(), source: 'firestore_voice_message_repository.delete');
     }
   }
 
   @override
   Future<void> pruneOldMessages(String channelId) async {
-    final snapshot = await _messagesRef(channelId)
+    final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _messagesRef(channelId)
         .orderBy('createdAt', descending: true)
         .limit(32)
-        .get();
+        .get(), source: 'firestore_voice_message_repository.get');
     if (snapshot.docs.length <= retainedMessageCount) {
       return;
     }
@@ -118,10 +127,17 @@ class FirestoreVoiceMessageRepository implements VoiceMessageRepository {
         id: doc.id,
         data: doc.data(),
       );
-      await doc.reference.delete();
+      try {
+        await FirebaseActivityMonitor.track(FirebaseActivityKind.delete, () => doc.reference.delete(), source: 'firestore_voice_message_repository.delete');
+      } on FirebaseException catch (error) {
+        if (error.code == 'permission-denied') {
+          continue;
+        }
+        rethrow;
+      }
       if (message.storagePath.isNotEmpty) {
         try {
-          await _storage.ref(message.storagePath).delete();
+          await FirebaseActivityMonitor.track(FirebaseActivityKind.storage, () => _storage.ref(message.storagePath).delete(), source: 'firestore_voice_message_repository.delete');
         } catch (_) {}
       }
     }

@@ -94,6 +94,7 @@ class StatusDialog {
     String copyButtonLabel = '전문 복사',
     bool useCommonUi = false,
     bool awaitManualClose = false,
+    bool isolateCopyText = false,
   }) async {
     if (!context.mounted) return;
 
@@ -110,11 +111,25 @@ class StatusDialog {
         description: trimmedDescription,
       );
     }
-    final currentDebugCode = developerMode ? debugPrintCode : '';
-    final effectiveCopyText = trimmedCopyText.isEmpty
-        ? currentDebugCode
-        : trimmedCopyText;
+    final currentDebugCode = developerMode && !isolateCopyText
+        ? debugPrintCode : '';
+    final explicitDebugCode = trimmedCopyText.isNotEmpty &&
+        (copyButtonLabel == 'debugPrint 코드 복사' ||
+            trimmedCopyText.split('\n').every((line) {
+              final value = line.trim();
+              return value.startsWith('debugPrint(') &&
+                  value.endsWith(');');
+            }));
+    final effectiveCopyText = explicitDebugCode && currentDebugCode.isNotEmpty
+        ? <String>{
+            ...trimmedCopyText.split('\n'),
+            ...currentDebugCode.split('\n'),
+          }.where((line) => line.trim().isNotEmpty).join('\n')
+        : trimmedCopyText.isEmpty
+            ? currentDebugCode
+            : trimmedCopyText;
     final debugCopyText = developerMode &&
+            !explicitDebugCode &&
             trimmedCopyText.isNotEmpty &&
             currentDebugCode.isNotEmpty &&
             trimmedCopyText != currentDebugCode
@@ -225,6 +240,7 @@ class StatusDialog {
     Duration? visibleDuration,
     bool useCommonUi = false,
     bool awaitManualClose = false,
+    bool isolateCopyText = false,
   }) {
     final hasCopyText = copyText != null && copyText.trim().isNotEmpty;
 
@@ -244,6 +260,7 @@ class StatusDialog {
                   : const Duration(milliseconds: 2600)),
       useCommonUi: useCommonUi,
       awaitManualClose: awaitManualClose,
+      isolateCopyText: isolateCopyText,
     );
   }
 
@@ -257,6 +274,7 @@ class StatusDialog {
     Duration? visibleDuration,
     bool useCommonUi = false,
     bool awaitManualClose = false,
+    bool isolateCopyText = false,
   }) {
     final hasCopyText = copyText != null && copyText.trim().isNotEmpty;
 
@@ -276,6 +294,7 @@ class StatusDialog {
                   : const Duration(milliseconds: 3200)),
       useCommonUi: useCommonUi,
       awaitManualClose: awaitManualClose,
+      isolateCopyText: isolateCopyText,
     );
   }
 
@@ -622,20 +641,35 @@ class _StatusDialogContent extends StatelessWidget {
                   ),
                 ),
                 if (hasDebugCopyText)
-                  AnimatedSwitcher(
+                  AnimatedScale(
+                    scale: debugCopied ? 1.025 : 1,
                     duration: reduceMotion
                         ? Duration.zero
                         : CommonUiMotion.selection,
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: ScaleTransition(scale: animation, child: child),
-                    ),
-                    child: CommonButton(
-                      key: ValueKey<bool>(debugCopied),
-                      label: debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
-                      icon: debugCopied ? Icons.check_rounded : Icons.code_rounded,
-                      onPressed: onDebugCopy,
-                      haptic: CommonHaptic.selection,
+                    curve: CommonUiMotion.enter,
+                    child: AnimatedSwitcher(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : CommonUiMotion.selection,
+                      switchInCurve: CommonUiMotion.enter,
+                      switchOutCurve: CommonUiMotion.exit,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.96, end: 1)
+                              .animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      child: CommonButton(
+                        key: ValueKey<bool>(debugCopied),
+                        label: debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
+                        icon: debugCopied
+                            ? Icons.check_rounded
+                            : Icons.code_rounded,
+                        onPressed: onDebugCopy,
+                        haptic: CommonHaptic.selection,
+                      ),
                     ),
                   ),
                 CommonButton(
@@ -677,19 +711,38 @@ class _StatusDialogContent extends StatelessWidget {
                   ),
                 ),
                 if (hasDebugCopyText)
-                  AnimatedSwitcher(
+                  AnimatedScale(
+                    scale: debugCopied ? 1.025 : 1,
                     duration: reduceMotion
                         ? Duration.zero
                         : const Duration(milliseconds: 180),
-                    child: OutlinedButton.icon(
-                      key: ValueKey<bool>(debugCopied),
-                      onPressed: onDebugCopy,
-                      icon: Icon(
-                        debugCopied ? Icons.check_rounded : Icons.code_rounded,
-                        size: 18,
+                    curve: Curves.easeOutCubic,
+                    child: AnimatedSwitcher(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 180),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.96, end: 1)
+                              .animate(animation),
+                          child: child,
+                        ),
                       ),
-                      label: Text(
-                        debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
+                      child: OutlinedButton.icon(
+                        key: ValueKey<bool>(debugCopied),
+                        onPressed: onDebugCopy,
+                        icon: Icon(
+                          debugCopied
+                              ? Icons.check_rounded
+                              : Icons.code_rounded,
+                          size: 18,
+                        ),
+                        label: Text(
+                          debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
+                        ),
                       ),
                     ),
                   ),

@@ -1,3 +1,5 @@
+import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -28,12 +30,12 @@ class EndWorkReportFirestoreRepository {
   Future<List<LockedPlateRecord>> fetchLockedDepartureCompletedPlates({
     required String area,
   }) async {
-    final snap = await _firestore
+    final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
         .collection('plates')
         .where('type', isEqualTo: PlateType.departureCompleted.firestoreValue)
         .where('area', isEqualTo: area)
         .where('isLockedFee', isEqualTo: true)
-        .get();
+        .get(), source: 'end_work_report_firestore_repository.get');
 
     return snap.docs
         .map((d) => LockedPlateRecord(docId: d.id, data: d.data()))
@@ -125,8 +127,9 @@ class EndWorkReportFirestoreRepository {
     };
 
     var operation = 'append';
-    await _firestore.runTransaction((tx) async {
-      final snap = await tx.get(ref);
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(ref), source: 'end_work_report_firestore_repository.get');
       final existing = snap.data();
       final rawLogs = existing?['logs'];
       final existingLogs = rawLogs is List ? rawLogs : const <dynamic>[];
@@ -189,8 +192,8 @@ class EndWorkReportFirestoreRepository {
               ? 'merge-sector'
               : 'keep-existing'
           : 'append';
-      tx.set(ref, update, SetOptions(merge: true));
-    });
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(ref, update, SetOptions(merge: true)));
+    }), source: 'end_work_report_firestore_repository.runTransaction');
 
     final message = '[EndWorkReport][plate_out_log] '
         'plateDocId=${record.docId} plate=$plateNumber operation=$operation '
@@ -262,23 +265,23 @@ class EndWorkReportFirestoreRepository {
     };
 
     final inserted = await _firestore.runTransaction<bool>((tx) async {
-      final submissionSnapshot = await tx.get(submissionRef);
+      final submissionSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(submissionRef), source: 'end_work_report_firestore_repository.get');
       if (submissionSnapshot.exists) {
         final existing = submissionSnapshot.data() ?? const <String, dynamic>{};
         final existingVerified = existing['gcsLogVerified'] == true;
         if (existingVerified || !gcsLogVerified) {
-          tx.set(
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             submissionRef,
             <String, dynamic>{
               'lastRetryAt': FieldValue.serverTimestamp(),
               'lastRetryUploadedBy': uploadedBy,
             },
             SetOptions(merge: true),
-          );
+          ));
           return false;
         }
 
-        tx.set(
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
           monthRef,
           <String, dynamic>{
             'division': division,
@@ -291,8 +294,8 @@ class EndWorkReportFirestoreRepository {
             },
           },
           SetOptions(merge: true),
-        );
-        tx.set(
+        ));
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
           submissionRef,
           <String, dynamic>{
             'gcsLogVerified': true,
@@ -311,11 +314,11 @@ class EndWorkReportFirestoreRepository {
             'recoveredAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true),
-        );
+        ));
         return true;
       }
 
-      tx.set(
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
         areaRef,
         <String, dynamic>{
           'division': division,
@@ -325,9 +328,9 @@ class EndWorkReportFirestoreRepository {
           'lastReportDate': dateStr,
         },
         SetOptions(merge: true),
-      );
+      ));
 
-      tx.set(
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
         monthRef,
         <String, dynamic>{
           'division': division,
@@ -340,9 +343,9 @@ class EndWorkReportFirestoreRepository {
           },
         },
         SetOptions(merge: true),
-      );
+      ));
 
-      tx.set(
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
         submissionRef,
         <String, dynamic>{
           'submissionId': submissionId,
@@ -366,7 +369,7 @@ class EndWorkReportFirestoreRepository {
           if (gcsByteSize != null) 'gcsByteSize': gcsByteSize,
           'createdAtServer': FieldValue.serverTimestamp(),
         },
-      );
+      ));
       return true;
     });
     debugPrint(
@@ -384,18 +387,18 @@ class EndWorkReportFirestoreRepository {
       final end = (offset + chunkSize).clamp(0, plateDocIds.length).toInt();
       final batch = _firestore.batch();
       for (final id in plateDocIds.sublist(offset, end)) {
-        batch.delete(_firestore.collection('plates').doc(id));
+        FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.delete, () => batch.delete(_firestore.collection('plates').doc(id)));
       }
-      await batch.commit();
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'end_work_report_firestore_repository.commit');
     }
 
     final countersRef = _firestore.collection('plate_counters').doc('area_$area');
-    await countersRef.set(
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => countersRef.set(
       <String, dynamic>{
         'departureCompletedEvents': 0,
       },
       SetOptions(merge: true),
-    );
+    ), source: 'end_work_report_firestore_repository.set');
   }
 
   DocumentReference<Map<String, dynamic>> _plateOutLogRef({

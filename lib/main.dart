@@ -11,6 +11,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'app/auth/google_auth_session.dart';
+import 'app/firebase_activity/firebase_activity_monitor.dart';
+import 'app/firebase_activity/firebase_activity_overlay.dart';
 import 'app/utils/secure_auth_diagnostics.dart';
 import 'app/config/auth_config.dart';
 import 'app/di/providers.dart';
@@ -45,7 +47,11 @@ Future<void> _diagnoseAppCheckTokenOnce() async {
   );
 
   try {
-    final token = await FirebaseAppCheck.instance.getToken(true);
+    final token = await FirebaseActivityMonitor.track(
+      FirebaseActivityKind.authentication,
+      () => FirebaseAppCheck.instance.getToken(true),
+      source: 'app_check.get_token',
+    );
     final succeeded = token != null && token.isNotEmpty;
 
     SecureAuthDiagnostics.record(
@@ -60,6 +66,7 @@ Future<void> _diagnoseAppCheckTokenOnce() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FirebaseActivityMonitor.instance.start();
   await initializeDateFormatting('ko_KR', null);
 
   final deviceLocale = WidgetsBinding.instance.platformDispatcher.locale;
@@ -176,7 +183,12 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
                   : const Duration(milliseconds: 220),
               themeAnimationCurve: Curves.easeOutCubic,
               home: const Scaffold(
-                body: Center(child: CircularProgressIndicator()),
+                body: Stack(
+                  children: [
+                    Center(child: CircularProgressIndicator()),
+                    FirebaseActivityOverlay(),
+                  ],
+                ),
               ),
             );
           },
@@ -190,7 +202,11 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     await AppModeMigration.migrateLegacyMode();
 
     SecureAuthDiagnostics.record('[MAIN][${_ts()}] Firebase.initializeApp');
-    await Firebase.initializeApp();
+    await FirebaseActivityMonitor.track(
+      FirebaseActivityKind.initialization,
+      () => Firebase.initializeApp(),
+      source: 'firebase.initialize_app',
+    );
 
     final appCheckProvider =
         kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity;
@@ -198,8 +214,12 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
       '[APP_CHECK][${_ts()}] activation_started provider=${kDebugMode ? 'debug' : 'play_integrity'}',
     );
     try {
-      await FirebaseAppCheck.instance.activate(
-        androidProvider: appCheckProvider,
+      await FirebaseActivityMonitor.track(
+        FirebaseActivityKind.authentication,
+        () => FirebaseAppCheck.instance.activate(
+          androidProvider: appCheckProvider,
+        ),
+        source: 'firebase.app_check.activate',
       );
       SecureAuthDiagnostics.record(
         '[APP_CHECK][${_ts()}] activation_completed',
@@ -217,7 +237,11 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
     SecureAuthDiagnostics.record('[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime');
     try {
-      await FirebaseGoogleAuthBridge.instance.configureRuntime();
+      await FirebaseActivityMonitor.track(
+        FirebaseActivityKind.authentication,
+        () => FirebaseGoogleAuthBridge.instance.configureRuntime(),
+        source: 'firebase.auth.configure',
+      );
       SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime done uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}',
       );
@@ -245,8 +269,12 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
       SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] existing Google user email=${existingGoogleUser?.email}',
       );
-      final ok = await FirebaseGoogleAuthBridge.instance
-          .bootstrapWithExistingGoogleUser(existingGoogleUser);
+      final ok = await FirebaseActivityMonitor.track(
+        FirebaseActivityKind.authentication,
+        () => FirebaseGoogleAuthBridge.instance
+            .bootstrapWithExistingGoogleUser(existingGoogleUser),
+        source: 'firebase.auth.bootstrap',
+      );
       SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser done ok=$ok uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}',
       );
@@ -377,6 +405,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   const Positioned.fill(
                     child: DebugSessionVisualOverlay(),
                   ),
+                  const FirebaseActivityOverlay(),
                 ],
               );
             },
@@ -398,12 +427,17 @@ class ErrorApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         appBar: AppBar(title: const Text('오류 발생')),
-        body: Center(
-          child: Text(
-            message,
-            style: const TextStyle(color: Colors.red, fontSize: 16),
-            textAlign: TextAlign.center,
-          ),
+        body: Stack(
+          children: [
+            Center(
+              child: Text(
+                message,
+                style: const TextStyle(color: Colors.red, fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const FirebaseActivityOverlay(),
+          ],
         ),
       ),
     );

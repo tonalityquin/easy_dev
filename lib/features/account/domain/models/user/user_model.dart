@@ -7,6 +7,7 @@ class UserModel {
   final String id;
   final String companyId;
   final bool isInitialAdmin;
+  final String accountGradeId;
   final List<String> permissionKeys;
   final int permissionSchemaVersion;
   final List<String> areaIds;
@@ -37,6 +38,7 @@ class UserModel {
     required this.id,
     this.companyId = '',
     this.isInitialAdmin = false,
+    this.accountGradeId = '',
     this.permissionKeys = const <String>[],
     this.permissionSchemaVersion = 1,
     this.areaIds = const <String>[],
@@ -72,6 +74,7 @@ class UserModel {
     String? id,
     String? companyId,
     bool? isInitialAdmin,
+    String? accountGradeId,
     List<String>? permissionKeys,
     int? permissionSchemaVersion,
     List<String>? areaIds,
@@ -102,6 +105,7 @@ class UserModel {
       id: id ?? this.id,
       companyId: companyId ?? this.companyId,
       isInitialAdmin: isInitialAdmin ?? this.isInitialAdmin,
+      accountGradeId: accountGradeId ?? this.accountGradeId,
       permissionKeys: permissionKeys ?? this.permissionKeys,
       permissionSchemaVersion: permissionSchemaVersion ?? this.permissionSchemaVersion,
       areaIds: areaIds ?? this.areaIds,
@@ -152,6 +156,7 @@ class UserModel {
       id: id,
       companyId: (data['companyId'] ?? '').toString(),
       isInitialAdmin: data['isInitialAdmin'] == true,
+      accountGradeId: (data['accountGradeId'] ?? '').toString(),
       permissionKeys: AccountPermissionPolicy.sanitize(List<String>.from(data['permissionKeys'] ?? const <String>[])).toList(growable: false),
       permissionSchemaVersion: data['permissionSchemaVersion'] is int ? data['permissionSchemaVersion'] as int : 1,
       areaIds: List<String>.from(data['areaIds'] ?? const <String>[]),
@@ -182,6 +187,7 @@ class UserModel {
     return <String, dynamic>{
       'companyId': companyId.trim(),
       'isInitialAdmin': isInitialAdmin,
+      'accountGradeId': accountGradeId,
       'permissionKeys': permissionKeys,
       'permissionSchemaVersion': permissionSchemaVersion,
       'areaIds': areaIds,

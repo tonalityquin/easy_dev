@@ -1,3 +1,5 @@
+import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -91,9 +93,9 @@ class UserCodeReservationBackfillService {
     UserCodeReservationBackfillLogger? onLog,
   }) async {
     onLog?.call('user_accounts 코드번호 수집을 시작합니다.', 0.03);
-    final rootSnapshot = await _roots.get(
+    final rootSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _roots.get(
       const GetOptions(source: Source.server),
-    );
+    ), source: 'user_code_reservation_backfill_service.get');
     final codeOwners = <String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
     final identifierOwners = <String, Set<String>>{};
     var invalidRootCodes = 0;
@@ -121,9 +123,9 @@ class UserCodeReservationBackfillService {
       0.18,
     );
 
-    final reservationSnapshot = await _reservations.get(
+    final reservationSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _reservations.get(
       const GetOptions(source: Source.server),
-    );
+    ), source: 'user_code_reservation_backfill_service.get');
     final reservationByCode = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{
       for (final doc in reservationSnapshot.docs) doc.id: doc,
     };
@@ -180,9 +182,9 @@ class UserCodeReservationBackfillService {
       final root = entry.value;
       try {
         final created = await _firestore.runTransaction<bool>((tx) async {
-          final rootSnap = await tx.get(root.reference);
+          final rootSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(root.reference), source: 'user_code_reservation_backfill_service.get');
           final reservationRef = _reservations.doc(code);
-          final reservationSnap = await tx.get(reservationRef);
+          final reservationSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(reservationRef), source: 'user_code_reservation_backfill_service.get');
           if (!rootSnap.exists || rootSnap.data() == null) {
             throw StateError('ROOT_MISSING:${root.id}');
           }
@@ -197,7 +199,7 @@ class UserCodeReservationBackfillService {
             }
             return false;
           }
-          tx.set(
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             reservationRef,
             <String, dynamic>{
               'userId': root.id,
@@ -206,7 +208,7 @@ class UserCodeReservationBackfillService {
               'createdAt': FieldValue.serverTimestamp(),
               'updatedAt': FieldValue.serverTimestamp(),
             },
-          );
+          ));
           return true;
         });
         if (created) {
@@ -233,9 +235,9 @@ class UserCodeReservationBackfillService {
     }
 
     onLog?.call('코드 인덱스와 Root 연결을 재검증합니다.', 0.78);
-    final verifyReservations = await _reservations.get(
+    final verifyReservations = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _reservations.get(
       const GetOptions(source: Source.server),
-    );
+    ), source: 'user_code_reservation_backfill_service.get');
     final verifyByCode = <String, Map<String, dynamic>>{
       for (final doc in verifyReservations.docs) doc.id: doc.data(),
     };

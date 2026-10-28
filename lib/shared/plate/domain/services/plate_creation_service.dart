@@ -1,3 +1,5 @@
+import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -169,6 +171,7 @@ class PlateCreationService {
     required Transaction transaction,
     required String plateNumber,
     required String area,
+    required String companyId,
     required String userName,
     required String memo,
     required bool monthlyStatusScope,
@@ -181,7 +184,7 @@ class PlateCreationService {
       final monthlyRef = _firestore
           .collection(_monthlyPlateStatusCollection)
           .doc('${plateNumber}_$area');
-      transaction.set(
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
         monthlyRef,
         <String, dynamic>{
           'customStatus': memo,
@@ -189,10 +192,11 @@ class PlateCreationService {
           'createdBy': userName,
           'lastMemoUpdatedBy': userName,
           'lastMemoSource': 'PlateCreationService.addPlate',
+          'companyId': companyId,
           'area': area,
         },
         SetOptions(merge: true),
-      );
+      ));
       return;
     }
 
@@ -207,18 +211,18 @@ class PlateCreationService {
       date: DateTime(now.year, now.month - 1, 1),
     );
     if (memo.isEmpty) {
-      transaction.delete(currentRef);
-      transaction.delete(previousRef);
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(currentRef));
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(previousRef));
       final sourcePath = expectedStatusSourcePath.trim();
       if (sourcePath.isNotEmpty &&
           sourcePath != currentRef.path &&
           sourcePath != previousRef.path) {
-        transaction.delete(_firestore.doc(sourcePath));
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(_firestore.doc(sourcePath)));
       }
       return;
     }
 
-    transaction.set(
+    FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
       currentRef,
       <String, dynamic>{
         'plateNumber': plateNumber,
@@ -232,13 +236,14 @@ class PlateCreationService {
         'customStatus': memo,
         'updatedAt': FieldValue.serverTimestamp(),
         'createdBy': userName,
+        'companyId': companyId,
         'area': area,
         'expireAt': Timestamp.fromDate(
           DateTime.utc(now.year, now.month + 1, 1),
         ),
       },
       SetOptions(merge: true),
-    );
+    ));
   }
 
 
@@ -503,8 +508,9 @@ class PlateCreationService {
         plateType == PlateType.parkingCompleted;
 
     try {
-      await _firestore.runTransaction((tx) async {
-        final snap = await tx.get(docRef);
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+        final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(docRef), source: 'plate_creation_service.get');
         if (snap.exists) {
           final data = snap.data();
           final existingTypeStr = (data?[PlateFields.type] as String?) ?? '';
@@ -524,7 +530,7 @@ class PlateCreationService {
 
         final monthlyStatusSnapshot =
             (monthlyStatusScope || shouldValidateStatusSnapshot)
-                ? await tx.get(monthlyStatusRef)
+                ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(monthlyStatusRef), source: 'plate_creation_service.get')
                 : null;
         if (monthlyStatusScope) {
           final monthlyData = monthlyStatusSnapshot?.data();
@@ -593,9 +599,9 @@ class PlateCreationService {
               }
             }
             final currentStatusSnapshot =
-                await tx.get(currentHistoryStatusRef);
+                await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(currentHistoryStatusRef), source: 'plate_creation_service.get');
             final previousStatusSnapshot =
-                await tx.get(previousHistoryStatusRef);
+                await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(previousHistoryStatusRef), source: 'plate_creation_service.get');
             DocumentSnapshot<Map<String, dynamic>>? sourceStatusSnapshot;
             if (expectedSourcePath.isNotEmpty) {
               if (expectedSourcePath == currentHistoryStatusRef.path) {
@@ -730,9 +736,10 @@ class PlateCreationService {
             partial[PlateFields.requestTime] = FieldValue.serverTimestamp();
 
             if (canWriteRequestsView) {
-              tx.set(
+              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
                 requestsViewRef,
                 <String, dynamic>{
+                  'companyId': normalizedDivision,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': _buildParkingRequestsViewItem(
@@ -745,7 +752,7 @@ class PlateCreationService {
                   ),
                 },
                 SetOptions(merge: true),
-              );
+              ));
             } else {
               if (kDebugMode) {
                 debugPrint(
@@ -755,9 +762,10 @@ class PlateCreationService {
           } else {
             if (existingType == PlateType.parkingRequests &&
                 canWriteRequestsView) {
-              tx.set(
+              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
                 requestsViewRef,
                 <String, dynamic>{
+                  'companyId': normalizedDivision,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': <String, dynamic>{
@@ -765,7 +773,7 @@ class PlateCreationService {
                   },
                 },
                 SetOptions(merge: true),
-              );
+              ));
             }
           }
 
@@ -773,9 +781,10 @@ class PlateCreationService {
             partial['parkingCompletedAt'] = FieldValue.serverTimestamp();
 
             if (canWriteCompletedView) {
-              tx.set(
+              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
                 completedViewRef,
                 <String, dynamic>{
+                  'companyId': normalizedDivision,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': _buildParkingCompletedViewItem(
@@ -788,7 +797,7 @@ class PlateCreationService {
                   ),
                 },
                 SetOptions(merge: true),
-              );
+              ));
             } else {
               if (kDebugMode) {
                 debugPrint(
@@ -797,9 +806,10 @@ class PlateCreationService {
             }
 
             if (canWriteRequestsView) {
-              tx.set(
+              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
                 requestsViewRef,
                 <String, dynamic>{
+                  'companyId': normalizedDivision,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': <String, dynamic>{
@@ -807,7 +817,7 @@ class PlateCreationService {
                   },
                 },
                 SetOptions(merge: true),
-              );
+              ));
             }
           }
 
@@ -815,14 +825,18 @@ class PlateCreationService {
           if (wasLocked) {
             final countersRef =
                 _firestore.collection('plate_counters').doc('area_$area');
-            tx.set(
+            FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
               countersRef,
-              {'departureCompletedEvents': FieldValue.increment(1)},
+              {
+                'companyId': normalizedDivision,
+                'area': area,
+                'departureCompletedEvents': FieldValue.increment(1),
+              },
               SetOptions(merge: true),
-            );
+            ));
           }
 
-          tx.update(docRef, partial);
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(docRef, partial));
 
           if (shouldIncrementReentryBillingCount) {
             PlateBillingCountService.incrementInTransaction(
@@ -853,9 +867,10 @@ class PlateCreationService {
           if (plateType == PlateType.parkingRequests) {
 
             if (canWriteRequestsView) {
-              tx.set(
+              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
                 requestsViewRef,
                 <String, dynamic>{
+                  'companyId': normalizedDivision,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': _buildParkingRequestsViewItem(
@@ -868,7 +883,7 @@ class PlateCreationService {
                   ),
                 },
                 SetOptions(merge: true),
-              );
+              ));
             } else {
               if (kDebugMode) {
                 debugPrint(
@@ -881,9 +896,10 @@ class PlateCreationService {
             map['parkingCompletedAt'] = FieldValue.serverTimestamp();
 
             if (canWriteCompletedView) {
-              tx.set(
+              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
                 completedViewRef,
                 <String, dynamic>{
+                  'companyId': normalizedDivision,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': _buildParkingCompletedViewItem(
@@ -896,7 +912,7 @@ class PlateCreationService {
                   ),
                 },
                 SetOptions(merge: true),
-              );
+              ));
             } else {
               if (kDebugMode) {
                 debugPrint(
@@ -905,9 +921,10 @@ class PlateCreationService {
             }
 
             if (canWriteRequestsView) {
-              tx.set(
+              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
                 requestsViewRef,
                 <String, dynamic>{
+                  'companyId': normalizedDivision,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': <String, dynamic>{
@@ -915,11 +932,11 @@ class PlateCreationService {
                   },
                 },
                 SetOptions(merge: true),
-              );
+              ));
             }
           }
 
-          tx.set(docRef, map);
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(docRef, map));
           if (shouldIncrementBillingCount) {
             PlateBillingCountService.incrementInTransaction(
               transaction: tx,
@@ -939,6 +956,7 @@ class PlateCreationService {
             transaction: tx,
             plateNumber: plateNumber,
             area: area,
+            companyId: normalizedDivision,
             userName: statusActorName,
             memo: statusMemo,
             monthlyStatusScope: monthlyStatusScope,
@@ -947,7 +965,7 @@ class PlateCreationService {
             now: statusWriteTime,
           );
         }
-      });
+      }), source: 'plate_creation_service.runTransaction');
     } on DuplicatePlateException {
       rethrow;
     } catch (_) {

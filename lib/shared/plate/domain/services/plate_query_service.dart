@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,10 +10,10 @@ class PlateQueryService {
 
   Future<PlateModel?> getPlate(String documentId) async {
     try {
-      final doc = await _firestore
+      final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection('plates')
           .doc(documentId)
-          .get()
+          .get(), source: 'plate_query_service.get')
           .timeout(const Duration(seconds: 10));
 
       if (!doc.exists) {
@@ -116,7 +117,7 @@ class PlateQueryService {
     List<String> tags = const ['plates', 'query'],
   }) async {
     try {
-      final querySnapshot = await query.get();
+      final querySnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(), source: 'plate_query_service.get');
       final results = querySnapshot.docs
           .map((doc) => PlateModel.fromDocument(doc))
           .toList();

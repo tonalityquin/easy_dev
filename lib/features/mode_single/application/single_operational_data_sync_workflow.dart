@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/operational_cache/domain/location_cache_scope.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/init/app_exit_service.dart';
@@ -209,7 +210,7 @@ class SingleOperationalDataSyncWorkflow {
         );
         await locationState.clearAreaCache(area);
         trace.log(
-          '주차 구역 삭제 검증 완료: area=$area remaining=${await localRepository.countLocations(area)}',
+          '주차 구역 삭제 검증 완료: area=$area remaining=${await localRepository.countLocations(area, cacheKey: LocationCacheScope.requireKey(division, area))}',
           progress: 0.20,
         );
 
@@ -269,7 +270,7 @@ class SingleOperationalDataSyncWorkflow {
           progress: 0.54,
         );
         await locationState.manualLocationRefreshStrictForArea(area);
-        final locationMeta = await localRepository.readAreaMeta(area);
+        final locationMeta = await localRepository.readLocationMeta(division: division, area: area);
         trace.log(
           '주차 구역 SQLite 저장 완료: area=$area count=${locationMeta?.locationCount ?? 0} totalCapacity=${locationMeta?.totalCapacity ?? 0}',
           progress: 0.62,
@@ -359,9 +360,10 @@ class SingleOperationalDataSyncWorkflow {
           syncedAtIso: syncedAtIso,
         );
         final finalMeta = await localRepository.readAreaMeta(area);
+        final finalLocationMeta = await localRepository.readLocationMeta(division: division, area: area);
         trace.log('운영 메타 정보 저장 완료: $syncedAtIso', progress: 0.97);
         trace.log(
-          'SQLite snapshot 검증 완료: area=$area locations=${finalMeta?.locationCount ?? 0} generalBills=${finalMeta?.generalBillCount ?? 0} regularBills=${finalMeta?.regularBillCount ?? 0} sectors=${finalMeta?.sectorCount ?? 0} rules=${division.isEmpty ? 0 : await localRepository.countRules(division: division, area: area)} monthly=${finalMeta?.hasMonthlyParking} monthlyPolicy=unknown_without_plate syncedAt=${finalMeta?.syncedAt?.toIso8601String()}',
+          'SQLite snapshot 검증 완료: area=$area locations=${finalLocationMeta?.locationCount ?? 0} generalBills=${finalMeta?.generalBillCount ?? 0} regularBills=${finalMeta?.regularBillCount ?? 0} sectors=${finalMeta?.sectorCount ?? 0} rules=${division.isEmpty ? 0 : await localRepository.countRules(division: division, area: area)} monthly=${finalMeta?.hasMonthlyParking} monthlyPolicy=unknown_without_plate syncedAt=${finalMeta?.syncedAt?.toIso8601String()}',
           progress: 0.99,
         );
         dataSaved = true;

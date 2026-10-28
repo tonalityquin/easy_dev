@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -185,11 +186,19 @@ class FirebaseGoogleAuthBridge {
         SecureAuthDiagnostics.record(
           '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] 익명 Firebase 세션 정리 후 Google credential 로그인 진행',
         );
-        await _auth.signOut();
+        await FirebaseActivityMonitor.track(
+      FirebaseActivityKind.authentication,
+      () => _auth.signOut(),
+      source: 'firebase.auth.sign_out',
+    );
       }
 
       final credential = GoogleAuthProvider.credential(idToken: idToken);
-      final result = await _auth.signInWithCredential(credential);
+      final result = await FirebaseActivityMonitor.track(
+        FirebaseActivityKind.authentication,
+        () => _auth.signInWithCredential(credential),
+        source: 'firebase.auth.credential',
+      );
       final user = result.user;
 
       SecureAuthDiagnostics.record(
@@ -215,7 +224,11 @@ class FirebaseGoogleAuthBridge {
     }
 
     try {
-      final result = await _auth.signInAnonymously();
+      final result = await FirebaseActivityMonitor.track(
+        FirebaseActivityKind.authentication,
+        () => _auth.signInAnonymously(),
+        source: 'firebase.auth.anonymous',
+      );
       SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug 익명 Firebase 로그인 성공 uid=${result.user?.uid}',
       );
@@ -251,7 +264,11 @@ class FirebaseGoogleAuthBridge {
       SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 비익명 세션 종료 uid=${current.uid} email=${current.email}',
       );
-      await _auth.signOut();
+      await FirebaseActivityMonitor.track(
+      FirebaseActivityKind.authentication,
+      () => _auth.signOut(),
+      source: 'firebase.auth.sign_out',
+    );
     }
 
     SecureAuthDiagnostics.record(
@@ -259,7 +276,11 @@ class FirebaseGoogleAuthBridge {
     );
 
     try {
-      final result = await _auth.signInAnonymously();
+      final result = await FirebaseActivityMonitor.track(
+        FirebaseActivityKind.authentication,
+        () => _auth.signInAnonymously(),
+        source: 'firebase.auth.anonymous',
+      );
       final user = result.user;
       SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 익명 인증 성공 uid=${user?.uid} anonymous=${user?.isAnonymous}',
@@ -288,7 +309,11 @@ class FirebaseGoogleAuthBridge {
       '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Firebase 로그아웃 uid=${current.uid} email=${current.email} anonymous=${current.isAnonymous}',
     );
 
-    await _auth.signOut();
+    await FirebaseActivityMonitor.track(
+      FirebaseActivityKind.authentication,
+      () => _auth.signOut(),
+      source: 'firebase.auth.sign_out',
+    );
 
     SecureAuthDiagnostics.record(
       '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Firebase 로그아웃 완료',

@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../features/dev/application/area_state.dart';
+import '../operational_cache/domain/location_cache_scope.dart';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -188,7 +190,9 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
   Future<List<LocationModel>> _loadLocationsFromLocal(String area) async {
     final normalizedArea = area.trim();
     if (normalizedArea.isEmpty) return const <LocationModel>[];
-    return context.read<OperationalLocalRepository>().readLocations(normalizedArea);
+    final scopeKey = LocationCacheScope.maybeKey(context.read<AreaState>().currentDivision, normalizedArea);
+    if (scopeKey == null) return const <LocationModel>[];
+    return context.read<OperationalLocalRepository>().readLocations(normalizedArea, cacheKey: scopeKey);
   }
 
   void _playSnapshotRefreshAnimation() {
@@ -658,6 +662,7 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
     super.build(context);
 
     final area = widget.area.trim();
+    final companyScope = LocationCacheScope.maybeKey(context.watch<AreaState>().currentDivision, area) ?? '';
     final store = context.watch<ViewDocRowsStore>();
     final liveLocations = context.watch<LocationState>().locations;
     final operationalRevision = context
@@ -695,8 +700,8 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
       );
     }
 
-    if (_localFuture == null || _localArea != area) {
-      _localArea = area;
+    if (_localFuture == null || _localArea != companyScope) {
+      _localArea = companyScope;
       _localFuture = _loadLocationsFromLocal(area);
     }
 

@@ -165,6 +165,7 @@ class ChildSlot {
 class LocationModel {
   final String id;
   final String area;
+  final String companyId;
   final int capacity;
   final bool isSelected;
   final String locationName;
@@ -185,6 +186,7 @@ class LocationModel {
   LocationModel({
     required this.id,
     required this.area,
+    this.companyId = '',
     required this.capacity,
     required this.isSelected,
     required this.locationName,
@@ -279,6 +281,7 @@ class LocationModel {
     return LocationModel(
       id: id,
       area: (data['area'] ?? '').toString(),
+      companyId: (data['companyId'] ?? '').toString(),
       capacity: (data['capacity'] as num?)?.toInt() ?? 0,
       isSelected: data['isSelected'] == true,
       locationName: (data['locationName'] ?? '').toString(),
@@ -300,6 +303,7 @@ class LocationModel {
     final resolvedParent = resolvedType == 'composite_parent' ? null : parent;
 
     final map = <String, dynamic>{
+      'companyId': companyId,
       'area': area,
       'capacity': capacity,
       'isSelected': isSelected,
@@ -340,6 +344,7 @@ class LocationModel {
   Map<String, dynamic> toCacheMap() {
     return {
       'id': id,
+      'companyId': companyId,
       'area': area,
       'capacity': capacity,
       'isSelected': isSelected,
@@ -372,6 +377,7 @@ class LocationModel {
     return LocationModel(
       id: safeId,
       area: (data['area'] ?? '').toString(),
+      companyId: (data['companyId'] ?? '').toString(),
       capacity: (data['capacity'] as num?)?.toInt() ?? 0,
       isSelected: data['isSelected'] == true,
       locationName: (data['locationName'] ?? '').toString(),
@@ -390,6 +396,7 @@ class LocationModel {
   LocationModel copyWith({
     String? id,
     String? area,
+    String? companyId,
     int? capacity,
     bool? isSelected,
     String? locationName,
@@ -406,6 +413,7 @@ class LocationModel {
     return LocationModel(
       id: id ?? this.id,
       area: area ?? this.area,
+      companyId: companyId ?? this.companyId,
       capacity: capacity ?? this.capacity,
       isSelected: isSelected ?? this.isSelected,
       locationName: locationName ?? this.locationName,

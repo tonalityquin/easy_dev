@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -161,7 +162,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
       );
 
       if (accountId.isNotEmpty && !ephemeralDebugSession) {
-        await FirebaseFirestore.instance
+        await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => FirebaseFirestore.instance
             .collection('personal_accounts')
             .doc(accountId)
             .set(
@@ -171,7 +172,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
             'updatedAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true),
-        );
+        ), source: 'personal_side_menu.set');
         trace.log('개인형 원격 로그아웃 상태 반영이 완료되었습니다.', progress: 0.38);
       } else {
         trace.log(

@@ -1,3 +1,5 @@
+import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,36 +10,94 @@ import 'package:flutter/foundation.dart';
 import '../../../../app/auth/google_auth_session.dart';
 import '../../../../app/utils/access_gate_diagnostics.dart';
 import '../../../dev/application/developer_account_authorization.dart';
+import '../../../dev/application/login_gate_paths.dart';
+import '../../domain/models/account_permission_policy.dart';
+import 'company_grade_policy_service.dart';
+import 'account_initialization_guard.dart';
+
+class BootstrapArea {
+  const BootstrapArea({
+    required this.id,
+    required this.name,
+    required this.englishName,
+    required this.isHeadquarter,
+    this.activeLimit,
+    this.totalLimit,
+    this.createOnBootstrap = false,
+  });
+
+  final String id;
+  final String name;
+  final String englishName;
+  final bool isHeadquarter;
+  final int? activeLimit;
+  final int? totalLimit;
+  final bool createOnBootstrap;
+}
 
 class BootstrapCompany {
   const BootstrapCompany({
     required this.id,
-    required this.initialized,
-    required this.accountExists,
-    required this.initialAdminExists,
-    required this.codeConsistent,
-    required this.showConsistent,
-    required this.metaConsistent,
-    required this.bootstrapConsistent,
+    required this.areaDocuments,
+    required this.areaConfigVersion,
   });
 
   final String id;
-  final bool initialized;
-  final bool accountExists;
-  final bool initialAdminExists;
-  final bool codeConsistent;
-  final bool showConsistent;
-  final bool metaConsistent;
-  final bool bootstrapConsistent;
+  final List<BootstrapArea> areaDocuments;
+  final int areaConfigVersion;
 
-  bool get needsInitialization => !initialized && !accountExists;
-  bool get needsReview => (!initialized && accountExists) ||
-      (initialized && (!bootstrapConsistent ||
-        (!initialAdminExists && accountExists)));
-  bool get needsRecovery => initialized && !needsReview &&
-      (!initialAdminExists || !codeConsistent ||
-       !showConsistent || !metaConsistent);
-  bool get healthy => initialized && !needsRecovery && !needsReview;
+  List<String> get areas => areaDocuments.map((area) => area.name).toSet().toList()..sort();
+  List<String> get areaIds => areaDocuments.map((area) => area.id).toSet().toList()..sort();
+
+  BootstrapArea get headquarter {
+    final official = areaDocuments.where((area) => area.isHeadquarter).toList();
+    if (official.length == 1) {
+      if (official.single.name != id || official.single.id != '$id-$id') {
+        throw StateError('INITIAL_SETUP_HEADQUARTER_PATH_CONFLICT:$id');
+      }
+      return official.single;
+    }
+    if (official.length > 1) throw StateError('INITIAL_SETUP_HEADQUARTER_DUPLICATE:$id');
+    final legacy = areaDocuments.where((area) => area.name == id && area.id == '$id-$id').toList();
+    if (legacy.length == 1) return legacy.single;
+    throw StateError('INITIAL_SETUP_HEADQUARTER_REQUIRED:$id');
+  }
+}
+
+class InitialAccountCreationResult {
+  const InitialAccountCreationResult({
+    required this.completedCompanyIds,
+    required this.failedCompanyIds,
+    required this.pendingCompanyIds,
+    required this.failureCode,
+    required this.activeCount,
+    required this.registrationPendingCount,
+  });
+
+  final List<String> completedCompanyIds;
+  final List<String> failedCompanyIds;
+  final List<String> pendingCompanyIds;
+  final String? failureCode;
+  final int activeCount;
+  final int registrationPendingCount;
+
+  bool get succeeded => failedCompanyIds.isEmpty && pendingCompanyIds.isEmpty;
+}
+
+class AreaLimitMigrationResult {
+  const AreaLimitMigrationResult({
+    required this.scannedCount,
+    required this.migratedCount,
+    required this.unchangedCount,
+    required this.missingMetaCount,
+    required this.unconfiguredCount,
+  });
+
+  final int scannedCount;
+  final int migratedCount;
+  final int unchangedCount;
+  final int missingMetaCount;
+  final int unconfiguredCount;
 }
 
 class BootstrapPreview {
@@ -46,18 +106,14 @@ class BootstrapPreview {
     required this.divisions,
     required this.areas,
     required this.areaIds,
-    required this.catalogVersion,
   });
 
   final List<BootstrapCompany> companies;
   final List<String> divisions;
   final List<String> areas;
   final List<String> areaIds;
-  final int catalogVersion;
 
-  int get pending => companies.where((company) => company.needsInitialization).length;
-  int get recoveryRequired => companies.where((company) => company.needsRecovery).length;
-  int get reviewRequired => companies.where((company) => company.needsReview).length;
+  int get pending => companies.length;
 }
 
 class BootstrapSyncProgress {
@@ -79,55 +135,63 @@ class BootstrapSyncProgress {
 class CompanyBootstrapService {
   const CompanyBootstrapService();
 
-  static const List<String> allModes = <String>[
-    'single', 'double', 'triple', 'minor',
-  ];
+  static const List<String> allModes = AccountInitializationGuard.accessModes;
 
-  static const List<String> initialPermissions = <String>[
-    'accounts.read',
-    'accounts.create',
-    'accounts.update',
-    'accounts.delete',
-    'accounts.activate',
-    'accounts.grantPermissions',
-    'sector.manage',
-    'location.manage',
-    'rule.manage',
-    'tablet.manage',
-    'bill.manage',
-    'monthly.manage',
-    'company.manage',
-    'voice.delete.any',
-    'single.operations.enter',
-  ];
-
-  static bool _sameStrings(dynamic left, dynamic right) {
-    if (left is! List || right is! List) return false;
-    final a = left.map((value) => value.toString()).toList()..sort();
-    final b = right.map((value) => value.toString()).toList()..sort();
-    return listEquals(a, b);
-  }
+  static final List<String> initialPermissions =
+      AccountPermissionPolicy.keys.toList(growable: false);
 
   static bool _matchesCatalog(
     Map<String, dynamic>? data,
-    BootstrapPreview snapshot,
-  ) => data != null &&
-      data['accessCatalogVersion'] == snapshot.catalogVersion &&
-      _sameStrings(data['divisions'], snapshot.divisions) &&
-      _sameStrings(data['areas'], snapshot.areas) &&
-      _sameStrings(data['areaIds'], snapshot.areaIds) &&
-      _sameStrings(data['modes'], allModes);
+    BootstrapCompany company,
+    int version,
+  ) => AccountInitializationGuard.matchesAccessCatalog(
+        account: data,
+        companyId: company.id,
+        areaNames: company.areas,
+        areaIds: company.areaIds,
+        catalogVersion: version,
+      );
 
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
-  static String initialCode(String companyId) {
-    if (companyId == 'belivus') return '01090351868';
-    final digest = sha256.convert(utf8.encode(companyId)).toString();
-    return 'a${digest.substring(0, 9)}1';
+  Future<void> ensureGeneralGradePolicies(String companyId) async {
+    final company = companyId.trim();
+    if (company.isEmpty) throw StateError('GRADE_POLICY_COMPANY_REQUIRED');
+    final entries = AccountPermissionPolicy.presets.entries.toList(growable: false);
+    final refs = entries.map((entry) => _firestore
+        .collection('company_grade_policies').doc(company)
+        .collection('grades').doc(entry.key)).toList(growable: false);
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((transaction) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+      final snapshots = await Future.wait(refs.map(transaction.get));
+      for (var index = 0; index < refs.length; index++) {
+        if (snapshots[index].exists) {
+          CompanyGradePolicyService.parse(
+            companyId: company,
+            gradeId: entries[index].key,
+            data: snapshots[index].data(),
+          );
+          continue;
+        }
+        final entry = entries[index];
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(refs[index], <String, dynamic>{
+          'companyId': company,
+          'gradeId': entry.key,
+          'name': AccountPermissionPolicy.gradeLabel(entry.key),
+          'permissionKeys': entry.value.toList(growable: false)..sort(),
+          'enabled': true,
+          'version': 1,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }));
+      }
+    }), source: 'company_bootstrap_service.runTransaction');
   }
 
+  static String initialCode(String companyId) =>
+      AccountInitializationGuard.initialCode(companyId);
+
   static String initialAccountId(String companyId) =>
-      '${initialCode(companyId)}-$companyId';
+      AccountInitializationGuard.initialAccountId(companyId);
 
   static Future<void> requireDeveloper({
     String source = 'initial_setup',
@@ -154,9 +218,19 @@ class CompanyBootstrapService {
       );
       throw StateError('INITIAL_SETUP_DEVELOPER_IDENTITY_REQUIRED');
     }
-    final gate = await FirebaseFirestore.instance
-        .doc('developer_login_gate/authorization')
-        .get(const GetOptions(source: Source.server));
+    late final DocumentSnapshot<Map<String, dynamic>> gate;
+    try {
+      gate = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => FirebaseFirestore.instance
+          .doc(LoginGatePaths.developer)
+          .get(const GetOptions(source: Source.server)), source: 'company_bootstrap_service.get');
+    } on FirebaseException catch (error) {
+      AccessGateDiagnostics.record(
+        'developer_auth_failed',
+        source: source,
+        reason: error.code,
+      );
+      rethrow;
+    }
     if (!gate.exists || gate.data()?['enabled'] != true) {
       AccessGateDiagnostics.record(
         'developer_auth_denied', source: source, reason: 'gate_disabled',
@@ -168,103 +242,227 @@ class CompanyBootstrapService {
 
   Future<BootstrapPreview> preview() async {
     final snapshots = await Future.wait([
-      _firestore.collection('divisions').get(const GetOptions(source: Source.server)),
-      _firestore.collection('areas').get(const GetOptions(source: Source.server)),
+      FirebaseActivityMonitor.track(
+        FirebaseActivityKind.read,
+        () => _firestore.collection('divisions')
+            .get(const GetOptions(source: Source.server)),
+        source: 'bootstrap.divisions.preview',
+      ),
+      FirebaseActivityMonitor.track(
+        FirebaseActivityKind.read,
+        () => _firestore.collection('areas')
+            .get(const GetOptions(source: Source.server)),
+        source: 'bootstrap.areas.preview',
+      ),
     ]);
-    final divisionDocs = snapshots[0].docs
-        .where((doc) => doc.data()['lifecycleStatus'] != 'closed')
+    final companyDocs = snapshots[0].docs.where((doc) {
+      final data = doc.data();
+      return data['lifecycleStatus'] != 'closed' &&
+          data['lifecycleStatus'] != 'closing' &&
+          data['accountWriteLocked'] != true &&
+          doc.id.trim().isNotEmpty;
+    }).toList(growable: false);
+    final companyIds = companyDocs.map((doc) => doc.id.trim()).toSet();
+    final configVersions = <String, int>{
+      for (final doc in companyDocs)
+        doc.id: doc.data()['areaConfigVersion'] is int
+            ? doc.data()['areaConfigVersion'] as int : 0,
+    };
+    final areaDocs = snapshots[1].docs.where((doc) =>
+        companyIds.contains((doc.data()['division'] ?? '').toString().trim()))
         .toList(growable: false);
-    final activeCompanyIds = divisionDocs.map((doc) => doc.id).toSet();
-    final areaDocs = snapshots[1].docs
-        .where((doc) => activeCompanyIds.contains(
-            (doc.data()['division'] ?? '').toString()))
-        .toList(growable: false);
-    final divisions = divisionDocs.map((doc) => doc.id.trim())
-        .where((value) => value.isNotEmpty).toSet().toList()..sort();
-    final areas = areaDocs.map((doc) => (doc.data()['name'] ?? '').toString().trim())
-        .where((value) => value.isNotEmpty).toSet().toList()..sort();
-    final areaIds = areaDocs.map((doc) => doc.id).toSet().toList()..sort();
-    final catalog = await _firestore.doc('access_catalog/current')
-        .get(const GetOptions(source: Source.server));
-    final version = catalog.data()?['version'] is int
-        ? catalog.data()!['version'] as int : 0;
-    final companies = <BootstrapCompany>[];
-    for (final company in divisions) {
-      final accountId = initialAccountId(company);
-      final checks = await Future.wait([
-        _firestore.collection('company_bootstrap').doc(company)
-            .get(const GetOptions(source: Source.server)),
-        _firestore.collection('user_accounts').doc(accountId)
-            .get(const GetOptions(source: Source.server)),
-        _firestore.collection('user_account_codes').doc(initialCode(company))
-            .get(const GetOptions(source: Source.server)),
-        _firestore.collection('user_accounts_show').doc('$company-$company')
-            .collection('users').doc(accountId)
-            .get(const GetOptions(source: Source.server)),
-        _firestore.collection('user_accounts_show').doc('$company-$company')
-            .get(const GetOptions(source: Source.server)),
-      ]);
-      final bootstrap = checks[0];
-      final admin = checks[1];
-      final code = checks[2];
-      final show = checks[3];
-      final meta = checks[4];
-      final general = await _firestore.collection('user_accounts')
-          .where('companyId', isEqualTo: company).limit(1)
-          .get(const GetOptions(source: Source.server));
-      final projections = await _firestore.collection('user_accounts_show')
-          .doc('$company-$company').collection('users')
-          .get(const GetOptions(source: Source.server));
-      final activeCount = projections.docs
-          .where((doc) => doc.data()['isActive'] == true).length;
-      final inactiveCount = projections.docs.length - activeCount;
-      companies.add(BootstrapCompany(
+    final divisions = companyIds.toList()..sort();
+    final companies = divisions.map((company) {
+      final related = areaDocs.where((doc) =>
+          (doc.data()['division'] ?? '').toString().trim() == company);
+      final documents = related.map((doc) {
+        final data = doc.data();
+        final name = (data['name'] ?? '').toString().trim();
+        return BootstrapArea(
+          id: doc.id,
+          name: name,
+          englishName: (data['englishName'] ?? '').toString().trim(),
+          isHeadquarter: data['isHeadquarter'] == true,
+          activeLimit: data['activeLimit'] is int ? data['activeLimit'] as int : null,
+          totalLimit: data['totalLimit'] is int ? data['totalLimit'] as int : null,
+        );
+      }).where((area) => area.name.isNotEmpty).toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+      if (documents.length != related.length ||
+          documents.map((area) => area.name).toSet().length != documents.length) {
+        throw StateError('INITIAL_SETUP_AREA_INVALID:$company');
+      }
+      if (documents.isEmpty) {
+        final division = companyDocs.firstWhere((doc) => doc.id == company).data();
+        final englishName = (division['headquarterEnglishName'] ?? company).toString().trim();
+        documents.add(BootstrapArea(
+          id: '$company-$company',
+          name: company,
+          englishName: englishName.isEmpty ? company : englishName,
+          isHeadquarter: true,
+          activeLimit: 5,
+          totalLimit: 10,
+          createOnBootstrap: true,
+        ));
+      }
+      for (final area in documents) {
+        final active = area.activeLimit;
+        final total = area.totalLimit;
+        if (active == null || total == null) {
+          throw StateError('INITIAL_SETUP_AREA_LIMIT_REQUIRED:$company/${area.name}');
+        }
+        if (active < 0 || total < 0 || active > total ||
+            active > (1 << 30) || total > (1 << 30)) {
+          throw StateError('INITIAL_SETUP_AREA_LIMIT_INVALID:$company/${area.name}');
+        }
+      }
+      final result = BootstrapCompany(
         id: company,
-        initialized: bootstrap.exists,
-        accountExists: general.docs.isNotEmpty,
-        initialAdminExists: admin.exists &&
-            admin.data()?['companyId'] == company &&
-            admin.data()?['isInitialAdmin'] == true,
-        codeConsistent: code.exists &&
-            code.data()?['userId'] == accountId &&
-            code.data()?['codeNumber'] == initialCode(company) &&
-            code.data()?['area'] == company,
-        showConsistent: show.exists &&
-            show.data()?['companyId'] == company &&
-            show.data()?['isInitialAdmin'] == true &&
-            show.data()?['codeNumber'] == initialCode(company) &&
-            (!admin.exists || (
-              _sameStrings(show.data()?['permissionKeys'], admin.data()?['permissionKeys']) &&
-              _sameStrings(show.data()?['divisions'], admin.data()?['divisions']) &&
-              _sameStrings(show.data()?['areas'], admin.data()?['areas']) &&
-              _sameStrings(show.data()?['areaIds'], admin.data()?['areaIds']) &&
-              _sameStrings(show.data()?['modes'], admin.data()?['modes']) &&
-              show.data()?['accessCatalogVersion'] == admin.data()?['accessCatalogVersion']
-            )) &&
-            !show.data()!.containsKey('passwordHash') &&
-            !show.data()!.containsKey('passwordSalt'),
-        metaConsistent: meta.exists &&
-            meta.data()?['division'] == company &&
-            meta.data()?['area'] == company &&
-            meta.data()?['activeCount'] == activeCount &&
-            meta.data()?['inactiveCount'] == inactiveCount &&
-            meta.data()?['totalCount'] == projections.docs.length,
-        bootstrapConsistent: bootstrap.exists &&
-            bootstrap.data()?['status'] == 'completed' &&
-            bootstrap.data()?['companyId'] == company &&
-            bootstrap.data()?['initialAdminAccountId'] == accountId,
-      ));
-    }
+        areaDocuments: documents,
+        areaConfigVersion: configVersions[company] ?? 0,
+      );
+      final headquarters = result.headquarter;
+      final activeAdmin = company == 'belivus';
+      if (headquarters.totalLimit! < 1 ||
+          (activeAdmin && headquarters.activeLimit! < 1)) {
+        throw StateError('INITIAL_SETUP_HEADQUARTER_LIMIT_INSUFFICIENT:$company');
+      }
+      return result;
+    }).toList(growable: false);
+    final areas = companies.expand((company) => company.areas).toSet().toList()..sort();
+    final areaIds = companies.expand((company) => company.areaIds).toSet().toList()..sort();
     return BootstrapPreview(
-      companies: companies, divisions: divisions, areas: areas,
-      areaIds: areaIds, catalogVersion: version,
+      companies: companies,
+      divisions: divisions,
+      areas: areas,
+      areaIds: areaIds,
     );
   }
 
+  Future<AreaLimitMigrationResult> migrateLegacyAreaLimits({
+    void Function(String message)? onProgress,
+  }) async {
+    await requireDeveloper(
+      source: 'area_limit_migration',
+      forceAccountSelection: false,
+    );
+    final areaDocs = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('areas')
+        .get(const GetOptions(source: Source.server)), source: 'company_bootstrap_service.get');
+    final ordered = areaDocs.docs.toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
+    final staged = <({
+      DocumentReference<Map<String, dynamic>> areaRef,
+      DocumentReference<Map<String, dynamic>> metaRef,
+      String company,
+      String name,
+      Map<String, dynamic> updates,
+    })>[];
+    var unchanged = 0;
+    var missingMeta = 0;
+    var unconfigured = 0;
+    for (final document in ordered) {
+      final area = document.data();
+      final company = (area['division'] ?? '').toString().trim();
+      final name = (area['name'] ?? '').toString().trim();
+      if (company.isEmpty || name.isEmpty ||
+          document.id != '$company-$name') {
+        throw StateError('AREA_LIMIT_MIGRATION_INVALID_AREA:${document.id}');
+      }
+      final metaRef = _firestore.collection('user_accounts_show')
+          .doc('$company-$name');
+      final metaSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => metaRef.get(const GetOptions(source: Source.server)), source: 'company_bootstrap_service.get');
+      final meta = metaSnap.data();
+      if (meta == null) {
+        missingMeta++;
+      } else if (meta['division'] != company || meta['area'] != name) {
+        throw StateError('AREA_LIMIT_MIGRATION_META_MISMATCH:$company/$name');
+      }
+      final updates = <String, dynamic>{};
+      for (final field in <String>['activeLimit', 'totalLimit']) {
+        final current = area[field];
+        final old = meta?[field];
+        if (current != null && (current is! int || current < 0 || current > (1 << 30)) ||
+            old != null && (old is! int || old < 0 || old > (1 << 30))) {
+          throw StateError('AREA_LIMIT_MIGRATION_INVALID_LIMIT:$company/$name/$field');
+        }
+        if (current != null && old != null && current != old) {
+          throw StateError('AREA_LIMIT_MIGRATION_LIMIT_CONFLICT:$company/$name/$field');
+        }
+        if (current == null && old is int) updates[field] = old;
+      }
+      final active = updates['activeLimit'] ?? area['activeLimit'];
+      final total = updates['totalLimit'] ?? area['totalLimit'];
+      if (active is int && total is int && active > total) {
+        throw StateError('AREA_LIMIT_MIGRATION_INVALID_RANGE:$company/$name');
+      }
+      if (active == null || total == null) unconfigured++;
+      if (updates.isEmpty) {
+        unchanged++;
+      } else {
+        staged.add((areaRef: document.reference, metaRef: metaRef,
+          company: company, name: name, updates: updates));
+      }
+      onProgress?.call('지역 제한값 사전 검사 $company/$name');
+    }
+    for (final item in staged) {
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+        final areaSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(item.areaRef), source: 'company_bootstrap_service.get');
+        final metaSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(item.metaRef), source: 'company_bootstrap_service.get');
+        final area = areaSnap.data();
+        final meta = metaSnap.data();
+        if (area == null || area['division'] != item.company ||
+            area['name'] != item.name || meta == null ||
+            meta['division'] != item.company || meta['area'] != item.name) {
+          throw StateError('AREA_LIMIT_MIGRATION_SOURCE_CHANGED:${item.company}/${item.name}');
+        }
+        for (final field in item.updates.keys) {
+          if (area[field] != null || meta[field] != item.updates[field]) {
+            throw StateError('AREA_LIMIT_MIGRATION_SOURCE_CHANGED:${item.company}/${item.name}');
+          }
+        }
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(item.areaRef, <String, dynamic>{
+          ...item.updates,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }));
+      }), source: 'company_bootstrap_service.runTransaction');
+      onProgress?.call('지역 제한값 이관 완료 ${item.company}/${item.name}');
+    }
+    final checked = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('areas')
+        .get(const GetOptions(source: Source.server)), source: 'company_bootstrap_service.get');
+    if (checked.docs.length != ordered.length) {
+      throw StateError('AREA_LIMIT_MIGRATION_AREA_COUNT_CHANGED');
+    }
+    final byId = <String, Map<String, dynamic>>{
+      for (final doc in checked.docs) doc.id: doc.data(),
+    };
+    for (final item in staged) {
+      final data = byId[item.areaRef.id];
+      if (data == null || item.updates.keys.any((field) =>
+          data[field] != item.updates[field])) {
+        throw StateError('AREA_LIMIT_MIGRATION_VERIFY_FAILED:${item.company}/${item.name}');
+      }
+    }
+    return AreaLimitMigrationResult(
+      scannedCount: ordered.length,
+      migratedCount: staged.length,
+      unchangedCount: unchanged,
+      missingMetaCount: missingMeta,
+      unconfiguredCount: unconfigured,
+    );
+  }
+
+  Future<int> _readCatalogVersion() async {
+    final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.doc('access_catalog/current')
+        .get(const GetOptions(source: Source.server)), source: 'company_bootstrap_service.get');
+    final value = snapshot.data()?['version'];
+    return value is int ? value : 0;
+  }
+
   Future<BootstrapSyncProgress?> syncProgress(int version) async {
-    final document = await _firestore.collection('access_sync_jobs')
+    final document = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('access_sync_jobs')
         .doc('catalog_$version')
-        .get(const GetOptions(source: Source.server));
+        .get(const GetOptions(source: Source.server)), source: 'company_bootstrap_service.get');
     final data = document.data();
     if (data == null) return null;
     return BootstrapSyncProgress(
@@ -282,6 +480,8 @@ class CompanyBootstrapService {
     required List<String> divisions,
     required List<String> areas,
     required List<String> areaIds,
+    required String currentArea,
+    required String englishCurrentArea,
     int accessCatalogVersion = 0,
     String? password,
   }) {
@@ -309,12 +509,13 @@ class CompanyBootstrapService {
       'areaIds': areaIds,
       'accessCatalogVersion': accessCatalogVersion,
       'modes': allModes,
-      'currentArea': company,
-      'selectedArea': company,
-      'englishSelectedAreaName': company,
+      'currentArea': currentArea,
+      'selectedArea': currentArea,
+      'englishSelectedAreaName': englishCurrentArea,
       'isInitialAdmin': true,
+      'accountGradeId': 'headquartersAdmin',
       'permissionKeys': initialPermissions,
-      'permissionSchemaVersion': 1,
+      'permissionSchemaVersion': 2,
       'isActive': isBelivus,
       'isSaved': true,
       'isSelected': false,
@@ -343,256 +544,351 @@ class CompanyBootstrapService {
     required Map<String, dynamic> data,
     required bool createCompany,
     required int expectedCatalogVersion,
+    required List<BootstrapArea> regionAreas,
+    int? expectedAreaConfigVersion,
     Map<String, dynamic>? divisionData,
     Map<String, dynamic>? areaData,
     Map<String, dynamic>? metaData,
   }) async {
     final accountId = initialAccountId(company);
     final code = initialCode(company);
-    final bootstrapRef = _firestore.collection('company_bootstrap').doc(company);
     final userRef = _firestore.collection('user_accounts').doc(accountId);
     final codeRef = _firestore.collection('user_account_codes').doc(code);
-    final metaRef = _firestore.collection('user_accounts_show').doc('$company-$company');
+    final metaRef = _firestore.collection('user_accounts_show')
+        .doc('$company-$company');
     final showRef = metaRef.collection('users').doc(accountId);
     final divisionRef = _firestore.collection('divisions').doc(company);
     final areaRef = _firestore.collection('areas').doc('$company-$company');
-    final reads = await Future.wait([
-      tx.get(bootstrapRef), tx.get(userRef), tx.get(codeRef),
-      tx.get(metaRef), tx.get(showRef),
-      tx.get(divisionRef),
-      if (createCompany) tx.get(areaRef),
-      tx.get(_firestore.doc('access_catalog/current')),
-    ]);
-    final catalogData = reads.last.data();
-    final actualCatalogVersion = catalogData?['version'] is int
-        ? catalogData!['version'] as int : 0;
-    if (actualCatalogVersion != expectedCatalogVersion) {
+    final gradeRefs = AccountPermissionPolicy.presets.keys.map((gradeId) =>
+        _firestore.collection('company_grade_policies').doc(company)
+            .collection('grades').doc(gradeId)).toList(growable: false);
+    final secondaryAreas = regionAreas.where((area) => area.name != company).toList();
+    final regionRefs = secondaryAreas.map((area) =>
+        _firestore.collection('user_accounts_show').doc('$company-${area.name}')).toList();
+    final divisionSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(divisionRef), source: 'company_bootstrap_service.get');
+    final areaSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(areaRef), source: 'company_bootstrap_service.get');
+    final userSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(userRef), source: 'company_bootstrap_service.get');
+    final codeSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(codeRef), source: 'company_bootstrap_service.get');
+    final metaSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(metaRef), source: 'company_bootstrap_service.get');
+    final displaySnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(showRef), source: 'company_bootstrap_service.get');
+    final regionSnapshots = await Future.wait(regionRefs.map(tx.get));
+    final catalogSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(
+        _firestore.doc('access_catalog/current')), source: 'company_bootstrap_service.get');
+    final gradeSnapshots = await Future.wait(gradeRefs.map(tx.get));
+    final email = (data['email'] ?? '').toString().trim().toLowerCase();
+    final identityRef = email.isEmpty ? null :
+        _firestore.collection('login_identity_accounts').doc(email);
+    final identitySnapshot = identityRef == null ? null :
+        await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(identityRef), source: 'company_bootstrap_service.get');
+    if (userSnapshot.exists || codeSnapshot.exists ||
+        metaSnapshot.exists || displaySnapshot.exists ||
+        regionSnapshots.any((snapshot) => snapshot.exists)) {
+      throw StateError('INITIAL_SETUP_DOCUMENT_CONFLICT:$company');
+    }
+    if (identitySnapshot != null && identitySnapshot.exists &&
+        (identitySnapshot.data()?['accountId'] != accountId ||
+         identitySnapshot.data()?['companyId'] != company ||
+         identitySnapshot.data()?['email'] != email)) {
+      throw StateError('INITIAL_IDENTITY_ALREADY_RESERVED:$company');
+    }
+    final catalogValue = catalogSnapshot.data()?['version'];
+    final actualVersion = catalogValue is int ? catalogValue : 0;
+    if (actualVersion != expectedCatalogVersion) {
       throw StateError('ACCESS_CATALOG_CHANGED');
     }
-    if (reads[0].exists || reads[1].exists || reads[2].exists || reads[4].exists) {
-      throw StateError('INITIAL_SETUP_ALREADY_INITIALIZED_OR_CONFLICT');
+    final plannedHeadquarters = regionAreas.where((area) => area.createOnBootstrap).toList();
+    if (createCompany) {
+      if (divisionSnapshot.exists || areaSnapshot.exists) {
+        throw StateError('INITIAL_SETUP_COMPANY_ALREADY_EXISTS');
+      }
+    } else {
+      final divisionData = divisionSnapshot.data();
+      if (divisionData == null ||
+          divisionData['lifecycleStatus'] == 'closed' ||
+          divisionData['lifecycleStatus'] == 'closing' ||
+          divisionData['accountWriteLocked'] == true) {
+        throw StateError('INITIAL_SETUP_COMPANY_NOT_WRITABLE:$company');
+      }
+      final actualAreaVersion = divisionData['areaConfigVersion'] is int
+          ? divisionData['areaConfigVersion'] as int : 0;
+      if (expectedAreaConfigVersion == null ||
+          actualAreaVersion != expectedAreaConfigVersion) {
+        throw StateError('AREA_CONFIGURATION_CHANGED:$company');
+      }
+      final storedCompany = (divisionData['companyId'] ?? '')
+          .toString().trim();
+      if (storedCompany.isNotEmpty && storedCompany != company) {
+        throw StateError('INITIAL_SETUP_COMPANY_ID_CONFLICT:$company');
+      }
+      if (plannedHeadquarters.length > 1 ||
+          (plannedHeadquarters.isNotEmpty && areaSnapshot.exists) ||
+          (plannedHeadquarters.isEmpty && !areaSnapshot.exists)) {
+        throw StateError('INITIAL_SETUP_HEADQUARTER_STATE_CHANGED:$company');
+      }
+      if (plannedHeadquarters.isEmpty) {
+        final existingHead = areaSnapshot.data();
+        final expectedHead = regionAreas.where((area) => area.name == company).toList();
+        if (existingHead == null || expectedHead.length != 1 ||
+            existingHead['division'] != company ||
+            existingHead['name'] != company ||
+            existingHead['activeLimit'] != expectedHead.single.activeLimit ||
+            existingHead['totalLimit'] != expectedHead.single.totalLimit) {
+          throw StateError('INITIAL_SETUP_HEADQUARTER_POLICY_CHANGED:$company');
+        }
+      }
     }
-    if (createCompany && (reads[5].exists || reads[6].exists)) {
-      throw StateError('INITIAL_SETUP_COMPANY_ALREADY_EXISTS');
+    for (var index = 0; index < gradeRefs.length; index++) {
+      if (gradeSnapshots[index].exists) continue;
+      final gradeId = gradeRefs[index].id;
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.create, () => tx.set(gradeRefs[index], <String, dynamic>{
+        'companyId': company,
+        'gradeId': gradeId,
+        'name': AccountPermissionPolicy.gradeLabel(gradeId),
+        'permissionKeys': AccountPermissionPolicy.presetPermissions(gradeId)
+            .toList(growable: false),
+        'enabled': true,
+        'version': 1,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }));
     }
-    if (!createCompany && (!reads[5].exists ||
-        reads[5].data()?['lifecycleStatus'] == 'closed' ||
-        reads[5].data()?['lifecycleStatus'] == 'closing' ||
-        reads[5].data()?['accountWriteLocked'] == true)) {
-      throw StateError('INITIAL_SETUP_COMPANY_NOT_WRITABLE:$company');
+    if (identityRef != null) {
+      if (identitySnapshot?.exists == true) {
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(identityRef, <String, dynamic>{
+          'enabled': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }));
+      } else {
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.create, () => tx.set(identityRef, <String, dynamic>{
+          'accountId': accountId,
+          'companyId': company,
+          'email': email,
+          'enabled': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }));
+      }
     }
     if (createCompany) {
-      tx.set(divisionRef, <String, dynamic>{
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.create, () => tx.set(divisionRef, <String, dynamic>{
         ...divisionData!,
+        'companyId': company,
+        'initialAdminAccountId': accountId,
         'lifecycleStatus': 'active',
         'accountWriteLocked': false,
-      });
-      tx.set(areaRef, areaData!);
-      tx.set(_firestore.doc('access_catalog/current'), <String, dynamic>{
+        'areaConfigVersion': 1,
+      }));
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.create, () => tx.set(areaRef, areaData!));
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(_firestore.doc('access_catalog/current'), <String, dynamic>{
         'version': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    }
-    if (!createCompany) {
-      tx.update(divisionRef, <String, dynamic>{
+      }, SetOptions(merge: true)));
+    } else {
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(divisionRef, <String, dynamic>{
+        'companyId': company,
+        'initialAdminAccountId': accountId,
         'accountWriteVersion': FieldValue.increment(1),
-      });
+        if (plannedHeadquarters.isNotEmpty)
+          'areaConfigVersion': FieldValue.increment(1),
+      }));
+      if (plannedHeadquarters.isNotEmpty) {
+        final headquarter = plannedHeadquarters.single;
+        final division = divisionSnapshot.data() ?? <String, dynamic>{};
+        final storedCapabilities = division['headquarterCapabilities'];
+        final capabilities = storedCapabilities is List
+            ? storedCapabilities.whereType<String>().toList(growable: false)
+            : <String>[];
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.create, () => tx.set(areaRef, <String, dynamic>{
+          'name': company,
+          'englishName': headquarter.englishName,
+          'division': company,
+          'modes': allModes,
+          'capabilities': capabilities,
+          'isHeadquarter': true,
+          'activeLimit': 5,
+          'totalLimit': 10,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }));
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(_firestore.doc('access_catalog/current'), <String, dynamic>{
+          'version': expectedCatalogVersion + 1,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true)));
+      }
     }
-    tx.set(userRef, data);
-    tx.set(codeRef, <String, dynamic>{
+    FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.create, () => tx.set(userRef, data));
+    FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.create, () => tx.set(codeRef, <String, dynamic>{
       'userId': accountId,
       'codeNumber': code,
       'area': company,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-    });
+    }));
     final active = data['isActive'] == true ? 1 : 0;
-    tx.set(metaRef, <String, dynamic>{
+    final headquarters = regionAreas.where((area) => area.name == company).toList();
+    FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.create, () => tx.set(metaRef, <String, dynamic>{
       ...?metaData,
+      if (headquarters.isNotEmpty && headquarters.first.activeLimit != null)
+        'activeLimit': headquarters.first.activeLimit,
+      if (headquarters.isNotEmpty && headquarters.first.totalLimit != null)
+        'totalLimit': headquarters.first.totalLimit,
       'division': company,
       'area': company,
       'activeCount': active,
       'inactiveCount': 1 - active,
       'totalCount': 1,
       'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    }));
+    for (var index = 0; index < regionRefs.length; index++) {
+      final area = secondaryAreas[index];
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.create, () => tx.set(regionRefs[index], <String, dynamic>{
+        'division': company,
+        'area': area.name,
+        'activeCount': 0,
+        'inactiveCount': 0,
+        'totalCount': 0,
+        if (area.activeLimit != null) 'activeLimit': area.activeLimit,
+        if (area.totalLimit != null) 'totalLimit': area.totalLimit,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }));
+    }
     final showData = Map<String, dynamic>.from(data)
       ..remove('passwordHash')
       ..remove('passwordSalt')
       ..remove('password');
-    tx.set(showRef, showData);
-    tx.set(bootstrapRef, <String, dynamic>{
-      'companyId': company,
-      'initialAdminAccountId': accountId,
-      'status': 'completed',
-      'schemaVersion': 1,
-      'createdAt': FieldValue.serverTimestamp(),
-      'completedAt': FieldValue.serverTimestamp(),
-    });
+    FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.create, () => tx.set(showRef, showData));
   }
 
-  Future<List<String>> initializeExisting({
-    required BootstrapPreview preview,
-    String? belivusPassword,
-    void Function(String message)? onProgress,
-  }) async {
-    final completed = <String>[];
-    for (final company in preview.companies.where((item) => item.needsInitialization)) {
-      final data = _accountData(
-        company: company.id,
-        divisions: preview.divisions,
-        areas: preview.areas,
-        areaIds: preview.areaIds,
-        accessCatalogVersion: preview.catalogVersion,
-        password: belivusPassword,
-      );
-      await _firestore.runTransaction((tx) async {
-        await _writeInitialAdmin(
-          tx: tx, company: company.id, data: data,
-          createCompany: false,
-          expectedCatalogVersion: preview.catalogVersion,
-        );
-      });
-      completed.add(company.id);
-      onProgress?.call('${company.id}: 초기 관리자 생성 완료');
-      AccessGateDiagnostics.record('bootstrap_created', source: 'launcher_help', group: 'developer');
+  Future<Map<String, AccountInitializationInspection>> inspectInitializations(
+      BootstrapPreview preview) async {
+    final inspections = <String, AccountInitializationInspection>{};
+    for (final company in preview.companies) {
+      inspections[company.id] = await AccountInitializationGuard.inspect(
+        firestore: _firestore, companyId: company.id);
+    }
+    return inspections;
+  }
+
+  Future<Set<String>> completedInitializations(BootstrapPreview preview) async {
+    final inspections = await inspectInitializations(preview);
+    final completed = <String>{};
+    for (final entry in inspections.entries) {
+      entry.value.requireConsistent();
+      if (entry.value.isInitialized) completed.add(entry.key);
     }
     return completed;
   }
 
-  Future<List<String>> recoverInitialAdmins({
+  Future<InitialAccountCreationResult> initializeExisting({
     required BootstrapPreview preview,
+    Set<String>? targetCompanyIds,
     String? belivusPassword,
     void Function(String message)? onProgress,
   }) async {
     await requireDeveloper(
-      source: 'launcher_initial_setup_recovery',
+      source: 'launcher_initial_setup_commit',
       forceAccountSelection: false,
     );
-    final refreshed = await this.preview();
-    final selected = preview.companies
-        .where((company) => company.needsRecovery)
-        .map((company) => company.id).toSet();
+    final companies = targetCompanyIds == null
+        ? preview.companies
+        : preview.companies.where((company) =>
+            targetCompanyIds.contains(company.id)).toList(growable: false);
+    if (targetCompanyIds != null &&
+        (targetCompanyIds.isEmpty || companies.length != targetCompanyIds.length)) {
+      throw StateError('INITIAL_SETUP_RETRY_TARGET_CHANGED');
+    }
     final completed = <String>[];
-    for (final company in refreshed.companies.where(
-        (item) => selected.contains(item.id) && item.needsRecovery)) {
-      final accountId = initialAccountId(company.id);
-      final code = initialCode(company.id);
-      final bootstrapRef = _firestore.collection('company_bootstrap').doc(company.id);
-      final divisionRef = _firestore.collection('divisions').doc(company.id);
-      final userRef = _firestore.collection('user_accounts').doc(accountId);
-      final codeRef = _firestore.collection('user_account_codes').doc(code);
-      final metaRef = _firestore.collection('user_accounts_show')
-          .doc('${company.id}-${company.id}');
-      final showRef = metaRef.collection('users').doc(accountId);
-      final projections = await metaRef.collection('users')
-          .limit(2).get(const GetOptions(source: Source.server));
-      final otherProjectionExists = projections.docs.any((doc) => doc.id != accountId);
-      await _firestore.runTransaction((tx) async {
-        final reads = await Future.wait([
-          tx.get(bootstrapRef), tx.get(userRef), tx.get(codeRef),
-          tx.get(showRef), tx.get(metaRef),
-          tx.get(_firestore.doc('access_catalog/current')),
-          tx.get(divisionRef),
-        ]);
-        if (!reads[6].exists ||
-            reads[6].data()?['accountWriteLocked'] == true ||
-            reads[6].data()?['lifecycleStatus'] == 'closed' ||
-            reads[6].data()?['lifecycleStatus'] == 'closing') {
-          throw StateError('COMPANY_ACCOUNT_WRITE_BLOCKED:${company.id}');
+    final failed = <String>[];
+    final pending = <String>[];
+    String? failureCode;
+    var activeCount = 0;
+    var registrationPendingCount = 0;
+    for (var index = 0; index < companies.length; index++) {
+      final company = companies[index];
+      try {
+        final inspection = await AccountInitializationGuard.inspect(
+          firestore: _firestore, companyId: company.id);
+        inspection.requireConsistent();
+        if (inspection.isInitialized) {
+          completed.add(company.id);
+          onProgress?.call('${company.id}: 이미 초기화가 완료되어 기존 문서를 유지합니다.');
+          continue;
         }
-        final actualVersion = reads[5].data()?['version'] is int
-            ? reads[5].data()!['version'] as int : 0;
-        if (actualVersion != refreshed.catalogVersion) {
-          throw StateError('ACCESS_CATALOG_CHANGED');
-        }
-        final bootstrap = reads[0];
-        final account = reads[1];
-        final reserved = reads[2];
-        if (!bootstrap.exists ||
-            bootstrap.data()?['companyId'] != company.id ||
-            bootstrap.data()?['initialAdminAccountId'] != accountId ||
-            bootstrap.data()?['status'] != 'completed') {
-          throw StateError('INITIAL_SETUP_RECOVERY_BOOTSTRAP_CONFLICT:${company.id}');
-        }
-        if (account.exists && (account.data()?['companyId'] != company.id ||
-            account.data()?['isInitialAdmin'] != true)) {
-          throw StateError('INITIAL_SETUP_RECOVERY_ACCOUNT_CONFLICT:${company.id}');
-        }
-        if (reserved.exists && (reserved.data()?['userId'] != accountId ||
-            reserved.data()?['codeNumber'] != code ||
-            reserved.data()?['area'] != company.id)) {
-          throw StateError('INITIAL_SETUP_RECOVERY_CODE_CONFLICT:${company.id}');
-        }
-        final data = account.data() ?? _accountData(
+        final headquarter = company.headquarter;
+        final version = await _readCatalogVersion();
+        final createsHeadquarter = headquarter.createOnBootstrap;
+        final data = _accountData(
           company: company.id,
-          divisions: refreshed.divisions,
-          areas: refreshed.areas,
-          areaIds: refreshed.areaIds,
-          accessCatalogVersion: refreshed.catalogVersion,
+          divisions: <String>[company.id],
+          areas: company.areas,
+          areaIds: company.areaIds,
+          currentArea: headquarter.name,
+          englishCurrentArea: headquarter.englishName.isEmpty
+              ? headquarter.name : headquarter.englishName,
+          accessCatalogVersion: version + (createsHeadquarter ? 1 : 0),
           password: belivusPassword,
         );
-        if (!account.exists) tx.set(userRef, data);
-        if (!reserved.exists) {
-          tx.set(codeRef, <String, dynamic>{
-            'codeNumber': code,
-            'userId': accountId,
-            'area': company.id,
-            'createdAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+        onProgress?.call(createsHeadquarter
+            ? '${company.id}: 본사 지역과 최초 관리자 문서를 함께 기록합니다.'
+            : '${company.id}: 최초 관리자 문서를 기록합니다.');
+        await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+          await _writeInitialAdmin(
+            tx: tx,
+            company: company.id,
+            data: data,
+            createCompany: false,
+            expectedCatalogVersion: version,
+            expectedAreaConfigVersion: company.areaConfigVersion,
+            regionAreas: company.areaDocuments,
+          );
+        }), source: 'company_bootstrap_service.runTransaction');
+        completed.add(company.id);
+        if (data['isActive'] == true) {
+          activeCount++;
+        } else {
+          registrationPendingCount++;
         }
-        final projection = Map<String, dynamic>.from(data)
-          ..remove('password')
-          ..remove('passwordHash')
-          ..remove('passwordSalt');
-        tx.set(showRef, projection);
-        final previousMeta = reads[4].data();
-        final previousShow = reads[3].data();
-        if (previousMeta == null && otherProjectionExists) {
-          throw StateError('INITIAL_SETUP_META_REBUILD_REQUIRED:${company.id}');
+        onProgress?.call('${company.id}: 초기 관리자 생성 완료');
+        AccessGateDiagnostics.record(
+          'bootstrap_created',
+          source: 'launcher_initial_setup',
+          group: 'developer',
+        );
+      } catch (error) {
+        failed.add(company.id);
+        final code = error is FirebaseException
+            ? 'FIREBASE_${error.code.toUpperCase().replaceAll('-', '_')}'
+            : error is StateError
+                ? error.message.toString().split(':').first
+                : error.runtimeType.toString();
+        failureCode ??= code;
+        onProgress?.call('${company.id}: 생성 실패 ($code)');
+        if (error is FirebaseException &&
+            (error.code == 'permission-denied' ||
+             error.code == 'unavailable' ||
+             error.code == 'unauthenticated') ||
+            code == 'ACCESS_CATALOG_CHANGED' ||
+            code == 'AREA_CONFIGURATION_CHANGED') {
+          pending.addAll(companies.skip(index + 1).map((item) => item.id));
+          break;
         }
-        final currentActive = previousMeta?['activeCount'];
-        final currentInactive = previousMeta?['inactiveCount'];
-        final currentTotal = previousMeta?['totalCount'];
-        if (previousMeta != null && (currentActive is! int ||
-            currentInactive is! int || currentTotal is! int ||
-            currentActive < 0 || currentInactive < 0 ||
-            currentActive + currentInactive != currentTotal)) {
-          throw StateError('INITIAL_SETUP_META_REBUILD_REQUIRED:${company.id}');
-        }
-        final wasActive = previousShow?['isActive'] == true;
-        final isActive = data['isActive'] == true;
-        final existed = reads[3].exists;
-        final deltaActive = (isActive ? 1 : 0) -
-            (existed && wasActive ? 1 : 0);
-        final deltaInactive = (isActive ? 0 : 1) -
-            (existed && !wasActive ? 1 : 0);
-        final nextActive = (currentActive is int ? currentActive : 0) + deltaActive;
-        final nextInactive = (currentInactive is int ? currentInactive : 0) + deltaInactive;
-        if (nextActive < 0 || nextInactive < 0) {
-          throw StateError('INITIAL_SETUP_META_REBUILD_REQUIRED:${company.id}');
-        }
-        tx.set(metaRef, <String, dynamic>{
-          'division': company.id,
-          'area': company.id,
-          'activeCount': nextActive,
-          'inactiveCount': nextInactive,
-          'totalCount': nextActive + nextInactive,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-        tx.update(bootstrapRef, <String, dynamic>{
-          'recoveryCount': FieldValue.increment(1),
-          'lastRecoveryAt': FieldValue.serverTimestamp(),
-        });
-      });
-      completed.add(company.id);
-      onProgress?.call('${company.id}: 초기 관리자 표시·집계·예약 문서 복구 완료');
-      AccessGateDiagnostics.record(
-        'bootstrap_recovered', source: 'launcher_help', group: 'developer',
-      );
+      }
     }
-    return completed;
+    if (completed.isNotEmpty) {
+      try {
+        onProgress?.call('초기 관리자 접근 목록의 최신 카탈로그 버전을 동기화합니다.');
+        await synchronizeInitialAdmins(onProgress: onProgress);
+      } catch (error) {
+        onProgress?.call('계정 생성은 유지됐으며 접근 목록 재동기화가 필요합니다: ${error.runtimeType}');
+      }
+    }
+    return InitialAccountCreationResult(
+      completedCompanyIds: List<String>.unmodifiable(completed),
+      failedCompanyIds: List<String>.unmodifiable(failed),
+      pendingCompanyIds: List<String>.unmodifiable(pending),
+      failureCode: failureCode,
+      activeCount: activeCount,
+      registrationPendingCount: registrationPendingCount,
+    );
   }
 
   Future<void> rebuildAccountCounts({
@@ -605,64 +901,74 @@ class CompanyBootstrapService {
     );
     final company = companyId.trim();
     if (company.isEmpty) throw StateError('COMPANY_ID_REQUIRED');
+    final inspection = await AccountInitializationGuard.inspect(
+      firestore: _firestore, companyId: company);
+    inspection.requireConsistent();
+    if (!inspection.isInitialized) {
+      throw StateError('ACCOUNT_INITIALIZATION_REQUIRED:$company');
+    }
     final divisionRef = _firestore.collection('divisions').doc(company);
     final metaRef = _firestore.collection('user_accounts_show')
         .doc('$company-$company');
     final collection = metaRef.collection('users');
     final operationId = DateTime.now().microsecondsSinceEpoch.toString();
-    await _firestore.runTransaction((tx) async {
-      final division = await tx.get(divisionRef);
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+      final division = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(divisionRef), source: 'company_bootstrap_service.get');
+      final meta = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(metaRef), source: 'company_bootstrap_service.get');
+      if (!meta.exists) throw StateError('ACCOUNT_META_MISSING:$company');
       if (!division.exists || division.data()?['lifecycleStatus'] == 'closed' ||
           division.data()?['lifecycleStatus'] == 'closing' ||
           division.data()?['accountWriteLocked'] == true) {
         throw StateError('COMPANY_COUNT_REBUILD_UNAVAILABLE:$company');
       }
-      tx.update(divisionRef, <String, dynamic>{
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(divisionRef, <String, dynamic>{
         'accountWriteLocked': true,
         'accountWriteLockId': operationId,
         'accountWriteVersion': FieldValue.increment(1),
-      });
-    });
+      }));
+    }), source: 'company_bootstrap_service.runTransaction');
     onProgress?.call('$company: 계정 집계 재구축 잠금 적용');
     try {
-      final all = await collection.get(const GetOptions(source: Source.server));
+      final all = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => collection.get(const GetOptions(source: Source.server)), source: 'company_bootstrap_service.get');
       final active = all.docs.where((doc) => doc.data()['isActive'] == true).length;
       final inactive = all.docs.length - active;
-      await _firestore.runTransaction((tx) async {
-        final division = await tx.get(divisionRef);
-        await tx.get(metaRef);
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+        final division = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(divisionRef), source: 'company_bootstrap_service.get');
+        final meta = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(metaRef), source: 'company_bootstrap_service.get');
+        if (!meta.exists) throw StateError('ACCOUNT_META_MISSING:$company');
         if (division.data()?['accountWriteLockId'] != operationId ||
             division.data()?['accountWriteLocked'] != true ||
             division.data()?['lifecycleStatus'] == 'closed') {
           throw StateError('COMPANY_COUNT_REBUILD_LOCK_CHANGED:$company');
         }
-        tx.set(metaRef, <String, dynamic>{
-          'division': company,
-          'area': company,
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(metaRef, <String, dynamic>{
           'activeCount': active,
           'inactiveCount': inactive,
           'totalCount': active + inactive,
           'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-        tx.update(divisionRef, <String, dynamic>{
+        }));
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(divisionRef, <String, dynamic>{
           'accountWriteLocked': false,
           'accountWriteLockId': FieldValue.delete(),
           'accountWriteVersion': FieldValue.increment(1),
-        });
-      });
+        }));
+      }), source: 'company_bootstrap_service.runTransaction');
       onProgress?.call('$company: 활성 $active · 비활성 $inactive 집계 재구축 완료');
     } catch (error) {
       try {
-        await _firestore.runTransaction((tx) async {
-          final division = await tx.get(divisionRef);
+        await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+          final division = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(divisionRef), source: 'company_bootstrap_service.get');
           if (division.data()?['accountWriteLockId'] == operationId &&
               division.data()?['accountWriteLocked'] == true) {
-            tx.update(divisionRef, <String, dynamic>{
+            FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(divisionRef, <String, dynamic>{
               'accountWriteLocked': false,
               'accountWriteLockId': FieldValue.delete(),
-            });
+            }));
           }
-        });
+        }), source: 'company_bootstrap_service.runTransaction');
       } catch (_) {}
       rethrow;
     }
@@ -680,120 +986,219 @@ class CompanyBootstrapService {
       forceAccountSelection: false,
     );
     final previous = await preview();
+    final catalogVersion = await _readCatalogVersion();
     if (previous.divisions.contains(company)) {
       throw StateError('INITIAL_SETUP_COMPANY_ALREADY_EXISTS');
     }
-    final companyAreas = <String>{...previous.areas, company}.toList()..sort();
-    final companyAreaIds = <String>{...previous.areaIds, '$company-$company'}.toList()..sort();
-    final allDivisions = <String>{...previous.divisions, company}.toList()..sort();
+    final requestedActive = areaData['activeLimit'];
+    final requestedTotal = areaData['totalLimit'];
+    if (requestedActive is! int || requestedTotal is! int ||
+        requestedActive < 0 || requestedTotal < 1 ||
+        requestedActive > requestedTotal || requestedTotal > (1 << 30) ||
+        (company == 'belivus' && requestedActive < 1)) {
+      throw StateError('INITIAL_SETUP_HEADQUARTER_LIMIT_INSUFFICIENT:$company');
+    }
+    final inspections = await inspectInitializations(previous);
+    for (final inspection in inspections.values) {
+      inspection.requireConsistent();
+    }
+    final initializedCount = inspections.values
+        .where((inspection) => inspection.isInitialized).length;
+    if (initializedCount > 0 && initializedCount != inspections.length) {
+      throw StateError('INITIAL_SETUP_PARTIAL_PENDING');
+    }
+    if (initializedCount == 0) {
+      final divisionRef = _firestore.collection('divisions').doc(company);
+      final areaRef = _firestore.collection('areas').doc('$company-$company');
+      final metaRef = _firestore.collection('user_accounts_show')
+          .doc('$company-$company');
+      final accountRef = _firestore.collection('user_accounts').doc(initialAccountId(company));
+      final codeRef = _firestore.collection('user_account_codes').doc(initialCode(company));
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+        final division = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(divisionRef), source: 'company_bootstrap_service.get');
+        final area = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(areaRef), source: 'company_bootstrap_service.get');
+        final meta = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(metaRef), source: 'company_bootstrap_service.get');
+        final account = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(accountRef), source: 'company_bootstrap_service.get');
+        final code = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(codeRef), source: 'company_bootstrap_service.get');
+        if (division.exists || area.exists || meta.exists || account.exists || code.exists) {
+          throw StateError('INITIAL_SETUP_COMPANY_ALREADY_EXISTS');
+        }
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.create, () => tx.set(divisionRef, <String, dynamic>{
+          ...divisionData,
+          'companyId': company,
+          'initialAdminAccountId': '',
+          'lifecycleStatus': 'active',
+          'accountWriteLocked': false,
+          'areaConfigVersion': 0,
+          'headquarterEnglishName': (areaData['englishName'] ?? company).toString(),
+          'headquarterCapabilities': areaData['capabilities'] is List
+              ? List<dynamic>.from(areaData['capabilities'] as List)
+              : <String>[],
+          'updatedAt': FieldValue.serverTimestamp(),
+        }));
+      }), source: 'company_bootstrap_service.runTransaction');
+      return;
+    }
+    final headquarters = BootstrapArea(
+      id: '$company-$company',
+      name: company,
+      englishName: (areaData['englishName'] ?? '').toString().trim(),
+      isHeadquarter: true,
+      activeLimit: areaData['activeLimit'] is int ? areaData['activeLimit'] as int : null,
+      totalLimit: areaData['totalLimit'] is int ? areaData['totalLimit'] as int : null,
+    );
+    final total = headquarters.totalLimit;
+    final active = headquarters.activeLimit;
+    if (total == null || active == null || total < 1 ||
+        active < 0 || active > total || total > (1 << 30) ||
+        (company == 'belivus' && active < 1)) {
+      throw StateError('INITIAL_SETUP_HEADQUARTER_LIMIT_INSUFFICIENT:$company');
+    }
     final data = _accountData(
       company: company,
-      divisions: allDivisions,
-      areas: companyAreas,
-      areaIds: companyAreaIds,
-      accessCatalogVersion: previous.catalogVersion + 1,
+      divisions: <String>[company],
+      areas: <String>[company],
+      areaIds: <String>['$company-$company'],
+      currentArea: headquarters.name,
+      englishCurrentArea: headquarters.englishName.isEmpty
+          ? headquarters.name : headquarters.englishName,
+      accessCatalogVersion: catalogVersion + 1,
       password: belivusPassword,
     );
-    await _firestore.runTransaction((tx) async {
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
       await _writeInitialAdmin(
         tx: tx,
         company: company,
         data: data,
         createCompany: true,
-        expectedCatalogVersion: previous.catalogVersion,
+        expectedCatalogVersion: catalogVersion,
+        regionAreas: const <BootstrapArea>[],
         divisionData: divisionData,
         areaData: areaData,
         metaData: metaData,
       );
-    });
+    }), source: 'company_bootstrap_service.runTransaction');
     await synchronizeInitialAdmins();
   }
 
   Future<void> closeCompany({required String company}) async {
-    await requireDeveloper(source: 'close_company', forceAccountSelection: false);
+    await requireDeveloper(
+      source: 'close_company',
+      forceAccountSelection: false,
+    );
     final normalized = company.trim();
     if (normalized.isEmpty) throw StateError('COMPANY_ID_REQUIRED');
+    final inspection = await AccountInitializationGuard.inspect(
+      firestore: _firestore, companyId: normalized);
+    inspection.requireConsistent();
     final divisionRef = _firestore.collection('divisions').doc(normalized);
-    final bootstrapRef = _firestore.collection('company_bootstrap').doc(normalized);
     final accountId = initialAccountId(normalized);
     final accountRef = _firestore.collection('user_accounts').doc(accountId);
     final metaRef = _firestore.collection('user_accounts_show')
         .doc('$normalized-$normalized');
     final displayRef = metaRef.collection('users').doc(accountId);
     final catalogRef = _firestore.doc('access_catalog/current');
-    final divisionBefore = await divisionRef.get(
+    final divisionBefore = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => divisionRef.get(
       const GetOptions(source: Source.server),
-    );
+    ), source: 'company_bootstrap_service.get');
     if (!divisionBefore.exists ||
         divisionBefore.data()?['accountWriteLocked'] == true) {
       throw StateError('COMPANY_CLOSE_UNAVAILABLE:$normalized');
     }
-    final expectedWriteVersion = divisionBefore.data()?['accountWriteVersion'] is int
-        ? divisionBefore.data()!['accountWriteVersion'] as int : 0;
-    final dependentTablets = await _firestore.collection('tablet_accounts')
+    final versionValue = divisionBefore.data()?['accountWriteVersion'];
+    final expectedWriteVersion = versionValue is int ? versionValue : 0;
+    final dependentTablets = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('tablet_accounts')
         .where('companyId', isEqualTo: normalized).limit(1)
-        .get(const GetOptions(source: Source.server));
+        .get(const GetOptions(source: Source.server)), source: 'company_bootstrap_service.get');
     if (dependentTablets.docs.isNotEmpty) {
       throw StateError('COMPANY_CLOSE_RELATED_TABLET_EXISTS');
     }
-    final dependentAccounts = await _firestore.collection('user_accounts')
+    final dependentAccounts = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('user_accounts')
         .where('companyId', isEqualTo: normalized).limit(2)
-        .get(const GetOptions(source: Source.server));
+        .get(const GetOptions(source: Source.server)), source: 'company_bootstrap_service.get');
     if (dependentAccounts.docs.any((doc) => doc.id != accountId)) {
       throw StateError('COMPANY_CLOSE_RELATED_ACCOUNT_EXISTS');
     }
-    await _firestore.runTransaction((tx) async {
+    final existingAdmin = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => accountRef.get(const GetOptions(source: Source.server)), source: 'company_bootstrap_service.get');
+    if (!existingAdmin.exists) {
+      final codeRef = _firestore.collection('user_account_codes')
+          .doc(initialCode(normalized));
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+        final division = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(divisionRef), source: 'company_bootstrap_service.get');
+        final admin = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(accountRef), source: 'company_bootstrap_service.get');
+        final code = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(codeRef), source: 'company_bootstrap_service.get');
+        final meta = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(metaRef), source: 'company_bootstrap_service.get');
+        final view = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(displayRef), source: 'company_bootstrap_service.get');
+        if (division.data()?['lifecycleStatus'] == 'closed' ||
+            division.data()?['accountWriteLocked'] == true ||
+            admin.exists || code.exists || meta.exists || view.exists) {
+          throw StateError('COMPANY_CLOSE_INTEGRITY_REVIEW_REQUIRED');
+        }
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(divisionRef, <String, dynamic>{
+          'lifecycleStatus': 'closed',
+          'closedAt': FieldValue.serverTimestamp(),
+        }));
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(catalogRef, <String, dynamic>{
+          'version': FieldValue.increment(1),
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true)));
+      }), source: 'company_bootstrap_service.runTransaction');
+      await synchronizeInitialAdmins();
+      return;
+    }
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
       final reads = await Future.wait([
-        tx.get(divisionRef), tx.get(bootstrapRef), tx.get(accountRef),
-        tx.get(displayRef), tx.get(metaRef), tx.get(catalogRef),
+        tx.get(divisionRef),
+        tx.get(accountRef),
+        tx.get(displayRef),
+        tx.get(metaRef),
+        tx.get(catalogRef),
       ]);
       final division = reads[0].data();
-      final bootstrap = reads[1].data();
-      final account = reads[2].data();
-      final meta = reads[4].data();
-      final currentWriteVersion = division?['accountWriteVersion'] is int
-          ? division!['accountWriteVersion'] as int : 0;
+      final account = reads[1].data();
+      final meta = reads[3].data();
+      final writeVersion = division?['accountWriteVersion'];
+      final currentWriteVersion = writeVersion is int ? writeVersion : 0;
       if (division == null || division['lifecycleStatus'] == 'closed' ||
           division['accountWriteLocked'] == true ||
           currentWriteVersion != expectedWriteVersion) {
         throw StateError('COMPANY_ALREADY_CLOSED_OR_MISSING');
       }
-      if (bootstrap == null || bootstrap['status'] != 'completed' ||
-          bootstrap['initialAdminAccountId'] != accountId ||
+      if (division['initialAdminAccountId'] != accountId ||
           account == null || account['companyId'] != normalized ||
           account['isInitialAdmin'] != true ||
-          !reads[3].exists || meta == null || meta['totalCount'] != 1) {
+          !reads[2].exists || meta == null || meta['totalCount'] != 1) {
         throw StateError('COMPANY_CLOSE_INTEGRITY_REVIEW_REQUIRED');
       }
-      tx.update(divisionRef, <String, dynamic>{
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(divisionRef, <String, dynamic>{
         'lifecycleStatus': 'closed',
         'closedAt': FieldValue.serverTimestamp(),
-      });
-      tx.update(bootstrapRef, <String, dynamic>{
-        'status': 'closed',
-        'closedAt': FieldValue.serverTimestamp(),
-      });
-      tx.update(accountRef, <String, dynamic>{
+      }));
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(accountRef, <String, dynamic>{
         'isActive': false,
         'accountStatus': 'closed',
         'updatedAt': FieldValue.serverTimestamp(),
-      });
-      tx.update(displayRef, <String, dynamic>{
+      }));
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(displayRef, <String, dynamic>{
         'isActive': false,
         'accountStatus': 'closed',
         'updatedAt': FieldValue.serverTimestamp(),
-      });
-      tx.update(metaRef, <String, dynamic>{
+      }));
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(metaRef, <String, dynamic>{
         'activeCount': 0,
         'inactiveCount': 1,
         'totalCount': 1,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
-      tx.set(catalogRef, <String, dynamic>{
+      }));
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(catalogRef, <String, dynamic>{
         'version': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    });
+      }, SetOptions(merge: true)));
+    }), source: 'company_bootstrap_service.runTransaction');
     try {
       await synchronizeInitialAdmins();
     } catch (error) {
@@ -809,18 +1214,22 @@ class CompanyBootstrapService {
       forceAccountSelection: false,
     );
     final snapshot = await preview();
-    if (snapshot.recoveryRequired > 0 || snapshot.reviewRequired > 0) {
-      throw StateError('INITIAL_SETUP_SYNC_REVIEW_REQUIRED:'
-          '${snapshot.recoveryRequired}:${snapshot.reviewRequired}');
+    final initialized = <BootstrapCompany>[];
+    for (final company in snapshot.companies) {
+      final account = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('user_accounts')
+          .doc(initialAccountId(company.id))
+          .get(const GetOptions(source: Source.server)), source: 'company_bootstrap_service.get');
+      if (account.exists &&
+          account.data()?['companyId'] == company.id &&
+          account.data()?['isInitialAdmin'] == true) {
+        initialized.add(company);
+      }
     }
-    final initialized = snapshot.companies
-        .where((company) => company.healthy)
-        .toList(growable: false);
     final targetIds = initialized.map((company) => company.id).toSet();
-    final version = snapshot.catalogVersion;
+    final version = await _readCatalogVersion();
     final jobRef = _firestore.collection('access_sync_jobs').doc('catalog_$version');
     final operationId = '${DateTime.now().microsecondsSinceEpoch}-$version';
-    final oldJob = await jobRef.get(const GetOptions(source: Source.server));
+    final oldJob = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => jobRef.get(const GetOptions(source: Source.server)), source: 'company_bootstrap_service.get');
     if (oldJob.exists && oldJob.data()?['catalogVersion'] != version) {
       throw StateError('ACCESS_SYNC_JOB_VERSION_CONFLICT');
     }
@@ -831,23 +1240,32 @@ class CompanyBootstrapService {
     for (final id in previouslyCompleted) {
       final accountId = initialAccountId(id);
       final verified = await Future.wait([
-        _firestore.collection('user_accounts').doc(accountId)
-            .get(const GetOptions(source: Source.server)),
-        _firestore.collection('user_accounts_show').doc('$id-$id')
-            .collection('users').doc(accountId)
-            .get(const GetOptions(source: Source.server)),
+        FirebaseActivityMonitor.track(
+          FirebaseActivityKind.read,
+          () => _firestore.collection('user_accounts').doc(accountId)
+              .get(const GetOptions(source: Source.server)),
+          source: 'bootstrap.account.verify',
+        ),
+        FirebaseActivityMonitor.track(
+          FirebaseActivityKind.read,
+          () => _firestore.collection('user_accounts_show').doc('$id-$id')
+              .collection('users').doc(accountId)
+              .get(const GetOptions(source: Source.server)),
+          source: 'bootstrap.display.verify',
+        ),
       ]);
       if (verified.every((doc) => doc.exists &&
           doc.data()?['companyId'] == id &&
           doc.data()?['isInitialAdmin'] == true &&
-          _matchesCatalog(doc.data(), snapshot))) {
+          _matchesCatalog(doc.data(), initialized.firstWhere((company) => company.id == id), version))) {
         verifiedCompleted.add(id);
       }
     }
     final remaining = initialized.where((company) =>
         !verifiedCompleted.contains(company.id)).toList(growable: false);
-    await _firestore.runTransaction((tx) async {
-      final previous = await tx.get(jobRef);
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+      final previous = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(jobRef), source: 'company_bootstrap_service.get');
       if (previous.exists && previous.data()?['catalogVersion'] != version) {
         throw StateError('ACCESS_SYNC_JOB_VERSION_CONFLICT');
       }
@@ -860,7 +1278,7 @@ class CompanyBootstrapService {
       }
       final pending = targetIds.difference(verifiedCompleted).toList()..sort();
       final orderedCompleted = verifiedCompleted.toList()..sort();
-      tx.set(jobRef, <String, dynamic>{
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(jobRef, <String, dynamic>{
         'catalogVersion': version,
         'status': pending.isEmpty ? 'completed' : 'running',
         'operationId': operationId,
@@ -872,8 +1290,8 @@ class CompanyBootstrapService {
         if (!previous.exists) 'createdAt': FieldValue.serverTimestamp(),
         if (pending.isEmpty) 'completedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    });
+      }, SetOptions(merge: true)));
+    }), source: 'company_bootstrap_service.runTransaction');
     String? activeCompany;
     try {
       for (final company in remaining) {
@@ -884,7 +1302,8 @@ class CompanyBootstrapService {
             .doc('${company.id}-${company.id}')
             .collection('users').doc(accountId);
         final catalogRef = _firestore.doc('access_catalog/current');
-        await _firestore.runTransaction((tx) async {
+        await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
           final reads = await Future.wait([
             tx.get(catalogRef), tx.get(accountRef), tx.get(displayRef),
             tx.get(jobRef),
@@ -907,23 +1326,23 @@ class CompanyBootstrapService {
           }
           final completed = (reads[3].data()?['completedCompanyIds'] as List<dynamic>? ??
               const <dynamic>[]).map((value) => value.toString()).toSet();
-          if (!_matchesCatalog(reads[1].data(), snapshot) ||
-              !_matchesCatalog(reads[2].data(), snapshot)) {
+          if (!_matchesCatalog(reads[1].data(), company, version) ||
+              !_matchesCatalog(reads[2].data(), company, version)) {
             final changes = <String, dynamic>{
-              'divisions': snapshot.divisions,
-              'areas': snapshot.areas,
-              'areaIds': snapshot.areaIds,
+              'divisions': <String>[company.id],
+              'areas': company.areas,
+              'areaIds': company.areaIds,
               'modes': allModes,
               'accessCatalogVersion': version,
               'updatedAt': FieldValue.serverTimestamp(),
             };
-            tx.update(accountRef, changes);
-            tx.update(displayRef, changes);
+            FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(accountRef, changes));
+            FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(displayRef, changes));
           }
           completed.add(company.id);
           final pending = targetIds.difference(completed).toList()..sort();
           final orderedCompleted = completed.intersection(targetIds).toList()..sort();
-          tx.update(jobRef, <String, dynamic>{
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(jobRef, <String, dynamic>{
             'status': pending.isEmpty ? 'completed' : 'running',
             'completedCount': orderedCompleted.length,
             'completedCompanyIds': orderedCompleted,
@@ -931,19 +1350,20 @@ class CompanyBootstrapService {
             'failedCompanyIds': <String>[],
             'updatedAt': FieldValue.serverTimestamp(),
             if (pending.isEmpty) 'completedAt': FieldValue.serverTimestamp(),
-          });
-        });
+          }));
+        }), source: 'company_bootstrap_service.runTransaction');
         onProgress?.call('${company.id}: 접근 목록 동기화 검증 완료');
       }
     } catch (error) {
       try {
-        await _firestore.runTransaction((tx) async {
-          final job = await tx.get(jobRef);
+        await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+          final job = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(jobRef), source: 'company_bootstrap_service.get');
           if (!job.exists || job.data()?['operationId'] != operationId) return;
           final completed = (job.data()?['completedCompanyIds'] as List<dynamic>? ??
               const <dynamic>[]).map((value) => value.toString()).toSet();
           final pending = targetIds.difference(completed).toList()..sort();
-          tx.update(jobRef, <String, dynamic>{
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(jobRef, <String, dynamic>{
             'status': 'failed',
             'completedCount': completed.intersection(targetIds).length,
             'pendingCompanyIds': pending,
@@ -951,8 +1371,8 @@ class CompanyBootstrapService {
                 ? <String>[] : <String>[activeCompany],
             'errorType': error.runtimeType.toString(),
             'updatedAt': FieldValue.serverTimestamp(),
-          });
-        });
+          }));
+        }), source: 'company_bootstrap_service.runTransaction');
       } catch (_) {}
       rethrow;
     }

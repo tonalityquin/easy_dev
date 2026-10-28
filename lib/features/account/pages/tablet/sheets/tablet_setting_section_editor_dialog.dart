@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../presentation/widgets/permission_detail_list.dart';
 import '../../../domain/models/account_permission_policy.dart';
 import 'package:flutter/services.dart';
 
@@ -294,28 +295,21 @@ class _TabletSettingSectionEditorDialogState
     return AnimatedSize(
       duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
       curve: CommonUiMotion.enter,
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: keys.map((permission) {
-          final selected = _permissionKeys.contains(permission);
-          return OpsFormChip(
-            label: permission,
-            selected: selected,
-            icon: selected ? Icons.check_rounded : Icons.lock_outline_rounded,
-            onTap: () {
-              setState(() {
-                _permissionKeys = <String>{..._permissionKeys};
-                if (selected) {
-                  _permissionKeys.remove(permission);
-                } else {
-                  _permissionKeys.add(permission);
-                }
-              });
-              widget.trace.log('태블릿 권한 변경: key=$permission selected=${!selected}');
-            },
-          );
-        }).toList(growable: false),
+      child: PermissionDetailList(
+        permissions: keys,
+        selected: _permissionKeys,
+        height: 340,
+        onToggle: (permission) {
+          setState(() {
+            _permissionKeys = <String>{..._permissionKeys};
+            if (_permissionKeys.contains(permission)) {
+              _permissionKeys.remove(permission);
+            } else {
+              _permissionKeys.add(permission);
+            }
+          });
+          widget.trace.log('태블릿 권한 변경: key=$permission selected=${_permissionKeys.contains(permission)}');
+        },
       ),
     );
   }

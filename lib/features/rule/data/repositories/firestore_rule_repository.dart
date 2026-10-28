@@ -1,3 +1,5 @@
+import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -27,7 +29,7 @@ class FirestoreRuleRepository implements RuleRepository {
       area: identity.$2,
     );
     try {
-      final snapshot = await _collection.doc(id).get();
+      final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _collection.doc(id).get(), source: 'firestore_rule_repository.get');
       if (!snapshot.exists || snapshot.data() == null) {
         debugPrint('[RuleRepository] 조회 완료: id=$id found=false');
         return null;
@@ -71,9 +73,9 @@ class FirestoreRuleRepository implements RuleRepository {
     final now = DateTime.now();
     try {
       final result = await _firestore.runTransaction<RuleModel>((transaction) async {
-        final existing = await transaction.get(reference);
+        final existing = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(reference), source: 'firestore_rule_repository.get');
         if (existing.exists) throw const RuleAlreadyExistsException();
-        transaction.set(reference, <String, dynamic>{
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(reference, <String, dynamic>{
           'division': identity.$1,
           'area': identity.$2,
           'todoItems': todos.map((item) => item.toMap()).toList(growable: false),
@@ -84,7 +86,7 @@ class FirestoreRuleRepository implements RuleRepository {
               .toList(growable: false),
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
-        });
+        }));
         return RuleModel(
           id: id,
           division: identity.$1,
@@ -134,13 +136,13 @@ class FirestoreRuleRepository implements RuleRepository {
     final now = DateTime.now();
     try {
       final result = await _firestore.runTransaction<RuleModel>((transaction) async {
-        final existing = await transaction.get(reference);
+        final existing = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(reference), source: 'firestore_rule_repository.get');
         if (!existing.exists || existing.data() == null) {
           throw const RuleNotFoundException();
         }
         final current = RuleModel.fromMap(id, existing.data()!);
         _ensureOwnership(current, identity.$1, identity.$2);
-        transaction.update(reference, <String, dynamic>{
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => transaction.update(reference, <String, dynamic>{
           'division': identity.$1,
           'area': identity.$2,
           'todoItems': todos.map((item) => item.toMap()).toList(growable: false),
@@ -150,7 +152,7 @@ class FirestoreRuleRepository implements RuleRepository {
               .map((page) => page.toMap())
               .toList(growable: false),
           'updatedAt': FieldValue.serverTimestamp(),
-        });
+        }));
         return RuleModel(
           id: id,
           division: identity.$1,
@@ -187,13 +189,13 @@ class FirestoreRuleRepository implements RuleRepository {
     final reference = _collection.doc(id);
     try {
       await _firestore.runTransaction<void>((transaction) async {
-        final existing = await transaction.get(reference);
+        final existing = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(reference), source: 'firestore_rule_repository.get');
         if (!existing.exists || existing.data() == null) {
           throw const RuleNotFoundException();
         }
         final current = RuleModel.fromMap(id, existing.data()!);
         _ensureOwnership(current, identity.$1, identity.$2);
-        transaction.delete(reference);
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(reference));
       });
       debugPrint('[RuleRepository] 삭제 완료: id=$id');
     } catch (error, stackTrace) {

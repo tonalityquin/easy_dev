@@ -9,12 +9,14 @@ class UserSettingsDraft {
     required this.codeEntryMode,
     required this.emailLocal,
     required this.position,
+    String accountGradeId = 'custom_6',
     Set<String> permissionKeys = const <String>{},
     required Set<String> modes,
     required Map<String, TimeOfDay?> startByDay,
     required Map<String, TimeOfDay?> endByDay,
     required Set<String> breakDays,
-  })  : permissionKeys = Set<String>.unmodifiable(permissionKeys),
+  })  : accountGradeId = accountGradeId,
+        permissionKeys = Set<String>.unmodifiable(permissionKeys),
         modes = Set<String>.unmodifiable(modes),
         startByDay = Map<String, TimeOfDay?>.unmodifiable(startByDay),
         endByDay = Map<String, TimeOfDay?>.unmodifiable(endByDay),
@@ -25,6 +27,7 @@ class UserSettingsDraft {
   final UserCodeEntryMode codeEntryMode;
   final String emailLocal;
   final String position;
+  final String accountGradeId;
   final Set<String> permissionKeys;
   final Set<String> modes;
   final Map<String, TimeOfDay?> startByDay;
@@ -37,6 +40,7 @@ class UserSettingsDraft {
     UserCodeEntryMode? codeEntryMode,
     String? emailLocal,
     String? position,
+    String? accountGradeId,
     Set<String>? permissionKeys,
     Set<String>? modes,
     Map<String, TimeOfDay?>? startByDay,
@@ -49,6 +53,7 @@ class UserSettingsDraft {
       codeEntryMode: codeEntryMode ?? this.codeEntryMode,
       emailLocal: emailLocal ?? this.emailLocal,
       position: position ?? this.position,
+      accountGradeId: accountGradeId ?? this.accountGradeId,
       permissionKeys: permissionKeys ?? this.permissionKeys,
       modes: modes ?? this.modes,
       startByDay: startByDay ?? this.startByDay,
@@ -64,6 +69,7 @@ class UserSettingsDraft {
       codeEntryMode: codeEntryMode,
       emailLocal: emailLocal,
       position: position,
+      accountGradeId: accountGradeId,
       permissionKeys: permissionKeys,
       modes: modes,
       startByDay: startByDay,

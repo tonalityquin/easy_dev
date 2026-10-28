@@ -1,3 +1,5 @@
+import '../../../../../app/firebase_activity/firebase_activity_write_scope.dart';
+import '../../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
@@ -7,6 +9,8 @@ import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../widgets/ops_console_dialogs.dart';
 import '../../../widgets/ops_console_widgets.dart';
+import '../../../../../features/account/data/services/company_bootstrap_service.dart';
+import '../../../../../features/account/data/services/account_initialization_guard.dart';
 
 class StatusMappingHelper extends StatefulWidget {
   const StatusMappingHelper({super.key});
@@ -46,6 +50,8 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
   String? _policyInputKey;
   List<String> _divisions = <String>[];
   List<String> _areas = <String>[];
+  Map<String, String> _divisionLabels = <String, String>{};
+  Map<String, String> _areaDocumentIds = <String, String>{};
   bool _loadingScope = true;
   bool _busy = false;
   String? _progressLabel;
@@ -87,6 +93,12 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
     return _showDocRef(division, area).collection('users');
   }
 
+  DocumentReference<Map<String, dynamic>> _areaRef(String name) {
+    final id = _areaDocumentIds[name];
+    if (id == null) throw StateError('AREA_DOCUMENT_NOT_FOUND');
+    return _fs.collection('areas').doc(id);
+  }
+
   int? _asInt(dynamic value) => value is int ? value : null;
 
   int? _configuredLimit(dynamic value) {
@@ -119,19 +131,19 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       setState(() => _loadingScope = true);
     }
     try {
-      final snap = await _fs
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _fs
           .collection('divisions')
           .orderBy('name')
-          .get(const GetOptions(source: Source.serverAndCache));
-      final list = snap.docs
-          .map((doc) => (doc.data()['name'] as String?)?.trim())
-          .whereType<String>()
-          .where((value) => value.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+          .get(const GetOptions(source: Source.serverAndCache)), source: 'status_mapping_helper.get');
+      final list = snap.docs.map((doc) => doc.id).toSet().toList()..sort();
+      final labels = <String, String>{
+        for (final doc in snap.docs)
+          doc.id: ((doc.data()['name'] as String?)?.trim().isNotEmpty ?? false)
+              ? (doc.data()['name'] as String).trim() : doc.id,
+      };
       if (!mounted) return;
       setState(() {
+        _divisionLabels = labels;
         _divisions = list;
         if (_selectedDivision == null || !_divisions.contains(_selectedDivision)) {
           _selectedDivision = _divisions.isEmpty ? null : _divisions.first;
@@ -161,25 +173,29 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       if (!mounted) return;
       setState(() {
         _areas = <String>[];
+        _areaDocumentIds = <String, String>{};
         _selectedArea = null;
       });
       return;
     }
     try {
-      final snap = await _fs
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _fs
           .collection('areas')
           .where('division', isEqualTo: division)
           .orderBy('name')
-          .get(const GetOptions(source: Source.serverAndCache));
-      final list = snap.docs
-          .map((doc) => (doc.data()['name'] as String?)?.trim())
-          .whereType<String>()
-          .where((value) => value.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+          .get(const GetOptions(source: Source.serverAndCache)), source: 'status_mapping_helper.get');
+      final areaIds = <String, String>{};
+      for (final doc in snap.docs) {
+        final name = (doc.data()['name'] as String?)?.trim() ?? '';
+        if (name.isEmpty || areaIds.containsKey(name)) {
+          throw StateError('AREA_SCOPE_DUPLICATE_OR_INVALID');
+        }
+        areaIds[name] = doc.id;
+      }
+      final list = areaIds.keys.toList()..sort();
       if (!mounted) return;
       setState(() {
+        _areaDocumentIds = areaIds;
         _areas = list;
         if (_selectedArea == null || !_areas.contains(_selectedArea)) {
           _selectedArea = _areas.isEmpty ? null : _areas.first;
@@ -215,6 +231,52 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       _activeLimitCtrl.text = activeLimit?.toString() ?? '';
       _totalLimitCtrl.text = totalLimit?.toString() ?? '';
     });
+  }
+
+  Future<void> _inspectAreaPolicies() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final trace = await DeveloperOperationTrace.start(
+      context: context,
+      title: '지역 리밋 정책 점검',
+      initialMessage: 'areas 기준 계정 제한 정책을 확인합니다.',
+      useCommonUi: true,
+      developerModeMessage: '개발자 모드 ON: 점검 결과를 debugPrint 코드로 복사할 수 있습니다.',
+      standardModeMessage: 'areas 정책을 확인합니다.',
+    );
+    try {
+      await CompanyBootstrapService.requireDeveloper(
+        source: 'area_limit_policy_inspection',
+        forceAccountSelection: false,
+      );
+      final areas = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _fs.collection('areas')
+          .get(const GetOptions(source: Source.server)), source: 'status_mapping_helper.get');
+      var valid = 0;
+      var invalid = 0;
+      for (final doc in areas.docs) {
+        final data = doc.data();
+        final active = data['activeLimit'];
+        final total = data['totalLimit'];
+        if (active is int && total is int && active >= 0 &&
+            total >= active && total <= _maxLimit) {
+          valid++;
+        } else {
+          invalid++;
+          trace.log('정책 확인 필요: areaDocument=${doc.id}');
+        }
+      }
+      trace.log('areas=${areas.docs.length} 정상=$valid 확인필요=$invalid', progress: .95);
+      if (invalid > 0) {
+        await trace.fail('제한 정책이 미설정된 지역을 먼저 수정하세요.');
+      } else {
+        await trace.succeed('모든 지역의 계정 제한 정책이 정상입니다.');
+      }
+    } catch (error, stackTrace) {
+      await trace.fail('지역 정책 검사에 실패했습니다.', error: error,
+          stackTrace: stackTrace);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _saveLimits({
@@ -254,17 +316,64 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
         '대상 확인: division=$division, area=$area, activeLimit=$activeLimit, totalLimit=$totalLimit',
         progress: .22,
       );
-      await _showDocRef(division, area).set(
-        <String, dynamic>{
-          'division': division,
-          'area': area,
+      await CompanyBootstrapService.requireDeveloper(
+        source: 'account_limit_save',
+        forceAccountSelection: false,
+      );
+      final inspection = await AccountInitializationGuard.inspect(
+        firestore: _fs, companyId: division);
+      inspection.requireConsistent();
+      final areaRef = _areaRef(area);
+      final showRef = _showDocRef(division, area);
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _fs.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+        final areaSnapshot = await tx.get(areaRef);
+        final showSnapshot = await tx.get(showRef);
+        final areaData = areaSnapshot.data();
+        if (areaData == null || areaData['division'] != division ||
+            areaData['name'] != area) {
+          throw StateError('AREA_SCOPE_MISMATCH');
+        }
+        final initialized = await AccountInitializationGuard.inTransaction(
+          transaction: tx, firestore: _fs, companyId: division);
+        final showData = showSnapshot.data();
+        if (initialized && showData == null) {
+          throw StateError('ACCOUNT_META_MISSING_AFTER_INITIALIZATION:$division/$area');
+        }
+        if (!initialized && showData != null) {
+          throw StateError('ACCOUNT_META_EXISTS_BEFORE_INITIALIZATION:$division/$area');
+        }
+        if (showData != null &&
+            (showData['division'] != division || showData['area'] != area)) {
+          throw StateError('ACCOUNT_META_SCOPE_MISMATCH');
+        }
+        final policy = <String, dynamic>{
           'activeLimit': activeLimit,
           'totalLimit': totalLimit,
           'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-      trace.log('user_accounts_show 메타 리밋 저장 완료', progress: .9);
+        };
+        if (initialized &&
+            ((showData?['activeCount'] is int &&
+                    activeLimit < (showData!['activeCount'] as int)) ||
+                (showData?['totalCount'] is int &&
+                    totalLimit < (showData!['totalCount'] as int)))) {
+          throw StateError('AREA_LIMIT_BELOW_ACCOUNT_COUNT');
+        }
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(areaRef, policy));
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(_fs.collection('divisions').doc(division),
+            <String, dynamic>{
+          'areaConfigVersion': FieldValue.increment(1),
+        }));
+        if (initialized) {
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(showRef, <String, dynamic>{
+            'activeLimit': activeLimit,
+            'totalLimit': totalLimit,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }));
+        }
+      }), source: 'status_mapping_helper.runTransaction');
+      _policyInputKey = null;
+      trace.log('areas 리밋 저장 및 초기화된 메타 동기화 완료', progress: .9);
       await trace.succeed('계정 리밋 저장이 완료되었습니다.');
       if (!mounted || trace.developerMode) return;
       showSuccessSnackbar(context, '리밋 저장을 완료했습니다.', useCommonUi: true);
@@ -293,8 +402,17 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       'projection 계정 조회 시작: division=$division, area=$area',
       progress: progress,
     );
-    final users = await _showUsersCol(division, area)
-        .get(const GetOptions(source: Source.server));
+    final showRef = _showDocRef(division, area);
+    final inspection = await AccountInitializationGuard.inspect(
+      firestore: _fs, companyId: division);
+    inspection.requireConsistent();
+    if (!inspection.isInitialized) {
+      throw StateError('ACCOUNT_INITIALIZATION_REQUIRED:$division');
+    }
+    final currentMeta = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => showRef.get(const GetOptions(source: Source.server)), source: 'status_mapping_helper.get');
+    if (!currentMeta.exists) throw StateError('ACCOUNT_META_MISSING:$division/$area');
+    final users = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _showUsersCol(division, area)
+        .get(const GetOptions(source: Source.server)), source: 'status_mapping_helper.get');
     var active = 0;
     var inactive = 0;
     for (final doc in users.docs) {
@@ -309,15 +427,18 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       activeCount: active,
       inactiveCount: inactive,
     );
-    await _showDocRef(division, area).set(
-      <String, dynamic>{
-        'division': division,
-        'area': area,
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _fs.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+      final meta = await tx.get(showRef);
+      if (!meta.exists || meta.data()?['division'] != division ||
+          meta.data()?['area'] != area) {
+        throw StateError('ACCOUNT_META_MISSING:$division/$area');
+      }
+      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(showRef, <String, dynamic>{
         ...counts.toMap(),
         'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+      }));
+    }), source: 'status_mapping_helper.runTransaction');
     trace?.log(
       '카운트 저장 완료: active=$active, inactive=$inactive, total=${counts.totalCount}',
       progress: progress,
@@ -395,11 +516,17 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       standardModeMessage: '개발자 모드 OFF: 회사 전체 리빌드 로그를 콘솔에 기록합니다.',
     );
     try {
-      final areasSnap = await _fs
+      final inspection = await AccountInitializationGuard.inspect(
+        firestore: _fs, companyId: division);
+      inspection.requireConsistent();
+      if (!inspection.isInitialized) {
+        throw StateError('ACCOUNT_INITIALIZATION_REQUIRED:$division');
+      }
+      final areasSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _fs
           .collection('areas')
           .where('division', isEqualTo: division)
           .orderBy('name')
-          .get(const GetOptions(source: Source.server));
+          .get(const GetOptions(source: Source.server)), source: 'status_mapping_helper.get');
       final areas = areasSnap.docs
           .map((doc) => (doc.data()['name'] as String?)?.trim())
           .whereType<String>()
@@ -540,7 +667,19 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : null,
+                  : PopupMenuButton<String>(
+                      enabled: !_busy,
+                      icon: const Icon(Icons.more_vert_rounded),
+                      onSelected: (value) {
+                        if (value == 'migrate') _inspectAreaPolicies();
+                      },
+                      itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                        PopupMenuItem<String>(
+                          value: 'migrate',
+                          child: Text('기존 지역 제한값 이관'),
+                        ),
+                      ],
+                    ),
             ),
           ),
           const OpsDivider(),
@@ -556,7 +695,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                         (value) => DropdownMenuItem<String>(
                           value: value,
                           child: Text(
-                            value,
+                            _divisionLabels[value] ?? value,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -570,6 +709,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                             _selectedDivision = value;
                             _selectedArea = null;
                             _areas = <String>[];
+                            _areaDocumentIds = <String, String>{};
                           });
                           await _loadAreas();
                         },
@@ -629,7 +769,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
           child: OpsEmptyState(
             icon: Icons.tune_rounded,
             title: '회사와 지역을 선택하세요',
-            message: '선택한 범위의 현재 계정 수와 생성 리밋을 관리할 수 있습니다.',
+            message: '본사는 최초 계정 생성 시 자동으로 추가됩니다. 생성 후 지역을 선택하여 계정 한도를 관리하세요.',
           ),
         ),
       );
@@ -638,8 +778,32 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
     final tokens = CommonUiTheme.of(context);
     return OpsDockListSurface(
       child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: _showDocRef(division, area).snapshots(),
-        builder: (context, snapshot) {
+        stream: FirebaseActivityMonitor.observe(
+          _areaRef(area).snapshots(),
+          origin: 'areas.policy.snapshots',
+        ),
+        builder: (context, areaSnapshot) {
+          if (areaSnapshot.connectionState == ConnectionState.waiting &&
+              !areaSnapshot.hasData) {
+            return const SizedBox(height: 260,
+                child: Center(child: CircularProgressIndicator()));
+          }
+          if (areaSnapshot.hasError || !areaSnapshot.hasData ||
+              !areaSnapshot.data!.exists) {
+            return const SizedBox(height: 260,
+                child: Center(child: Text('지역 정책을 조회할 수 없습니다.')));
+          }
+          final policy = areaSnapshot.data!.data() ?? <String, dynamic>{};
+          if (policy['division'] != division || policy['name'] != area) {
+            return const SizedBox(height: 260,
+                child: Center(child: Text('지역 정책의 회사·지역 정보가 일치하지 않습니다.')));
+          }
+          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: FirebaseActivityMonitor.observe(
+              _showDocRef(division, area).snapshots(),
+              origin: 'accounts.meta.snapshots',
+            ),
+            builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
             return const SizedBox(
               height: 260,
@@ -659,8 +823,8 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
           final data = snapshot.data?.data() ?? <String, dynamic>{};
           final exists = snapshot.data?.exists ?? false;
           final counts = _countsFromMeta(data);
-          final activeLimit = _configuredLimit(data['activeLimit']);
-          final totalLimit = _configuredLimit(data['totalLimit']);
+          final activeLimit = _configuredLimit(policy['activeLimit']);
+          final totalLimit = _configuredLimit(policy['totalLimit']);
           final configured = activeLimit != null && totalLimit != null;
           final activeWarning = activeLimit != null && counts.activeCount > activeLimit;
           final totalWarning = totalLimit != null && counts.totalCount > totalLimit;
@@ -681,10 +845,15 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                     title: '계정 정책',
                     subtitle: '신규 계정 생성 전에 활성/전체 리밋이 모두 설정되어 있어야 합니다.',
                     icon: Icons.manage_accounts_rounded,
-                    trailing: OpsStatusBadge(
-                      label: configured ? '리밋 설정됨' : '리밋 미설정',
-                      color: configured ? tokens.success : tokens.warning,
-                      icon: configured ? Icons.check_rounded : Icons.priority_high_rounded,
+                    trailing: AnimatedSwitcher(
+                      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                      switchInCurve: Curves.easeOutCubic,
+                      child: OpsStatusBadge(
+                        key: ValueKey<bool>(configured),
+                        label: configured ? '리밋 설정됨' : '리밋 미설정',
+                        color: configured ? tokens.success : tokens.warning,
+                        icon: configured ? Icons.check_rounded : Icons.priority_high_rounded,
+                      ),
                     ),
                   ),
                 ),
@@ -717,7 +886,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                     padding: const EdgeInsets.all(12),
                     child: OpsInlineMessage(
                       message: !exists
-                          ? '계정 메타 문서가 없습니다. 리밋을 저장하거나 카운트를 리빌드하면 생성됩니다.'
+                          ? '계정 메타 문서가 없습니다. 최초 계정 생성 전에는 본사 문서가 함께 생성되며, 생성 후 메타 누락은 정합성 점검이 필요합니다.'
                           : activeWarning && totalWarning
                               ? '활성 계정과 전체 계정 수가 설정 리밋을 초과했습니다.'
                               : activeWarning
@@ -772,6 +941,8 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                 ),
               ],
             ),
+          );
+            },
           );
         },
       ),

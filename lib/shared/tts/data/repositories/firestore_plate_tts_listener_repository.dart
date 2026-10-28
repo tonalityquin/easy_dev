@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../plate/domain/enums/plate_type.dart';
@@ -29,14 +30,14 @@ class FirestorePlateTtsListenerRepository implements PlateTtsListenerRepository 
       return const PlateTtsBaselineCursor(updatedAt: null, docId: null);
     }
 
-    final qs = await _firestore
+    final qs = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
         .collection('plates')
         .where('area', isEqualTo: safeArea)
         .where('type', whereIn: types.map((e) => e.firestoreValue).toList(growable: false))
         .orderBy('updatedAt', descending: true)
         .orderBy(FieldPath.documentId, descending: true)
         .limit(1)
-        .get();
+        .get(), source: 'firestore_plate_tts_listener_repository.get');
 
     if (qs.docs.isEmpty) {
       return const PlateTtsBaselineCursor(updatedAt: null, docId: null);
@@ -79,7 +80,10 @@ class FirestorePlateTtsListenerRepository implements PlateTtsListenerRepository 
       ]);
     }
 
-    return query.snapshots(includeMetadataChanges: true).map((snapshot) {
+    return FirebaseActivityMonitor.observe(
+      query.snapshots(includeMetadataChanges: true),
+      origin: 'plates.tts.snapshots',
+    ).map((snapshot) {
       final changes = snapshot.docChanges
           .map((change) => PlateTtsDocChange(
                 type: _mapType(change.type),

@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -42,7 +43,7 @@ class PlateCountService {
 
     try {
       final agg =
-          await baseQuery.count().get().timeout(const Duration(seconds: 10));
+          await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => baseQuery.count().get(), source: 'plate_count_service.get').timeout(const Duration(seconds: 10));
       final int count = agg.count ?? 0;
 
       _setCached(cacheKey, count);
@@ -65,7 +66,7 @@ class PlateCountService {
 
     try {
       final agg =
-          await baseQuery.count().get().timeout(const Duration(seconds: 10));
+          await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => baseQuery.count().get(), source: 'plate_count_service.get').timeout(const Duration(seconds: 10));
       final int docCount = agg.count ?? 0;
 
       _setCached(cacheKey, docCount);
@@ -82,7 +83,7 @@ class PlateCountService {
 
     try {
       final extraSnap =
-          await _firestore.collection('plate_counters').doc('area_$area').get();
+          await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('plate_counters').doc('area_$area').get(), source: 'plate_count_service.get');
 
       final int extras =
           (extraSnap.data()?['departureCompletedEvents'] as int?) ?? 0;

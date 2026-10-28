@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../features/dev/application/area_state.dart';
+import '../operational_cache/domain/location_cache_scope.dart';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -111,7 +113,9 @@ class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardA
   Future<List<LocationModel>> _loadLocationsFromLocal(String area) async {
     final a = area.trim();
     if (a.isEmpty) return const <LocationModel>[];
-    return context.read<OperationalLocalRepository>().readLocations(a);
+    final scopeKey = LocationCacheScope.maybeKey(context.read<AreaState>().currentDivision, a);
+    if (scopeKey == null) return const <LocationModel>[];
+    return context.read<OperationalLocalRepository>().readLocations(a, cacheKey: scopeKey);
   }
 
   void _playSnapshotRefreshAnimation() {
@@ -273,6 +277,7 @@ class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardA
   @override
   Widget build(BuildContext context) {
     final a = widget.area.trim();
+    final companyScope = LocationCacheScope.maybeKey(context.watch<AreaState>().currentDivision, a) ?? '';
     final store = context.watch<ViewDocRowsStore>();
     final overlay = _buildOverlay(store, a);
     final operationalRevision = context
@@ -309,8 +314,8 @@ class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardA
       );
     }
 
-    if (_localFuture == null || _localArea != a) {
-      _localArea = a;
+    if (_localFuture == null || _localArea != companyScope) {
+      _localArea = companyScope;
       _localFuture = _loadLocationsFromLocal(a);
     }
 

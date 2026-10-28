@@ -1,3 +1,5 @@
+import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:async';
 import 'dart:developer' as dev;
 
@@ -289,7 +291,7 @@ class PlateWriteService {
 
     try {
       final docSnapshot =
-          await docRef.get().timeout(const Duration(seconds: 10));
+          await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => docRef.get(), source: 'plate_write_service.get').timeout(const Duration(seconds: 10));
 
       var newData = plate.toMap();
 
@@ -321,8 +323,8 @@ class PlateWriteService {
 
       newData['updatedAt'] = FieldValue.serverTimestamp();
 
-      await docRef
-          .set(newData, SetOptions(merge: true))
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => docRef
+          .set(newData, SetOptions(merge: true)), source: 'plate_write_service.set')
           .timeout(const Duration(seconds: 10));
 
       final action = exists ? 'update' : 'create';
@@ -405,8 +407,9 @@ class PlateWriteService {
     final bool shouldSyncReqView = await _shouldSyncParkingRequestsView();
 
     try {
-      await _firestore.runTransaction((tx) async {
-        final snap = await tx.get(docRef);
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+        final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(docRef), source: 'plate_write_service.get');
         if (!snap.exists) {
           throw FirebaseException(
             plugin: 'cloud_firestore',
@@ -436,7 +439,7 @@ class PlateWriteService {
         if (transactionExtension != null) {
           await transactionExtension(tx, before);
         }
-        tx.update(docRef, fields);
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(docRef, fields));
 
         final String beforeType =
             ((before[PlateFields.type] as String?) ?? '').trim();
@@ -539,7 +542,7 @@ class PlateWriteService {
           if (area.trim().isEmpty) return;
           final ref = _viewRef(collection, area.trim());
 
-          tx.set(
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             ref,
             <String, dynamic>{
               'area': area.trim(),
@@ -549,7 +552,7 @@ class PlateWriteService {
               }
             },
             SetOptions(merge: true),
-          );
+          ));
         }
 
         void _txUpsertViewItemFields({
@@ -597,7 +600,7 @@ class PlateWriteService {
                   : selectedByValue,
           };
 
-          tx.set(
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             ref,
             <String, dynamic>{
               'area': area.trim(),
@@ -607,7 +610,7 @@ class PlateWriteService {
               }
             },
             SetOptions(merge: true),
-          );
+          ));
         }
 
         const String reqCollection = 'parking_requests_view';
@@ -749,7 +752,7 @@ class PlateWriteService {
             }
           }
         }
-      });
+      }), source: 'plate_write_service.runTransaction');
 
       debugPrint("✅ 문서 업데이트 완료(+view sync): $documentId");
     } on FirebaseException catch (e, st) {
@@ -808,18 +811,18 @@ class PlateWriteService {
 
     try {
       if (!syncViews || normalizedArea.isEmpty) {
-        await docRef.delete();
+        await FirebaseActivityMonitor.track(FirebaseActivityKind.delete, () => docRef.delete(), source: 'plate_write_service.delete');
         dev.log("🗑️ 문서 삭제 완료(plates only): $documentId", name: "Firestore");
         return;
       }
 
       final batch = _firestore.batch();
 
-      batch.delete(docRef);
+      FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.delete, () => batch.delete(docRef));
 
       void removeFromView(String collection) {
         final viewRef = _firestore.collection(collection).doc(normalizedArea);
-        batch.set(
+        FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(
           viewRef,
           <String, dynamic>{
             'area': normalizedArea,
@@ -829,14 +832,14 @@ class PlateWriteService {
             }
           },
           SetOptions(merge: true),
-        );
+        ));
       }
 
       removeFromView('parking_requests_view');
       removeFromView('parking_completed_view');
       removeFromView('departure_requests_view');
 
-      await batch.commit();
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'plate_write_service.commit');
 
       dev.log(
         "🗑️ 문서 삭제 완료(+view cleanup): $documentId",
@@ -866,7 +869,7 @@ class PlateWriteService {
 
     try {
       final createdAt = await _firestore.runTransaction<DateTime?>((tx) async {
-        final snap = await tx.get(docRef);
+        final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(docRef), source: 'plate_write_service.get');
         if (!snap.exists) {
           throw FirebaseException(plugin: 'cloud_firestore', code: 'not-found');
         }
@@ -927,7 +930,7 @@ class PlateWriteService {
           ]),
         };
 
-        tx.update(docRef, update);
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(docRef, update));
         return createdAt;
       });
 
@@ -994,8 +997,9 @@ class PlateWriteService {
     final canUpsertReqView = await _canUpsertParkingRequestsView();
 
     try {
-      await _firestore.runTransaction((tx) async {
-        final snap = await tx.get(docRef);
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
+        FirebaseActivityMonitor.beginTransactionAttempt();
+        final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(docRef), source: 'plate_write_service.get');
         if (!snap.exists) {
           throw FirebaseException(
             plugin: 'cloud_firestore',
@@ -1046,7 +1050,7 @@ class PlateWriteService {
             ]),
         };
 
-        tx.update(docRef, update);
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(docRef, update));
 
         final docArea = ((data['area'] as String?) ?? area).trim();
 
@@ -1067,7 +1071,7 @@ class PlateWriteService {
           final depRequestedAt = data['departureRequestedAt'];
           final selectedByValue = isSelected ? selectedBy?.trim() : null;
 
-          tx.set(
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             viewRef,
             <String, dynamic>{
               'area': docArea,
@@ -1090,7 +1094,7 @@ class PlateWriteService {
               }
             },
             SetOptions(merge: true),
-          );
+          ));
         }
 
         if (typeEnum == PlateType.parkingRequests && docArea.isNotEmpty) {
@@ -1110,7 +1114,7 @@ class PlateWriteService {
           final reqAt = data['requestTime'] ?? data['parkingRequestedAt'];
           final selectedByValue = isSelected ? selectedBy?.trim() : null;
 
-          tx.set(
+          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             viewRef,
             <String, dynamic>{
               'area': docArea,
@@ -1132,9 +1136,9 @@ class PlateWriteService {
               }
             },
             SetOptions(merge: true),
-          );
+          ));
         }
-      });
+      }), source: 'plate_write_service.runTransaction');
     } on FirebaseException catch (e, st) {
       unawaited(
         DevFirebaseDebugDialog.show(

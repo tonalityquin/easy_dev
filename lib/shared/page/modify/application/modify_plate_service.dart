@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -570,7 +571,7 @@ class ModifyPlateService {
         } else {
           debugPrint(startMessage);
         }
-        await storage.objects.delete(bucketName, path);
+        await FirebaseActivityMonitor.track(FirebaseActivityKind.delete, () => storage.objects.delete(bucketName, path), source: 'modify_plate_service.delete');
         final successMessage =
             '[ModifyPlateService] photo_cleanup=success path=$path';
         if (onDebug != null) {

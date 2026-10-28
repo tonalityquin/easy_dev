@@ -1,3 +1,5 @@
+import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:developer' as dev;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -85,9 +87,9 @@ class EndWorkReportRepository {
     };
 
     final batch = _firestore.batch();
-    batch.set(areaRef, areaMetaPayload, SetOptions(merge: true));
-    batch.set(monthRef, monthPayload, SetOptions(merge: true));
-    await batch.commit();
+    FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(areaRef, areaMetaPayload, SetOptions(merge: true)));
+    FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(monthRef, monthPayload, SetOptions(merge: true)));
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'end_work_report_repository.commit');
 
     return EndWorkReportWriteResult(
       area: area,
@@ -128,7 +130,7 @@ class EndWorkReportRepository {
     final missing = <String>[];
 
     for (final monthKey in keys) {
-      final monthDoc = await areaRef.collection('months').doc(monthKey).get();
+      final monthDoc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => areaRef.collection('months').doc(monthKey).get(), source: 'end_work_report_repository.get');
       if (!monthDoc.exists || monthDoc.data() == null) {
         missing.add(monthKey);
         continue;
@@ -142,7 +144,7 @@ class EndWorkReportRepository {
     }
 
     if (allowLegacyFallback && missing.isNotEmpty) {
-      final areaDoc = await areaRef.get();
+      final areaDoc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => areaRef.get(), source: 'end_work_report_repository.get');
       final data = areaDoc.data();
       if (data != null) {
         final legacy = _extractAllDaysFromLegacyAreaDoc(
@@ -181,7 +183,7 @@ class EndWorkReportRepository {
         q = q.where('division', isEqualTo: division);
       }
 
-      final snap = await q.get();
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => q.get(), source: 'end_work_report_repository.get');
       for (final monthDoc in snap.docs) {
         _mergeOneMonthDocIntoCache(
           rebuilt: rebuilt,
@@ -332,11 +334,11 @@ class EndWorkReportRepository {
       qAreas = qAreas.where('division', isEqualTo: division);
     }
 
-    final areaSnap = await qAreas.get();
+    final areaSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => qAreas.get(), source: 'end_work_report_repository.get');
     dev.log('[STAT] fallback scan: areaDocs=${areaSnap.size}', name: 'EndWorkReportRepository');
 
     for (final areaDoc in areaSnap.docs) {
-      final monthsSnap = await areaDoc.reference.collection('months').get();
+      final monthsSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => areaDoc.reference.collection('months').get(), source: 'end_work_report_repository.get');
       for (final monthDoc in monthsSnap.docs) {
         _mergeOneMonthDocIntoCache(
           rebuilt: rebuilt,
@@ -358,7 +360,7 @@ class EndWorkReportRepository {
       q = q.where('division', isEqualTo: division);
     }
 
-    final snap = await q.get();
+    final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => q.get(), source: 'end_work_report_repository.get');
     dev.log('[STAT] legacy scan: areaDocs=${snap.size}', name: 'EndWorkReportRepository');
 
     for (final doc in snap.docs) {

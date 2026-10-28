@@ -1,3 +1,5 @@
+import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PlateBillingCountService {
@@ -76,7 +78,7 @@ class PlateBillingCountService {
       area: safeArea,
     );
 
-    transaction.set(
+    FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
       ref,
       <String, dynamic>{
         'docId': ref.id,
@@ -96,6 +98,6 @@ class PlateBillingCountService {
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
-    );
+    ));
   }
 }

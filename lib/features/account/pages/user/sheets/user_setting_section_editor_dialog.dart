@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../../presentation/widgets/permission_detail_list.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../applications/user_state.dart';
 import '../../../domain/models/account_permission_policy.dart';
+import '../../../data/services/company_grade_policy_service.dart';
 
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../../app/utils/snackbar_helper.dart';
@@ -19,6 +21,7 @@ class UserSettingSectionEditorDialog extends StatefulWidget {
   const UserSettingSectionEditorDialog({
     super.key,
     required this.section,
+    required this.companyId,
     required this.initialDraft,
     required this.isEditMode,
     required this.manualCodeAllowed,
@@ -28,6 +31,7 @@ class UserSettingSectionEditorDialog extends StatefulWidget {
   });
 
   final UserSettingsSection section;
+  final String companyId;
   final UserSettingsDraft initialDraft;
   final bool isEditMode;
   final bool manualCodeAllowed;
@@ -55,6 +59,11 @@ class _UserSettingSectionEditorDialogState
   late final TextEditingController _emailController;
   late final TextEditingController _positionController;
   late Set<String> _permissionKeys;
+  final CompanyGradePolicyService _gradeService = CompanyGradePolicyService();
+  Map<String, CompanyGradePolicy> _gradePolicies = <String, CompanyGradePolicy>{};
+  bool _gradeLoading = false;
+  String? _gradeError;
+  late String _accountGradeId;
   late UserCodeEntryMode _codeEntryMode;
   late Set<String> _modes;
   late Map<String, TimeOfDay?> _startByDay;
@@ -77,11 +86,45 @@ class _UserSettingSectionEditorDialogState
     _emailController = TextEditingController(text: draft.emailLocal);
     _positionController = TextEditingController(text: draft.position);
     _permissionKeys = AccountPermissionPolicy.sanitize(draft.permissionKeys);
+    _accountGradeId = draft.accountGradeId;
     _modes = Set<String>.of(draft.modes);
     _startByDay = Map<String, TimeOfDay?>.of(draft.startByDay);
     _endByDay = Map<String, TimeOfDay?>.of(draft.endByDay);
     _breakDays = Set<String>.of(draft.breakDays);
     widget.trace.log('편집 화면이 열렸습니다: section=${widget.section.name}');
+    if (widget.section == UserSettingsSection.permission &&
+        _accountGradeId != 'headquartersAdmin') {
+      _loadGradePolicies();
+    }
+  }
+
+  Future<void> _loadGradePolicies() async {
+    setState(() {
+      _gradeLoading = true;
+      _gradeError = null;
+    });
+    try {
+      final values = await _gradeService.loadAll(widget.companyId);
+      if (!mounted) return;
+      setState(() {
+        _gradePolicies = <String, CompanyGradePolicy>{
+          for (final entry in values.entries)
+            if (entry.value.enabled) entry.key: entry.value,
+        };
+        final policy = _gradePolicies[_accountGradeId];
+        if (policy != null) {
+          _permissionKeys = Set<String>.of(policy.permissionKeys);
+        }
+        _gradeLoading = false;
+      });
+    } catch (error, stackTrace) {
+      widget.trace.log('등급 정책 조회 실패: company=${widget.companyId} error=$error stack=$stackTrace');
+      if (!mounted) return;
+      setState(() {
+        _gradeLoading = false;
+        _gradeError = error.toString();
+      });
+    }
   }
 
   @override
@@ -159,7 +202,10 @@ class _UserSettingSectionEditorDialogState
         _isValidEmailLocalPart(email);
   }
 
-  bool get _permissionOk => _modes.isNotEmpty;
+  bool get _permissionOk => _modes.isNotEmpty &&
+      (_accountGradeId == 'headquartersAdmin' ||
+          (!_gradeLoading && _gradeError == null &&
+              (_gradePolicies[_accountGradeId]?.matches(_permissionKeys) ?? false)));
 
   bool get _scheduleOk {
     for (final day in _days) {
@@ -213,6 +259,7 @@ class _UserSettingSectionEditorDialogState
         );
       case UserSettingsSection.permission:
         return base.copyWith(
+          accountGradeId: _accountGradeId,
           permissionKeys: _permissionKeys,
           modes: _modes,
         );
@@ -583,7 +630,11 @@ class _UserSettingSectionEditorDialogState
 
   Widget _permissionEditor(BuildContext context) {
     final actor = context.read<UserState>();
-    final selectedPreset = AccountPermissionPolicy.presetIdFor(_permissionKeys);
+    final selectedPreset = _accountGradeId;
+    final selectedLabel = selectedPreset == 'headquartersAdmin'
+        ? AccountPermissionPolicy.gradeLabel(selectedPreset)
+        : _gradePolicies[selectedPreset]?.name;
+    final permissionSignature = (_permissionKeys.toList()..sort()).join('|');
     final editable = actor.hasPermission('accounts.grantPermissions');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -597,12 +648,13 @@ class _UserSettingSectionEditorDialogState
           child: Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: AccountPermissionPolicy.presets.entries.map((entry) {
+            children: _gradePolicies.entries.map((entry) {
               final selected = selectedPreset == entry.key;
-              final canApply = editable &&
-                  AccountPermissionPolicy.mayGrant(actor.permissionKeys, entry.value);
+              final canApply = editable && !_gradeLoading &&
+                  selectedPreset != 'headquartersAdmin' &&
+                  AccountPermissionPolicy.mayGrant(actor.permissionKeys, entry.value.permissionKeys);
               return OpsFormChip(
-                label: AccountPermissionPolicy.presetLabels[entry.key]!,
+                label: entry.value.name,
                 selected: selected,
                 icon: selected ? Icons.check_circle_rounded : Icons.shield_outlined,
                 onTap: () {
@@ -610,13 +662,18 @@ class _UserSettingSectionEditorDialogState
                     widget.trace.log('계정 등급 선택 거부: preset=${entry.key}');
                     return;
                   }
-                  setState(() => _permissionKeys = Set<String>.of(entry.value));
-                  widget.trace.log('계정 등급 선택: preset=${entry.key} count=${entry.value.length}');
+                  setState(() {
+                    _accountGradeId = entry.key;
+                    _permissionKeys = Set<String>.of(entry.value.permissionKeys);
+                  });
+                  widget.trace.log('계정 등급 선택: preset=${entry.key} count=${entry.value.permissionKeys.length}');
                 },
               );
             }).toList(growable: false),
           ),
         ),
+        if (_gradeLoading) const LinearProgressIndicator(),
+        if (_gradeError != null) Text('등급 정책 조회 실패: $_gradeError'),
         const SizedBox(height: 10),
         AnimatedSwitcher(
           duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
@@ -627,26 +684,23 @@ class _UserSettingSectionEditorDialogState
             child: SizeTransition(sizeFactor: animation, child: child),
           ),
           child: Column(
-            key: ValueKey<String>(selectedPreset ?? 'custom_permissions'),
+            key: ValueKey<String>('$selectedPreset:$permissionSignature'),
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                selectedPreset == null
-                    ? '기존 권한 구성 · 등급을 선택하면 해당 권한으로 변경됩니다.'
-                    : '${AccountPermissionPolicy.presetLabels[selectedPreset]} · ${_permissionKeys.length}개 권한',
+                selectedLabel == null
+                    ? '등록되지 않은 계정 등급 · ${_permissionKeys.length}개 권한'
+                    : '$selectedLabel · ${_permissionKeys.length}개 권한',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: (AccountPermissionPolicy.keys.where(_permissionKeys.contains).toList()
-                      ..sort())
-                    .map((permission) => Chip(
-                          label: Text(AccountPermissionPolicy.permissionLabel(permission)),
-                          avatar: const Icon(Icons.check_rounded, size: 16),
-                        ))
-                    .toList(growable: false),
+              PermissionDetailList(
+                permissions: (selectedPreset == 'headquartersAdmin'
+                    ? AccountPermissionPolicy.keys
+                    : AccountPermissionPolicy.generalPermissionKeys).toList()..sort(),
+                selected: _permissionKeys,
+                enabled: false,
+                height: 288,
               ),
             ],
           ),

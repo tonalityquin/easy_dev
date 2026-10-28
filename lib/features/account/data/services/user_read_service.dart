@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -49,10 +50,10 @@ class UserReadService {
   }
 
   Future<void> _writeRootActiveState(String id, bool active) async {
-    await _getUserCollectionRef().doc(id).set(
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _getUserCollectionRef().doc(id).set(
       <String, dynamic>{'isActive': active},
       SetOptions(merge: true),
-    );
+    ), source: 'user_read_service.set');
   }
 
   Future<UserModel> _userFromRootWithActiveState(
@@ -94,8 +95,8 @@ class UserReadService {
           .collection('users')
           .doc(id);
       final showSnap = viewOptions == null
-          ? await showRef.get()
-          : await showRef.get(viewOptions);
+          ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => showRef.get(), source: 'user_read_service.get')
+          : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => showRef.get(viewOptions), source: 'user_read_service.get');
       final active = showSnap.data()?['isActive'];
       if (active is! bool) {
         debugPrint(
@@ -140,7 +141,7 @@ class UserReadService {
   Future<UserModel?> getUserById(String userId) async {
     debugPrint('getUserById 호출 → ID: $userId');
     try {
-      final doc = await _getUserCollectionRef().doc(userId).get();
+      final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef().doc(userId).get(), source: 'user_read_service.get');
 
       if (!doc.exists) {
         debugPrint('DB 문서 없음 → userId=$userId');
@@ -154,9 +155,9 @@ class UserReadService {
 
   Future<UserModel?> getUserByIdFromServer(String userId) async {
     try {
-      final doc = await _getUserCollectionRef()
+      final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
           .doc(userId)
-          .get(const GetOptions(source: Source.server));
+          .get(const GetOptions(source: Source.server)), source: 'user_read_service.get');
 
       if (!doc.exists) {
         return null;
@@ -174,43 +175,19 @@ class UserReadService {
   Future<UserModel?> getUserByAccountCode(String accountCode) async {
     final normalized = AccountCodeNumber.normalize(accountCode);
     if (!AccountCodeNumber.isValid(normalized)) return null;
-
     debugPrint(
-      'getUserByAccountCode, 조회 시작 - accountCode: ${AccountCodeNumber.mask(normalized)} source=root_query',
+      'getUserByAccountCode, 조회 시작 - accountCode: ${AccountCodeNumber.mask(normalized)} source=code_index',
     );
     try {
-      final codeSnapshot = await _getUserCollectionRef()
-          .where('codeNumber', isEqualTo: normalized)
-          .limit(2)
-          .get();
-      if (codeSnapshot.docs.length > 1) {
-        debugPrint(
-          'getUserByAccountCode, 중복 코드번호 감지 - accountCode: ${AccountCodeNumber.mask(normalized)} source=codeNumber',
-        );
+      final index = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('user_account_codes')
+          .doc(normalized).get(const GetOptions(source: Source.server)), source: 'user_read_service.get');
+      final accountId = (index.data()?['userId'] ?? '').toString().trim();
+      if (accountId.isEmpty || index.data()?['codeNumber'] != normalized) {
         return null;
       }
-      if (codeSnapshot.docs.length == 1) {
-        final doc = codeSnapshot.docs.single;
-        return await _userFromRootWithActiveState(doc.id, doc.data());
-      }
-
-      for (final field in <String>['phone', 'handle']) {
-        final legacySnapshot = await _getUserCollectionRef()
-            .where(field, isEqualTo: normalized)
-            .limit(2)
-            .get();
-        if (legacySnapshot.docs.length > 1) {
-          debugPrint(
-            'getUserByAccountCode, 중복 legacy 식별자 감지 - accountCode: ${AccountCodeNumber.mask(normalized)} source=$field',
-          );
-          return null;
-        }
-        if (legacySnapshot.docs.length == 1) {
-          final doc = legacySnapshot.docs.single;
-          return await _userFromRootWithActiveState(doc.id, doc.data());
-        }
-      }
-      return null;
+      final user = await getUserByIdFromServer(accountId);
+      if (user == null || user.codeNumber != normalized) return null;
+      return user;
     } on FirebaseException catch (error, stackTrace) {
       debugPrint(
         'getUserByAccountCode, Firebase 조회 실패 - accountCode: ${AccountCodeNumber.mask(normalized)} code=${error.code} message=${error.message}',
@@ -234,10 +211,10 @@ class UserReadService {
       'searchUsersByCodeNumber, 조회 시작 - codeNumber: ${AccountCodeNumber.mask(normalized)}',
     );
     try {
-      final snapshot = await _getUserCollectionRef()
+      final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
           .where('codeNumber', isEqualTo: normalized)
           .limit(10)
-          .get();
+          .get(), source: 'user_read_service.get');
       final users = await Future.wait(
         snapshot.docs.map(
           (doc) => _userFromRootWithActiveState(doc.id, doc.data()),
@@ -260,10 +237,10 @@ class UserReadService {
       'searchUsersByName, 조회 시작 - nameLength: ${normalized.length}',
     );
     try {
-      final snapshot = await _getUserCollectionRef()
+      final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
           .where('name', isEqualTo: normalized)
           .limit(20)
-          .get();
+          .get(), source: 'user_read_service.get');
       final users = await Future.wait(
         snapshot.docs.map(
           (doc) => _userFromRootWithActiveState(doc.id, doc.data()),
@@ -287,21 +264,21 @@ class UserReadService {
     final h = _normalizeHandle(handle);
     debugPrint('getUserByHandle, 조회 시작 - handle: $h');
     try {
-      var qs = await _getUserCollectionRef()
+      var qs = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
           .where('handle', isEqualTo: h)
           .limit(1)
-          .get();
+          .get(), source: 'user_read_service.get');
       if (qs.docs.isEmpty) {
-        qs = await _getUserCollectionRef()
+        qs = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
             .where('codeNumber', isEqualTo: h)
             .limit(1)
-            .get();
+            .get(), source: 'user_read_service.get');
       }
       if (qs.docs.isEmpty) {
-        qs = await _getUserCollectionRef()
+        qs = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
             .where('phone', isEqualTo: h)
             .limit(1)
-            .get();
+            .get(), source: 'user_read_service.get');
       }
 
       if (qs.docs.isNotEmpty) {
@@ -354,10 +331,14 @@ class UserReadService {
     try {
       final snapshots = await Future.wait(
         fields.map(
-          (field) => _getTabletCollectionRef()
-              .where(field, isEqualTo: normalized)
-              .limit(50)
-              .get(),
+          (field) => FirebaseActivityMonitor.track(
+              FirebaseActivityKind.read,
+              () => _getTabletCollectionRef()
+                  .where(field, isEqualTo: normalized)
+                  .limit(50)
+                  .get(),
+              source: 'tablet.account.read',
+            ),
         ),
       );
       final byId =
@@ -453,7 +434,7 @@ class UserReadService {
     );
 
     try {
-      final direct = await _getTabletCollectionRef().doc(documentId).get();
+      final direct = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getTabletCollectionRef().doc(documentId).get(), source: 'user_read_service.get');
       if (direct.exists && direct.data() != null) {
         TabletAccountDiagnostics.record(
           'code_number_area_lookup_direct_hit',
@@ -595,9 +576,9 @@ class UserReadService {
     debugPrint('🔥 Firestore 호출 시작 (users) → $selectedArea');
 
     try {
-      final querySnapshot = await _getUserCollectionRef()
+      final querySnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
           .where('areas', arrayContains: selectedArea)
-          .get();
+          .get(), source: 'user_read_service.get');
 
       final users = await Future.wait(
         querySnapshot.docs.map(
@@ -621,7 +602,7 @@ class UserReadService {
     try {
       final usersRef =
       _getUserShowCollectionRef().doc(docId).collection('users');
-      final snap = await usersRef.get();
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => usersRef.get(), source: 'user_read_service.get');
 
       final users = snap.docs
           .map((doc) => _userFromShowData(doc.id, doc.data()))
@@ -649,9 +630,9 @@ class UserReadService {
     try {
       final usersRef =
           _getUserShowCollectionRef().doc(docId).collection('users');
-      final snap = await usersRef
+      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => usersRef
           .where('isActive', isEqualTo: true)
-          .get();
+          .get(), source: 'user_read_service.get');
 
       final users = snap.docs
           .map((doc) => _userFromShowData(doc.id, doc.data()))
@@ -676,9 +657,9 @@ class UserReadService {
     debugPrint('🔥 Firestore 호출 시작 (tablet) → $selectedArea');
 
     try {
-      final querySnapshot = await _getTabletCollectionRef()
+      final querySnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getTabletCollectionRef()
           .where('areas', arrayContains: selectedArea)
-          .get();
+          .get(), source: 'user_read_service.get');
 
       final tablets = querySnapshot.docs
           .map((doc) => TabletModel.fromMap(doc.id, doc.data()))
@@ -707,9 +688,9 @@ class UserReadService {
     }
 
     try {
-      final doc = await _getAreasCollectionRef()
+      final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getAreasCollectionRef()
           .doc('${division.trim()}-${area.trim()}')
-          .get();
+          .get(), source: 'user_read_service.get');
       String? name;
       if (doc.exists) {
         name = doc.data()?['englishName'] as String?;

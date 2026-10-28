@@ -20,6 +20,7 @@ import '../../../../dev/application/account_group_authorization.dart';
 import '../../../../launcher/application/app_mode_registry.dart';
 import '../../../applications/user_state.dart';
 import '../../../data/services/company_bootstrap_service.dart';
+import '../../../data/services/company_grade_policy_service.dart';
 import '../../../domain/models/user/user_model.dart';
 import '../../../domain/models/account_permission_policy.dart';
 import '../../../domain/repositories/user_repository.dart';
@@ -59,7 +60,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     for (final section in UserSettingsSection.values) section: GlobalKey(),
   };
   final Set<String> _selectedPermissionKeys = <String>{};
-  bool _permissionChanged = false;
+  String _accountGradeId = 'custom_6';
   UserCodeEntryMode _codeEntryMode = UserCodeEntryMode.generated;
   final Set<String> _selectedModes = <String>{};
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
@@ -80,8 +81,16 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
 
   bool get _manualCodeAllowedNow => !isEditMode && _groupAuthorized;
 
-  Future<bool> _refreshGroupAuthorization({required String source}) async {
-    final approved = await AccountGroupAuthorization.verify(source: source);
+  Future<bool> _refreshGroupAuthorization({
+    required String source,
+    bool showStatus = false,
+  }) async {
+    final approved = showStatus
+        ? await AccountGroupAuthorization.verifyWithStatus(
+            context,
+            source: source,
+          )
+        : await AccountGroupAuthorization.verify(source: source);
     if (mounted && _groupAuthorized != approved) {
       setState(() => _groupAuthorized = approved);
     }
@@ -94,6 +103,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       source: interactive
           ? 'user_account_manual_code_interactive'
           : 'user_account_manual_code',
+      showStatus: interactive,
     );
   }
 
@@ -152,10 +162,10 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       _codeNumberController.text = AccountCodeNumber.format(AccountCodeNumber.generate());
       _emailController.clear();
       _positionController.clear();
+      _accountGradeId = 'custom_6';
       _selectedPermissionKeys
         ..clear()
-        ..addAll(AccountPermissionPolicy.presetPermissions('branchWorker'));
-      _permissionChanged = false;
+        ..addAll(AccountPermissionPolicy.presetPermissions('custom_6'));
       _selectedModes
         ..clear()
         ..add('single');
@@ -178,7 +188,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     );
     _emailController.text = user.email.split('@').first;
     _positionController.text = user.position ?? '';
-    _permissionChanged = false;
+    _accountGradeId = user.accountGradeId;
     _selectedPermissionKeys
       ..clear()
       ..addAll(AccountPermissionPolicy.sanitize(user.permissionKeys));
@@ -336,6 +346,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       codeEntryMode: _codeEntryMode,
       emailLocal: _emailController.text.trim(),
       position: _positionController.text.trim(),
+      accountGradeId: _accountGradeId,
       permissionKeys: Set<String>.of(_selectedPermissionKeys),
       modes: Set<String>.of(_selectedModes),
       startByDay: Map<String, TimeOfDay?>.of(_startByDay),
@@ -361,10 +372,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
           _emailController.text = draft.emailLocal;
           break;
         case UserSettingsSection.permission:
-          if (!(_selectedPermissionKeys.length == draft.permissionKeys.length &&
-              _selectedPermissionKeys.containsAll(draft.permissionKeys))) {
-            _permissionChanged = true;
-          }
+          _accountGradeId = draft.accountGradeId;
           _selectedPermissionKeys
             ..clear()
             ..addAll(AccountPermissionPolicy.sanitize(draft.permissionKeys));
@@ -481,6 +489,8 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         barrierLabel: '${_sectionTitle(section)} 편집',
         builder: (dialogContext) {
           return UserSettingSectionEditorDialog(
+            companyId: widget.initialUser?.companyId ??
+                context.read<AreaState>().currentDivision,
             section: section,
             initialDraft: _currentDraft().detached(),
             isEditMode: isEditMode,
@@ -694,11 +704,15 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       );
       trace.log('server_access_gate approved=$approved');
       if (!approved) throw StateError('GROUP_ACCESS_DENIED');
-      await CompanyBootstrapService.requireDeveloper(
-        source: 'user_account_write',
-        forceAccountSelection: false,
-      );
-      trace.log('server_developer_write_approved');
+      final actorForWrite = context.read<UserState>();
+      final permission = isEditMode ? 'accounts.update' : 'accounts.create';
+      if (!actorForWrite.hasPermission(permission)) {
+        await CompanyBootstrapService.requireDeveloper(
+          source: 'user_account_write',
+          forceAccountSelection: false,
+        );
+      }
+      trace.log('server_account_write_gate_approved');
       if (_codeEntryMode == UserCodeEntryMode.developerManual) {
         final authorized = await _isManualCodeAuthorized();
         if (!authorized) {
@@ -812,6 +826,12 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       trace.log('assignment_list_check allowed=${assignmentDenied == null} reason=${assignmentDenied ?? 'ok'} divisions=${nextDivisions.length} areas=${nextAreas.length}');
       if (assignmentDenied != null) throw StateError(assignmentDenied);
 
+      final currentPolicy = initialUser?.isInitialAdmin == true
+          ? null
+          : await CompanyGradePolicyService().load(division, _accountGradeId);
+      final currentPermissions = currentPolicy?.permissionKeys ??
+          Set<String>.of(_selectedPermissionKeys);
+      trace.log('현재 등급 정책: company=$division grade=$_accountGradeId version=${currentPolicy?.version} count=${currentPermissions.length}');
       final user = UserModel(
         id: AccountCodeNumber.documentId(
           codeNumber: _codeNumberController.text,
@@ -824,7 +844,8 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
             ? initialUser!.companyId : division,
         isInitialAdmin: initialUser?.isInitialAdmin ?? false,
         areaIds: initialUser?.areaIds ?? const <String>[],
-        permissionKeys: _selectedPermissionKeys.toList(growable: false),
+        accountGradeId: _accountGradeId,
+        permissionKeys: currentPermissions.toList(growable: false),
         modes: normalizedModes,
         position: _positionController.text.trim(),
         areas: nextAreas,
@@ -846,7 +867,8 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         previousPermissions: initialUser?.permissionKeys ?? const <String>[],
         nextPermissions: user.permissionKeys,
         isCreating: initialUser == null,
-        changesPermissions: _permissionChanged,
+        changesPermissions: initialUser == null ||
+            initialUser.accountGradeId != _accountGradeId,
       );
       trace.log('permission_policy_final_check allowed=${reason == null} reason=${reason ?? 'ok'}');
       if (reason != null) throw StateError(reason);
@@ -1078,7 +1100,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         .map(_modeLabel)
         .toList(growable: false);
     final permissions = _selectedPermissionKeys.length;
-    final profile = AccountPermissionPolicy.presetLabelFor(_selectedPermissionKeys);
+    final profile = AccountPermissionPolicy.gradeLabel(_accountGradeId);
     if (modes.isEmpty) return '$profile · 권한 $permissions개 · 허용 모드 입력 필요';
     return '$profile · 권한 $permissions개 · ${modes.join(' · ')}';
   }

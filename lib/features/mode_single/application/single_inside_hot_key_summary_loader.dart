@@ -1,4 +1,5 @@
 import 'package:intl/intl.dart';
+import '../../../shared/operational_cache/domain/location_cache_scope.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/init/work_schedule_prefs.dart';
@@ -43,7 +44,7 @@ class SingleInsideHotKeySummaryLoader {
       late final SingleInsideHotKeySummary summary;
       switch (content) {
         case SingleInsideHotKeyContent.parkingArea:
-          summary = await _loadParkingArea(area: area);
+          summary = await _loadParkingArea(division: division, area: area);
           break;
         case SingleInsideHotKeyContent.workSchedule:
           summary = await _loadWorkSchedule();
@@ -98,6 +99,7 @@ class SingleInsideHotKeySummaryLoader {
   }
 
   static Future<SingleInsideHotKeySummary> _loadParkingArea({
+    required String division,
     required String area,
   }) async {
     final normalizedArea = area.trim();
@@ -108,9 +110,17 @@ class SingleInsideHotKeySummaryLoader {
         secondary: '근무지 정보를 확인해 주세요.',
       );
     }
+    final scopeKey = LocationCacheScope.maybeKey(division, normalizedArea);
+    if (scopeKey == null) {
+      return const SingleInsideHotKeySummary(
+        status: '확인 필요',
+        primary: '회사 또는 지역 정보 없음',
+        secondary: '근무지 정보를 확인해 주세요.',
+      );
+    }
     final locations = await SqliteOperationalLocalRepository(
       OperationalCacheDatabase.instance,
-    ).readLocations(normalizedArea);
+    ).readLocations(normalizedArea, cacheKey: scopeKey);
     final hierarchy = resolveParkingSpatialHierarchy(locations);
     var parentCount = 0;
     var childCount = 0;

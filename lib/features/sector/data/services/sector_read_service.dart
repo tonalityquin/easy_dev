@@ -1,3 +1,4 @@
+import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -18,10 +19,10 @@ class SectorReadService {
     }
 
     try {
-      final snapshot = await _firestore
+      final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection(collectionName)
           .where('area', isEqualTo: normalizedArea)
-          .get();
+          .get(), source: 'sector_read_service.get');
 
       final sectors = <SectorModel>[];
       for (final document in snapshot.docs) {
