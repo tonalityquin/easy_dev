@@ -1159,6 +1159,8 @@ class HeadMemo {
         tags: const <String>[_tMemo, _tMemoFirestore],
       );
       rethrow;
+    } finally {
+      FirebaseActivityWriteScope.cancelBatch(batch);
     }
   }
 

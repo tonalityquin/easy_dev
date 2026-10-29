@@ -211,6 +211,7 @@ class CompanyScopeMigrationService {
         }
         if (page.docs.isEmpty) break;
         final batch = firestore.batch();
+        try {
         var pending = 0;
         final children = <({DocumentSnapshot<Map<String, dynamic>> doc,
           String company, String? area})>[];
@@ -265,6 +266,9 @@ class CompanyScopeMigrationService {
               noteFailure(child.doc.reference.path, error, stackTrace);
             }
           }
+        }
+        } finally {
+          FirebaseActivityWriteScope.cancelBatch(batch);
         }
         cursor = page.docs.last;
         if (page.docs.length < 150) break;
@@ -361,6 +365,7 @@ class CompanyScopeMigrationService {
       }
       if (page.docs.isEmpty) break;
       final batch = firestore.batch();
+      try {
       var pending = 0;
       for (final doc in page.docs) {
         checked++;
@@ -400,6 +405,9 @@ class CompanyScopeMigrationService {
             noteFailure('collectionGroup/plates', error, stackTrace, count: pending);
           }
         }
+      }
+      } finally {
+        FirebaseActivityWriteScope.cancelBatch(batch);
       }
       historyCursor = page.docs.last;
       if (page.docs.length < 150) break;

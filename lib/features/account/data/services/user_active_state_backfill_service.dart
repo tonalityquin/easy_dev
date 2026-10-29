@@ -132,6 +132,7 @@ class UserActiveStateBackfillService {
             ? offset + _batchLimit
             : passwordRefs.length;
         final batch = _firestore.batch();
+        try {
         for (final reference in passwordRefs.sublist(offset, end)) {
           FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(
             reference,
@@ -147,6 +148,9 @@ class UserActiveStateBackfillService {
           debugPrint(
             'user_accounts_show password 정리 실패 code=${error.code} count=${end - offset}',
           );
+        }
+        } finally {
+          FirebaseActivityWriteScope.cancelBatch(batch);
         }
         onLog?.call(
           'View password 정리: $viewPasswordsRemoved/${passwordRefs.length}',
@@ -183,6 +187,7 @@ class UserActiveStateBackfillService {
             ? offset + _batchLimit
             : pendingUpdates.length;
         final batch = _firestore.batch();
+        try {
         for (final entry in pendingUpdates.sublist(offset, end)) {
           FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(
             entry.key,
@@ -201,6 +206,9 @@ class UserActiveStateBackfillService {
           debugPrint(
             'user_accounts isActive backfill 실패 code=${error.code} count=${end - offset}',
           );
+        }
+        } finally {
+          FirebaseActivityWriteScope.cancelBatch(batch);
         }
         onLog?.call(
           'Root isActive 반영: $updatedRoots/${pendingUpdates.length}',

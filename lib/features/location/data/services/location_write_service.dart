@@ -586,6 +586,7 @@ class LocationWriteService {
     }
 
     final batch = _firestore.batch();
+    try {
 
     for (final update in parentGridUpdates) {
       final ref = _firestore.collection('locations').doc(update.parentId);
@@ -604,6 +605,9 @@ class LocationWriteService {
     }
 
     await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'location_write_service.commit');
+    } finally {
+      FirebaseActivityWriteScope.cancelBatch(batch);
+    }
     debugPrint(
       'deleteLocations area=$area ids=${ids.length} reservations=${slotReservationDeletes.length}',
     );

@@ -23,7 +23,35 @@ enum FirebaseActivityKind {
   initialization,
 }
 
-enum FirebaseActivityPhase { started, received, completed, failed }
+enum FirebaseActivityPhase {
+  started,
+  received,
+  completed,
+  failed,
+  cancelled,
+  outcomeUnknown,
+}
+
+enum FirebaseActivityStage {
+  preparing,
+  submitting,
+  attempting,
+  retrying,
+  callerTimedOut,
+  stalePreparation,
+}
+
+enum FirebaseActionOutcome {
+  running,
+  completed,
+  completedWithWarnings,
+  partial,
+  failed,
+  skipped,
+  cancelled,
+}
+
+enum FirebaseActivityCallState { notInvoked, sdkFutureReturned }
 
 @immutable
 class FirebaseActivityEvent {
@@ -35,11 +63,18 @@ class FirebaseActivityEvent {
     required this.source,
     this.operationId,
     this.parentOperationId,
+    this.actionId,
+    this.actionName,
+    this.counterBefore,
+    this.counterAfter,
+    this.stage,
     this.durationMs,
     this.documents,
     this.fromCache,
     this.pendingWrites,
     this.errorCode,
+    this.callState,
+    this.outcomeBasis,
     this.setCommands = 0,
     this.createCommands = 0,
     this.updateCommands = 0,
@@ -57,11 +92,20 @@ class FirebaseActivityEvent {
   final String source;
   final int? operationId;
   final int? parentOperationId;
+  final int? actionId;
+  final String? actionName;
+  final int? counterBefore;
+  final int? counterAfter;
+  bool get increasedCounter =>
+      counterBefore != null && counterAfter != null && counterAfter! > counterBefore!;
+  final FirebaseActivityStage? stage;
   final int? durationMs;
   final int? documents;
   final bool? fromCache;
   final bool? pendingWrites;
   final String? errorCode;
+  final FirebaseActivityCallState? callState;
+  final String? outcomeBasis;
   final int setCommands;
   final int createCommands;
   final int updateCommands;
@@ -73,6 +117,37 @@ class FirebaseActivityEvent {
 
   int get documentCommands =>
       setCommands + createCommands + updateCommands + deleteCommands;
+
+  FirebaseActivityEvent withCallState(FirebaseActivityCallState value) =>
+      FirebaseActivityEvent(
+        sequence: sequence,
+        timestamp: timestamp,
+        kind: kind,
+        phase: phase,
+        source: source,
+        operationId: operationId,
+        parentOperationId: parentOperationId,
+        actionId: actionId,
+        actionName: actionName,
+        counterBefore: counterBefore,
+        counterAfter: counterAfter,
+        stage: stage,
+        durationMs: durationMs,
+        documents: documents,
+        fromCache: fromCache,
+        pendingWrites: pendingWrites,
+        errorCode: errorCode,
+        callState: value,
+        outcomeBasis: outcomeBasis,
+        setCommands: setCommands,
+        createCommands: createCommands,
+        updateCommands: updateCommands,
+        deleteCommands: deleteCommands,
+        attempts: attempts,
+        added: added,
+        modified: modified,
+        removed: removed,
+      );
 
   bool matchesStatusFilter(
     String filter, {
@@ -89,6 +164,10 @@ class FirebaseActivityEvent {
         return phase == FirebaseActivityPhase.received;
       case 'failed':
         return phase == FirebaseActivityPhase.failed;
+      case 'cancelled':
+        return phase == FirebaseActivityPhase.cancelled;
+      case 'unknown':
+        return phase == FirebaseActivityPhase.outcomeUnknown;
       default:
         return false;
     }
@@ -134,8 +213,13 @@ class FirebaseActivityEvent {
         kind.name,
         phase.name,
         'source=$source',
+        'sequence=$sequence',
+        if (actionId != null) 'actionId=$actionId',
+        if (actionName != null) 'action=$actionName',
+        if (increasedCounter) 'counter=$counterBefore->$counterAfter',
         if (operationId != null) 'operationId=$operationId',
         if (parentOperationId != null) 'parentId=$parentOperationId',
+        if (stage != null) 'stage=${stage!.name}',
         if (durationMs != null) 'elapsedMs=$durationMs',
         if (documents != null) 'resultDocuments=$documents',
         if (documentCommands > 0)
@@ -145,7 +229,58 @@ class FirebaseActivityEvent {
           'changes=added:$added,modified:$modified,removed:$removed',
         if (fromCache != null) 'fromCache=$fromCache',
         if (pendingWrites != null) 'pendingWrites=$pendingWrites',
+        if (callState != null) 'sdkCall=${callState!.name}',
+        if (outcomeBasis != null) 'outcomeBasis=$outcomeBasis',
         if (errorCode != null) 'error=$errorCode',
+      ].join(' ');
+}
+
+@immutable
+class FirebaseActivityAction {
+  const FirebaseActivityAction({
+    required this.id,
+    required this.name,
+    required this.startedAt,
+    this.finishedAt,
+    this.outcome = FirebaseActionOutcome.running,
+    this.errorCode,
+    this.issueCodes = const <String>[],
+  });
+
+  final int id;
+  final String name;
+  final DateTime startedAt;
+  final DateTime? finishedAt;
+  final FirebaseActionOutcome outcome;
+  final String? errorCode;
+  final List<String> issueCodes;
+
+  bool get running => outcome == FirebaseActionOutcome.running;
+
+  bool? get succeeded => running
+      ? null
+      : outcome == FirebaseActionOutcome.completed ||
+          outcome == FirebaseActionOutcome.completedWithWarnings;
+
+  String get outcomeLabel => switch (outcome) {
+        FirebaseActionOutcome.running => '진행 중',
+        FirebaseActionOutcome.completed => '완료',
+        FirebaseActionOutcome.completedWithWarnings => '완료·주의',
+        FirebaseActionOutcome.partial => '부분 성공',
+        FirebaseActionOutcome.failed => '실패',
+        FirebaseActionOutcome.skipped => '실행 생략',
+        FirebaseActionOutcome.cancelled => '취소',
+      };
+
+  String get debugLine => <String>[
+        '[FIREBASE_ACTION]',
+        'actionId=$id',
+        'action=$name',
+        'startedAt=${startedAt.toIso8601String()}',
+        if (finishedAt != null) 'finishedAt=${finishedAt!.toIso8601String()}',
+        'state=${outcome.name}',
+        if (errorCode != null) 'error=$errorCode',
+        if (issueCodes.isNotEmpty) 'issues=${issueCodes.join(',')}',
       ].join(' ');
 }
 
@@ -154,21 +289,36 @@ class FirebaseActivityMonitor extends ChangeNotifier {
 
   static final FirebaseActivityMonitor instance = FirebaseActivityMonitor._();
   static final Object _parentOperationKey = Object();
+  static final Object _actionKey = Object();
+  static const int maxCounterIncrements = 1000;
+  static const int maxActions = 200;
   static final Object _transactionScopeKey = Object();
+  static final Object _transactionOperationKey = Object();
   static const int maxEvents = 200;
   static const Duration idleDelay = Duration(milliseconds: 1500);
 
   final Queue<FirebaseActivityEvent> _events = Queue<FirebaseActivityEvent>();
+  final Queue<FirebaseActivityEvent> _counterIncrements =
+      Queue<FirebaseActivityEvent>();
+  final Queue<FirebaseActivityAction> _actions = Queue<FirebaseActivityAction>();
+  final Map<int, FirebaseActivityAction> _activeActions =
+      <int, FirebaseActivityAction>{};
+  final Map<int, int> _operationActionIds = <int, int>{};
+  final Map<int, FirebaseActionOutcome> _actionOutcomes =
+      <int, FirebaseActionOutcome>{};
+  final Map<int, List<String>> _actionIssues = <int, List<String>>{};
   final Map<int, FirebaseActivityEvent> _running =
       <int, FirebaseActivityEvent>{};
   final Set<int> _finished = <int>{};
   final Queue<int> _finishedOrder = Queue<int>();
+  final Map<int, Timer> _preparationTimers = <int, Timer>{};
   final Map<FirebaseActivityKind, int> _completed =
       <FirebaseActivityKind, int>{};
   FirebaseActivityEvent? _latest;
   Timer? _refreshTimer;
   Timer? _idleTimer;
   int _sequence = 0;
+  int _actionSequence = 0;
   int _operationSequence = 0;
   int _snapshotReceivedCount = 0;
   int _cachedSnapshotCount = 0;
@@ -177,12 +327,16 @@ class FirebaseActivityMonitor extends ChangeNotifier {
   int _snapshotModifiedCount = 0;
   int _snapshotRemovedCount = 0;
   int _failedEventCount = 0;
+  int _unknownOutcomeCount = 0;
+  int _abandonedBatchCount = 0;
+  int _stalePreparationCount = 0;
   int _setCommandCount = 0;
   int _createCommandCount = 0;
   int _updateCommandCount = 0;
   int _deleteCommandCount = 0;
   int _topLevelCompletedCount = 0;
   int _nestedCompletedCount = 0;
+  int _firestoreOperationCount = 0;
   int _readResultDocumentCount = 0;
   int _cacheReadResponseCount = 0;
   bool _started = false;
@@ -196,8 +350,23 @@ class FirebaseActivityMonitor extends ChangeNotifier {
   int get activeOperationCount => _running.length;
   bool isOperationRunning(int? operationId) =>
       operationId != null && _running.containsKey(operationId);
+  FirebaseActivityEvent? runningEventFor(int? operationId) =>
+      operationId == null ? null : _running[operationId];
   int get snapshotCount => _snapshotReceivedCount;
   int get failureCount => _failedEventCount;
+  int get unknownOutcomeCount => _unknownOutcomeCount;
+  int get abandonedBatchCount => _abandonedBatchCount;
+  int get stalePreparationCount => _stalePreparationCount;
+  List<FirebaseActivityEvent> get topLevelRunningOperations =>
+      List<FirebaseActivityEvent>.unmodifiable(
+        _running.values.where((event) => event.parentOperationId == null),
+      );
+  List<FirebaseActivityEvent> get nestedRunningOperations =>
+      List<FirebaseActivityEvent>.unmodifiable(
+        _running.values.where((event) => event.parentOperationId != null),
+      );
+  int get topLevelActiveOperationCount => topLevelRunningOperations.length;
+  int get nestedActiveOperationCount => nestedRunningOperations.length;
   int get cacheSnapshotCount => _cachedSnapshotCount;
   int get localSnapshotCount => _localSnapshotCount;
   int get setCount => _setCommandCount;
@@ -215,17 +384,158 @@ class FirebaseActivityMonitor extends ChangeNotifier {
   int get cacheReadResponseCount => _cacheReadResponseCount;
   int get totalActivityCount =>
       _topLevelCompletedCount + _snapshotReceivedCount;
+  int get firestoreOperationCount => _firestoreOperationCount;
   int get snapshotAddedCount => _snapshotAddedCount;
   int get snapshotModifiedCount => _snapshotModifiedCount;
   int get snapshotRemovedCount => _snapshotRemovedCount;
   List<FirebaseActivityEvent> get events =>
       List<FirebaseActivityEvent>.unmodifiable(_events);
+  List<FirebaseActivityEvent> get counterIncrements =>
+      List<FirebaseActivityEvent>.unmodifiable(_counterIncrements);
+  List<FirebaseActivityAction> get actions =>
+      List<FirebaseActivityAction>.unmodifiable(_actions);
+  int get omittedCounterIncrements =>
+      firestoreOperationCount - _counterIncrements.length;
   List<FirebaseActivityEvent> get runningOperations =>
       List<FirebaseActivityEvent>.unmodifiable(_running.values);
+
+  static Future<T> runAction<T>(
+    String name,
+    Future<T> Function() execute,
+  ) async {
+    final monitor = instance;
+    final safeName = _safeActionName(name);
+    final id = ++monitor._actionSequence;
+    final startedAt = DateTime.now();
+    final action = FirebaseActivityAction(
+      id: id,
+      name: safeName,
+      startedAt: startedAt,
+    );
+    monitor._activeActions[id] = action;
+    monitor._actions.addLast(action);
+    while (monitor._actions.length > maxActions) {
+      monitor._actions.removeFirst();
+    }
+    monitor._printAction(action);
+    monitor._requestRefresh();
+    try {
+      final result = await runZoned<Future<T>>(
+        execute,
+        zoneValues: <Object, Object>{_actionKey: id},
+      );
+      final marked = monitor._actionOutcomes.remove(id);
+      final issues = monitor._actionIssues.remove(id) ?? <String>[];
+      final outcome = marked ??
+          (result is bool && result == false
+              ? FirebaseActionOutcome.failed
+              : FirebaseActionOutcome.completed);
+      final normalized = result is bool && result == false &&
+              outcome == FirebaseActionOutcome.completed
+          ? FirebaseActionOutcome.failed
+          : outcome;
+      if (normalized == FirebaseActionOutcome.failed && issues.isEmpty) {
+        issues.add('action_rejected');
+      }
+      monitor._finishAction(
+        id,
+        safeName,
+        startedAt,
+        normalized,
+        issues,
+      );
+      return result;
+    } catch (error) {
+      final issues = monitor._actionIssues.remove(id) ?? <String>[];
+      monitor._actionOutcomes.remove(id);
+      final code = _safeError(error);
+      if (!issues.contains(code)) issues.add(code);
+      monitor._finishAction(
+        id,
+        safeName,
+        startedAt,
+        FirebaseActionOutcome.failed,
+        issues,
+      );
+      rethrow;
+    }
+  }
+
+  static void noteCurrentActionFailure(String errorCode) {
+    noteCurrentActionOutcome(FirebaseActionOutcome.failed, code: errorCode);
+  }
+
+  static void noteCurrentActionOutcome(
+    FirebaseActionOutcome outcome, {
+    String? code,
+  }) {
+    final id = Zone.current[_actionKey] as int?;
+    final monitor = instance;
+    if (id == null || !monitor._activeActions.containsKey(id)) return;
+    final previous = monitor._actionOutcomes[id];
+    const priority = <FirebaseActionOutcome, int>{
+      FirebaseActionOutcome.running: 0,
+      FirebaseActionOutcome.completed: 1,
+      FirebaseActionOutcome.skipped: 2,
+      FirebaseActionOutcome.cancelled: 3,
+      FirebaseActionOutcome.completedWithWarnings: 4,
+      FirebaseActionOutcome.partial: 5,
+      FirebaseActionOutcome.failed: 6,
+    };
+    if (previous == null || priority[outcome]! >= priority[previous]!) {
+      monitor._actionOutcomes[id] = outcome;
+    }
+    if (code != null && code.isNotEmpty) {
+      final safeCode = _safeSource(code);
+      final issues = monitor._actionIssues.putIfAbsent(id, () => <String>[]);
+      if (!issues.contains(safeCode) && issues.length < 20) {
+        issues.add(safeCode);
+      }
+    }
+  }
+
+  void _printAction(FirebaseActivityAction action) {
+    if (!DevAuth.devModeEnabled.value) return;
+    try {
+      debugPrint(action.debugLine);
+    } catch (_) {}
+  }
+
+  void _finishAction(
+    int id,
+    String name,
+    DateTime startedAt,
+    FirebaseActionOutcome outcome,
+    List<String> issues,
+  ) {
+    _activeActions.remove(id);
+    final safeIssues = List<String>.unmodifiable(issues);
+    final action = FirebaseActivityAction(
+      id: id,
+      name: name,
+      startedAt: startedAt,
+      finishedAt: DateTime.now(),
+      outcome: outcome,
+      errorCode: safeIssues.isEmpty ? null : safeIssues.first,
+      issueCodes: safeIssues,
+    );
+    final index = _actions.toList().indexWhere((item) => item.id == id);
+    if (index >= 0) {
+      final items = _actions.toList();
+      items[index] = action;
+      _actions
+        ..clear()
+        ..addAll(items);
+    }
+    _printAction(action);
+    _requestRefresh();
+  }
 
   void start() {
     if (_started) return;
     _started = true;
+    FirebaseActivityWriteScope.onBatchChanged = _batchChanged;
+    FirebaseActivityWriteScope.onBatchCancelled = _batchCancelled;
     emit(FirebaseActivityKind.initialization, FirebaseActivityPhase.received,
         source: 'app.start');
   }
@@ -258,17 +568,177 @@ class FirebaseActivityMonitor extends ChangeNotifier {
     });
   }
 
+  FirebaseActivityEvent _progressEvent(
+    FirebaseActivityEvent previous,
+    FirebaseActivityWriteCounts counts,
+    FirebaseActivityStage stage, {
+    String? source,
+  }) =>
+      FirebaseActivityEvent(
+        sequence: previous.sequence,
+        timestamp: previous.timestamp,
+        kind: previous.kind,
+        phase: FirebaseActivityPhase.started,
+        source: source == null ? previous.source : _safeSource(source),
+        operationId: previous.operationId,
+        parentOperationId: previous.parentOperationId,
+        actionId: previous.actionId,
+        actionName: previous.actionName,
+        counterBefore: previous.counterBefore,
+        counterAfter: previous.counterAfter,
+        stage: stage,
+        callState: previous.callState,
+        outcomeBasis: previous.outcomeBasis,
+        setCommands: counts.sets,
+        createCommands: counts.creates,
+        updateCommands: counts.updates,
+        deleteCommands: counts.deletes,
+        attempts: counts.attempts,
+      );
+
+  void _publishProgress(
+    int? operationId,
+    FirebaseActivityWriteCounts counts,
+    FirebaseActivityStage stage, {
+    String? source,
+  }) {
+    if (operationId == null) return;
+    final previous = _running[operationId];
+    if (previous == null) return;
+    final updated = _progressEvent(previous, counts, stage, source: source);
+    _running[operationId] = updated;
+    _latest = updated;
+    _isIdle = false;
+    _idleTimer?.cancel();
+    _idleTimer = null;
+    _requestRefresh();
+  }
+
+  void _markSdkFutureReturned(int operationId) {
+    final previous = _running[operationId];
+    if (previous == null) return;
+    final updated = previous.withCallState(
+      FirebaseActivityCallState.sdkFutureReturned,
+    );
+    _running[operationId] = updated;
+    _latest = updated;
+    _requestRefresh();
+  }
+
+  void _schedulePreparationExpiry(FirebaseActivityWriteCounts counts) {
+    final operationId = counts.operationId;
+    if (operationId == null) return;
+    _preparationTimers.remove(operationId)?.cancel();
+    _preparationTimers[operationId] = Timer(
+      const Duration(minutes: 2),
+      () {
+        _preparationTimers.remove(operationId);
+        if (counts.operationId != operationId ||
+            !_running.containsKey(operationId)) return;
+        counts.operationId = null;
+        emit(
+          FirebaseActivityKind.batch,
+          FirebaseActivityPhase.cancelled,
+          source: 'firestore.batch.preparation_stale',
+          operationId: operationId,
+          parentOperationId: counts.parentOperationId,
+          stage: FirebaseActivityStage.stalePreparation,
+          callState: FirebaseActivityCallState.notInvoked,
+          commands: counts,
+        );
+      },
+    );
+  }
+
+  void _batchChanged(FirebaseActivityWriteCounts counts) {
+    if (!counts.parentCaptured) {
+      counts.parentOperationId = Zone.current[_parentOperationKey] as int?;
+      counts.parentCaptured = true;
+    }
+    var operationId = counts.operationId;
+    if (operationId == null || !_running.containsKey(operationId)) {
+      operationId = ++_operationSequence;
+      counts.operationId = operationId;
+      emit(
+        FirebaseActivityKind.batch,
+        FirebaseActivityPhase.started,
+        source: 'firestore.batch.prepare',
+        operationId: operationId,
+        parentOperationId: counts.parentOperationId,
+        callState: FirebaseActivityCallState.notInvoked,
+        commands: counts,
+        stage: FirebaseActivityStage.preparing,
+      );
+    }
+    _publishProgress(
+      operationId,
+      counts,
+      FirebaseActivityStage.preparing,
+    );
+    _schedulePreparationExpiry(counts);
+  }
+
+  void noteCallerTimeout(Object batch) {
+    final counts = FirebaseActivityWriteScope.inspectBatch(batch);
+    final operationId = counts?.operationId;
+    if (operationId == null || counts == null) return;
+    final current = _running[operationId];
+    if (current == null || current.stage == FirebaseActivityStage.callerTimedOut) {
+      return;
+    }
+    _publishProgress(
+      operationId,
+      counts,
+      FirebaseActivityStage.callerTimedOut,
+      source: 'firestore.batch.caller_timeout',
+    );
+  }
+
+  static Future<T> observeCallerTimeout<T>(
+    Future<T> original, {
+    required Object batch,
+    required Duration timeout,
+  }) async {
+    try {
+      return await original.timeout(timeout);
+    } on TimeoutException {
+      instance.noteCallerTimeout(batch);
+      rethrow;
+    }
+  }
+
+  void _batchCancelled(FirebaseActivityWriteCounts counts) {
+    final operationId = counts.operationId;
+    if (operationId == null) return;
+    _preparationTimers.remove(operationId)?.cancel();
+    if (_running.containsKey(operationId)) {
+      emit(
+        FirebaseActivityKind.batch,
+        FirebaseActivityPhase.cancelled,
+        source: 'firestore.batch.unsubmitted',
+        operationId: operationId,
+        parentOperationId: counts.parentOperationId,
+        callState: FirebaseActivityCallState.notInvoked,
+        commands: counts,
+      );
+    }
+    counts.operationId = null;
+  }
+
   void emit(
     FirebaseActivityKind kind,
     FirebaseActivityPhase phase, {
     required String source,
     int? operationId,
     int? parentOperationId,
+    FirebaseActivityStage? stage,
     int? durationMs,
     int? documents,
     bool? fromCache,
     bool? pendingWrites,
     String? errorCode,
+    FirebaseActivityCallState? callState,
+    String? outcomeBasis,
     FirebaseActivityWriteCounts? commands,
     int added = 0,
     int modified = 0,
@@ -276,10 +746,34 @@ class FirebaseActivityMonitor extends ChangeNotifier {
   }) {
     if (!_started) start();
     if (operationId != null &&
-        phase != FirebaseActivityPhase.started &&
-        _finished.contains(operationId)) {
+        (_finished.contains(operationId) ||
+            (phase == FirebaseActivityPhase.started
+                ? _running.containsKey(operationId)
+                : !_running.containsKey(operationId)))) {
       return;
     }
+    final zoneActionId = Zone.current[_actionKey] as int?;
+    final currentActionId = zoneActionId != null &&
+            _activeActions.containsKey(zoneActionId)
+        ? zoneActionId
+        : null;
+    final actionId = currentActionId ??
+        (operationId == null ? null : _operationActionIds[operationId]);
+    final actionName = actionId == null
+        ? null
+        : _activeActions[actionId]?.name ??
+            _actions.where((item) => item.id == actionId)
+                .map((item) => item.name)
+                .firstOrNull;
+    if (operationId != null && actionId != null &&
+        phase == FirebaseActivityPhase.started) {
+      _operationActionIds[operationId] = actionId;
+    }
+    final counterBefore = firestoreOperationCount;
+    final increasesCounter =
+        phase == FirebaseActivityPhase.completed &&
+        parentOperationId == null &&
+        _isFirestoreKind(kind);
     final event = FirebaseActivityEvent(
       sequence: ++_sequence,
       timestamp: DateTime.now(),
@@ -288,11 +782,18 @@ class FirebaseActivityMonitor extends ChangeNotifier {
       source: _safeSource(source),
       operationId: operationId,
       parentOperationId: parentOperationId,
+      actionId: actionId,
+      actionName: actionName,
+      counterBefore: increasesCounter ? counterBefore : null,
+      counterAfter: increasesCounter ? counterBefore + 1 : null,
+      stage: stage,
       durationMs: durationMs,
       documents: documents,
       fromCache: fromCache,
       pendingWrites: pendingWrites,
       errorCode: errorCode,
+      callState: callState,
+      outcomeBasis: outcomeBasis,
       setCommands: commands?.sets ?? 0,
       createCommands: commands?.creates ?? 0,
       updateCommands: commands?.updates ?? 0,
@@ -303,6 +804,9 @@ class FirebaseActivityMonitor extends ChangeNotifier {
       removed: removed,
     );
     if (operationId != null) {
+      if (phase != FirebaseActivityPhase.started) {
+        _preparationTimers.remove(operationId)?.cancel();
+      }
       if (phase == FirebaseActivityPhase.started) {
         _running[operationId] = event;
       } else {
@@ -320,6 +824,9 @@ class FirebaseActivityMonitor extends ChangeNotifier {
         _topLevelCompletedCount++;
       } else {
         _nestedCompletedCount++;
+      }
+      if (increasesCounter) {
+        _firestoreOperationCount++;
       }
       if (kind == FirebaseActivityKind.read) {
         _readResultDocumentCount += event.documents ?? 0;
@@ -347,6 +854,24 @@ class FirebaseActivityMonitor extends ChangeNotifier {
       _snapshotRemovedCount += removed;
     }
     if (phase == FirebaseActivityPhase.failed) _failedEventCount++;
+    if (phase == FirebaseActivityPhase.outcomeUnknown) _unknownOutcomeCount++;
+    if (phase == FirebaseActivityPhase.cancelled) {
+      if (stage == FirebaseActivityStage.stalePreparation) {
+        _stalePreparationCount++;
+      } else {
+        _abandonedBatchCount++;
+      }
+    }
+    if (operationId != null && phase != FirebaseActivityPhase.started) {
+      _operationActionIds.remove(operationId);
+    }
+    if (increasesCounter) {
+      assert(firestoreOperationCount == counterBefore + 1);
+      _counterIncrements.addLast(event);
+      while (_counterIncrements.length > maxCounterIncrements) {
+        _counterIncrements.removeFirst();
+      }
+    }
     _events.addLast(event);
     while (_events.length > maxEvents) {
       _events.removeFirst();
@@ -354,13 +879,26 @@ class FirebaseActivityMonitor extends ChangeNotifier {
     _latest = event;
     _isIdle = false;
     _scheduleIdle();
-    if (DevAuth.devModeEnabled.value) debugPrint(event.debugLine);
+    if (DevAuth.devModeEnabled.value) {
+      try {
+        debugPrint(event.debugLine);
+      } catch (_) {}
+    }
     _requestRefresh();
   }
 
   static void beginTransactionAttempt() {
     final scope = Zone.current[_transactionScopeKey];
-    if (scope is FirebaseActivityWriteCounts) scope.resetAttempt();
+    if (scope is! FirebaseActivityWriteCounts) return;
+    scope.resetAttempt();
+    final operationId = Zone.current[_transactionOperationKey] as int?;
+    instance._publishProgress(
+      operationId,
+      scope,
+      scope.attempts > 1
+          ? FirebaseActivityStage.retrying
+          : FirebaseActivityStage.attempting,
+    );
   }
 
   static void transactionCommand(
@@ -369,7 +907,16 @@ class FirebaseActivityMonitor extends ChangeNotifier {
   ) {
     execute();
     final scope = Zone.current[_transactionScopeKey];
-    if (scope is FirebaseActivityWriteCounts) scope.add(kind);
+    if (scope is! FirebaseActivityWriteCounts) return;
+    scope.add(kind);
+    final operationId = Zone.current[_transactionOperationKey] as int?;
+    instance._publishProgress(
+      operationId,
+      scope,
+      scope.attempts > 1
+          ? FirebaseActivityStage.retrying
+          : FirebaseActivityStage.attempting,
+    );
   }
 
   static Future<T> track<T>(
@@ -379,25 +926,93 @@ class FirebaseActivityMonitor extends ChangeNotifier {
     Object? batch,
   }) async {
     final monitor = instance;
-    final operationId = ++monitor._operationSequence;
-    final parentOperationId = Zone.current[_parentOperationKey] as int?;
+    final batchCounts = kind == FirebaseActivityKind.batch
+        ? FirebaseActivityWriteScope.inspectBatch(batch)
+        : null;
+    final preparedId = batchCounts?.operationId;
+    final prepared = preparedId != null && monitor._running.containsKey(preparedId);
+    final operationId = prepared ? preparedId : ++monitor._operationSequence;
+    final parentOperationId = kind == FirebaseActivityKind.batch &&
+            batchCounts != null && batchCounts.parentCaptured
+        ? batchCounts.parentOperationId
+        : Zone.current[_parentOperationKey] as int?;
     final transactionScope = kind == FirebaseActivityKind.transaction
         ? FirebaseActivityWriteCounts()
         : null;
-    monitor.emit(kind, FirebaseActivityPhase.started,
-        source: source,
-        operationId: operationId,
-        parentOperationId: parentOperationId);
+    if (prepared && batchCounts != null) {
+      monitor._preparationTimers.remove(operationId)?.cancel();
+    } else {
+      monitor.emit(kind, FirebaseActivityPhase.started,
+          source: source,
+          operationId: operationId,
+          parentOperationId: parentOperationId,
+          callState: FirebaseActivityCallState.notInvoked,
+          commands: batchCounts,
+          stage: kind == FirebaseActivityKind.batch
+              ? FirebaseActivityStage.preparing
+              : kind == FirebaseActivityKind.transaction
+                  ? FirebaseActivityStage.attempting
+                  : null);
+    }
     final stopwatch = Stopwatch()..start();
+    var sdkFutureReturned = false;
+    late T result;
     try {
-      final result = await runZoned<Future<T>>(
+      final original = runZoned<Future<T>>(
         execute,
         zoneValues: <Object, Object>{
           _parentOperationKey: operationId,
           if (transactionScope != null) _transactionScopeKey: transactionScope,
+          if (transactionScope != null) _transactionOperationKey: operationId,
         },
       );
+      sdkFutureReturned = true;
+      if (kind == FirebaseActivityKind.batch) {
+        FirebaseActivityWriteScope.markSubmitted(batch);
+        if (batchCounts != null) {
+          try {
+            monitor._publishProgress(
+              operationId,
+              batchCounts,
+              FirebaseActivityStage.submitting,
+              source: source,
+            );
+          } catch (error) {
+            _diagnoseTelemetryFailure(error);
+          }
+        }
+      }
+      try {
+        monitor._markSdkFutureReturned(operationId);
+      } catch (error) {
+        _diagnoseTelemetryFailure(error);
+      }
+      result = await original;
+    } catch (error) {
       stopwatch.stop();
+      try {
+        final commands = kind == FirebaseActivityKind.batch
+            ? FirebaseActivityWriteScope.takeBatch(batch)
+            : transactionScope?.copy();
+        final phase = _classifyError(kind, error, sdkFutureReturned);
+        monitor.emit(kind, phase,
+            source: source,
+            operationId: operationId,
+            parentOperationId: parentOperationId,
+            durationMs: stopwatch.elapsedMilliseconds,
+            commands: commands,
+            callState: sdkFutureReturned
+                ? FirebaseActivityCallState.sdkFutureReturned
+                : FirebaseActivityCallState.notInvoked,
+            outcomeBasis: _outcomeBasis(kind, error, sdkFutureReturned, phase),
+            errorCode: _safeError(error));
+      } catch (observationError) {
+        _diagnoseTelemetryFailure(observationError);
+      }
+      rethrow;
+    }
+    stopwatch.stop();
+    try {
       final metadata = _snapshotMetadata(result);
       final commands = kind == FirebaseActivityKind.batch
           ? FirebaseActivityWriteScope.takeBatch(batch)
@@ -410,22 +1025,71 @@ class FirebaseActivityMonitor extends ChangeNotifier {
           documents: metadata.$1,
           fromCache: metadata.$2,
           pendingWrites: metadata.$3,
+          callState: FirebaseActivityCallState.sdkFutureReturned,
           commands: commands);
-      return result;
-    } catch (error) {
-      stopwatch.stop();
-      final commands = kind == FirebaseActivityKind.batch
-          ? FirebaseActivityWriteScope.takeBatch(batch)
-          : transactionScope?.copy();
-      monitor.emit(kind, FirebaseActivityPhase.failed,
-          source: source,
-          operationId: operationId,
-          parentOperationId: parentOperationId,
-          durationMs: stopwatch.elapsedMilliseconds,
-          commands: commands,
-          errorCode: _safeError(error));
-      rethrow;
+    } catch (observationError) {
+      _diagnoseTelemetryFailure(observationError);
     }
+    return result;
+  }
+
+  static bool _isWriteKind(FirebaseActivityKind kind) =>
+      kind == FirebaseActivityKind.write ||
+      kind == FirebaseActivityKind.set ||
+      kind == FirebaseActivityKind.create ||
+      kind == FirebaseActivityKind.update ||
+      kind == FirebaseActivityKind.delete ||
+      kind == FirebaseActivityKind.batch ||
+      kind == FirebaseActivityKind.transaction;
+
+  static const Set<String> _confirmedRejectionCodes = <String>{
+    'permission-denied',
+    'unauthenticated',
+    'invalid-argument',
+    'failed-precondition',
+    'already-exists',
+    'not-found',
+  };
+
+  static FirebaseActivityPhase _classifyError(
+    FirebaseActivityKind kind,
+    Object error,
+    bool sdkFutureReturned,
+  ) {
+    if (!_isWriteKind(kind)) return FirebaseActivityPhase.failed;
+    if (error is FirebaseException &&
+        _confirmedRejectionCodes.contains(error.code)) {
+      return FirebaseActivityPhase.failed;
+    }
+    if (!sdkFutureReturned && error is StateError) {
+      return FirebaseActivityPhase.failed;
+    }
+    return FirebaseActivityPhase.outcomeUnknown;
+  }
+
+  static String _outcomeBasis(
+    FirebaseActivityKind kind,
+    Object error,
+    bool sdkFutureReturned,
+    FirebaseActivityPhase phase,
+  ) {
+    if (!_isWriteKind(kind)) return 'non_write_error';
+    if (phase == FirebaseActivityPhase.failed) {
+      return sdkFutureReturned
+          ? 'sdk_confirmed_rejection'
+          : 'local_invocation_rejection';
+    }
+    if (!sdkFutureReturned) return 'sdk_future_not_returned';
+    if (error is TimeoutException) return 'sdk_timeout_unverified';
+    if (error is FirebaseException) return 'sdk_error_unverified';
+    return 'async_error_unverified';
+  }
+
+  static void _diagnoseTelemetryFailure(Object error) {
+    if (!DevAuth.devModeEnabled.value) return;
+    try {
+      debugPrint('[FIREBASE_ACTIVITY] telemetryFailure=${_safeSource(error.runtimeType.toString())}');
+    } catch (_) {}
   }
 
   static Stream<T> observe<T>(Stream<T> source, {required String origin}) {
@@ -486,6 +1150,11 @@ class FirebaseActivityMonitor extends ChangeNotifier {
     return (null, null, null);
   }
 
+  static String _safeActionName(String value) {
+    final safe = value.replaceAll(RegExp(r'[\r\n\t]'), ' ').trim();
+    return safe.length > 80 ? safe.substring(0, 80) : safe;
+  }
+
   static String _safeSource(String value) {
     final normalized = value.replaceAll(RegExp(r'[^a-zA-Z0-9_./:-]'), '_');
     return normalized.length > 120 ? normalized.substring(0, 120) : normalized;
@@ -497,6 +1166,18 @@ class FirebaseActivityMonitor extends ChangeNotifier {
     }
     return _safeSource(error.runtimeType.toString());
   }
+
+  static bool _isFirestoreKind(FirebaseActivityKind kind) => switch (kind) {
+        FirebaseActivityKind.read ||
+        FirebaseActivityKind.write ||
+        FirebaseActivityKind.set ||
+        FirebaseActivityKind.create ||
+        FirebaseActivityKind.update ||
+        FirebaseActivityKind.delete ||
+        FirebaseActivityKind.batch ||
+        FirebaseActivityKind.transaction => true,
+        _ => false,
+      };
 
   String debugPrintCodeForEvent(FirebaseActivityEvent event) =>
       'debugPrint(${jsonEncode(event.debugLine)});';
@@ -519,12 +1200,35 @@ class FirebaseActivityMonitor extends ChangeNotifier {
     ].join('\n');
   }
 
+  String debugPrintCodeForCounterIncrements(
+    Iterable<FirebaseActivityEvent> selected,
+  ) => <String>[
+        'debugPrint(${jsonEncode('[FIREBASE_COUNTER] scope=firestore current=$firestoreOperationCount '
+            'retained=${_counterIncrements.length} omitted=$omittedCounterIncrements')});',
+        ...selected.map(debugPrintCodeForEvent),
+      ].join('\n');
+
+  String debugPrintCodeForActions(Iterable<FirebaseActivityAction> selected) {
+    final actions = selected.toList(growable: false);
+    final ids = actions.map((item) => item.id).toSet();
+    final related = _events.where((event) => ids.contains(event.actionId)).toList()
+      ..sort((a, b) => a.sequence.compareTo(b.sequence));
+    return <String>[
+      ...actions.map((action) => 'debugPrint(${jsonEncode(action.debugLine)});'),
+      ...related.map(debugPrintCodeForEvent),
+    ].join('\n');
+  }
+
   String get debugPrintCode => debugPrintCodeFor(_events);
 
   String get summary =>
       '앱 시작 이후 상위 작업 완료 $_topLevelCompletedCount회 · '
       '내부 계측 완료 $_nestedCompletedCount회 · Snapshot $_snapshotReceivedCount회 · '
-      '상단 완료·수신 합계 $totalActivityCount회 · '
+      '상단 Firestore 완료 $firestoreOperationCount회 · '
+      '전체 상위 완료·Snapshot 수신 합계 $totalActivityCount회 · '
+      '초기화 완료 ${count(FirebaseActivityKind.initialization)}회 · '
+      '인증 완료 ${count(FirebaseActivityKind.authentication)}회 · '
+      'Storage 완료 ${count(FirebaseActivityKind.storage)}회 · '
       '읽기 호출 완료 ${count(FirebaseActivityKind.read)}회 · '
       '조회 결과 문서 수 $_readResultDocumentCount건(캐시 포함) · '
       'set/upsert 성공 $_setCommandCount건 · 생성 분류 성공 $_createCommandCount건 · '
@@ -533,16 +1237,25 @@ class FirebaseActivityMonitor extends ChangeNotifier {
       '종류 미분류 쓰기 완료 ${count(FirebaseActivityKind.write)}회 · '
       'Batch ${count(FirebaseActivityKind.batch)}회 · '
       'Transaction ${count(FirebaseActivityKind.transaction)}회 · '
-      '진행 중 $activeOperationCount건 · 실패 $_failedEventCount회\n'
+      '진행 중 $activeOperationCount건(상위 $topLevelActiveOperationCount, 내부 $nestedActiveOperationCount) · '
+      '실패 $_failedEventCount회 · 결과 미확정 $_unknownOutcomeCount회 · '
+      '미제출 중단 $_abandonedBatchCount회 · 준비 표시 만료 $_stalePreparationCount회\n'
       '최근 기록 ${_events.length}건 / 최대 $maxEvents건 · '
       'Snapshot에는 캐시 및 로컬 이벤트가 포함될 수 있습니다. '
       '미분류 쓰기 호출은 분류 가능 문서 명령 합계에서 제외됩니다. '
-      '완료·수신 합계는 실제 과금 건수나 청구 금액이 아닙니다.';
+      '커밋 응답이 불명확하면 결과 미확정으로 별도 집계합니다. '
+      'Firestore 완료 작업 수와 전체 완료·수신 합계는 실제 과금 건수나 청구 금액이 아닙니다.';
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
     _idleTimer?.cancel();
+    for (final timer in _preparationTimers.values) {
+      timer.cancel();
+    }
+    _preparationTimers.clear();
+    FirebaseActivityWriteScope.onBatchChanged = null;
+    FirebaseActivityWriteScope.onBatchCancelled = null;
     super.dispose();
   }
 }

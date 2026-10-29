@@ -155,7 +155,8 @@ class AppBootstrapper extends StatefulWidget {
 }
 
 class _AppBootstrapperState extends State<AppBootstrapper> {
-  late final Future<void> _initFuture = _initializeApp();
+  late final Future<void> _initFuture =
+      FirebaseActivityMonitor.runAction<void>('앱 실행', _initializeApp);
 
   @override
   Widget build(BuildContext context) {
@@ -230,6 +231,10 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
         unawaited(_diagnoseAppCheckTokenOnce());
       }
     } catch (error) {
+      FirebaseActivityMonitor.noteCurrentActionOutcome(
+        FirebaseActionOutcome.completedWithWarnings,
+        code: 'APP_CHECK_ACTIVATION_FAILED',
+      );
       SecureAuthDiagnostics.record(
         '[APP_CHECK][${_ts()}] activation_failed type=${error.runtimeType}',
       );
@@ -246,6 +251,10 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime done uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}',
       );
     } catch (e, st) {
+      FirebaseActivityMonitor.noteCurrentActionOutcome(
+        FirebaseActionOutcome.completedWithWarnings,
+        code: 'FIREBASE_AUTH_CONFIGURE_FAILED',
+      );
       SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime failed: $e\n$st',
       );
@@ -258,6 +267,10 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
       );
       SecureAuthDiagnostics.record('[MAIN][${_ts()}] GoogleAuthSession.init done');
     } catch (e, st) {
+      FirebaseActivityMonitor.noteCurrentActionOutcome(
+        FirebaseActionOutcome.completedWithWarnings,
+        code: 'GOOGLE_SESSION_INIT_FAILED',
+      );
       SecureAuthDiagnostics.record('[MAIN][${_ts()}] GoogleAuthSession.init failed: $e\n$st');
     }
 
@@ -279,6 +292,10 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser done ok=$ok uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}',
       );
     } catch (e, st) {
+      FirebaseActivityMonitor.noteCurrentActionOutcome(
+        FirebaseActionOutcome.completedWithWarnings,
+        code: 'GOOGLE_BOOTSTRAP_FAILED',
+      );
       SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser failed: $e\n$st',
       );

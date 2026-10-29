@@ -4,14 +4,15 @@ import 'package:flutter/material.dart';
 
 import '../../features/selector/application/dev_auth.dart';
 import 'firebase_activity_monitor.dart';
-import 'firebase_activity_status_dialog.dart';
 
 class FirebaseActivityOverlay extends StatelessWidget {
   const FirebaseActivityOverlay({super.key});
 
   Color _color(FirebaseActivityEvent? event, int running) {
     if (event == null && running == 0) return const Color(0xFF8A98A8);
-    if (event?.phase == FirebaseActivityPhase.failed) {
+    if (event?.phase == FirebaseActivityPhase.failed ||
+        event?.phase == FirebaseActivityPhase.outcomeUnknown ||
+        event?.stage == FirebaseActivityStage.callerTimedOut) {
       return const Color(0xFFE65D67);
     }
     if (running > 1) return const Color(0xFF36B6B2);
@@ -42,7 +43,11 @@ class FirebaseActivityOverlay extends StatelessWidget {
 
   IconData _icon(FirebaseActivityEvent? event, int running) {
     if (event == null && running == 0) return Icons.circle_outlined;
-    if (event?.phase == FirebaseActivityPhase.failed) return Icons.error_outline;
+    if (event?.phase == FirebaseActivityPhase.failed ||
+        event?.phase == FirebaseActivityPhase.outcomeUnknown ||
+        event?.stage == FirebaseActivityStage.callerTimedOut) {
+      return Icons.warning_amber_rounded;
+    }
     if (running > 1) return Icons.multiple_stop_rounded;
     switch (event?.kind) {
       case FirebaseActivityKind.read:
@@ -82,21 +87,53 @@ class FirebaseActivityOverlay extends StatelessWidget {
       child: ValueListenableBuilder<bool>(
         valueListenable: DevAuth.devModeEnabled,
         builder: (context, developer, _) => IgnorePointer(
-          ignoring: !developer,
+          ignoring: true,
           child: AnimatedBuilder(
             animation: monitor,
             builder: (context, _) {
-              final event = monitor.visibleEvent;
               final running = monitor.activeOperationCount;
+              final topRunning = monitor.topLevelRunningOperations;
+              final nestedRunning = monitor.nestedRunningOperations;
+              final focus = topRunning.length == 1
+                  ? topRunning.first
+                  : topRunning.isEmpty && nestedRunning.length == 1
+                      ? nestedRunning.first
+                      : null;
+              final event = focus ?? monitor.visibleEvent;
+              final primaryRunning = topRunning.isNotEmpty
+                  ? topRunning.length
+                  : nestedRunning.length;
               final idle = monitor.isIdle && running == 0;
-              final color = _color(event, running);
-              final count = monitor.totalActivityCount;
-              return GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: developer
-                    ? () => FirebaseActivityStatusDialog.show(context)
-                    : null,
-                child: AnimatedContainer(
+              final color = _color(event, primaryRunning);
+              final count = monitor.firestoreOperationCount;
+              final stage = event?.stage;
+              final String activityLabel;
+              if (primaryRunning > 1) {
+                activityLabel = topRunning.isNotEmpty
+                    ? '동시 $primaryRunning'
+                    : '내부 동시 $primaryRunning';
+              } else if (primaryRunning == 1) {
+                switch (stage) {
+                  case FirebaseActivityStage.preparing:
+                    activityLabel = '준비 ${event?.documentCommands ?? 0}';
+                  case FirebaseActivityStage.submitting:
+                    activityLabel = '제출 ${event?.documentCommands ?? 0}';
+                  case FirebaseActivityStage.retrying:
+                    activityLabel = '재시도 ${event?.attempts ?? 0}';
+                  case FirebaseActivityStage.callerTimedOut:
+                    activityLabel = '응답 대기';
+                  case FirebaseActivityStage.stalePreparation:
+                    activityLabel = '준비 만료';
+                  case FirebaseActivityStage.attempting:
+                  case null:
+                    activityLabel = topRunning.isNotEmpty
+                        ? '진행 $primaryRunning'
+                        : '내부 $primaryRunning';
+                }
+              } else {
+                activityLabel = idle ? '대기' : '활동';
+              }
+              return AnimatedContainer(
                   duration: duration,
                   curve: Curves.easeOutCubic,
                   constraints: const BoxConstraints(minWidth: 96, minHeight: 38),
@@ -122,9 +159,9 @@ class FirebaseActivityOverlay extends StatelessWidget {
                       AnimatedSwitcher(
                         duration: duration,
                         child: Icon(
-                          _icon(event, running),
+                          _icon(event, primaryRunning),
                           key: ValueKey<String>(
-                              '${idle ? 'idle' : 'active'}_${event?.sequence ?? 0}_${running > 1}'),
+                              '${idle ? 'idle' : 'active'}_${event?.sequence ?? 0}_${primaryRunning > 1}'),
                           color: color,
                           size: 19,
                         ),
@@ -151,19 +188,31 @@ class FirebaseActivityOverlay extends StatelessWidget {
                               ),
                             ),
                           ),
-                          Text(
-                            running > 0 ? '진행 $running' : idle ? '대기' : '활동',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: color,
-                              fontWeight: FontWeight.w600,
+                          AnimatedSwitcher(
+                            duration: duration,
+                            transitionBuilder: (child, animation) =>
+                                FadeTransition(
+                              opacity: animation,
+                              child: ScaleTransition(
+                                scale: Tween<double>(begin: 0.96, end: 1)
+                                    .animate(animation),
+                                child: child,
+                              ),
+                            ),
+                            child: Text(
+                              activityLabel,
+                              key: ValueKey<String>(activityLabel),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: color,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ],
                   ),
-                ),
               );
             },
           ),

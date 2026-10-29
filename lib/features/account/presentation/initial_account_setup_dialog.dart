@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../app/utils/status_dialog.dart';
+import '../../../app/firebase_activity/firebase_activity_monitor.dart';
 import '../../selector/application/dev_auth.dart';
 import '../data/services/company_bootstrap_service.dart';
 import '../data/services/account_initialization_guard.dart';
@@ -129,8 +130,20 @@ class _InitialAccountSetupDialogState extends State<InitialAccountSetupDialog> {
     );
   }
 
-  Future<void> _authorizeAndInspect() async {
-    if (_busy) return;
+  Future<void> _authorizeAndInspect() =>
+      FirebaseActivityMonitor.runAction<void>(
+        '최초 계정 설정 대상 확인',
+        _authorizeAndInspectCore,
+      );
+
+  Future<void> _authorizeAndInspectCore() async {
+    if (_busy) {
+      FirebaseActivityMonitor.noteCurrentActionOutcome(
+        FirebaseActionOutcome.skipped,
+        code: 'INITIAL_SETUP_BUSY',
+      );
+      return;
+    }
     _log.clear();
     setState(() => _busy = true);
     try {
@@ -150,7 +163,13 @@ class _InitialAccountSetupDialogState extends State<InitialAccountSetupDialog> {
       }
       final pending = preview.companies.map((company) => company.id).toSet()
         ..removeAll(completed);
-      if (!mounted) return;
+      if (!mounted) {
+        FirebaseActivityMonitor.noteCurrentActionOutcome(
+          FirebaseActionOutcome.cancelled,
+          code: 'INITIAL_SETUP_VIEW_DISPOSED',
+        );
+        return;
+      }
       setState(() {
         _preview = preview;
         _authorized = true;
@@ -165,6 +184,7 @@ class _InitialAccountSetupDialogState extends State<InitialAccountSetupDialog> {
           '${preview.areaIds.length}개(생성 예정 포함) · 완료 ${completed.length}개 · 남음 ${pending.length}개'
           ' · 동기화 필요 ${syncPending.length}개');
       if (preview.companies.isEmpty) {
+        FirebaseActivityMonitor.noteCurrentActionFailure('NO_ACTIVE_COMPANIES');
         await _showStatus(
           failure: true,
           title: '생성 대상 없음',
@@ -175,6 +195,7 @@ class _InitialAccountSetupDialogState extends State<InitialAccountSetupDialog> {
       _authorized = false;
       _preview = null;
       final code = _errorCode(error);
+      FirebaseActivityMonitor.noteCurrentActionFailure(code);
       _record('인증 및 대상 조회 실패: $code');
       await _showStatus(
         failure: true,
@@ -186,17 +207,29 @@ class _InitialAccountSetupDialogState extends State<InitialAccountSetupDialog> {
     }
   }
 
-  Future<void> _initialize() async {
+  Future<void> _initialize() => FirebaseActivityMonitor.runAction<void>(
+        '최초 계정 생성',
+        _initializeCore,
+      );
+
+  Future<void> _initializeCore() async {
     final preview = _preview;
     final targets = _retryCompanyIds;
     if (_busy || !_authorized || preview == null || preview.pending == 0 ||
         (targets != null && targets.isEmpty)) {
+      FirebaseActivityMonitor.noteCurrentActionOutcome(
+        FirebaseActionOutcome.skipped,
+        code: 'INITIAL_SETUP_NOT_READY',
+      );
       return;
     }
     if ((targets == null
             ? preview.companies.any((company) => company.id == 'belivus')
             : targets.contains('belivus')) &&
         _password.text.trim().isEmpty) {
+      FirebaseActivityMonitor.noteCurrentActionFailure(
+        'INITIAL_ADMIN_PASSWORD_REQUIRED',
+      );
       _record('belivus 최초 관리자 비밀번호가 비어 있습니다.');
       await _showStatus(
         failure: true,
@@ -254,15 +287,34 @@ class _InitialAccountSetupDialogState extends State<InitialAccountSetupDialog> {
           '미시도=${result.pendingCompanyIds.length} 활성=$activeTotal '
           '등록대기=$pendingTotal');
       if (result.succeeded) {
+        if (result.syncPending) {
+          FirebaseActivityMonitor.noteCurrentActionOutcome(
+            FirebaseActionOutcome.completedWithWarnings,
+            code: result.syncFailureCode ?? 'ACCESS_SYNC_PENDING',
+          );
+        }
         await _showStatus(
           failure: false,
           title: '본사 및 최초 계정 생성 완료',
           message: '완료 ${_completedCompanyIds.length}개 회사 · '
-              '활성 $activeTotal개 · 등록 대기 $pendingTotal개',
+              '활성 $activeTotal개 · 등록 대기 $pendingTotal개'
+              '${result.syncPending ? ' · 접근 목록 재동기화 필요' : ''}',
         );
         if (mounted) Navigator.of(context).pop();
       } else {
         final code = result.failureCode ?? 'INITIAL_SETUP_FAILED';
+        FirebaseActivityMonitor.noteCurrentActionOutcome(
+          result.newlyCreatedCompanyIds.isNotEmpty
+              ? FirebaseActionOutcome.partial
+              : FirebaseActionOutcome.failed,
+          code: code,
+        );
+        if (result.syncPending) {
+          FirebaseActivityMonitor.noteCurrentActionOutcome(
+            FirebaseActionOutcome.completedWithWarnings,
+            code: result.syncFailureCode ?? 'ACCESS_SYNC_PENDING',
+          );
+        }
         await _showStatus(
           failure: true,
           title: _completedCompanyIds.isEmpty ? '최초 계정 생성 실패' : '일부 회사 생성 완료',
@@ -275,6 +327,7 @@ class _InitialAccountSetupDialogState extends State<InitialAccountSetupDialog> {
       }
     } catch (error) {
       final code = _errorCode(error);
+      FirebaseActivityMonitor.noteCurrentActionFailure(code);
       _record('최초 계정 생성 실패: $code');
       if (mounted && _retryCompanyIds == null) {
         setState(() {

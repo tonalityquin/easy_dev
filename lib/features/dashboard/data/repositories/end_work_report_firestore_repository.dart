@@ -386,10 +386,14 @@ class EndWorkReportFirestoreRepository {
     for (var offset = 0; offset < plateDocIds.length; offset += chunkSize) {
       final end = (offset + chunkSize).clamp(0, plateDocIds.length).toInt();
       final batch = _firestore.batch();
+      try {
       for (final id in plateDocIds.sublist(offset, end)) {
         FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.delete, () => batch.delete(_firestore.collection('plates').doc(id)));
       }
       await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'end_work_report_firestore_repository.commit');
+      } finally {
+        FirebaseActivityWriteScope.cancelBatch(batch);
+      }
     }
 
     final countersRef = _firestore.collection('plate_counters').doc('area_$area');

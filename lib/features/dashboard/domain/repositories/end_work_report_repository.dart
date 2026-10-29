@@ -87,9 +87,13 @@ class EndWorkReportRepository {
     };
 
     final batch = _firestore.batch();
+    try {
     FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(areaRef, areaMetaPayload, SetOptions(merge: true)));
     FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(monthRef, monthPayload, SetOptions(merge: true)));
     await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'end_work_report_repository.commit');
+    } finally {
+      FirebaseActivityWriteScope.cancelBatch(batch);
+    }
 
     return EndWorkReportWriteResult(
       area: area,

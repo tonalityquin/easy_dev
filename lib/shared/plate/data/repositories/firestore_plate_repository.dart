@@ -1691,12 +1691,13 @@ class FirestorePlateRepository implements PlateRepository {
           .timeout(const Duration(seconds: 30));
 
       WriteBatch batch = _firestore.batch();
+      try {
       var pendingWrites = 0;
       var deletedViewCount = 0;
 
       Future<void> commitIfFull() async {
         if (pendingWrites < 450) return;
-        await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'firestore_plate_repository.commit').timeout(const Duration(seconds: 30));
+        await FirebaseActivityMonitor.observeCallerTimeout(FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'firestore_plate_repository.commit'), batch: batch, timeout: const Duration(seconds: 30));
         batch = _firestore.batch();
         pendingWrites = 0;
       }
@@ -1724,7 +1725,7 @@ class FirestorePlateRepository implements PlateRepository {
       }
 
       if (pendingWrites > 0) {
-        await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'firestore_plate_repository.commit').timeout(const Duration(seconds: 30));
+        await FirebaseActivityMonitor.observeCallerTimeout(FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'firestore_plate_repository.commit'), batch: batch, timeout: const Duration(seconds: 30));
       }
 
       return MonthlyPlateViewRebuildResult(
@@ -1733,6 +1734,9 @@ class FirestorePlateRepository implements PlateRepository {
         skippedCount: skippedCount,
         deletedViewCount: deletedViewCount,
       );
+      } finally {
+        FirebaseActivityWriteScope.cancelBatch(batch);
+      }
     } on FirebaseException catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.rebuildAllMonthlyPlateStatusViews',

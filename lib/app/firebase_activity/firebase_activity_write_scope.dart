@@ -1,3 +1,7 @@
+import 'package:flutter/foundation.dart';
+
+import '../../features/selector/application/dev_auth.dart';
+
 enum FirebaseActivityDocumentCommand { set, create, update, delete }
 
 class FirebaseActivityWriteCounts {
@@ -6,6 +10,10 @@ class FirebaseActivityWriteCounts {
   int updates = 0;
   int deletes = 0;
   int attempts = 0;
+  int? operationId;
+  int? parentOperationId;
+  bool parentCaptured = false;
+  bool submitted = false;
 
   int get total => sets + creates + updates + deletes;
 
@@ -35,7 +43,11 @@ class FirebaseActivityWriteCounts {
     ..creates = creates
     ..updates = updates
     ..deletes = deletes
-    ..attempts = attempts;
+    ..attempts = attempts
+    ..operationId = operationId
+    ..parentOperationId = parentOperationId
+    ..parentCaptured = parentCaptured
+    ..submitted = submitted;
 }
 
 class FirebaseActivityWriteScope {
@@ -43,16 +55,55 @@ class FirebaseActivityWriteScope {
 
   static final Expando<FirebaseActivityWriteCounts> _batches =
       Expando<FirebaseActivityWriteCounts>('firebase_activity_batch');
+  static void Function(FirebaseActivityWriteCounts counts)? onBatchChanged;
+  static void Function(FirebaseActivityWriteCounts counts)? onBatchCancelled;
+
+  static FirebaseActivityWriteCounts? inspectBatch(Object? batch) =>
+      batch == null ? null : _batches[batch];
 
   static void batchCommand(
     Object batch,
     FirebaseActivityDocumentCommand kind,
     void Function() execute,
   ) {
-    execute();
     final counts = _batches[batch] ?? FirebaseActivityWriteCounts();
+    if (counts.submitted) {
+      throw StateError('firebase_batch_already_submitted');
+    }
+    execute();
     counts.add(kind);
     _batches[batch] = counts;
+    _notifyObserver(onBatchChanged, counts);
+  }
+
+  static void cancelBatch(Object batch) {
+    final counts = _batches[batch];
+    if (counts == null || counts.submitted) return;
+    _batches[batch] = null;
+    _notifyObserver(onBatchCancelled, counts);
+  }
+
+  static void _notifyObserver(
+    void Function(FirebaseActivityWriteCounts counts)? observer,
+    FirebaseActivityWriteCounts counts,
+  ) {
+    if (observer == null) return;
+    try {
+      observer(counts);
+    } catch (error) {
+      if (DevAuth.devModeEnabled.value) {
+        try {
+          debugPrint('[FIREBASE_ACTIVITY] observerFailure=${error.runtimeType}');
+        } catch (_) {}
+      }
+    }
+  }
+
+  static void markSubmitted(Object? batch) {
+    if (batch == null) return;
+    final counts = _batches[batch];
+    if (counts == null) return;
+    counts.submitted = true;
   }
 
   static FirebaseActivityWriteCounts? takeBatch(Object? batch) {

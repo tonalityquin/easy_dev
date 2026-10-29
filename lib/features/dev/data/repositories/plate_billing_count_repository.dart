@@ -35,18 +35,37 @@ class PlateBillingCountRepository {
     await FirebaseActivityMonitor.track(FirebaseActivityKind.delete, () => _collection.doc(id).delete(), source: 'plate_billing_count_repository.delete');
   }
 
-  Future<int> deleteMonth(String month) async {
+  Future<int> deleteMonth(
+    String month, {
+    void Function(int completed, int total)? onProgress,
+  }) async {
     final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _collection.where('month', isEqualTo: month).get(), source: 'plate_billing_count_repository.get');
     if (snapshot.docs.isEmpty) return 0;
     var deleted = 0;
     for (var i = 0; i < snapshot.docs.length; i += 450) {
       final batch = _firestore.batch();
-      final end = i + 450 > snapshot.docs.length ? snapshot.docs.length : i + 450;
-      for (final doc in snapshot.docs.sublist(i, end)) {
-        FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.delete, () => batch.delete(doc.reference));
+      final int end = i + 450 > snapshot.docs.length
+          ? snapshot.docs.length
+          : i + 450;
+      try {
+        for (final doc in snapshot.docs.sublist(i, end)) {
+          FirebaseActivityWriteScope.batchCommand(
+            batch,
+            FirebaseActivityDocumentCommand.delete,
+            () => batch.delete(doc.reference),
+          );
+        }
+        await FirebaseActivityMonitor.track(
+          FirebaseActivityKind.batch,
+          () => batch.commit(),
+          batch: batch,
+          source: 'plate_billing_count_repository.commit',
+        );
+      } finally {
+        FirebaseActivityWriteScope.cancelBatch(batch);
       }
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'plate_billing_count_repository.commit');
       deleted += end - i;
+      onProgress?.call(deleted, snapshot.docs.length);
     }
     return deleted;
   }

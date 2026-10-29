@@ -119,6 +119,7 @@ class SectorWriteService {
         }
 
         final batch = _firestore.batch();
+        try {
         FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(targetReference, <String, dynamic>{
           'area': normalizedArea,
           'name': sectorName,
@@ -128,6 +129,9 @@ class SectorWriteService {
         }));
         FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.delete, () => batch.delete(sourceReference));
         await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'sector_write_service.commit');
+        } finally {
+          FirebaseActivityWriteScope.cancelBatch(batch);
+        }
       }
 
       debugPrint(

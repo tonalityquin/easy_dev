@@ -72,6 +72,9 @@ class InitialAccountCreationResult {
     required this.failureCode,
     required this.activeCount,
     required this.registrationPendingCount,
+    this.syncPending = false,
+    this.syncFailureCode,
+    this.newlyCreatedCompanyIds = const <String>[],
   });
 
   final List<String> completedCompanyIds;
@@ -80,6 +83,9 @@ class InitialAccountCreationResult {
   final String? failureCode;
   final int activeCount;
   final int registrationPendingCount;
+  final bool syncPending;
+  final String? syncFailureCode;
+  final List<String> newlyCreatedCompanyIds;
 
   bool get succeeded => failedCompanyIds.isEmpty && pendingCompanyIds.isEmpty;
 }
@@ -796,6 +802,7 @@ class CompanyBootstrapService {
       throw StateError('INITIAL_SETUP_RETRY_TARGET_CHANGED');
     }
     final completed = <String>[];
+    final newlyCreated = <String>[];
     final failed = <String>[];
     final pending = <String>[];
     String? failureCode;
@@ -842,6 +849,7 @@ class CompanyBootstrapService {
           );
         }), source: 'company_bootstrap_service.runTransaction');
         completed.add(company.id);
+        newlyCreated.add(company.id);
         if (data['isActive'] == true) {
           activeCount++;
         } else {
@@ -873,11 +881,19 @@ class CompanyBootstrapService {
         }
       }
     }
+    var syncPending = false;
+    String? syncFailureCode;
     if (completed.isNotEmpty) {
       try {
         onProgress?.call('초기 관리자 접근 목록의 최신 카탈로그 버전을 동기화합니다.');
         await synchronizeInitialAdmins(onProgress: onProgress);
       } catch (error) {
+        syncPending = true;
+        syncFailureCode = error is FirebaseException
+            ? 'FIREBASE_${error.code.toUpperCase().replaceAll('-', '_')}'
+            : error is StateError
+                ? error.message.toString().split(':').first
+                : error.runtimeType.toString();
         onProgress?.call('계정 생성은 유지됐으며 접근 목록 재동기화가 필요합니다: ${error.runtimeType}');
       }
     }
@@ -888,6 +904,9 @@ class CompanyBootstrapService {
       failureCode: failureCode,
       activeCount: activeCount,
       registrationPendingCount: registrationPendingCount,
+      syncPending: syncPending,
+      syncFailureCode: syncFailureCode,
+      newlyCreatedCompanyIds: List<String>.unmodifiable(newlyCreated),
     );
   }
 

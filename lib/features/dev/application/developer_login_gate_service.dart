@@ -20,6 +20,9 @@ class DeveloperLoginGateService {
     }
 
     if (!DeveloperAccountAuthorization.isAuthorized) {
+      FirebaseActivityMonitor.noteCurrentActionFailure(
+        'DEVELOPER_GATE_IDENTITY_NOT_AUTHORIZED',
+      );
       _record('denied', source: source, reason: 'identity_not_authorized');
       DeveloperAccountAuthorization.clearSession(source: source);
       return false;
@@ -34,6 +37,9 @@ class DeveloperLoginGateService {
           document.data()?['enabled'] == true &&
           DeveloperAccountAuthorization.isAuthorized;
       if (!approved) {
+        FirebaseActivityMonitor.noteCurrentActionFailure(
+          'DEVELOPER_GATE_NOT_ENABLED',
+        );
         _record('denied', source: source, reason: 'server_not_enabled');
         DeveloperAccountAuthorization.clearSession(source: source);
         return false;
@@ -41,6 +47,9 @@ class DeveloperLoginGateService {
       _record('verified', source: source);
       return true;
     } catch (error) {
+      FirebaseActivityMonitor.noteCurrentActionFailure(
+        'DEVELOPER_GATE_READ_FAILED',
+      );
       _record('failed', source: source, reason: error.runtimeType.toString());
       DeveloperAccountAuthorization.clearSession(source: source);
       return false;

@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import '../../features/selector/application/dev_auth.dart';
 import 'firebase_activity_monitor.dart';
 
+enum _DashboardView { counter, action, all }
+
 class FirebaseActivityStatusDialog {
   const FirebaseActivityStatusDialog._();
 
@@ -62,13 +64,17 @@ class _FirebaseActivityDashboardState
     'completed': '완료',
     'failed': '실패',
     'received': '수신',
+    'cancelled': '미제출·준비 표시 만료',
+    'unknown': '결과 미확정',
   };
 
+  _DashboardView _view = _DashboardView.counter;
   String _filter = 'all';
   String _statusFilter = 'all';
   bool _copiedFilter = false;
-  int? _copiedEventSequence;
+  String? _copiedEventLine;
   final Set<int> _expandedSequences = <int>{};
+  final Set<int> _expandedActionIds = <int>{};
 
   Future<void> _copyFilter(Iterable<FirebaseActivityEvent> events) async {
     if (!DevAuth.devModeEnabled.value) return;
@@ -81,7 +87,7 @@ class _FirebaseActivityDashboardState
     if (!mounted || !DevAuth.devModeEnabled.value) return;
     setState(() {
       _copiedFilter = true;
-      _copiedEventSequence = null;
+      _copiedEventLine = null;
     });
   }
 
@@ -91,9 +97,194 @@ class _FirebaseActivityDashboardState
     await Clipboard.setData(ClipboardData(text: code));
     if (!mounted || !DevAuth.devModeEnabled.value) return;
     setState(() {
-      _copiedEventSequence = event.sequence;
+      _copiedEventLine = event.debugLine;
       _copiedFilter = false;
     });
+  }
+
+  Future<void> _copyCounter(
+    Iterable<FirebaseActivityEvent> selected,
+  ) async {
+    if (!DevAuth.devModeEnabled.value) return;
+    final code = monitor.debugPrintCodeForCounterIncrements(selected);
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted || !DevAuth.devModeEnabled.value) return;
+    setState(() {
+      _copiedFilter = true;
+      _copiedEventLine = null;
+    });
+  }
+
+  Future<void> _copyActions(
+    Iterable<FirebaseActivityAction> selected,
+  ) async {
+    if (!DevAuth.devModeEnabled.value) return;
+    final code = monitor.debugPrintCodeForActions(selected);
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted || !DevAuth.devModeEnabled.value) return;
+    setState(() {
+      _copiedFilter = true;
+      _copiedEventLine = null;
+    });
+  }
+
+  Widget _counterRow(
+    BuildContext context,
+    FirebaseActivityEvent event,
+    Duration duration,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      key: ValueKey<String>('counter_${event.sequence}'),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  Icon(Icons.add_circle_outline_rounded,
+                      color: colorScheme.primary, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${event.counterBefore} → ${event.counterAfter} · '
+                      'Firestore ${event.kind.name} 완료',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => _copyEvent(event),
+                    tooltip: 'debugPrint 코드 복사',
+                    icon: AnimatedSwitcher(
+                      duration: duration,
+                      child: Icon(
+                        _copiedEventLine == event.debugLine
+                            ? Icons.check_rounded
+                            : Icons.copy_rounded,
+                        key: ValueKey<bool>(_copiedEventLine == event.debugLine),
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                '#${event.sequence} · ${event.timestamp.toLocal().toIso8601String()}',
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+              Text(event.source, style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                event.actionName == null
+                    ? '자동 실행 · 행동 미연결'
+                    : '${event.actionName} · 행동 #${event.actionId}',
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionRow(
+    BuildContext context,
+    FirebaseActivityAction action,
+    Duration duration,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    final expanded = _expandedActionIds.contains(action.id);
+    final related = monitor.events
+        .where((event) => event.actionId == action.id)
+        .toList(growable: false);
+    return Padding(
+      key: ValueKey<String>('action_${action.id}'),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: scheme.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: <Widget>[
+            ListTile(
+              onTap: () => setState(() {
+                if (expanded) {
+                  _expandedActionIds.remove(action.id);
+                } else {
+                  _expandedActionIds.add(action.id);
+                }
+              }),
+              title: Text('${action.name} · #${action.id}'),
+              subtitle: AnimatedSwitcher(
+                duration: duration,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SizeTransition(
+                    sizeFactor: animation,
+                    axisAlignment: -1,
+                    child: child,
+                  ),
+                ),
+                child: Text(
+                  '${action.startedAt.toLocal().toIso8601String()} · '
+                  '${action.outcomeLabel} · '
+                  '보존된 이벤트 ${related.length}건',
+                  key: ValueKey<String>('${action.id}_${action.outcome.name}'),
+                ),
+              ),
+              trailing: Icon(expanded
+                  ? Icons.expand_less_rounded
+                  : Icons.expand_more_rounded),
+            ),
+            AnimatedSize(
+              duration: duration,
+              curve: Curves.easeInOutCubic,
+              alignment: Alignment.topCenter,
+              child: expanded
+                  ? Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          if (action.issueCodes.isNotEmpty)
+                            Text('상태 코드 ${action.issueCodes.join(', ')}',
+                                style: Theme.of(context).textTheme.bodySmall),
+                          for (final event in related)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3),
+                              child: Text(
+                                '#${event.sequence} · ${event.timestamp.toLocal().toIso8601String()} · '
+                                '${event.source} · ${event.phase.name}'
+                                '${event.increasedCounter ? ' · 카운터 ${event.counterBefore} → ${event.counterAfter}' : ''}',
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            ),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: () => _copyActions(<FirebaseActivityAction>[action]),
+                              icon: const Icon(Icons.copy_rounded),
+                              label: const Text('debugPrint 코드 복사'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _metric(
@@ -154,8 +345,12 @@ class _FirebaseActivityDashboardState
   }
 
   Color _eventColor(FirebaseActivityEvent event) {
-    if (event.phase == FirebaseActivityPhase.failed) {
+    if (event.phase == FirebaseActivityPhase.failed ||
+        event.phase == FirebaseActivityPhase.outcomeUnknown) {
       return const Color(0xFFE65D67);
+    }
+    if (event.phase == FirebaseActivityPhase.cancelled) {
+      return const Color(0xFF929BAB);
     }
     if (event.createCommands > 0 ||
         event.kind == FirebaseActivityKind.create) {
@@ -194,8 +389,10 @@ class _FirebaseActivityDashboardState
     final prefix = switch (event.phase) {
       FirebaseActivityPhase.completed => '성공한 문서 명령',
       FirebaseActivityPhase.failed => '실패한 시도의 예정 명령',
+      FirebaseActivityPhase.outcomeUnknown => '결과 미확정 명령',
       FirebaseActivityPhase.started => '아직 확정되지 않은 예정 명령',
       FirebaseActivityPhase.received => '수신된 명령 정보',
+      FirebaseActivityPhase.cancelled => '미제출·표시 종료된 예정 명령',
     };
     final commands = <String>[
       if (event.setCommands > 0) 'set ${event.setCommands}',
@@ -206,12 +403,40 @@ class _FirebaseActivityDashboardState
     return '$prefix $commands';
   }
 
+  String _outcomeBasisLabel(String basis) => switch (basis) {
+        'non_write_error' => '쓰기 외 요청 오류',
+        'sdk_confirmed_rejection' => 'SDK의 확정 거부 응답',
+        'local_invocation_rejection' => 'SDK Future 반환 전 로컬 거부',
+        'sdk_future_not_returned' => 'SDK Future 반환 전 예외 · 서버 결과 검증 불가',
+        'sdk_timeout_unverified' => 'SDK 요청 시간 초과 · 결과 미확정',
+        'sdk_error_unverified' => 'SDK 오류 · 반영 여부 미확정',
+        'async_error_unverified' => '비동기 오류 · 반영 여부 미확정',
+        _ => '분류 근거 확인 필요',
+      };
+
+  String _stageLabel(FirebaseActivityEvent event) => switch (event.stage) {
+        FirebaseActivityStage.preparing => '명령 준비 중',
+        FirebaseActivityStage.submitting => '커밋 제출 중',
+        FirebaseActivityStage.attempting => '트랜잭션 시도 ${event.attempts > 0 ? event.attempts : 1}',
+        FirebaseActivityStage.retrying => '트랜잭션 재시도 ${event.attempts}',
+        FirebaseActivityStage.callerTimedOut => '호출자 시간 초과 · 원본 응답 확인 중',
+        FirebaseActivityStage.stalePreparation => '미제출 Batch 준비 표시 만료',
+        null => '실행 중',
+      };
+
   String _phaseLabel(FirebaseActivityEvent event) => switch (event.phase) {
         FirebaseActivityPhase.started =>
-          monitor.isOperationRunning(event.operationId) ? '현재 진행' : '시작 이력',
+          monitor.isOperationRunning(event.operationId)
+              ? _stageLabel(event)
+              : '시작 이력',
         FirebaseActivityPhase.completed => '완료',
         FirebaseActivityPhase.received => '수신',
         FirebaseActivityPhase.failed => '실패',
+        FirebaseActivityPhase.outcomeUnknown => '결과 미확정',
+        FirebaseActivityPhase.cancelled =>
+            event.stage == FirebaseActivityStage.stalePreparation
+                ? '준비 표시 만료'
+                : '미제출 중단',
       };
 
   Widget _eventRow(
@@ -221,7 +446,7 @@ class _FirebaseActivityDashboardState
   ) {
     final scheme = Theme.of(context).colorScheme;
     final expanded = _expandedSequences.contains(event.sequence);
-    final copied = _copiedEventSequence == event.sequence;
+    final copied = _copiedEventLine == event.debugLine;
     final commandText = _commandText(event);
     return Padding(
       key: ValueKey<int>(event.sequence),
@@ -251,13 +476,16 @@ class _FirebaseActivityDashboardState
                       child: Row(
                         children: <Widget>[
                           Icon(
-                            event.phase == FirebaseActivityPhase.failed
+                            (event.phase == FirebaseActivityPhase.failed ||
+                                event.phase == FirebaseActivityPhase.outcomeUnknown)
                                 ? Icons.error_outline_rounded
                                 : event.phase == FirebaseActivityPhase.completed
                                     ? Icons.check_circle_outline_rounded
                                     : event.phase == FirebaseActivityPhase.started
                                         ? Icons.radio_button_checked_rounded
-                                        : Icons.adjust_rounded,
+                                        : event.phase == FirebaseActivityPhase.cancelled
+                                            ? Icons.block_rounded
+                                            : Icons.adjust_rounded,
                             size: 18,
                             color: _eventColor(event),
                           ),
@@ -284,11 +512,26 @@ class _FirebaseActivityDashboardState
                                   style: Theme.of(context).textTheme.labelSmall,
                                 ),
                                 if (commandText.isNotEmpty)
-                                  Text(
-                                    commandText,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.labelSmall,
+                                  AnimatedSwitcher(
+                                    duration: duration,
+                                    transitionBuilder: (child, animation) =>
+                                        FadeTransition(
+                                      opacity: animation,
+                                      child: ScaleTransition(
+                                        scale: Tween<double>(begin: 0.97, end: 1)
+                                            .animate(animation),
+                                        child: child,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      commandText,
+                                      key: ValueKey<String>(
+                                        '${event.operationId}:${event.attempts}:${event.stage}:$commandText',
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context).textTheme.labelSmall,
+                                    ),
                                   ),
                               ],
                             ),
@@ -340,6 +583,31 @@ class _FirebaseActivityDashboardState
                             Text(
                               '소요 시간 ${event.durationMs}ms',
                               style: Theme.of(context).textTheme.labelSmall,
+                            ),
+                          if (event.stage != null)
+                            Text(
+                              '현재 단계 ${_stageLabel(event)} · 예정 명령 ${event.documentCommands}건',
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
+                          if (event.callState != null)
+                            AnimatedSwitcher(
+                              duration: duration,
+                              child: Text(
+                                event.callState == FirebaseActivityCallState.sdkFutureReturned
+                                    ? 'SDK 호출 Future 확보 · 서버 반영 여부는 결과 응답으로 판정'
+                                    : 'SDK 호출 Future 확보 전',
+                                key: ValueKey<FirebaseActivityCallState>(event.callState!),
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            ),
+                          if (event.outcomeBasis != null)
+                            AnimatedSwitcher(
+                              duration: duration,
+                              child: Text(
+                                '결과 분류 근거 ${_outcomeBasisLabel(event.outcomeBasis!)}',
+                                key: ValueKey<String>(event.outcomeBasis!),
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
                             ),
                           if (event.attempts > 0)
                             Text(
@@ -405,7 +673,10 @@ class _FirebaseActivityDashboardState
             final Iterable<FirebaseActivityEvent> sourceEvents =
                 _statusFilter == 'running'
                     ? monitor.runningOperations.reversed
-                    : monitor.events.reversed;
+                    : monitor.events.reversed.map((event) =>
+                        event.phase == FirebaseActivityPhase.started
+                            ? monitor.runningEventFor(event.operationId) ?? event
+                            : event);
             final events = sourceEvents
                 .where((event) => event.matchesFilter(_filter))
                 .where((event) => event.matchesStatusFilter(
@@ -415,6 +686,9 @@ class _FirebaseActivityDashboardState
                 .toList(growable: false);
             final completedRows = events
                 .where((event) => event.phase == FirebaseActivityPhase.completed)
+                .length;
+            final unknownRows = events
+                .where((event) => event.phase == FirebaseActivityPhase.outcomeUnknown)
                 .length;
             final failedRows = events
                 .where((event) => event.phase == FirebaseActivityPhase.failed)
@@ -500,6 +774,76 @@ class _FirebaseActivityDashboardState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: <Widget>[
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: <Widget>[
+                                    for (final entry in const <_DashboardView, String>{
+                                      _DashboardView.counter: '카운터 증가 원인',
+                                      _DashboardView.action: '행동별 기록',
+                                      _DashboardView.all: '전체 활동',
+                                    }.entries)
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 6),
+                                        child: ChoiceChip(
+                                          label: Text(entry.value),
+                                          selected: _view == entry.key,
+                                          onSelected: (_) => setState(() {
+                                            _view = entry.key;
+                                            _copiedFilter = false;
+                                            _copiedEventLine = null;
+                                          }),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              if (_view == _DashboardView.counter) ...<Widget>[
+                                AnimatedSwitcher(
+                                  duration: duration,
+                                  transitionBuilder: (child, animation) => FadeTransition(
+                                    opacity: animation,
+                                    child: SizeTransition(
+                                      sizeFactor: animation,
+                                      axisAlignment: -1,
+                                      child: child,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'Firestore 완료 ${monitor.firestoreOperationCount}회 · 보존 ${monitor.counterIncrements.length}회 · 이전 기록 ${monitor.omittedCounterIncrements}회',
+                                    key: ValueKey<int>(monitor.firestoreOperationCount),
+                                    style: Theme.of(context).textTheme.titleSmall,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                if (monitor.counterIncrements.isEmpty)
+                                  const Text('카운터 증가 기록이 없습니다.'),
+                                for (final event in monitor.counterIncrements.toList().reversed.take(80))
+                                  _counterRow(context, event, duration),
+                                if (monitor.counterIncrements.length > 80)
+                                  Text(
+                                    '최근 80행 표시 · 복사는 보존된 ${monitor.counterIncrements.length}행 전체',
+                                    style: Theme.of(context).textTheme.labelSmall,
+                                  ),
+                              ],
+                              if (_view == _DashboardView.action) ...<Widget>[
+                                Text(
+                                  '행동 기록 ${monitor.actions.length}건',
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                                const SizedBox(height: 8),
+                                if (monitor.actions.isEmpty)
+                                  const Text('연결된 행동 기록이 없습니다.'),
+                                for (final action in monitor.actions.toList().reversed.take(80))
+                                  _actionRow(context, action, duration),
+                                if (monitor.actions.length > 80)
+                                  Text(
+                                    '최근 80개 행동 표시 · 복사는 보존된 ${monitor.actions.length}개 행동 전체',
+                                    style: Theme.of(context).textTheme.labelSmall,
+                                  ),
+                              ],
+                              if (_view == _DashboardView.all) ...<Widget>[
                               Wrap(
                                 spacing: 8,
                                 runSpacing: 8,
@@ -604,9 +948,20 @@ class _FirebaseActivityDashboardState
                               ),
                               const SizedBox(height: 12),
                               Text(
-                                '상단 완료·수신 합계 ${monitor.totalActivityCount}회'
+                                '상단 Firestore 완료 ${monitor.firestoreOperationCount}회 · '
+                                '전체 상위 완료·Snapshot 수신 합계 ${monitor.totalActivityCount}회'
                                 ' = 상위 완료 ${monitor.topLevelCompletedCount}회'
                                 ' + Snapshot ${monitor.snapshotCount}회',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              Text(
+                                '초기화 완료 ${monitor.count(FirebaseActivityKind.initialization)}회 · '
+                                '인증 완료 ${monitor.count(FirebaseActivityKind.authentication)}회 · '
+                                'Storage 완료 ${monitor.count(FirebaseActivityKind.storage)}회',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              Text(
+                                '응답 미확정 ${monitor.unknownOutcomeCount}회 · 미제출 중단 ${monitor.abandonedBatchCount}회 · 준비 표시 만료 ${monitor.stalePreparationCount}회',
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                               Text(
@@ -626,7 +981,7 @@ class _FirebaseActivityDashboardState
                               if (active > 0) ...<Widget>[
                                 const SizedBox(height: 12),
                                 Text(
-                                  '진행 중 요청 ($active)',
+                                  '진행 중 요청 ($active · 상위 ${monitor.topLevelActiveOperationCount} · 내부 ${monitor.nestedActiveOperationCount})',
                                   style: Theme.of(context).textTheme.titleSmall,
                                 ),
                                 const SizedBox(height: 4),
@@ -645,7 +1000,10 @@ class _FirebaseActivityDashboardState
                                         Expanded(
                                           child: Text(
                                             '#${running.operationId} · '
-                                            '${running.kind.name} · ${running.source}',
+                                            '${running.kind.name} · ${_stageLabel(running)} · '
+                                            '예정 set ${running.setCommands} / 생성 ${running.createCommands} / '
+                                            '수정 ${running.updateCommands} / 삭제 ${running.deleteCommands} · '
+                                            '${running.source}',
                                             maxLines: 2,
                                             overflow: TextOverflow.ellipsis,
                                             style: Theme.of(context)
@@ -671,7 +1029,7 @@ class _FirebaseActivityDashboardState
                               const SizedBox(height: 4),
                               Text(
                                 '선택된 이벤트 ${events.length}행 · 완료 $completedRows행 '
-                                '· 실패 $failedRows행 · 수신 $receivedRows행 '
+                                '· 실패 $failedRows행 · 미확정 $unknownRows행 · 수신 $receivedRows행 '
                                 '· 현재 진행 $activeRows건',
                                 style: Theme.of(context).textTheme.labelSmall,
                               ),
@@ -693,7 +1051,7 @@ class _FirebaseActivityDashboardState
                                           onSelected: (_) => setState(() {
                                             _filter = entry.key;
                                             _copiedFilter = false;
-                                            _copiedEventSequence = null;
+                                            _copiedEventLine = null;
                                           }),
                                         ),
                                       ),
@@ -718,7 +1076,7 @@ class _FirebaseActivityDashboardState
                                           onSelected: (_) => setState(() {
                                             _statusFilter = entry.key;
                                             _copiedFilter = false;
-                                            _copiedEventSequence = null;
+                                            _copiedEventLine = null;
                                           }),
                                         ),
                                       ),
@@ -744,21 +1102,35 @@ class _FirebaseActivityDashboardState
                                 ),
                               const SizedBox(height: 8),
                               Text(
+                                '진행 중 Batch·Transaction의 문서 명령은 예정 수이며 커밋 성공 전에는 누적 성공 수에 포함되지 않습니다. '
+                                '준비 중이던 Batch는 명시적인 중단 또는 일정 시간 명령이 없을 때 표시를 종료하며, 이후 실제 커밋 성공과는 별도로 구분합니다. '
                                 '유형과 진행 상태는 독립적으로 필터링합니다. '
-                                '시작 이력은 현재 진행 요청과 다르며, 실패한 시도의 예정 명령은 성공 건수에 포함되지 않습니다. '
+                                '시작 이력은 현재 진행 요청과 다르며, 실패하거나 결과 미확정인 예정 명령은 성공 건수에 포함되지 않습니다. '
                                 '선택된 이벤트 행 수와 앱 시작 이후 누적 명령 수는 서로 다릅니다. '
                                 '일반 쓰기 호출 중 명령 유형을 알 수 없는 경우는 문서 명령 합계에서 제외합니다. '
                                 '조회·Snapshot에는 캐시 및 재시도 결과가 포함될 수 있습니다. '
+                                '호출자의 시간 초과는 원본 커밋 실패를 뜻하지 않으며, 최종 응답은 별도로 집계됩니다. '
+                                'SDK Future 반환은 서버 반영의 증거가 아니며, 확정 거부가 아닌 오류는 결과 미확정으로 분류합니다. '
+                                '개별 이벤트를 펼치면 SDK 호출 단계와 결과 분류 근거를 확인하고 debugPrint 코드로 복사할 수 있습니다. '
                                 '실제 Firebase 청구 건수나 금액은 아닙니다.',
                                 style: Theme.of(context).textTheme.labelSmall,
                               ),
+                              ],
                             ],
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
                       FilledButton.icon(
-                        onPressed: () => _copyFilter(events.reversed),
+                        onPressed: () {
+                          if (_view == _DashboardView.counter) {
+                            _copyCounter(monitor.counterIncrements);
+                          } else if (_view == _DashboardView.action) {
+                            _copyActions(monitor.actions);
+                          } else {
+                            _copyFilter(events.reversed);
+                          }
+                        },
                         icon: Icon(
                           _copiedFilter
                               ? Icons.check_rounded
@@ -766,8 +1138,8 @@ class _FirebaseActivityDashboardState
                         ),
                         label: Text(
                           _copiedFilter
-                              ? '현재 유형·상태 debugPrint 복사됨'
-                              : '현재 유형·상태 debugPrint 복사',
+                              ? 'debugPrint 코드 복사됨'
+                              : '현재 탭 debugPrint 코드 복사',
                         ),
                       ),
                     ],

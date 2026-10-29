@@ -817,6 +817,7 @@ class PlateWriteService {
       }
 
       final batch = _firestore.batch();
+      try {
 
       FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.delete, () => batch.delete(docRef));
 
@@ -840,6 +841,9 @@ class PlateWriteService {
       removeFromView('departure_requests_view');
 
       await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'plate_write_service.commit');
+      } finally {
+        FirebaseActivityWriteScope.cancelBatch(batch);
+      }
 
       dev.log(
         "🗑️ 문서 삭제 완료(+view cleanup): $documentId",

@@ -1,4 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
+import '../../../app/firebase_activity/firebase_activity_monitor.dart';
 
 import '../../../app/auth/google_auth_session.dart';
 import '../../../app/terminal/application/parkinworkin_terminal_diagnostics.dart';
@@ -96,6 +99,9 @@ class DeveloperAccountAuthorization {
       final email = identity.normalizedEmail;
       final allowed = allowedEmails.contains(email);
       if (!allowed) {
+        FirebaseActivityMonitor.noteCurrentActionFailure(
+          'DEVELOPER_GOOGLE_ACCOUNT_NOT_ALLOWED',
+        );
         _record(
           'developer_authorization_denied',
           source: source,
@@ -112,6 +118,9 @@ class DeveloperAccountAuthorization {
       _lastAuthorizationStateKey = null;
       final authorized = isAuthorized;
       if (!authorized) {
+        FirebaseActivityMonitor.noteCurrentActionFailure(
+          'DEVELOPER_GOOGLE_SESSION_MISMATCH',
+        );
         _releaseSessionAuthorized = false;
         _authorizedEmail = null;
         _lastAuthorizationStateKey = null;
@@ -138,6 +147,14 @@ class DeveloperAccountAuthorization {
       );
       return true;
     } catch (error) {
+      final cancelled = error is GoogleSignInException &&
+          error.code == GoogleSignInExceptionCode.canceled;
+      FirebaseActivityMonitor.noteCurrentActionOutcome(
+        cancelled ? FirebaseActionOutcome.cancelled : FirebaseActionOutcome.failed,
+        code: cancelled
+            ? 'DEVELOPER_GOOGLE_SIGN_IN_CANCELLED'
+            : 'DEVELOPER_GOOGLE_SIGN_IN_ERROR',
+      );
       _releaseSessionAuthorized = false;
       _authorizedEmail = null;
       _lastAuthorizationStateKey = null;

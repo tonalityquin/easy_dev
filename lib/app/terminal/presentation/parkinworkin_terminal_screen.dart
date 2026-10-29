@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../utils/motion_timing_diagnostics.dart';
+import '../../firebase_activity/firebase_activity_monitor.dart';
 import '../../../features/account/presentation/initial_account_setup_dialog.dart';
 import '../../../features/launcher/application/launcher_actions.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
@@ -5635,16 +5636,42 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       },
     );
 
-    final gmailAuthorized =
-        await DeveloperAccountAuthorization.authorizeInteractive(
-      source: 'launcher_terminal_manual_auth',
-    );
-    if (!mounted) return;
-
-    final authorized = gmailAuthorized &&
-        await DeveloperLoginGateService.verify(
+    final authorized = await FirebaseActivityMonitor.runAction<bool>(
+      '개발자 로그인',
+      () async {
+        final gmailAuthorized =
+            await DeveloperAccountAuthorization.authorizeInteractive(
           source: 'launcher_terminal_manual_auth',
         );
+        if (!mounted) {
+          FirebaseActivityMonitor.noteCurrentActionOutcome(
+            FirebaseActionOutcome.cancelled,
+            code: 'DEVELOPER_LOGIN_VIEW_DISPOSED',
+          );
+          return false;
+        }
+        if (!gmailAuthorized) return false;
+        final gateApproved = await DeveloperLoginGateService.verify(
+          source: 'launcher_terminal_manual_auth',
+        );
+        if (!mounted) {
+          FirebaseActivityMonitor.noteCurrentActionOutcome(
+            FirebaseActionOutcome.cancelled,
+            code: 'DEVELOPER_LOGIN_VIEW_DISPOSED',
+          );
+          return false;
+        }
+        if (!gateApproved) return false;
+        setState(() {
+          _busy = false;
+          _developerPasswordMode = true;
+          _nameError = null;
+          _accountIdentifierError = null;
+          _submitError = null;
+        });
+        return true;
+      },
+    );
     if (!mounted) return;
 
     if (!authorized) {
@@ -5679,13 +5706,6 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       return;
     }
 
-    setState(() {
-      _busy = false;
-      _developerPasswordMode = true;
-      _nameError = null;
-      _accountIdentifierError = null;
-      _submitError = null;
-    });
     await HapticFeedback.heavyImpact();
     LauncherDiagnostics.record(
       'developer_password_mode_enabled',

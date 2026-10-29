@@ -7,6 +7,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/utils/motion_timing_diagnostics.dart';
+import '../../../../app/firebase_activity/firebase_activity_status_dialog.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/app_navigator.dart';
 import '../../application/debug_session_controller.dart';
@@ -299,6 +300,13 @@ class _DebugLauncherState extends State<_DebugLauncher>
     );
   }
 
+  Future<void> _openFirebaseActivity() async {
+    await _setExpanded(false);
+    await DevQuickActions.openSheetExclusively(
+      (context) => FirebaseActivityStatusDialog.show(context),
+    );
+  }
+
   Future<void> _exitDebug() async {
     if (_ending) return;
     HapticFeedback.mediumImpact();
@@ -386,6 +394,7 @@ class _DebugLauncherState extends State<_DebugLauncher>
                   onPrefs: _openPrefs,
                   onSQLite: _openSQLite,
                   onStatus: _showStatus,
+                  onFirebaseActivity: _openFirebaseActivity,
                   onExitDebug: _exitDebug,
                   onExitApp: _exitApp,
                 ),
@@ -577,6 +586,7 @@ class _DebugPalette extends StatelessWidget {
     required this.onPrefs,
     required this.onSQLite,
     required this.onStatus,
+    required this.onFirebaseActivity,
     required this.onExitDebug,
     required this.onExitApp,
   });
@@ -589,6 +599,7 @@ class _DebugPalette extends StatelessWidget {
   final Future<void> Function() onPrefs;
   final Future<void> Function() onSQLite;
   final Future<void> Function() onStatus;
+  final Future<void> Function() onFirebaseActivity;
   final Future<void> Function() onExitDebug;
   final Future<void> Function() onExitApp;
 
@@ -696,10 +707,18 @@ class _DebugPalette extends StatelessWidget {
                 subtitle: 'debugPrint 로그 확인 및 코드 복사',
                 onTap: onStatus,
               ),
+              _AnimatedPaletteAction(
+                index: 3,
+                progress: progress,
+                icon: Icons.cloud_outlined,
+                title: 'Firebase 활동 센터',
+                subtitle: '카운터·행동·전체 활동 및 로그 복사',
+                onTap: onFirebaseActivity,
+              ),
               const SizedBox(height: 8),
               _PaletteSectionLabel(label: '세션'),
               _AnimatedPaletteAction(
-                index: 3,
+                index: 4,
                 progress: progress,
                 icon: Icons.logout_rounded,
                 title: 'DEBUG 종료',
@@ -709,7 +728,7 @@ class _DebugPalette extends StatelessWidget {
               const SizedBox(height: 8),
               _PaletteSectionLabel(label: '앱'),
               _AnimatedPaletteAction(
-                index: 4,
+                index: 5,
                 progress: progress,
                 icon: Icons.power_settings_new_rounded,
                 title: '앱 종료',
