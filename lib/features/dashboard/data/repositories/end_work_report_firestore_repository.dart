@@ -388,7 +388,13 @@ class EndWorkReportFirestoreRepository {
       final batch = _firestore.batch();
       try {
       for (final id in plateDocIds.sublist(offset, end)) {
-        FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.delete, () => batch.delete(_firestore.collection('plates').doc(id)));
+        final ref = _firestore.collection('plates').doc(id);
+        FirebaseActivityWriteScope.batchCommand(
+          batch,
+          FirebaseActivityDocumentCommand.delete,
+          () => batch.delete(ref),
+          documentPath: ref.path,
+        );
       }
       await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'end_work_report_firestore_repository.commit');
       } finally {

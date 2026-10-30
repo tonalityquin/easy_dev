@@ -27,7 +27,7 @@ class BillWriteService {
         (key, value) => value == null || value.toString().trim().isEmpty);
 
     try {
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => docRef.set(data), source: 'bill_write_service.set');
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => docRef.set(data), source: 'bill_write_service.set', writeData: data, writeDocumentPath: docRef.path);
       debugPrint("✅ 일반 정산 저장 성공: ${bill.id}");
     } catch (e, st) {
       debugPrint("🔥 일반 정산 저장 실패: $e");
@@ -45,7 +45,7 @@ class BillWriteService {
         (key, value) => value == null || value.toString().trim().isEmpty);
 
     try {
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => docRef.set(data), source: 'bill_write_service.set');
+      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => docRef.set(data), source: 'bill_write_service.set', writeData: data, writeDocumentPath: docRef.path);
       debugPrint("✅ 정기 정산 저장 성공: ${bill.id}");
     } catch (e, st) {
       debugPrint("🔥 정기 정산 저장 실패: $e");

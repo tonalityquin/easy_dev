@@ -2,8 +2,9 @@ import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 
-import '../../features/selector/application/dev_auth.dart';
 import 'firebase_activity_monitor.dart';
+import 'firebase_activity_cost_estimator.dart';
+import 'firebase_activity_billing_config.dart';
 
 class FirebaseActivityOverlay extends StatelessWidget {
   const FirebaseActivityOverlay({super.key});
@@ -81,13 +82,27 @@ class FirebaseActivityOverlay extends StatelessWidget {
     final reduced = media.disableAnimations;
     final duration = reduced ? Duration.zero : const Duration(milliseconds: 240);
     final monitor = FirebaseActivityMonitor.instance;
+
     return Positioned(
       right: 12,
-      top: media.padding.top + 84,
-      child: ValueListenableBuilder<bool>(
-        valueListenable: DevAuth.devModeEnabled,
-        builder: (context, developer, _) => IgnorePointer(
-          ignoring: true,
+      top: media.padding.top + 8,
+      child: IgnorePointer(
+        ignoring: true,
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0, end: 1),
+          duration: reduced ? Duration.zero : const Duration(milliseconds: 360),
+          curve: Curves.easeOutCubic,
+          builder: (context, progress, child) => Opacity(
+            opacity: progress,
+            child: Transform.translate(
+              offset: Offset(0, (1 - progress) * 10),
+              child: Transform.scale(
+                scale: 0.94 + progress * 0.06,
+                alignment: Alignment.topRight,
+                child: child,
+              ),
+            ),
+          ),
           child: AnimatedBuilder(
             animation: monitor,
             builder: (context, _) {
@@ -108,6 +123,7 @@ class FirebaseActivityOverlay extends StatelessWidget {
               final count = monitor.firestoreOperationCount;
               final stage = event?.stage;
               final String activityLabel;
+
               if (primaryRunning > 1) {
                 activityLabel = topRunning.isNotEmpty
                     ? '동시 $primaryRunning'
@@ -133,86 +149,131 @@ class FirebaseActivityOverlay extends StatelessWidget {
               } else {
                 activityLabel = idle ? '대기' : '활동';
               }
-              return AnimatedContainer(
+
+              return AnimatedSlide(
+                offset: idle ? Offset.zero : const Offset(0, -0.08),
+                duration: duration,
+                curve: Curves.easeInOutCubic,
+                child: AnimatedScale(
+                  scale: idle ? 1 : 1.04,
+                  alignment: Alignment.topRight,
                   duration: duration,
                   curve: Curves.easeOutCubic,
-                  constraints: const BoxConstraints(minWidth: 96, minHeight: 38),
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Color.lerp(Theme.of(context).colorScheme.surface,
-                        color, idle ? 0.08 : 0.18),
-                    border: Border.all(color: color.withAlpha(idle ? 110 : 210)),
-                    borderRadius: BorderRadius.circular(22),
-                    boxShadow: idle
-                        ? null
-                        : <BoxShadow>[
-                            BoxShadow(
-                              color: color.withAlpha(42),
-                              blurRadius: 12,
-                              spreadRadius: 1,
+                  child: AnimatedContainer(
+                    duration: duration,
+                    curve: Curves.easeOutCubic,
+                    constraints: const BoxConstraints(minWidth: 96, minHeight: 38),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Color.lerp(
+                        Theme.of(context).colorScheme.surface,
+                        color,
+                        idle ? 0.08 : 0.18,
+                      ),
+                      border: Border.all(
+                        color: color.withAlpha(idle ? 110 : 210),
+                      ),
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: idle
+                          ? null
+                          : <BoxShadow>[
+                              BoxShadow(
+                                color: color.withAlpha(42),
+                                blurRadius: 12,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        AnimatedSwitcher(
+                          duration: duration,
+                          child: Icon(
+                            _icon(event, primaryRunning),
+                            key: ValueKey<String>(
+                              '${idle ? 'idle' : 'active'}_${event?.sequence ?? 0}_${primaryRunning > 1}',
+                            ),
+                            color: color,
+                            size: 19,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            AnimatedSwitcher(
+                              duration: duration,
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(
+                                  scale: Tween<double>(begin: 0.9, end: 1)
+                                      .animate(animation),
+                                  child: child,
+                                ),
+                              ),
+                              child: Text(
+                                '$count',
+                                key: ValueKey<int>(count),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color:
+                                      Theme.of(context).colorScheme.onSurface,
+                                  fontFeatures: const <FontFeature>[
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            AnimatedSwitcher(
+                              duration: duration,
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(
+                                  scale: Tween<double>(begin: 0.96, end: 1)
+                                      .animate(animation),
+                                  child: child,
+                                ),
+                              ),
+                              child: Text(
+                                activityLabel,
+                                key: ValueKey<String>(activityLabel),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: color,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            AnimatedSwitcher(
+                              duration: duration,
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(opacity: animation, child: child),
+                              child: Text(
+                                '${FirebaseActivityCostEstimator.formatWon(monitor.cost.totalWon)} 추정${FirebaseActivityBillingConfig.settingsVerified ? '' : ' · 가정'}${monitor.cost.possibleExtraWon > 0 ? ' · 범위 있음' : ''}',
+                                key: ValueKey<String>('${monitor.cost.totalWon.toStringAsFixed(7)}_${monitor.cost.possibleExtraWon.toStringAsFixed(7)}'),
+                                maxLines: 1,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                  fontFeatures: const <FontFeature>[
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
                             ),
                           ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedSwitcher(
-                        duration: duration,
-                        child: Icon(
-                          _icon(event, primaryRunning),
-                          key: ValueKey<String>(
-                              '${idle ? 'idle' : 'active'}_${event?.sequence ?? 0}_${primaryRunning > 1}'),
-                          color: color,
-                          size: 19,
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AnimatedSwitcher(
-                            duration: duration,
-                            transitionBuilder: (child, animation) =>
-                                FadeTransition(opacity: animation, child: child),
-                            child: Text(
-                              '$count',
-                              key: ValueKey<int>(count),
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                color: Theme.of(context).colorScheme.onSurface,
-                                fontFeatures: const <FontFeature>[
-                                  FontFeature.tabularFigures(),
-                                ],
-                              ),
-                            ),
-                          ),
-                          AnimatedSwitcher(
-                            duration: duration,
-                            transitionBuilder: (child, animation) =>
-                                FadeTransition(
-                              opacity: animation,
-                              child: ScaleTransition(
-                                scale: Tween<double>(begin: 0.96, end: 1)
-                                    .animate(animation),
-                                child: child,
-                              ),
-                            ),
-                            child: Text(
-                              activityLabel,
-                              key: ValueKey<String>(activityLabel),
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: color,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                ),
               );
             },
           ),

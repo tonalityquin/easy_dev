@@ -1071,7 +1071,14 @@ class HeadMemo {
       DocumentReference<Map<String, dynamic>> ref,
       Map<String, dynamic> payload,
     ) {
-      FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(ref, payload, SetOptions(merge: true)));
+      FirebaseActivityWriteScope.batchCommand(
+        batch,
+        FirebaseActivityDocumentCommand.set,
+        () => batch.set(ref, payload, SetOptions(merge: true)),
+        documentData: payload,
+        documentPath: ref.path,
+        partialWrite: true,
+      );
       writeCount += 1;
     }
 

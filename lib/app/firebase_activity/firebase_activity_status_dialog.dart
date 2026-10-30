@@ -1,10 +1,13 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../features/selector/application/dev_auth.dart';
 import 'firebase_activity_monitor.dart';
+import 'firebase_activity_cost_estimator.dart';
+import 'firebase_activity_billing_config.dart';
 
 enum _DashboardView { counter, action, all }
 
@@ -72,9 +75,30 @@ class _FirebaseActivityDashboardState
   String _filter = 'all';
   String _statusFilter = 'all';
   bool _copiedFilter = false;
+  bool _copiedAll = false;
+  bool _copiedCost = false;
   String? _copiedEventLine;
   final Set<int> _expandedSequences = <int>{};
   final Set<int> _expandedActionIds = <int>{};
+
+  Future<bool> _copyCode(String code, String scope) async {
+    if (!DevAuth.devModeEnabled.value) return false;
+    try {
+      await Clipboard.setData(ClipboardData(text: code));
+    } catch (error) {
+      if (DevAuth.devModeEnabled.value) {
+        debugPrint(
+          '[FIREBASE_ACTIVITY] clipboardCopyFailed scope=$scope error=${error.runtimeType}',
+        );
+      }
+      return false;
+    }
+    if (!mounted || !DevAuth.devModeEnabled.value) return false;
+    debugPrint(
+      '[FIREBASE_ACTIVITY] clipboardCopied scope=$scope characters=${code.length}',
+    );
+    return true;
+  }
 
   Future<void> _copyFilter(Iterable<FirebaseActivityEvent> events) async {
     if (!DevAuth.devModeEnabled.value) return;
@@ -83,34 +107,37 @@ class _FirebaseActivityDashboardState
       typeFilter: _filter,
       statusFilter: _statusFilter,
     );
-    await Clipboard.setData(ClipboardData(text: code));
-    if (!mounted || !DevAuth.devModeEnabled.value) return;
+    if (!await _copyCode(code, 'filtered')) return;
     setState(() {
       _copiedFilter = true;
+      _copiedAll = false;
       _copiedEventLine = null;
     });
   }
 
   Future<void> _copyEvent(FirebaseActivityEvent event) async {
-    if (!DevAuth.devModeEnabled.value) return;
-    final code = monitor.debugPrintCodeForEvent(event);
-    await Clipboard.setData(ClipboardData(text: code));
-    if (!mounted || !DevAuth.devModeEnabled.value) return;
+    if (!await _copyCode(monitor.debugPrintCodeForEvent(event), 'event')) {
+      return;
+    }
     setState(() {
       _copiedEventLine = event.debugLine;
       _copiedFilter = false;
+      _copiedAll = false;
     });
   }
 
   Future<void> _copyCounter(
     Iterable<FirebaseActivityEvent> selected,
   ) async {
-    if (!DevAuth.devModeEnabled.value) return;
-    final code = monitor.debugPrintCodeForCounterIncrements(selected);
-    await Clipboard.setData(ClipboardData(text: code));
-    if (!mounted || !DevAuth.devModeEnabled.value) return;
+    if (!await _copyCode(
+      monitor.debugPrintCodeForCounterIncrements(selected),
+      'counter',
+    )) {
+      return;
+    }
     setState(() {
       _copiedFilter = true;
+      _copiedAll = false;
       _copiedEventLine = null;
     });
   }
@@ -118,14 +145,138 @@ class _FirebaseActivityDashboardState
   Future<void> _copyActions(
     Iterable<FirebaseActivityAction> selected,
   ) async {
-    if (!DevAuth.devModeEnabled.value) return;
-    final code = monitor.debugPrintCodeForActions(selected);
-    await Clipboard.setData(ClipboardData(text: code));
-    if (!mounted || !DevAuth.devModeEnabled.value) return;
+    if (!await _copyCode(monitor.debugPrintCodeForActions(selected), 'actions')) {
+      return;
+    }
     setState(() {
       _copiedFilter = true;
+      _copiedAll = false;
       _copiedEventLine = null;
     });
+  }
+
+  Future<void> _copyAll() async {
+    if (!await _copyCode(monitor.debugPrintCode, 'all')) return;
+    setState(() {
+      _copiedAll = true;
+      _copiedFilter = false;
+      _copiedEventLine = null;
+    });
+  }
+
+  Future<void> _copyCost() async {
+    if (!await _copyCode(monitor.costDebugPrintCode, 'cost')) return;
+    setState(() {
+      _copiedCost = true;
+      _copiedAll = false;
+      _copiedFilter = false;
+      _copiedEventLine = null;
+    });
+  }
+
+  Widget _costOverview(BuildContext context, Duration duration) {
+    final scheme = Theme.of(context).colorScheme;
+    final cost = monitor.cost;
+    return AnimatedContainer(
+      duration: duration,
+      curve: Curves.easeInOutCubic,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: scheme.primary.withAlpha(100)),
+        color: scheme.primaryContainer.withAlpha(60),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text('앱 관측 예상 사용요금',
+                    style: Theme.of(context).textTheme.titleSmall),
+              ),
+              AnimatedSwitcher(
+                duration: duration,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(scale: animation, child: child),
+                ),
+                child: Text(
+                  FirebaseActivityCostEstimator.formatWon(cost.totalWon),
+                  key: ValueKey<String>(cost.totalWon.toStringAsFixed(8)),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: scheme.primary,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${FirebaseActivityBillingConfig.editionLabel} · '
+            '${FirebaseActivityBillingConfig.region} · '
+            'USD 1 = ₩${FirebaseActivityBillingConfig.krwPerUsd.toStringAsFixed(2)}',
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+          Text(
+            '${FirebaseActivityBillingConfig.priceReference} · '
+            '${FirebaseActivityBillingConfig.exchangeRateReference}',
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+          const SizedBox(height: 8),
+          for (final row in cost.summaries)
+            if (row.units > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(child: Text(row.label,
+                        style: Theme.of(context).textTheme.bodySmall)),
+                    Text('${row.units} 단위',
+                        style: Theme.of(context).textTheme.labelSmall),
+                    const SizedBox(width: 12),
+                    Text(FirebaseActivityCostEstimator.formatWon(row.won),
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ),
+          const SizedBox(height: 6),
+          Text('관측 문서 크기 ${cost.knownBytes}B · 필드 ${cost.knownFields}개 · '
+              '불확실성 포함 ${cost.uncertainOperations}건',
+              style: Theme.of(context).textTheme.labelSmall),
+          AnimatedSize(
+            duration: duration,
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topLeft,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('요금 설정: ${FirebaseActivityBillingConfig.confidenceLabel} · '
+                    '기준 ${FirebaseActivityBillingConfig.pricingDate}',
+                    style: Theme.of(context).textTheme.labelSmall),
+                if (cost.possibleExtraUnits > 0)
+                  Text('제거 원인 불명의 추가 읽기 가능성: '
+                      '${cost.possibleExtraUnits}단위 · '
+                      '${FirebaseActivityCostEstimator.formatWon(cost.possibleExtraWon)} 범위',
+                      style: Theme.of(context).textTheme.labelSmall),
+                Text('원인 미확정 제거 ${cost.unknownRemoved}건 · '
+                    '재연결 재조회 후보 ${cost.reconnectCandidates}회 · '
+                    '메타데이터 변경 ${cost.metadataOnlyEvents}회',
+                    style: Theme.of(context).textTheme.labelSmall),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '실제 청구액이 아닙니다. 무료 할당량, 색인 읽기, 보안 규칙 읽기, '
+            '전체 데이터 보관·전송 비용 및 미계측 작업은 포함되지 않거나 '
+            '불완전하게 추정됩니다. 현재 앱 세션의 관측값입니다.',
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _counterRow(
@@ -614,6 +765,17 @@ class _FirebaseActivityDashboardState
                               'Transaction 시도 ${event.attempts}회',
                               style: Theme.of(context).textTheme.labelSmall,
                             ),
+                          if (event.estimatedUnits > 0)
+                            Text(
+                              '과금 추정 ${event.estimatedUnits}단위 · '
+                              '${FirebaseActivityCostEstimator.formatWon(event.estimatedWon)}',
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
+                          if (event.dataBytes > 0)
+                            Text(
+                              '관측 데이터 ${event.dataBytes}B · 필드 ${event.fieldCount}개',
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
                           if (event.kind == FirebaseActivityKind.snapshot)
                             Text(
                               '변경 추가 ${event.added} · 수정 ${event.modified} · 제거 ${event.removed}',
@@ -791,6 +953,7 @@ class _FirebaseActivityDashboardState
                                           onSelected: (_) => setState(() {
                                             _view = entry.key;
                                             _copiedFilter = false;
+                                            _copiedAll = false;
                                             _copiedEventLine = null;
                                           }),
                                         ),
@@ -799,6 +962,8 @@ class _FirebaseActivityDashboardState
                                 ),
                               ),
                               const SizedBox(height: 10),
+                              _costOverview(context, duration),
+                              const SizedBox(height: 12),
                               if (_view == _DashboardView.counter) ...<Widget>[
                                 AnimatedSwitcher(
                                   duration: duration,
@@ -1051,6 +1216,7 @@ class _FirebaseActivityDashboardState
                                           onSelected: (_) => setState(() {
                                             _filter = entry.key;
                                             _copiedFilter = false;
+                                            _copiedAll = false;
                                             _copiedEventLine = null;
                                           }),
                                         ),
@@ -1076,6 +1242,7 @@ class _FirebaseActivityDashboardState
                                           onSelected: (_) => setState(() {
                                             _statusFilter = entry.key;
                                             _copiedFilter = false;
+                                            _copiedAll = false;
                                             _copiedEventLine = null;
                                           }),
                                         ),
@@ -1121,25 +1288,72 @@ class _FirebaseActivityDashboardState
                         ),
                       ),
                       const SizedBox(height: 12),
-                      FilledButton.icon(
-                        onPressed: () {
-                          if (_view == _DashboardView.counter) {
-                            _copyCounter(monitor.counterIncrements);
-                          } else if (_view == _DashboardView.action) {
-                            _copyActions(monitor.actions);
-                          } else {
-                            _copyFilter(events.reversed);
-                          }
-                        },
-                        icon: Icon(
-                          _copiedFilter
-                              ? Icons.check_rounded
-                              : Icons.copy_rounded,
-                        ),
-                        label: Text(
-                          _copiedFilter
-                              ? 'debugPrint 코드 복사됨'
-                              : '현재 탭 debugPrint 코드 복사',
+                      AnimatedSize(
+                        duration: duration,
+                        curve: Curves.easeInOutCubic,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: <Widget>[
+                            FilledButton.icon(
+                              onPressed: () {
+                                if (_view == _DashboardView.counter) {
+                                  _copyCounter(monitor.counterIncrements);
+                                } else if (_view == _DashboardView.action) {
+                                  _copyActions(monitor.actions);
+                                } else {
+                                  _copyFilter(events.reversed);
+                                }
+                              },
+                              icon: AnimatedSwitcher(
+                                duration: duration,
+                                child: Icon(
+                                  _copiedFilter
+                                      ? Icons.check_rounded
+                                      : Icons.copy_rounded,
+                                  key: ValueKey<bool>(_copiedFilter),
+                                ),
+                              ),
+                              label: Text(
+                                _copiedFilter
+                                    ? '현재 탭 debugPrint 코드 복사됨'
+                                    : '현재 탭 debugPrint 코드 복사',
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            OutlinedButton.icon(
+                              onPressed: _copyCost,
+                              icon: AnimatedSwitcher(
+                                duration: duration,
+                                child: Icon(
+                                  _copiedCost
+                                      ? Icons.check_rounded
+                                      : Icons.receipt_long_outlined,
+                                  key: ValueKey<bool>(_copiedCost),
+                                ),
+                              ),
+                              label: Text(_copiedCost
+                                  ? '비용 debugPrint 코드 복사됨'
+                                  : '비용 debugPrint 코드 복사'),
+                            ),
+                            const SizedBox(height: 6),
+                            OutlinedButton.icon(
+                              onPressed: _copyAll,
+                              icon: AnimatedSwitcher(
+                                duration: duration,
+                                child: Icon(
+                                  _copiedAll
+                                      ? Icons.check_rounded
+                                      : Icons.content_copy_rounded,
+                                  key: ValueKey<bool>(_copiedAll),
+                                ),
+                              ),
+                              label: Text(
+                                _copiedAll
+                                    ? '전체 debugPrint 코드 복사됨'
+                                    : '전체 debugPrint 코드 복사',
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],

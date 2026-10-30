@@ -231,7 +231,15 @@ class CompanyScopeMigrationService {
             final stored = (data['companyId'] ?? '').toString().trim();
             if (stored != company) {
               if (!dryRun) {
-                FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.update, () => batch.update(doc.reference, <String, dynamic>{'companyId': company}));
+                final payload = <String, dynamic>{'companyId': company};
+                FirebaseActivityWriteScope.batchCommand(
+                  batch,
+                  FirebaseActivityDocumentCommand.update,
+                  () => batch.update(doc.reference, payload),
+                  documentData: payload,
+                  documentPath: doc.reference.path,
+                  partialWrite: true,
+                );
               }
               pending++;
             }
@@ -388,7 +396,15 @@ class CompanyScopeMigrationService {
           continue;
         }
         if (!dryRun) {
-          FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.update, () => batch.update(doc.reference, <String, dynamic>{'companyId': company}));
+          final payload = <String, dynamic>{'companyId': company};
+                FirebaseActivityWriteScope.batchCommand(
+                  batch,
+                  FirebaseActivityDocumentCommand.update,
+                  () => batch.update(doc.reference, payload),
+                  documentData: payload,
+                  documentPath: doc.reference.path,
+                  partialWrite: true,
+                );
         }
         pending++;
       }

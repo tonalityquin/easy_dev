@@ -7,6 +7,10 @@ import 'package:flutter/foundation.dart';
 
 import '../../features/selector/application/dev_auth.dart';
 import 'firebase_activity_write_scope.dart';
+import 'firebase_activity_cost_estimator.dart';
+import 'firebase_activity_listener_state.dart';
+import 'firebase_activity_billing_config.dart';
+import 'firestore_document_sizer.dart';
 
 enum FirebaseActivityKind {
   read,
@@ -83,6 +87,17 @@ class FirebaseActivityEvent {
     this.added = 0,
     this.modified = 0,
     this.removed = 0,
+    this.dataBytes = 0,
+    this.fieldCount = 0,
+    this.estimatedWon = 0,
+    this.estimatedUnits = 0,
+    this.costUncertain = false,
+    this.listenerId,
+    this.costReason,
+    this.metadataOnly = false,
+    this.reconnectCandidate = false,
+    this.possibleExtraReads = 0,
+    this.readStrategy = FirestoreReadStrategy.unknown,
   });
 
   final int sequence;
@@ -114,6 +129,17 @@ class FirebaseActivityEvent {
   final int added;
   final int modified;
   final int removed;
+  final int dataBytes;
+  final int fieldCount;
+  final double estimatedWon;
+  final int estimatedUnits;
+  final bool costUncertain;
+  final int? listenerId;
+  final String? costReason;
+  final bool metadataOnly;
+  final bool reconnectCandidate;
+  final int possibleExtraReads;
+  final FirestoreReadStrategy readStrategy;
 
   int get documentCommands =>
       setCommands + createCommands + updateCommands + deleteCommands;
@@ -147,6 +173,17 @@ class FirebaseActivityEvent {
         added: added,
         modified: modified,
         removed: removed,
+        dataBytes: dataBytes,
+        fieldCount: fieldCount,
+        estimatedWon: estimatedWon,
+        estimatedUnits: estimatedUnits,
+        costUncertain: costUncertain,
+        listenerId: listenerId,
+        costReason: costReason,
+        metadataOnly: metadataOnly,
+        reconnectCandidate: reconnectCandidate,
+        possibleExtraReads: possibleExtraReads,
+        readStrategy: readStrategy,
       );
 
   bool matchesStatusFilter(
@@ -222,6 +259,16 @@ class FirebaseActivityEvent {
         if (stage != null) 'stage=${stage!.name}',
         if (durationMs != null) 'elapsedMs=$durationMs',
         if (documents != null) 'resultDocuments=$documents',
+        if (dataBytes > 0) 'dataBytes=$dataBytes fields=$fieldCount',
+        if (estimatedUnits > 0) 'estimatedUnits=$estimatedUnits',
+        if (estimatedWon > 0) 'estimatedWon=${estimatedWon.toStringAsFixed(8)}',
+        if (costUncertain) 'costEstimateUncertain=true',
+        if (listenerId != null) 'listenerId=$listenerId',
+        if (metadataOnly) 'metadataOnly=true',
+        if (reconnectCandidate) 'reconnectCandidate=true',
+        if (possibleExtraReads > 0) 'possibleExtraReads=$possibleExtraReads',
+        if (costReason != null) 'costReason=$costReason',
+        if (readStrategy != FirestoreReadStrategy.unknown) 'readStrategy=${readStrategy.name}',
         if (documentCommands > 0)
           'commands=set:$setCommands,create:$createCommands,update:$updateCommands,delete:$deleteCommands',
         if (attempts > 0) 'attempts=$attempts',
@@ -297,6 +344,7 @@ class FirebaseActivityMonitor extends ChangeNotifier {
   static const int maxEvents = 200;
   static const Duration idleDelay = Duration(milliseconds: 1500);
 
+  final FirebaseActivityCostEstimator cost = FirebaseActivityCostEstimator();
   final Queue<FirebaseActivityEvent> _events = Queue<FirebaseActivityEvent>();
   final Queue<FirebaseActivityEvent> _counterIncrements =
       Queue<FirebaseActivityEvent>();
@@ -320,6 +368,7 @@ class FirebaseActivityMonitor extends ChangeNotifier {
   int _sequence = 0;
   int _actionSequence = 0;
   int _operationSequence = 0;
+  static int _listenerSequence = 0;
   int _snapshotReceivedCount = 0;
   int _cachedSnapshotCount = 0;
   int _localSnapshotCount = 0;
@@ -743,6 +792,19 @@ class FirebaseActivityMonitor extends ChangeNotifier {
     int added = 0,
     int modified = 0,
     int removed = 0,
+    int dataBytes = 0,
+    int fieldCount = 0,
+    int? estimatedDocuments,
+    bool snapshotInitial = false,
+    bool costUncertain = false,
+    FirestoreReadStrategy readStrategy = FirestoreReadStrategy.unknown,
+    int pointReadUnits = 0,
+    int indexBytes = 0,
+    int? listenerId,
+    bool metadataOnly = false,
+    bool reconnectCandidate = false,
+    int possibleExtraReads = 0,
+    String? costReason,
   }) {
     if (!_started) start();
     if (operationId != null &&
@@ -774,6 +836,79 @@ class FirebaseActivityMonitor extends ChangeNotifier {
         phase == FirebaseActivityPhase.completed &&
         parentOperationId == null &&
         _isFirestoreKind(kind);
+    final costBefore = cost.totalWon;
+    final costUnitsBefore = cost.totalUnits;
+    final uncertainBefore = cost.uncertainOperations;
+    if (phase == FirebaseActivityPhase.completed) {
+      if (kind == FirebaseActivityKind.read && fromCache != true) {
+        cost.record(
+          parentOperationId == null ? 'read' : 'transactionRead',
+          count: documents ?? 1,
+          bytes: dataBytes,
+          fields: fieldCount,
+          uncertain: costUncertain || documents == null,
+          isRead: true,
+          readStrategy: readStrategy,
+          pointReadUnits: pointReadUnits,
+          indexBytes: indexBytes,
+          reason: costReason ?? 'sdk_read_result',
+        );
+      } else if (kind == FirebaseActivityKind.set ||
+          kind == FirebaseActivityKind.create ||
+          kind == FirebaseActivityKind.update ||
+          kind == FirebaseActivityKind.delete ||
+          kind == FirebaseActivityKind.write) {
+        cost.record(kind.name, count: 1, bytes: dataBytes,
+          fields: fieldCount, uncertain: costUncertain || dataBytes == 0,
+          reason: dataBytes == 0 ? 'write_size_unobserved' : 'write_payload_size');
+      } else if (kind == FirebaseActivityKind.batch ||
+          kind == FirebaseActivityKind.transaction) {
+        final prefix = kind == FirebaseActivityKind.batch
+            ? 'batch'
+            : 'transaction';
+        final count = (commands?.sets ?? 0) + (commands?.creates ?? 0) +
+            (commands?.updates ?? 0);
+        final deletes = commands?.deletes ?? 0;
+        final estimatedBytes = commands?.dataBytes ?? 0;
+        final estimatedFields = commands?.dataFields ?? 0;
+        final allMetrics = commands?.metrics ?? const <FirestoreWriteMetric>[];
+        final writes = allMetrics.where((metric) =>
+            metric.kind != FirebaseActivityDocumentCommand.delete).toList();
+        final deletionMetrics = allMetrics.where((metric) =>
+            metric.kind == FirebaseActivityDocumentCommand.delete).toList();
+        if (count > 0) {
+          cost.record('${prefix}Write', count: count,
+            bytes: estimatedBytes, fields: estimatedFields,
+            writeMetrics: writes.length == count ? writes : null,
+            uncertain: writes.length != count ||
+                writes.any((metric) => !metric.sizeKnown) ||
+                kind == FirebaseActivityKind.transaction,
+            reason: 'command_level_write_estimate');
+        }
+        if (deletes > 0) {
+          cost.record('${prefix}Delete', count: deletes,
+            writeMetrics: deletionMetrics.length == deletes ? deletionMetrics : null,
+            uncertain: deletionMetrics.any((metric) => !metric.sizeKnown) ||
+                deletionMetrics.length != deletes,
+            reason: 'command_level_delete_estimate');
+        }
+      }
+    } else if (kind == FirebaseActivityKind.snapshot &&
+        phase == FirebaseActivityPhase.received &&
+        fromCache == false && pendingWrites != true &&
+        estimatedDocuments != null) {
+      cost.record('snapshot', count: estimatedDocuments,
+        bytes: dataBytes, fields: fieldCount,
+        initialSnapshot: snapshotInitial,
+        uncertain: costUncertain,
+        readStrategy: readStrategy,
+        pointReadUnits: pointReadUnits,
+        possibleExtraReads: possibleExtraReads,
+        unknownRemoved: possibleExtraReads,
+        reconnectCandidate: reconnectCandidate,
+        metadataOnly: metadataOnly,
+        reason: costReason ?? 'listener_server_event');
+    }
     final event = FirebaseActivityEvent(
       sequence: ++_sequence,
       timestamp: DateTime.now(),
@@ -802,6 +937,17 @@ class FirebaseActivityMonitor extends ChangeNotifier {
       added: added,
       modified: modified,
       removed: removed,
+      dataBytes: dataBytes,
+      fieldCount: fieldCount,
+      estimatedWon: cost.totalWon - costBefore,
+      estimatedUnits: cost.totalUnits - costUnitsBefore,
+      costUncertain: costUncertain || cost.uncertainOperations > uncertainBefore,
+      listenerId: listenerId,
+      costReason: costReason,
+      metadataOnly: metadataOnly,
+      reconnectCandidate: reconnectCandidate,
+      possibleExtraReads: possibleExtraReads,
+      readStrategy: readStrategy,
     );
     if (operationId != null) {
       if (phase != FirebaseActivityPhase.started) {
@@ -903,12 +1049,24 @@ class FirebaseActivityMonitor extends ChangeNotifier {
 
   static void transactionCommand(
     FirebaseActivityDocumentCommand kind,
-    void Function() execute,
-  ) {
+    void Function() execute, {
+    int documentBytes = 0,
+    int fieldCount = 0,
+    Object? documentData,
+    String? documentPath,
+    int indexWriteUnits = 0,
+  }) {
     execute();
     final scope = Zone.current[_transactionScopeKey];
     if (scope is! FirebaseActivityWriteCounts) return;
-    scope.add(kind);
+    final size = documentData == null ? null
+        : FirestoreDocumentSizer.document(documentPath ?? '', documentData);
+    scope.add(kind,
+        bytes: size?.bytes ?? documentBytes,
+        fields: size?.fieldCount ?? fieldCount,
+        sizeKnown: size != null || documentBytes > 0,
+        documentPath: documentPath,
+        indexWriteUnits: indexWriteUnits);
     final operationId = Zone.current[_transactionOperationKey] as int?;
     instance._publishProgress(
       operationId,
@@ -924,6 +1082,10 @@ class FirebaseActivityMonitor extends ChangeNotifier {
     Future<T> Function() execute, {
     required String source,
     Object? batch,
+    Object? writeData,
+    String? writeDocumentPath,
+    FirestoreReadStrategy readStrategy = FirestoreReadStrategy.unknown,
+    int indexBytes = 0,
   }) async {
     final monitor = instance;
     final batchCounts = kind == FirebaseActivityKind.batch
@@ -1014,6 +1176,11 @@ class FirebaseActivityMonitor extends ChangeNotifier {
     stopwatch.stop();
     try {
       final metadata = _snapshotMetadata(result);
+      final size = kind == FirebaseActivityKind.read
+          ? FirestoreDocumentSizer.fromSnapshot(result)
+          : writeData == null
+              ? const FirestoreSizeEstimate(bytes: 0, fieldCount: 0, documents: 0)
+              : FirestoreDocumentSizer.document(writeDocumentPath ?? '', writeData);
       final commands = kind == FirebaseActivityKind.batch
           ? FirebaseActivityWriteScope.takeBatch(batch)
           : transactionScope?.copy();
@@ -1025,6 +1192,15 @@ class FirebaseActivityMonitor extends ChangeNotifier {
           documents: metadata.$1,
           fromCache: metadata.$2,
           pendingWrites: metadata.$3,
+          dataBytes: size.bytes,
+          fieldCount: size.fieldCount,
+          pointReadUnits: size.pointReadUnits,
+          readStrategy: result is DocumentSnapshot ? FirestoreReadStrategy.pointRead : readStrategy,
+          indexBytes: indexBytes,
+          costUncertain: kind == FirebaseActivityKind.read &&
+              (metadata.$1 == null || result is QuerySnapshot ||
+                  (FirebaseActivityCostEstimator.enterprise &&
+                      readStrategy == FirestoreReadStrategy.unknown)),
           callState: FirebaseActivityCallState.sdkFutureReturned,
           commands: commands);
     } catch (observationError) {
@@ -1093,36 +1269,60 @@ class FirebaseActivityMonitor extends ChangeNotifier {
   }
 
   static Stream<T> observe<T>(Stream<T> source, {required String origin}) {
-    return source.transform(
-      StreamTransformer<T, T>.fromHandlers(
+    return source.transform(StreamTransformer<T, T>.fromBind((stream) {
+      final listener = FirebaseActivityListenerState(
+        ++_listenerSequence, _safeSource(origin));
+      return stream.transform(StreamTransformer<T, T>.fromHandlers(
         handleData: (event, sink) {
-          final metadata = _snapshotMetadata(event);
-          var added = 0;
-          var modified = 0;
-          var removed = 0;
-          if (event is QuerySnapshot) {
-            for (final change in event.docChanges) {
-              switch (change.type) {
-                case DocumentChangeType.added:
-                  added++;
-                case DocumentChangeType.modified:
-                  modified++;
-                case DocumentChangeType.removed:
-                  removed++;
+          try {
+            final metadata = _snapshotMetadata(event);
+            final assessment = listener.examine(event);
+            var added = 0;
+            var modified = 0;
+            var removed = 0;
+            if (event is QuerySnapshot) {
+              for (final change in event.docChanges) {
+                switch (change.type) {
+                  case DocumentChangeType.added:
+                    added++;
+                  case DocumentChangeType.modified:
+                    modified++;
+                  case DocumentChangeType.removed:
+                    removed++;
+                }
               }
             }
+            instance.emit(
+              FirebaseActivityKind.snapshot,
+              FirebaseActivityPhase.received,
+              source: origin,
+              documents: metadata.$1,
+              fromCache: metadata.$2,
+              pendingWrites: metadata.$3,
+              added: added,
+              modified: modified,
+              removed: removed,
+              dataBytes: assessment.server && !assessment.metadataOnly ? assessment.size.bytes : 0,
+              fieldCount: assessment.server && !assessment.metadataOnly ? assessment.size.fieldCount : 0,
+              pointReadUnits: assessment.size.pointReadUnits,
+              estimatedDocuments: assessment.server
+                  ? assessment.billableDocuments : null,
+              snapshotInitial: assessment.initial || assessment.reconnectCandidate,
+              costUncertain: assessment.unknownRemoved > 0 ||
+                  assessment.reconnectCandidate ||
+                  (assessment.server && assessment.billableDocuments > 0),
+              readStrategy: event is DocumentSnapshot
+                  ? FirestoreReadStrategy.pointRead
+                  : FirestoreReadStrategy.unknown,
+              listenerId: listener.id,
+              metadataOnly: assessment.metadataOnly,
+              reconnectCandidate: assessment.reconnectCandidate,
+              possibleExtraReads: assessment.unknownRemoved,
+              costReason: assessment.reason,
+            );
+          } catch (error) {
+            _diagnoseTelemetryFailure(error);
           }
-          instance.emit(
-            FirebaseActivityKind.snapshot,
-            FirebaseActivityPhase.received,
-            source: origin,
-            documents: metadata.$1,
-            fromCache: metadata.$2,
-            pendingWrites: metadata.$3,
-            added: added,
-            modified: modified,
-            removed: removed,
-          );
           sink.add(event);
         },
         handleError: (Object error, StackTrace stackTrace, sink) {
@@ -1131,11 +1331,12 @@ class FirebaseActivityMonitor extends ChangeNotifier {
             FirebaseActivityPhase.failed,
             source: origin,
             errorCode: _safeError(error),
+            listenerId: listener.id,
           );
           sink.addError(error, stackTrace);
         },
-      ),
-    );
+      ));
+    }));
   }
 
   static (int?, bool?, bool?) _snapshotMetadata(Object? value) {
@@ -1219,7 +1420,38 @@ class FirebaseActivityMonitor extends ChangeNotifier {
     ].join('\n');
   }
 
-  String get debugPrintCode => debugPrintCodeFor(_events);
+  String get costDebugPrintCode => <String>[
+        'debugPrint(${jsonEncode('[FIREBASE_COST] estimatedWon=${cost.totalWon.toStringAsFixed(8)} '
+            'edition=${FirebaseActivityBillingConfig.editionLabel} '
+            'region=${FirebaseActivityBillingConfig.region} '
+            'reference=${FirebaseActivityBillingConfig.priceReference} '
+            'krwPerUsd=${FirebaseActivityBillingConfig.krwPerUsd} '
+            'rateDate=${FirebaseActivityBillingConfig.exchangeRateReference} '
+            'unknown=${cost.uncertainOperations} '
+            'knownBytes=${cost.knownBytes} knownFields=${cost.knownFields} '
+            'freeQuotaApplied=false billingAmount=false '
+            'settings=${FirebaseActivityBillingConfig.confidenceLabel} '
+            'pricingDate=${FirebaseActivityBillingConfig.pricingDate} '
+            'possibleExtraWon=${cost.possibleExtraWon.toStringAsFixed(8)} '
+            'unknownRemoved=${cost.unknownRemoved} '
+            'reconnectCandidates=${cost.reconnectCandidates} '
+            'metadataOnlyEvents=${cost.metadataOnlyEvents}')});',
+        ...cost.summaries.map((row) =>
+            'debugPrint(${jsonEncode('[FIREBASE_COST_KIND] type=${row.label} '
+                'units=${row.units} estimatedWon=${row.won.toStringAsFixed(8)}')});'),
+        ...cost.recent.map((entry) =>
+            'debugPrint(${jsonEncode('[FIREBASE_COST_ENTRY] type=${entry.kind} '
+                'units=${entry.units} bytes=${entry.bytes} fields=${entry.fields} '
+                'estimatedWon=${entry.won.toStringAsFixed(8)} '
+                'possibleExtraUnits=${entry.possibleExtraUnits} '
+                'possibleExtraWon=${entry.possibleExtraWon.toStringAsFixed(8)} '
+                'uncertain=${entry.uncertain} reason=${entry.reason}')});'),
+      ].join('\n');
+
+  String get debugPrintCode => <String>[
+        costDebugPrintCode,
+        debugPrintCodeFor(_events),
+      ].join('\n');
 
   String get summary =>
       '앱 시작 이후 상위 작업 완료 $_topLevelCompletedCount회 · '
@@ -1244,7 +1476,8 @@ class FirebaseActivityMonitor extends ChangeNotifier {
       'Snapshot에는 캐시 및 로컬 이벤트가 포함될 수 있습니다. '
       '미분류 쓰기 호출은 분류 가능 문서 명령 합계에서 제외됩니다. '
       '커밋 응답이 불명확하면 결과 미확정으로 별도 집계합니다. '
-      'Firestore 완료 작업 수와 전체 완료·수신 합계는 실제 과금 건수나 청구 금액이 아닙니다.';
+      'Firestore 완료 작업 수는 실제 과금 건수가 아닙니다. '
+      '앱 관측 예상 사용요금 ${FirebaseActivityCostEstimator.formatWon(cost.totalWon)}(무료할당량 미적용, 청구액 아님).';
 
   @override
   void dispose() {
