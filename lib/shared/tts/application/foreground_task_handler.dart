@@ -25,6 +25,7 @@ String _ts() => DateTime.now().toIso8601String();
 @pragma('vm:entry-point')
 class MyTaskHandler implements TaskHandler {
   String? _listeningArea;
+  String? _listeningCompany;
   String? _listeningMode;
   DateTime? _startedAt;
 
@@ -59,6 +60,7 @@ class MyTaskHandler implements TaskHandler {
       await TtsOwnership.setOwner(TtsOwner.app);
       PlateTtsListenerService.setLocalRole(TtsOwner.app);
       _listeningArea = null;
+      _listeningCompany = null;
       _listeningMode = null;
       _sendStatus(
         event: 'handler_start_blocked',
@@ -87,6 +89,7 @@ class MyTaskHandler implements TaskHandler {
     await PlateLocalNotificationService.instance.ensureInitialized();
     await PlateTtsListenerService.stop();
     _listeningArea = null;
+    _listeningCompany = null;
     _listeningMode = null;
 
     final recovery = await PlateTtsSessionRecoveryStore.load();
@@ -100,6 +103,20 @@ class MyTaskHandler implements TaskHandler {
         source: 'foreground_service_start',
       );
       debugPrint('[HANDLER][${_ts()}] recovery snapshot unavailable');
+      return;
+    }
+
+    if (recovery.companyId.isEmpty) {
+      await PlateTtsSessionRecoveryStore.clear(source: 'legacy_snapshot_requires_authenticated_session');
+      await TtsOwnership.setOwner(TtsOwner.app);
+      _sendStatus(
+        event: 'handler_started',
+        listening: false,
+        masterOn: false,
+        reason: 'legacy_snapshot_awaiting_verified_session',
+        source: 'foreground_service_start',
+      );
+      debugPrint('[HANDLER][${_ts()}] legacy recovery missing companyId; awaiting authenticated work session');
       return;
     }
 
@@ -138,6 +155,7 @@ class MyTaskHandler implements TaskHandler {
     await PlateTtsListenerService.stop();
     await TtsOwnership.setOwner(TtsOwner.app);
     _listeningArea = null;
+    _listeningCompany = null;
     _listeningMode = null;
     _sendStatus(
       event: isTimeout ? 'handler_timeout' : 'handler_destroyed',
@@ -320,6 +338,7 @@ class MyTaskHandler implements TaskHandler {
     );
 
     String? area;
+    String? companyId;
     String? incomingMode;
     TtsUserFilters? incomingFilters;
     var forceRestart = false;
@@ -333,6 +352,10 @@ class MyTaskHandler implements TaskHandler {
           '[HANDLER][${_ts()}] unsupported command kind=${kind.toString()}',
         );
         return;
+      }
+      final vCompany = data['companyId'];
+      if (vCompany is String) {
+        companyId = vCompany.trim();
       }
       final vArea = data['area'];
       if (vArea is String) {
@@ -363,6 +386,7 @@ class MyTaskHandler implements TaskHandler {
       await PlateTtsListenerService.stop();
       await TtsOwnership.setOwner(TtsOwner.app);
       _listeningArea = null;
+      _listeningCompany = null;
       _listeningMode = null;
       _sendStatus(
         event: 'session_waiting_mode',
@@ -398,6 +422,7 @@ class MyTaskHandler implements TaskHandler {
       await PlateTtsListenerService.stop();
       await TtsOwnership.setOwner(TtsOwner.app);
       _listeningArea = null;
+      _listeningCompany = null;
       _listeningMode = null;
       _sendStatus(
         event: 'session_waiting_mode',
@@ -421,6 +446,7 @@ class MyTaskHandler implements TaskHandler {
     if (!masterOn) {
       await PlateTtsListenerService.stop();
       _listeningArea = null;
+      _listeningCompany = null;
       _listeningMode = mode;
       debugPrint(
         '[HANDLER][${_ts()}] session disabled mode=$mode filters=${filters.toMap()}',
@@ -440,6 +466,7 @@ class MyTaskHandler implements TaskHandler {
     if (area == null || area.isEmpty) {
       await PlateTtsListenerService.stop();
       _listeningArea = null;
+      _listeningCompany = null;
       _listeningMode = mode;
       _sendStatus(
         event: 'session_waiting_area',
@@ -453,11 +480,22 @@ class MyTaskHandler implements TaskHandler {
       return;
     }
 
-    final changed = _listeningArea != area || _listeningMode != mode;
+    if (companyId == null || companyId.isEmpty) {
+      await PlateTtsListenerService.stop();
+      _listeningArea = null;
+      _listeningCompany = null;
+      _listeningMode = null;
+      debugPrint('[HANDLER][${_ts()}] session rejected: missing companyId');
+      return;
+    }
+
+    final changed = _listeningArea != area ||
+        _listeningCompany != companyId || _listeningMode != mode;
     if (!forceRestart &&
         !changed &&
         PlateTtsListenerService.isListening &&
         PlateTtsListenerService.currentArea == area &&
+        PlateTtsListenerService.currentCompany == companyId &&
         PlateTtsListenerService.currentMode == mode) {
       debugPrint(
         '[HANDLER][${_ts()}] session noop area=$area mode=$mode source=$source',
@@ -477,6 +515,7 @@ class MyTaskHandler implements TaskHandler {
     try {
       final started = await PlateTtsListenerService.start(
         area,
+        companyId: companyId,
         force: forceRestart || changed || !PlateTtsListenerService.isListening,
         mode: mode,
         filters: filters,
@@ -485,12 +524,14 @@ class MyTaskHandler implements TaskHandler {
         final prevArea = _listeningArea;
         final prevMode = _listeningMode;
         _listeningArea = area;
+        _listeningCompany = companyId;
         _listeningMode = mode;
         debugPrint(
           '[HANDLER][${_ts()}] listener started area=$area mode=$mode prevArea=$prevArea prevMode=$prevMode source=$source',
         );
       } else {
         _listeningArea = null;
+        _listeningCompany = null;
         _listeningMode = mode;
         debugPrint(
           '[HANDLER][${_ts()}] listener start rejected area=$area mode=$mode source=$source',
@@ -507,6 +548,7 @@ class MyTaskHandler implements TaskHandler {
       );
     } catch (error, stackTrace) {
       _listeningArea = null;
+      _listeningCompany = null;
       _listeningMode = mode;
       debugPrint(
         '[HANDLER][${_ts()}] listener start error area=$area mode=$mode error=$error\n$stackTrace',

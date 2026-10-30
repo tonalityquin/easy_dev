@@ -179,7 +179,8 @@ class LocationReservationIntegrityService {
     final company = await LocationCompanyScope.resolve(_firestore);
     Query<Map<String, dynamic>> locationQuery = _firestore
         .collection('locations').where('area', isEqualTo: cleanArea);
-    if (company != null) {
+    if (company == null || company.isEmpty) throw StateError('LOCATION_COMPANY_REQUIRED');
+    if (company.isNotEmpty) {
       locationQuery = locationQuery.where('companyId', isEqualTo: company);
     }
     final locationSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => locationQuery
@@ -328,9 +329,7 @@ class LocationReservationIntegrityService {
 
     Query<Map<String, dynamic>> areaReservationQuery = reservationCollection
         .where('area', isEqualTo: cleanArea);
-    if (company != null) {
-      areaReservationQuery = areaReservationQuery.where('companyId', isEqualTo: company);
-    }
+    areaReservationQuery = areaReservationQuery.where('companyId', isEqualTo: company);
     final areaReservationSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => areaReservationQuery
         .get(const GetOptions(source: Source.server)), source: 'location_reservation_integrity_service.get');
     for (final document in areaReservationSnapshot.docs) {
@@ -343,11 +342,10 @@ class LocationReservationIntegrityService {
     var parentScopedReadCount = 0;
     for (final parent in parents) {
       Query<Map<String, dynamic>> parentReservationQuery = reservationCollection
+          .where('area', isEqualTo: cleanArea)
           .where('parentId', isEqualTo: parent.id);
-      if (company != null) {
-        parentReservationQuery = parentReservationQuery
-            .where('companyId', isEqualTo: company);
-      }
+      parentReservationQuery = parentReservationQuery
+          .where('companyId', isEqualTo: company);
       final parentReservationSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => parentReservationQuery
           .get(const GetOptions(source: Source.server)), source: 'location_reservation_integrity_service.get');
       parentScopedReadCount += parentReservationSnapshot.docs.length;

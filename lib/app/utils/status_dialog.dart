@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -18,6 +19,27 @@ class StatusDialog {
   const StatusDialog._();
 
   static final List<String> _debugLines = <String>[];
+  static String _indexCreationUrl = '';
+
+  static String get indexCreationUrl => _indexCreationUrl;
+
+  static void recordFirestoreIndexError(Object error) {
+    if (!DevAuth.devModeEnabled.value || error is! FirebaseException ||
+        error.code != 'failed-precondition') return;
+    final raw = error.message ?? error.toString();
+    final match = RegExp(r'https://console\.firebase\.google\.com/[^\s<>"\]]+')
+        .firstMatch(raw);
+    if (match == null) return;
+    final url = (match.group(0) ?? '')
+        .replaceFirst(RegExp(r'[.,;\)]+$'), '');
+    if (url.isEmpty) return;
+    _indexCreationUrl = url;
+    recordDebugOperation(
+      'firestore.index', 'missing_composite_index',
+      details: <String, Object?>{'indexUrl': url},
+    );
+  }
+
 
   static List<String> get debugLines => List<String>.unmodifiable(_debugLines);
 
@@ -44,6 +66,26 @@ class StatusDialog {
       'title=${jsonEncode(title)}',
       if (trimmed.isNotEmpty) 'description=${jsonEncode(trimmed)}',
     ].join(' ');
+    debugPrint(line);
+    _debugLines.add(line);
+    if (_debugLines.length > 200) {
+      _debugLines.removeRange(0, _debugLines.length - 200);
+    }
+  }
+
+  static void recordDebugOperation(
+    String source,
+    String event, {
+    Map<String, Object?> details = const <String, Object?>{},
+  }) {
+    if (!DevAuth.devModeEnabled.value) return;
+    final message = jsonEncode(<String, Object?>{
+      'timestamp': DateTime.now().toIso8601String(),
+      'source': source,
+      'event': event,
+      ...details,
+    }, toEncodable: (Object? value) => value.toString());
+    final line = '[FIREBASE_OPT] $message';
     debugPrint(line);
     _debugLines.add(line);
     if (_debugLines.length > 200) {

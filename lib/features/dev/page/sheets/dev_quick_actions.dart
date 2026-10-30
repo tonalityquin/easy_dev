@@ -420,7 +420,7 @@ class _DebugLauncherState extends State<_DebugLauncher>
               child: TweenAnimationBuilder<double>(
                 duration: _reduceMotion
                     ? Duration.zero
-                    : const Duration(milliseconds: 220),
+                    : const Duration(milliseconds: 280),
                 curve: Curves.easeOutBack,
                 tween: Tween<double>(begin: 0, end: 1),
                 builder: (context, value, child) {
@@ -433,9 +433,13 @@ class _DebugLauncherState extends State<_DebugLauncher>
                             (1 - visualProgress),
                         0,
                       ),
-                      child: Transform.scale(
-                        scale: 0.96 + 0.04 * value,
-                        child: child,
+                      child: Transform.rotate(
+                        angle: (_side == _DebugEdgeSide.left ? -1 : 1) *
+                            0.018 * (1 - visualProgress),
+                        child: Transform.scale(
+                          scale: 0.94 + 0.06 * value,
+                          child: child,
+                        ),
                       ),
                     ),
                   );

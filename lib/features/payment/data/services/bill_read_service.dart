@@ -1,3 +1,6 @@
+import '../../../../shared/area_remote_settings/application/area_snapshot_scope.dart';
+import '../../../location/data/services/location_company_scope.dart';
+import '../../../../app/utils/status_dialog.dart';
 import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -20,8 +23,14 @@ class BillReadService {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final company = (prefs.getString('division') ?? '').trim();
-      if (company.isEmpty) throw StateError('BILL_COMPANY_REQUIRED');
+      final cachedCompany = (prefs.getString('division') ?? '').trim();
+      final company = AreaSnapshotScope.isBound && AreaSnapshotScope.area == area.trim()
+          ? AreaSnapshotScope.division.trim()
+          : (await LocationCompanyScope.resolve(_firestore) ?? '').trim();
+      if (company.isEmpty || (cachedCompany.isNotEmpty && cachedCompany != company)) {
+        throw StateError('BILL_COMPANY_SESSION_MISMATCH');
+      }
+      StatusDialog.recordDebugOperation('bill.read', 'company_scoped', details: {'companyId': company, 'area': area});
       snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection('bill')
           .where('companyId', isEqualTo: company)

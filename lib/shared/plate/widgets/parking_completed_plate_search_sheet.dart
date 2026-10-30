@@ -24,6 +24,7 @@ import '../domain/enums/plate_type.dart';
 import '../domain/models/plate_model.dart';
 import '../domain/models/plate_out_log_search_result.dart';
 import '../domain/repositories/plate_repository.dart';
+import '../domain/services/plate_document_paths.dart';
 import 'plate_out_log_search_results.dart';
 import 'plate_remove_dialog.dart';
 import 'plate_search_mode_switch.dart';
@@ -489,6 +490,7 @@ class _ParkingCompletedPlateSearchSideDockState
 
       if (mode == PlateSearchMode.plateOutLog) {
         final results = await repository.searchPlateOutLogsByFourDigit(
+          companyId: PlateDocumentPaths.companyFor(area, companyId: context.read<UserState>().session?.companyId),
           plateFourDigit: query,
           area: area,
         );

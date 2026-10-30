@@ -58,6 +58,7 @@ class LocationCountService {
     required String area,
     String type = PlateTypeFirestoreValue.parkingCompleted,
     LocationQueryField locationField = LocationQueryField.full,
+    String? companyId,
   }) async {
     final _area = area.trim();
     final _type = normalizePlateTypeFirestoreValue(type);
@@ -81,15 +82,16 @@ class LocationCountService {
     }
 
     try {
-      final company = await LocationCompanyScope.resolve(_firestore);
+      final company = companyId?.trim().isNotEmpty == true
+          ? companyId!.trim()
+          : await LocationCompanyScope.resolve(_firestore);
       Query<Map<String, dynamic>> query = _firestore
           .collection('plates')
           .where(fieldPath, isEqualTo: value)
           .where('area', isEqualTo: _area)
           .where('type', isEqualTo: _type);
-      if (company != null) {
-        query = query.where('companyId', isEqualTo: company);
-      }
+      if (company == null || company.isEmpty) throw StateError('LOCATION_COMPANY_REQUIRED');
+      query = query.where('companyId', isEqualTo: company);
       final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.count().get(), source: 'location_count_service.get');
 
       final int safeCount = snapshot.count ?? 0;
@@ -118,6 +120,8 @@ class LocationCountService {
     final _type = normalizePlateTypeFirestoreValue(type);
 
     try {
+      final company = await LocationCompanyScope.resolve(_firestore);
+      if (company == null || company.isEmpty) throw StateError('LOCATION_COMPANY_REQUIRED');
       final uniq = locationNames.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
       const window = 10; 
 
@@ -132,7 +136,8 @@ class LocationCountService {
             locationName: displayName, 
             area: _area,
             type: _type,
-            locationField: locationField, 
+            locationField: locationField,
+            companyId: company,
           );
           return MapEntry(displayName, count);
         }));

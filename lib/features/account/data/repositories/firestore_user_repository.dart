@@ -43,38 +43,38 @@ class FirestoreUserRepository implements UserRepository {
       _readService.getTabletByCodeNumberAndAreaName(codeNumber, areaName);
 
   @override
-  Future<List<UserModel>> getUsersByAreaOnceWithCache(String selectedArea) =>
-      _readService.getUsersByAreaOnceWithCache(selectedArea);
+  Future<List<UserModel>> getUsersByAreaOnceWithCache(String selectedArea, {String? companyId}) =>
+      _readService.getUsersByAreaOnceWithCache(selectedArea, companyId: companyId);
 
   @override
-  Future<List<TabletModel>> getTabletsByAreaOnceWithCache(String selectedArea) =>
-      _readService.getTabletsByAreaOnceWithCache(selectedArea);
+  Future<List<TabletModel>> getTabletsByAreaOnceWithCache(String selectedArea, {String? companyId}) =>
+      _readService.getTabletsByAreaOnceWithCache(selectedArea, companyId: companyId);
 
   @override
-  Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea) =>
-      _readService.refreshUsersBySelectedArea(selectedArea);
+  Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea, {required String companyId}) =>
+      _readService.refreshUsersBySelectedArea(selectedArea, companyId: companyId);
 
   @override
   Future<List<UserModel>> refreshUsersByDivisionAreaFromShow(String division, String area) =>
       _readService.refreshUsersByDivisionAreaFromShow(division, area);
 
   @override
-  Future<List<TabletModel>> refreshTabletsBySelectedArea(String selectedArea) =>
-      _readService.refreshTabletsBySelectedArea(selectedArea);
+  Future<List<TabletModel>> refreshTabletsBySelectedArea(String selectedArea, {String? companyId}) =>
+      _readService.refreshTabletsBySelectedArea(selectedArea, companyId: companyId);
 
   @override
-  Future<void> updateUsersCache(String selectedArea, List<UserModel> users) =>
-      _readService.updateCacheWithUsers(selectedArea, users);
+  Future<void> updateUsersCache(String selectedArea, List<UserModel> users, {String? companyId}) =>
+      _readService.updateCacheWithUsers(selectedArea, users, companyId: companyId);
 
   @override
-  Future<void> updateTabletsCache(String selectedArea, List<TabletModel> tablets) =>
-      _readService.updateCacheWithTablets(selectedArea, tablets);
+  Future<void> updateTabletsCache(String selectedArea, List<TabletModel> tablets, {String? companyId}) =>
+      _readService.updateCacheWithTablets(selectedArea, tablets, companyId: companyId);
 
   @override
-  Future<void> clearUsersCache(String selectedArea) => _readService.clearUserCache(selectedArea);
+  Future<void> clearUsersCache(String selectedArea, {String? companyId}) => _readService.clearUserCache(selectedArea, companyId: companyId);
 
   @override
-  Future<void> clearTabletsCache(String selectedArea) => _readService.clearTabletCache(selectedArea);
+  Future<void> clearTabletsCache(String selectedArea, {String? companyId}) => _readService.clearTabletCache(selectedArea, companyId: companyId);
 
   @override
   Future<String?> getEnglishNameByArea(String area, String division) =>
@@ -106,12 +106,12 @@ class FirestoreUserRepository implements UserRepository {
       _writeService.setUserActiveStatus(userId, isActive: isActive);
 
   @override
-  Future<void> updateLogOutUserStatus(String codeNumber, String area, {bool? isWorking, bool? isSaved}) =>
-      _statusService.updateLogOutUserStatus(codeNumber, area, isWorking: isWorking, isSaved: isSaved);
+  Future<void> updateLogOutUserStatus(String userId, {bool? isWorking, bool? isSaved}) =>
+      _statusService.updateLogOutUserStatus(userId, isWorking: isWorking, isSaved: isSaved);
 
   @override
-  Future<void> updateWorkingUserStatus(String codeNumber, String area, {bool? isWorking, bool? isSaved}) =>
-      _statusService.updateWorkingUserStatus(codeNumber, area, isWorking: isWorking, isSaved: isSaved);
+  Future<void> updateWorkingUserStatus(String userId, {bool? isWorking, bool? isSaved}) =>
+      _statusService.updateWorkingUserStatus(userId, isWorking: isWorking, isSaved: isSaved);
 
   @override
   Future<void> updateLoginSession({

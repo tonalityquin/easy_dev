@@ -196,6 +196,7 @@ class WorkAreaSessionCoordinator {
     );
 
     final tts = await PlateTtsSessionActivator.activate(
+      companyId: normalizedDivision,
       area: normalizedCurrentArea,
       mode: resolvedMode,
       filters: filters,

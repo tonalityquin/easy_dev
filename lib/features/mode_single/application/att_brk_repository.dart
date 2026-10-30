@@ -60,6 +60,18 @@ AttBrkModeType? singleModeAttBrkTypeFromCode(String code) {
   return null;
 }
 
+class ClockInRestorePoint {
+  const ClockInRestorePoint({
+    required this.date,
+    required this.previousWorkRow,
+    required this.previousSessionRow,
+  });
+
+  final String date;
+  final Map<String, Object?>? previousWorkRow;
+  final Map<String, Object?>? previousSessionRow;
+}
+
 class AttBrkRepository {
   AttBrkRepository._({
     CommuteLogRepository? commuteLogRepository,
@@ -76,6 +88,76 @@ class AttBrkRepository {
   static const String _breakTypeStart = 'start';
 
   Future<Database> get _database async => AttBrkModeDb.instance.database;
+
+  Future<ClockInRestorePoint> captureClockInRestorePoint(DateTime dateTime) async {
+    final db = await _database;
+    final date = _dateFormatter.format(dateTime);
+    final workRows = await db.query(
+      AttBrkModeDb.workAttendanceTable,
+      where: 'date = ? AND type = ?',
+      whereArgs: <Object?>[date, AttBrkModeType.workIn.code],
+      limit: 1,
+    );
+    final sessionRows = await db.query(
+      AttBrkModeDb.attendanceSessionTable,
+      where: 'date = ?',
+      whereArgs: <Object?>[date],
+      limit: 1,
+    );
+    return ClockInRestorePoint(
+      date: date,
+      previousWorkRow: workRows.isEmpty
+          ? null
+          : Map<String, Object?>.from(workRows.first),
+      previousSessionRow: sessionRows.isEmpty
+          ? null
+          : Map<String, Object?>.from(sessionRows.first),
+    );
+  }
+
+  Future<void> restoreClockInAttempt({
+    required ClockInRestorePoint restorePoint,
+    required DateTime attemptedAt,
+  }) async {
+    final db = await _database;
+    await db.transaction((txn) async {
+      final current = await txn.query(
+        AttBrkModeDb.workAttendanceTable,
+        where: 'date = ? AND type = ?',
+        whereArgs: <Object?>[restorePoint.date, AttBrkModeType.workIn.code],
+        limit: 1,
+      );
+      if (current.isEmpty ||
+          current.first['created_at'] != attemptedAt.toIso8601String()) {
+        throw StateError('CLOCK_IN_RESTORE_CONCURRENT_UPDATE');
+      }
+      await txn.delete(
+        AttBrkModeDb.workAttendanceTable,
+        where: 'date = ? AND type = ?',
+        whereArgs: <Object?>[restorePoint.date, AttBrkModeType.workIn.code],
+      );
+      if (restorePoint.previousWorkRow != null) {
+        await txn.insert(
+          AttBrkModeDb.workAttendanceTable,
+          restorePoint.previousWorkRow!,
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await txn.delete(
+        AttBrkModeDb.attendanceSessionTable,
+        where: 'date = ?',
+        whereArgs: <Object?>[restorePoint.date],
+      );
+      if (restorePoint.previousSessionRow != null) {
+        await txn.insert(
+          AttBrkModeDb.attendanceSessionTable,
+          restorePoint.previousSessionRow!,
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    });
+    debugPrint('[ATTENDANCE_SESSION] clock_in_restore_complete date=${restorePoint.date}');
+  }
 
   Future<AttendanceSession> insertClockInWithSession({
     required DateTime dateTime,

@@ -1,3 +1,6 @@
+import '../../domain/repositories/end_work_report_paths.dart';
+import '../../../../shared/plate/domain/services/plate_document_paths.dart';
+import '../../../../app/utils/status_dialog.dart';
 import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
 import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -28,10 +31,14 @@ class EndWorkReportFirestoreRepository {
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
   Future<List<LockedPlateRecord>> fetchLockedDepartureCompletedPlates({
+    required String companyId,
     required String area,
   }) async {
+    final scope = PlateDocumentPaths.companyFor(area, companyId: companyId);
+    StatusDialog.recordDebugOperation('end_work.plates', 'query', details: {'companyId': scope, 'area': area});
     final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
         .collection('plates')
+        .where('companyId', isEqualTo: scope)
         .where('type', isEqualTo: PlateType.departureCompleted.firestoreValue)
         .where('area', isEqualTo: area)
         .where('isLockedFee', isEqualTo: true)
@@ -43,6 +50,7 @@ class EndWorkReportFirestoreRepository {
   }
 
   Future<void> appendPlateOutLogs({
+    required String companyId,
     required String area,
     required List<LockedPlateRecord> plates,
     required bool sectorEnabled,
@@ -50,10 +58,12 @@ class EndWorkReportFirestoreRepository {
     void Function(String message)? onLog,
   }) async {
     final safeArea = _safeArea(area);
+    final scope = PlateDocumentPaths.companyFor(safeArea, companyId: companyId);
     if (plates.isEmpty) return;
 
     for (final plate in plates) {
       await _appendSinglePlateOutLog(
+        companyId: scope,
         safeArea: safeArea,
         record: plate,
         sectorEnabled: sectorEnabled,
@@ -64,6 +74,7 @@ class EndWorkReportFirestoreRepository {
   }
 
   Future<void> _appendSinglePlateOutLog({
+    required String companyId,
     required String safeArea,
     required LockedPlateRecord record,
     required bool sectorEnabled,
@@ -71,6 +82,11 @@ class EndWorkReportFirestoreRepository {
     void Function(String message)? onLog,
   }) async {
     final data = record.data;
+    if (data['companyId']?.toString().trim() != companyId ||
+        data['area']?.toString().trim() != safeArea) {
+      StatusDialog.recordDebugOperation('end_work.plate_out_log', 'scope_rejected', details: {'docId': record.docId, 'companyId': companyId, 'area': safeArea});
+      throw StateError('PLATE_OUT_LOG_SCOPE_MISMATCH');
+    }
     final now = DateTime.now();
     final completedAt = _readDate(data['departureCompletedAt']) ??
         _readDate(data['updatedAt']) ??
@@ -105,6 +121,7 @@ class EndWorkReportFirestoreRepository {
     );
     final createdAt = Timestamp.fromDate(now);
     final logEntry = <String, dynamic>{
+      'companyId': companyId,
       'logKey': logKey,
       'submissionId': submissionId,
       'sourcePlateDocId': record.docId,
@@ -131,6 +148,11 @@ class EndWorkReportFirestoreRepository {
         FirebaseActivityMonitor.beginTransactionAttempt();
       final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(ref), source: 'end_work_report_firestore_repository.get');
       final existing = snap.data();
+      if (existing != null &&
+          (existing['companyId']?.toString().trim() != companyId ||
+              existing['area']?.toString().trim() != safeArea)) {
+        throw StateError('PLATE_OUT_LOG_EXISTING_SCOPE_MISMATCH');
+      }
       final rawLogs = existing?['logs'];
       final existingLogs = rawLogs is List ? rawLogs : const <dynamic>[];
       final alreadyExists = existingLogs.any((item) {
@@ -151,6 +173,7 @@ class EndWorkReportFirestoreRepository {
         };
       }).toList(growable: false);
       final update = <String, dynamic>{
+        'companyId': companyId,
         'area': safeArea,
         'monthKey': monthKey,
         'plateDocId': record.docId,
@@ -195,6 +218,7 @@ class EndWorkReportFirestoreRepository {
       FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(ref, update, SetOptions(merge: true)));
     }), source: 'end_work_report_firestore_repository.runTransaction');
 
+    StatusDialog.recordDebugOperation('end_work.plate_out_log', 'committed', details: {'companyId': companyId, 'area': safeArea, 'docId': record.docId, 'operation': operation});
     final message = '[EndWorkReport][plate_out_log] '
         'plateDocId=${record.docId} plate=$plateNumber operation=$operation '
         'sectorEnabled=$sectorEnabled sectorAssigned=$hasValidSector '
@@ -223,11 +247,12 @@ class EndWorkReportFirestoreRepository {
     String? gcsMd5Hash,
     int? gcsByteSize,
   }) async {
-    final areaRef = _firestore.collection('end_work_reports').doc('area_$area');
+    final areaRef = EndWorkReportPaths.root(_firestore, companyId: division, area: area);
     final monthRef = areaRef.collection('months').doc(monthKey);
     final submissionRef = monthRef.collection('submissions').doc(submissionId);
 
     final historyEntry = <String, dynamic>{
+      'companyId': division,
       'submissionId': submissionId,
       'reportType': EndWorkReportHistoryTypes.detailedGcsEndReport,
       'gcsLogVerified': gcsLogVerified,
@@ -248,6 +273,7 @@ class EndWorkReportFirestoreRepository {
     };
 
     final dayPayload = <String, dynamic>{
+      ...EndWorkReportPaths.scope(companyId: division, area: area),
       'submissionId': submissionId,
       'reportType': EndWorkReportHistoryTypes.detailedGcsEndReport,
       'gcsLogVerified': gcsLogVerified,
@@ -264,6 +290,7 @@ class EndWorkReportFirestoreRepository {
       'history': FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]),
     };
 
+    StatusDialog.recordDebugOperation('end_work.report', 'submit_start', details: {'companyId': division, 'area': area, 'submissionId': submissionId});
     final inserted = await _firestore.runTransaction<bool>((tx) async {
       final submissionSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(submissionRef), source: 'end_work_report_firestore_repository.get');
       if (submissionSnapshot.exists) {
@@ -284,8 +311,7 @@ class EndWorkReportFirestoreRepository {
         FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
           monthRef,
           <String, dynamic>{
-            'division': division,
-            'area': area,
+            ...EndWorkReportPaths.scope(companyId: division, area: area),
             'monthKey': monthKey,
             'updatedAt': FieldValue.serverTimestamp(),
             'lastReportDate': dateStr,
@@ -321,8 +347,7 @@ class EndWorkReportFirestoreRepository {
       FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
         areaRef,
         <String, dynamic>{
-          'division': division,
-          'area': area,
+          ...EndWorkReportPaths.scope(companyId: division, area: area),
           'updatedAt': FieldValue.serverTimestamp(),
           'lastMonthKey': monthKey,
           'lastReportDate': dateStr,
@@ -333,8 +358,7 @@ class EndWorkReportFirestoreRepository {
       FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
         monthRef,
         <String, dynamic>{
-          'division': division,
-          'area': area,
+          ...EndWorkReportPaths.scope(companyId: division, area: area),
           'monthKey': monthKey,
           'updatedAt': FieldValue.serverTimestamp(),
           'lastReportDate': dateStr,
@@ -349,8 +373,7 @@ class EndWorkReportFirestoreRepository {
         submissionRef,
         <String, dynamic>{
           'submissionId': submissionId,
-          'division': division,
-          'area': area,
+          ...EndWorkReportPaths.scope(companyId: division, area: area),
           'monthKey': monthKey,
           'date': dateStr,
           'reportType': EndWorkReportHistoryTypes.detailedGcsEndReport,
@@ -372,6 +395,7 @@ class EndWorkReportFirestoreRepository {
       ));
       return true;
     });
+    StatusDialog.recordDebugOperation('end_work.report', 'submit_result', details: {'companyId': division, 'area': area, 'submissionId': submissionId, 'inserted': inserted});
     debugPrint(
       '[EndWorkReport][submission] id=$submissionId area=$area month=$monthKey date=$dateStr inserted=$inserted gcsVerified=$gcsLogVerified',
     );
@@ -381,6 +405,7 @@ class EndWorkReportFirestoreRepository {
   Future<void> cleanupLockedDepartureCompletedPlates({
     required String area,
     required List<String> plateDocIds,
+    String? companyId,
   }) async {
     const chunkSize = 450;
     for (var offset = 0; offset < plateDocIds.length; offset += chunkSize) {
@@ -402,9 +427,13 @@ class EndWorkReportFirestoreRepository {
       }
     }
 
-    final countersRef = _firestore.collection('plate_counters').doc('area_$area');
+    final countersRef = _firestore.collection('plate_counters').doc(
+        PlateDocumentPaths.counterId(area, companyId: companyId));
     await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => countersRef.set(
       <String, dynamic>{
+        'companyId': PlateDocumentPaths.companyFor(area, companyId: companyId),
+        'areaId': PlateDocumentPaths.areaId(area, companyId: companyId),
+        'area': area,
         'departureCompletedEvents': 0,
       },
       SetOptions(merge: true),

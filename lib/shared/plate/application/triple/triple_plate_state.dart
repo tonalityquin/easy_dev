@@ -1,3 +1,4 @@
+import '../../domain/services/plate_document_paths.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -284,7 +285,7 @@ class TriplePlateState extends ChangeNotifier {
     required String userName,
     required void Function(String) onError,
   }) async {
-    final plateId = '${plateNumber}_$currentArea';
+    final plateId = PlateDocumentPaths.vehicleId(plateNumber, currentArea);
 
     try {
       final plateList = _data[collection];

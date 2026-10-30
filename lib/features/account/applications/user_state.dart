@@ -288,7 +288,9 @@ class UserState extends ChangeNotifier {
 
   Future<void> refreshUsersBySelectedAreaAndCache() async {
     final selectedArea = _areaState.currentArea.trim();
-    final currentDivision = _areaState.currentDivision.trim();
+    final currentDivision = _areaState.currentDivision.trim().isNotEmpty
+        ? _areaState.currentDivision.trim()
+        : (_session?.companyId ?? '').trim();
 
     _clearSelectionSilently();
 
@@ -299,11 +301,14 @@ class UserState extends ChangeNotifier {
       final data = currentDivision.isNotEmpty
           ? await _repository.refreshUsersByDivisionAreaFromShow(
               currentDivision, selectedArea)
-          : await _repository.refreshUsersBySelectedArea(selectedArea);
+          : await _repository.refreshUsersBySelectedArea(
+              selectedArea,
+              companyId: currentDivision,
+            );
 
       _userList = List<UserModel>.of(data, growable: false);
       _clearSelectionSilently();
-      _prevAreaUsers = selectedArea;
+      _prevAreaUsers = '${_areaState.currentDivision.trim()}/$selectedArea';
     } catch (e) {
       _clearSelectionSilently();
       debugPrint('🔥 Error refreshing users: $e');
@@ -330,10 +335,16 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data = await _repository.refreshTabletsBySelectedArea(selectedArea);
+      final verifiedCompany = _areaState.currentDivision.trim().isNotEmpty
+          ? _areaState.currentDivision.trim()
+          : (_session?.companyId ?? '').trim();
+      final data = await _repository.refreshTabletsBySelectedArea(
+        selectedArea,
+        companyId: verifiedCompany,
+      );
       _tabletList = List<TabletModel>.of(data, growable: false);
       _clearSelectionSilently();
-      _prevAreaTablets = selectedArea;
+      _prevAreaTablets = '${_areaState.currentDivision.trim()}/$selectedArea';
     } catch (e, st) {
       _clearSelectionSilently();
       debugPrint('🔥 Error refreshing tablets: $e\n$st');
@@ -391,8 +402,7 @@ class UserState extends ChangeNotifier {
 
     if (_user == null || _user!.isWorking == isWorking) return;
     await _repository.updateWorkingUserStatus(
-      _user!.codeNumber,
-      _user!.areas.firstOrNull ?? '',
+      _user!.id,
       isWorking: isWorking,
     );
     _user = _user!.copyWith(isWorking: isWorking);
@@ -447,7 +457,11 @@ class UserState extends ChangeNotifier {
       if (idx >= 0) {
         final updated = _userList[idx].copyWith(isActive: isActive);
         _userList = _replaceItem(_userList, updated);
-        await _repository.updateUsersCache(area, _userList);
+        await _repository.updateUsersCache(
+          area,
+          _userList,
+          companyId: _areaState.currentDivision.trim(),
+        );
       }
 
       notifyListeners();
@@ -671,60 +685,43 @@ class UserState extends ChangeNotifier {
       final successLine =
           '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser remote session update success userId=${updatedUser.id} elapsedMs=$elapsedMs firebaseRead=0 firebaseWrite=1 userAccountsShowRead=0 userAccountsShowWrite=0';
       debugPrint(successLine);
-      unawaited(
-        DevFirebaseDebugDialog.show(
-          operation: 'user.login.updateLoginSession',
-          details: <String, Object?>{
-            'source': 'UserState.updateLoginUser',
-            'userId': updatedUser.id,
-            'currentArea': updatedUser.currentArea,
-            'selectedArea': updatedUser.selectedArea,
-            'isSaved': updatedUser.isSaved,
-            'firebaseRead': 0,
-            'firebaseWrite': 1,
-            'userAccountsShowRead': 0,
-            'userAccountsShowWrite': 0,
-            'elapsedMs': elapsedMs,
-          },
-          title: '로그인 세션 동기화 완료',
-          success: true,
-          copyAsDebugPrintCode: true,
-          devModeOnly: true,
-        ),
+      LauncherDiagnostics.record(
+        'login_session_sync_completed',
+        scope: 'user_state',
+        meta: <String, Object?>{
+          'operation': 'user.login.updateLoginSession',
+          'firebaseWrite': 1,
+          'elapsedMs': elapsedMs,
+          'success': true,
+        },
       );
     } catch (error, stackTrace) {
       final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
       debugPrint(
         '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser remote session update failed userId=${updatedUser.id} elapsedMs=$elapsedMs error=$error\n$stackTrace',
       );
-      unawaited(
-        DevFirebaseDebugDialog.show(
-          operation: 'user.login.updateLoginSession',
-          error: error,
-          stackTrace: stackTrace,
-          details: <String, Object?>{
-            'source': 'UserState.updateLoginUser',
-            'userId': updatedUser.id,
-            'currentArea': updatedUser.currentArea,
-            'selectedArea': updatedUser.selectedArea,
-            'isSaved': updatedUser.isSaved,
-            'firebaseRead': 0,
-            'firebaseWriteAttempted': 1,
-            'userAccountsShowRead': 0,
-            'userAccountsShowWrite': 0,
-            'elapsedMs': elapsedMs,
-          },
-          title: '로그인 세션 동기화 실패',
-          copyAsDebugPrintCode: true,
-          devModeOnly: true,
-        ),
+      LauncherDiagnostics.record(
+        'login_session_sync_failed',
+        scope: 'user_state',
+        meta: <String, Object?>{
+          'operation': 'user.login.updateLoginSession',
+          'firebaseWriteAttempted': 1,
+          'elapsedMs': elapsedMs,
+          'errorType': error.runtimeType.toString(),
+          'firebaseCode': error is FirebaseException ? error.code : '',
+          'stack': stackTrace.toString(),
+        },
       );
       rethrow;
     }
 
     final area = _areaState.currentArea.trim();
     _userList = _replaceItem(_userList, updatedUser);
-    await _repository.updateUsersCache(area, _userList);
+    await _repository.updateUsersCache(
+          area,
+          _userList,
+          companyId: _areaState.currentDivision.trim(),
+        );
 
     await saveCardToUserCodeNumber(updatedUser);
     debugPrint(
@@ -1024,7 +1021,11 @@ class UserState extends ChangeNotifier {
 
     final area = _areaState.currentArea.trim();
     _tabletList = _replaceTabletItem(_tabletList, updatedTablet);
-    await _repository.updateTabletsCache(area, _tabletList);
+    await _repository.updateTabletsCache(
+          area,
+          _tabletList,
+          companyId: _areaState.currentDivision.trim(),
+        );
 
     await _saveTabletPrefs(updatedTablet);
   }
@@ -1063,7 +1064,11 @@ class UserState extends ChangeNotifier {
       } else {
         _userList = _replaceItem(_userList, updatedUser);
       }
-      await _repository.updateUsersCache(area, _userList);
+      await _repository.updateUsersCache(
+          area,
+          _userList,
+          companyId: _areaState.currentDivision.trim(),
+        );
 
       notifyListeners();
       return true;
@@ -1104,7 +1109,11 @@ class UserState extends ChangeNotifier {
             .toList(growable: false);
       }
       _tabletList = _replaceTabletItem(_tabletList, updatedTablet);
-      await _repository.updateTabletsCache(area, _tabletList);
+      await _repository.updateTabletsCache(
+          area,
+          _tabletList,
+          companyId: _areaState.currentDivision.trim(),
+        );
 
       notifyListeners();
       return true;
@@ -1171,8 +1180,7 @@ class UserState extends ChangeNotifier {
           );
         } else {
           await _repository.updateLogOutUserStatus(
-            _user!.codeNumber,
-            _user!.areas.firstOrNull ?? '',
+            _user!.id,
             isWorking: false,
             isSaved: false,
           );
@@ -1287,7 +1295,11 @@ class UserState extends ChangeNotifier {
 
       final area = _areaState.currentArea.trim();
       _userList = _insertOrReplace(_userList, user);
-      await _repository.updateUsersCache(area, _userList);
+      await _repository.updateUsersCache(
+          area,
+          _userList,
+          companyId: _areaState.currentDivision.trim(),
+        );
 
       notifyListeners();
     } catch (e) {
@@ -1314,7 +1326,11 @@ class UserState extends ChangeNotifier {
 
       final area = _areaState.currentArea.trim();
       _tabletList = _insertOrReplaceTablet(_tabletList, tablet);
-      await _repository.updateTabletsCache(area, _tabletList);
+      await _repository.updateTabletsCache(
+          area,
+          _tabletList,
+          companyId: _areaState.currentDivision.trim(),
+        );
 
       notifyListeners();
     } catch (e, st) {
@@ -1334,7 +1350,11 @@ class UserState extends ChangeNotifier {
       final area = _areaState.currentArea.trim();
       _userList =
           _userList.where((u) => !ids.contains(u.id)).toList(growable: false);
-      await _repository.updateUsersCache(area, _userList);
+      await _repository.updateUsersCache(
+          area,
+          _userList,
+          companyId: _areaState.currentDivision.trim(),
+        );
 
       _clearSelectionSilently();
 
@@ -1354,7 +1374,11 @@ class UserState extends ChangeNotifier {
       final area = _areaState.currentArea.trim();
       _tabletList =
           _tabletList.where((u) => !ids.contains(u.id)).toList(growable: false);
-      await _repository.updateTabletsCache(area, _tabletList);
+      await _repository.updateTabletsCache(
+          area,
+          _tabletList,
+          companyId: _areaState.currentDivision.trim(),
+        );
 
       _clearSelectionSilently();
 
@@ -2075,9 +2099,10 @@ class UserState extends ChangeNotifier {
   Future<void> _fetchUsersByAreaWithCache({bool force = false}) async {
     final selectedArea = _areaState.currentArea.trim();
     if (selectedArea.isEmpty) return;
-    if (!force && _prevAreaUsers == selectedArea) return;
+    final areaKey = '${_areaState.currentDivision.trim()}/$selectedArea';
+    if (!force && _prevAreaUsers == areaKey) return;
 
-    _prevAreaUsers = selectedArea;
+    _prevAreaUsers = areaKey;
 
     _clearSelectionSilently();
 
@@ -2085,7 +2110,10 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data = await _repository.getUsersByAreaOnceWithCache(selectedArea);
+      final data = await _repository.getUsersByAreaOnceWithCache(
+        selectedArea,
+        companyId: _areaState.currentDivision.trim(),
+      );
       _userList = List<UserModel>.of(data, growable: false);
       _clearSelectionSilently();
     } catch (e) {
@@ -2100,9 +2128,10 @@ class UserState extends ChangeNotifier {
   Future<void> _fetchTabletsByAreaWithCache({bool force = false}) async {
     final selectedArea = _areaState.currentArea.trim();
     if (selectedArea.isEmpty) return;
-    if (!force && _prevAreaTablets == selectedArea) return;
+    final areaKey = '${_areaState.currentDivision.trim()}/$selectedArea';
+    if (!force && _prevAreaTablets == areaKey) return;
 
-    _prevAreaTablets = selectedArea;
+    _prevAreaTablets = areaKey;
 
     _clearSelectionSilently();
 
@@ -2111,7 +2140,10 @@ class UserState extends ChangeNotifier {
 
     try {
       final data =
-          await _repository.getTabletsByAreaOnceWithCache(selectedArea);
+          await _repository.getTabletsByAreaOnceWithCache(
+            selectedArea,
+            companyId: _areaState.currentDivision.trim(),
+          );
       _tabletList = List<TabletModel>.of(data, growable: false);
       _clearSelectionSilently();
     } catch (e) {

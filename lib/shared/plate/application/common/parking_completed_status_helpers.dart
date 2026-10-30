@@ -1,3 +1,4 @@
+import '../../domain/services/plate_document_paths.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -75,7 +76,7 @@ Future<void> appendParkingCompletedPlateLog({
 
 String resolveParkingCompletedDocId(PlateModel plate) {
   if (plate.id.trim().isNotEmpty) return plate.id.trim();
-  return '${plate.plateNumber}_${plate.area}';
+  return PlateDocumentPaths.vehicleId(plate.plateNumber, plate.area);
 }
 
 String resolveParkingCompletedEffectiveLocation(

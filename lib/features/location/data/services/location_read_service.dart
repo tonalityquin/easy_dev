@@ -19,9 +19,8 @@ class LocationReadService {
       final companyId = await LocationCompanyScope.resolve(_firestore);
       Query<Map<String, dynamic>> query = _firestore
           .collection('locations').where('area', isEqualTo: cleanArea);
-      if (companyId != null) {
-        query = query.where('companyId', isEqualTo: companyId);
-      }
+      if (companyId == null || companyId.isEmpty) throw StateError('LOCATION_COMPANY_REQUIRED');
+      query = query.where('companyId', isEqualTo: companyId);
       snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(), source: 'location_read_service.get');
     } catch (e, st) {
       if (kDebugMode) {
@@ -35,8 +34,8 @@ class LocationReadService {
         details: <String, Object?>{
           'collection': 'locations',
           'area': cleanArea,
-          'query': 'where(area == $cleanArea)',
-          'filters': 'area == $cleanArea',
+          'query': 'where(companyId == currentCompany).where(area == $cleanArea)',
+          'filters': 'companyId == currentCompany AND area == $cleanArea',
           'orderBy': 'none',
           'queryShape': 'single-field-equality',
           'compositeIndex': 'not-required-for-this-shape-unless-console-error-requires-it',

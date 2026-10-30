@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../features/selector/application/dev_auth.dart';
+import '../utils/status_dialog.dart';
+import '../../shared/tts/application/plate_tts_session_diagnostics.dart';
 import 'firebase_activity_monitor.dart';
 import 'firebase_activity_cost_estimator.dart';
 import 'firebase_activity_billing_config.dart';
@@ -25,15 +27,28 @@ class FirebaseActivityStatusDialog {
       transitionDuration:
           reduced ? Duration.zero : const Duration(milliseconds: 240),
       pageBuilder: (context, _, __) => const _FirebaseActivityDashboard(),
-      transitionBuilder: (context, animation, _, child) => FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.96, end: 1).animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+      transitionBuilder: (context, animation, _, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.025),
+              end: Offset.zero,
+            ).animate(curved),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
+              child: RotationTransition(
+                turns: Tween<double>(begin: -0.004, end: 0).animate(curved),
+                child: child,
+              ),
+            ),
           ),
-          child: child,
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -155,8 +170,21 @@ class _FirebaseActivityDashboardState
     });
   }
 
+  Future<void> _copyIndexUrl() async {
+    final url = StatusDialog.indexCreationUrl;
+    if (url.isEmpty) return;
+    if (!await _copyCode(url, 'index_url')) return;
+    if (mounted) setState(() => _copiedAll = false);
+  }
+
   Future<void> _copyAll() async {
-    if (!await _copyCode(monitor.debugPrintCode, 'all')) return;
+    final optimizationCode = StatusDialog.debugPrintCode;
+    final allCode = <String>[
+      monitor.debugPrintCode,
+      if (optimizationCode.isNotEmpty) optimizationCode,
+      PlateTtsSessionDiagnostics.debugPrintCode,
+    ].where((line) => line.isNotEmpty).join('\n');
+    if (!await _copyCode(allCode, 'all')) return;
     setState(() {
       _copiedAll = true;
       _copiedFilter = false;
@@ -1335,22 +1363,47 @@ class _FirebaseActivityDashboardState
                                   ? '비용 debugPrint 코드 복사됨'
                                   : '비용 debugPrint 코드 복사'),
                             ),
-                            const SizedBox(height: 6),
-                            OutlinedButton.icon(
-                              onPressed: _copyAll,
-                              icon: AnimatedSwitcher(
+                            if (StatusDialog.indexCreationUrl.isNotEmpty) ...<Widget>[
+                              const SizedBox(height: 6),
+                              TweenAnimationBuilder<double>(
+                                tween: Tween<double>(begin: 0.98, end: 1),
                                 duration: duration,
-                                child: Icon(
-                                  _copiedAll
-                                      ? Icons.check_rounded
-                                      : Icons.content_copy_rounded,
-                                  key: ValueKey<bool>(_copiedAll),
+                                curve: Curves.easeOutCubic,
+                                builder: (context, scale, child) =>
+                                    Transform.scale(scale: scale, child: child),
+                                child: OutlinedButton.icon(
+                                  onPressed: _copyIndexUrl,
+                                  icon: const Icon(Icons.link_rounded),
+                                  label: const Text('복합 인덱스 생성 주소 복사'),
                                 ),
                               ),
-                              label: Text(
-                                _copiedAll
-                                    ? '전체 debugPrint 코드 복사됨'
-                                    : '전체 debugPrint 코드 복사',
+                            ],
+                            const SizedBox(height: 6),
+                            AnimatedOpacity(
+                              opacity: _copiedAll && !reduced ? 0.9 : 1,
+                              duration: duration,
+                              curve: Curves.easeOutCubic,
+                              child: AnimatedScale(
+                                scale: _copiedAll && !reduced ? 1.015 : 1,
+                                duration: duration,
+                                curve: Curves.easeOutCubic,
+                                child: OutlinedButton.icon(
+                                onPressed: _copyAll,
+                                icon: AnimatedSwitcher(
+                                  duration: duration,
+                                  child: Icon(
+                                    _copiedAll
+                                        ? Icons.check_rounded
+                                        : Icons.content_copy_rounded,
+                                    key: ValueKey<bool>(_copiedAll),
+                                  ),
+                                ),
+                                label: Text(
+                                  _copiedAll
+                                      ? '전체 debugPrint 코드 복사됨'
+                                      : '전체 debugPrint 코드 복사',
+                                ),
+                                ),
                               ),
                             ),
                           ],

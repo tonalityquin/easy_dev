@@ -14,8 +14,8 @@ abstract class UserRepository {
 
   Future<void> updateLoadCurrentArea(String codeNumber, String area, String currentArea);
   Future<void> areaPickerCurrentArea(String codeNumber, String area, String currentArea);
-  Future<void> updateLogOutUserStatus(String codeNumber, String area, {bool? isWorking, bool? isSaved});
-  Future<void> updateWorkingUserStatus(String codeNumber, String area, {bool? isWorking, bool? isSaved});
+  Future<void> updateLogOutUserStatus(String userId, {bool? isWorking, bool? isSaved});
+  Future<void> updateWorkingUserStatus(String userId, {bool? isWorking, bool? isSaved});
   Future<void> updateLoginSession({
     required String userId,
     required bool isSaved,
@@ -37,18 +37,18 @@ abstract class UserRepository {
   Future<void> deleteUsers(List<String> ids, {void Function(String)? onDiagnostic});
   Future<void> deleteTablets(List<String> ids);
 
-  Future<List<UserModel>> getUsersByAreaOnceWithCache(String selectedArea);
-  Future<List<TabletModel>> getTabletsByAreaOnceWithCache(String selectedArea);
+  Future<List<UserModel>> getUsersByAreaOnceWithCache(String selectedArea, {String? companyId});
+  Future<List<TabletModel>> getTabletsByAreaOnceWithCache(String selectedArea, {String? companyId});
 
-  Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea);
+  Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea, {required String companyId});
   Future<List<UserModel>> refreshUsersByDivisionAreaFromShow(String division, String area);
-  Future<List<TabletModel>> refreshTabletsBySelectedArea(String selectedArea);
+  Future<List<TabletModel>> refreshTabletsBySelectedArea(String selectedArea, {String? companyId});
 
-  Future<void> updateUsersCache(String selectedArea, List<UserModel> users);
-  Future<void> updateTabletsCache(String selectedArea, List<TabletModel> tablets);
+  Future<void> updateUsersCache(String selectedArea, List<UserModel> users, {String? companyId});
+  Future<void> updateTabletsCache(String selectedArea, List<TabletModel> tablets, {String? companyId});
 
-  Future<void> clearUsersCache(String selectedArea);
-  Future<void> clearTabletsCache(String selectedArea);
+  Future<void> clearUsersCache(String selectedArea, {String? companyId});
+  Future<void> clearTabletsCache(String selectedArea, {String? companyId});
 
   Future<String?> getEnglishNameByArea(String area, String division);
 }

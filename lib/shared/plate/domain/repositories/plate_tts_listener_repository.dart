@@ -40,11 +40,13 @@ class PlateTtsChangeBatch {
 
 abstract interface class PlateTtsListenerRepository {
   Future<PlateTtsBaselineCursor> fetchBaseline({
+    required String companyId,
     required String area,
     required List<PlateType> types,
   });
 
   Stream<PlateTtsChangeBatch> watchChanges({
+    required String companyId,
     required String area,
     required List<PlateType> types,
     DateTime? startAfterUpdatedAt,

@@ -578,6 +578,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
         .watchViewRows(
       collection: 'parking_completed_view',
       area: requestedArea,
+      companyId: division,
       primaryAtField: 'parkingCompletedAt',
     )
         .listen(
@@ -608,6 +609,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage>
         .watchViewRows(
       collection: 'departure_requests_view',
       area: requestedArea,
+      companyId: division,
       primaryAtField: 'departureRequestedAt',
     )
         .listen(

@@ -42,6 +42,8 @@ class AreaState with ChangeNotifier {
 
   AreaRecord? get currentRecord => _currentRecord;
 
+  String get currentAreaId => _currentRecord?.id ?? '';
+
   String get selectedArea => _selectedArea;
 
   String get selectedDivision => _selectedDivision;

@@ -1,3 +1,4 @@
+import '../../../plate/domain/services/plate_document_paths.dart';
 import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -812,7 +813,7 @@ class ModifyPlateService {
     );
 
     try {
-      final documentId = '${originalPlate.plateNumber}_${originalPlate.area}';
+      final documentId = PlateDocumentPaths.vehicleId(originalPlate.plateNumber, originalPlate.area);
       if (statusMutationAllowed) {
         final resolvedScope = statusScope;
         if (resolvedScope == null) {
@@ -851,7 +852,7 @@ class ModifyPlateService {
             : 'PlateRepository.updatePlate 실패',
         error: e,
         extra: <String, dynamic>{
-          'docId': '${originalPlate.plateNumber}_${originalPlate.area}',
+          'docId': PlateDocumentPaths.vehicleId(originalPlate.plateNumber, originalPlate.area),
           'area': areaState.currentArea,
           'division': areaState.currentDivision,
           'performedByLen': userState.name.trim().length,

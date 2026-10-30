@@ -1127,6 +1127,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       context: _contextLabel,
       meta: <String, Object?>{'stage': stage.name},
     );
+    var dialogInteractionFailed = false;
     try {
       await _playbackController.waitUntilIdle();
       if (!mounted || _interactionLocked || _launcherController!.busy) return;
@@ -1153,6 +1154,18 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         case TerminalLoginStage.activatingMode:
           break;
       }
+    } catch (error, stackTrace) {
+      dialogInteractionFailed = true;
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_dialog_interaction_failed',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'error': error.toString(),
+          'stack': stackTrace.toString(),
+          'stage': _launcherController?.loginStage.name ?? '',
+        },
+      );
+      debugPrint('[LAUNCHER_DIALOG] interaction_failed error=$error\n$stackTrace');
     } finally {
       if (mounted) {
         _setLauncherDialogPhase(
@@ -1165,10 +1178,19 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     final deferred = _deferredLauncherResult;
     _deferredLauncherResult = null;
     if (deferred != null) {
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_deferred_result_consumed',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'targetRoute': deferred.targetRoute ?? '',
+        },
+      );
       await _handleLauncherResult(deferred);
       if (!mounted || _interactionLocked) return;
     }
-    await _syncLauncherInteractionSurface();
+    if (!dialogInteractionFailed) {
+      await _syncLauncherInteractionSurface();
+    }
   }
 
   Future<void> _showLauncherDialog({
@@ -1177,6 +1199,11 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     _setLauncherDialogPhase(
       _LauncherDialogPhase.opening,
       source: 'dialog_route_start',
+    );
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_dialog_route_open_requested',
+      context: _contextLabel,
+      meta: <String, Object?>{'stage': _launcherController?.loginStage.name ?? ''},
     );
     await showGeneralDialog<void>(
       context: context,
@@ -1216,11 +1243,28 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
           curve: Curves.easeOutCubic,
           reverseCurve: Curves.easeInCubic,
         );
+        if (_reduceMotion) {
+          return FadeTransition(opacity: curved, child: child);
+        }
         return FadeTransition(
           opacity: curved,
-          child: child,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.025),
+              end: Offset.zero,
+            ).animate(curved),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.985, end: 1).animate(curved),
+              child: child,
+            ),
+          ),
         );
       },
+    );
+    ParkinWorkinTerminalDiagnostics.record(
+      'launcher_dialog_route_closed',
+      context: _contextLabel,
+      meta: <String, Object?>{'stage': _launcherController?.loginStage.name ?? ''},
     );
   }
 
@@ -6196,6 +6240,7 @@ class _LauncherPasswordDialogState extends State<_LauncherPasswordDialog> {
     }
     setState(() => _busy = true);
     await HapticFeedback.selectionClick();
+    final passwordRoute = ModalRoute.of(context);
     final result = await widget.onAuthenticate(password);
     if (!mounted) return;
     if (result.accepted) {
@@ -6205,7 +6250,33 @@ class _LauncherPasswordDialogState extends State<_LauncherPasswordDialog> {
       await WidgetsBinding.instance.endOfFrame;
       await _frameKey.currentState?.close();
       if (!mounted) return;
-      Navigator.of(context).pop();
+      final navigator = passwordRoute?.navigator;
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_password_route_close_requested',
+        context: 'launcher',
+        meta: <String, Object?>{
+          'routeActive': passwordRoute?.isActive ?? false,
+          'routeCurrent': passwordRoute?.isCurrent ?? false,
+        },
+      );
+      if (passwordRoute != null &&
+          passwordRoute.isActive &&
+          navigator != null) {
+        if (passwordRoute.isCurrent) {
+          navigator.pop();
+        } else {
+          navigator.removeRoute(passwordRoute);
+        }
+        ParkinWorkinTerminalDiagnostics.record(
+          'launcher_password_route_close_dispatched',
+          context: 'launcher',
+        );
+      } else {
+        ParkinWorkinTerminalDiagnostics.record(
+          'launcher_password_route_close_unavailable',
+          context: 'launcher',
+        );
+      }
       return;
     }
     await HapticFeedback.mediumImpact();

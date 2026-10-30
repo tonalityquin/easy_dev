@@ -1,3 +1,5 @@
+import 'end_work_report_paths.dart';
+import '../../../../app/utils/status_dialog.dart';
 import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
 import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:developer' as dev;
@@ -29,7 +31,7 @@ class EndWorkReportRepository {
     const int snapshotLockedVehicleCount = 0;
     const int snapshotTotalLockedFee = 0;
 
-    final areaRef = _firestore.collection('end_work_reports').doc('area_$area');
+    final areaRef = EndWorkReportPaths.root(_firestore, companyId: division, area: area);
     final monthRef = areaRef.collection('months').doc(monthKey);
 
     final historyEntry = <String, dynamic>{
@@ -49,14 +51,14 @@ class EndWorkReportRepository {
     };
 
     final areaMetaPayload = <String, dynamic>{
-      'division': division,
-      'area': area,
+      ...EndWorkReportPaths.scope(companyId: division, area: area),
       'updatedAt': createdAtIso,
       'lastReportDate': dateStr,
       'lastMonthKey': monthKey,
     };
 
     final dayPayload = <String, dynamic>{
+      ...EndWorkReportPaths.scope(companyId: division, area: area),
       'reportType': EndWorkReportHistoryTypes.firstEndReport,
       'gcsLogVerified': false,
       'division': division,
@@ -76,8 +78,7 @@ class EndWorkReportRepository {
     };
 
     final monthPayload = <String, dynamic>{
-      'division': division,
-      'area': area,
+      ...EndWorkReportPaths.scope(companyId: division, area: area),
       'monthKey': monthKey,
       'updatedAt': createdAtIso,
       'lastReportDate': dateStr,
@@ -95,6 +96,7 @@ class EndWorkReportRepository {
       FirebaseActivityWriteScope.cancelBatch(batch);
     }
 
+    StatusDialog.recordDebugOperation('end_work.report', 'first_saved', details: {'companyId': division, 'area': area, 'monthKey': monthKey});
     return EndWorkReportWriteResult(
       area: area,
       division: division,
@@ -124,18 +126,41 @@ class EndWorkReportRepository {
         .toSet()
         .toList()
       ..sort();
+    if (normalizedDivision.isEmpty) throw StateError('END_WORK_COMPANY_REQUIRED');
     if (normalizedArea.isEmpty || keys.isEmpty) {
       return <String, Map<String, dynamic>>{};
     }
 
     final rebuilt = <String, Map<String, Map<String, dynamic>>>{};
     final bestAt = <String, Map<String, DateTime>>{};
-    final areaRef = _firestore.collection('end_work_reports').doc('area_$normalizedArea');
+    final areaRef = EndWorkReportPaths.root(_firestore, companyId: normalizedDivision, area: normalizedArea);
     final missing = <String>[];
 
     for (final monthKey in keys) {
       final monthDoc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => areaRef.collection('months').doc(monthKey).get(), source: 'end_work_report_repository.get');
       if (!monthDoc.exists || monthDoc.data() == null) {
+        if (allowLegacyFallback) {
+          try {
+            final oldMonthDoc = await FirebaseActivityMonitor.track(
+              FirebaseActivityKind.read,
+              () => _firestore.collection('end_work_reports').doc('area_$normalizedArea').collection('months').doc(monthKey).get(),
+              source: 'end_work_report_repository.legacy_month_get',
+            );
+            final oldData = oldMonthDoc.data();
+            if (oldData != null &&
+                (oldData['companyId'] ?? oldData['division'] ?? '').toString().trim() == normalizedDivision) {
+              _mergeOneMonthDocIntoCache(
+                rebuilt: rebuilt,
+                bestAt: bestAt,
+                division: normalizedDivision,
+                monthDoc: oldMonthDoc,
+              );
+              continue;
+            }
+          } on FirebaseException catch (error) {
+            StatusDialog.recordDebugOperation('end_work.history', 'legacy_month_unavailable', details: {'companyId': normalizedDivision, 'area': normalizedArea, 'monthKey': monthKey, 'code': error.code});
+          }
+        }
         missing.add(monthKey);
         continue;
       }
@@ -148,11 +173,19 @@ class EndWorkReportRepository {
     }
 
     if (allowLegacyFallback && missing.isNotEmpty) {
-      final areaDoc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => areaRef.get(), source: 'end_work_report_repository.get');
-      final data = areaDoc.data();
+      DocumentSnapshot<Map<String, dynamic>>? areaDoc;
+      try {
+        areaDoc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => areaRef.get(), source: 'end_work_report_repository.get');
+        if (areaDoc?.exists != true) {
+          areaDoc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('end_work_reports').doc('area_$normalizedArea').get(), source: 'end_work_report_repository.legacy_get');
+        }
+      } on FirebaseException catch (error) {
+        StatusDialog.recordDebugOperation('end_work.history', 'legacy_fallback_unavailable', details: {'code': error.code, 'companyId': normalizedDivision, 'area': normalizedArea});
+      }
+      final data = areaDoc?.data();
       if (data != null) {
         final legacy = _extractAllDaysFromLegacyAreaDoc(
-          docId: areaDoc.id,
+          docId: areaDoc!.id,
           data: data,
         );
         for (final entry in legacy.entries) {
@@ -168,6 +201,7 @@ class EndWorkReportRepository {
     }
 
     final result = rebuilt[normalizedArea] ?? <String, Map<String, dynamic>>{};
+    StatusDialog.recordDebugOperation('end_work.history', 'months_loaded', details: {'companyId': normalizedDivision, 'area': normalizedArea, 'days': result.length});
     dev.log(
       '[STAT] direct months area=$normalizedArea requested=${keys.length} missing=${missing.length} days=${result.length}',
       name: 'EndWorkReportRepository',
@@ -183,9 +217,8 @@ class EndWorkReportRepository {
 
     try {
       Query<Map<String, dynamic>> q = _firestore.collectionGroup('months');
-      if (division.isNotEmpty) {
-        q = q.where('division', isEqualTo: division);
-      }
+      if (division.trim().isEmpty) throw StateError('END_WORK_COMPANY_REQUIRED');
+      q = q.where('companyId', isEqualTo: division.trim());
 
       final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => q.get(), source: 'end_work_report_repository.get');
       for (final monthDoc in snap.docs) {
@@ -268,6 +301,8 @@ class EndWorkReportRepository {
   }) {
     final data = monthDoc.data();
     if (data == null) return;
+    if (division.isNotEmpty &&
+        (data['companyId'] ?? data['division'] ?? '').toString().trim() != division.trim()) return;
 
     final area = (data['area']?.toString().trim().isNotEmpty == true)
         ? data['area']!.toString().trim()
@@ -322,11 +357,7 @@ class EndWorkReportRepository {
     }
   }
 
-  String _areaFromAreaDocId(String id) {
-    final s = id.trim();
-    if (s.startsWith('area_') && s.length > 5) return s.substring(5).trim();
-    return s;
-  }
+  String _areaFromAreaDocId(String id) => EndWorkReportPaths.areaFromRootId(id.trim());
 
   Future<void> _appendMonthsByHierarchicalScan({
     required String division,
@@ -334,9 +365,8 @@ class EndWorkReportRepository {
     required Map<String, Map<String, DateTime>> bestAt,
   }) async {
     Query<Map<String, dynamic>> qAreas = _firestore.collection('end_work_reports');
-    if (division.isNotEmpty) {
-      qAreas = qAreas.where('division', isEqualTo: division);
-    }
+    if (division.trim().isEmpty) throw StateError('END_WORK_COMPANY_REQUIRED');
+    qAreas = qAreas.where('companyId', isEqualTo: division.trim());
 
     final areaSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => qAreas.get(), source: 'end_work_report_repository.get');
     dev.log('[STAT] fallback scan: areaDocs=${areaSnap.size}', name: 'EndWorkReportRepository');
@@ -360,15 +390,15 @@ class EndWorkReportRepository {
     required Map<String, Map<String, DateTime>> bestAt,
   }) async {
     Query<Map<String, dynamic>> q = _firestore.collection('end_work_reports');
-    if (division.isNotEmpty) {
-      q = q.where('division', isEqualTo: division);
-    }
+    if (division.trim().isEmpty) throw StateError('END_WORK_COMPANY_REQUIRED');
+    q = q.where('division', isEqualTo: division.trim());
 
     final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => q.get(), source: 'end_work_report_repository.get');
     dev.log('[STAT] legacy scan: areaDocs=${snap.size}', name: 'EndWorkReportRepository');
 
     for (final doc in snap.docs) {
       final data = doc.data();
+      if ((data['companyId'] ?? data['division'] ?? '').toString().trim() != division.trim()) continue;
       final area = (data['area']?.toString().trim().isNotEmpty == true)
           ? data['area']!.toString().trim()
           : _tryParseAreaFromDocId(doc.id).trim();

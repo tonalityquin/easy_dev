@@ -1,3 +1,5 @@
+import '../../../area_remote_settings/application/area_snapshot_scope.dart';
+import '../../domain/services/plate_document_paths.dart';
 import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
 import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:async';
@@ -103,9 +105,7 @@ String _normalizeViewRowLocation(String? raw) {
 }
 
 String _fallbackPlateNumberFromDocId(String docId) {
-  final idx = docId.lastIndexOf('_');
-  if (idx > 0) return docId.substring(0, idx);
-  return docId;
+  return PlateDocumentPaths.plateNumberFromId(docId);
 }
 
 Query<Map<String, dynamic>> _platesByTypeAreaQuery(
@@ -116,6 +116,7 @@ Query<Map<String, dynamic>> _platesByTypeAreaQuery(
 }) {
   Query<Map<String, dynamic>> q = firestore
       .collection('plates')
+      .where('companyId', isEqualTo: PlateDocumentPaths.companyFor(area))
       .where(PlateFields.type, isEqualTo: type.firestoreValue)
       .where(PlateFields.area, isEqualTo: area);
 
@@ -822,9 +823,14 @@ class FirestorePlateRepository implements PlateRepository {
       return <PlateModel>[];
     }
 
+    final activeArea = AreaSnapshotScope.area.trim();
+    if (activeArea.isEmpty) return <PlateModel>[];
     try {
       final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection('plates')
+          .where('area', isEqualTo: activeArea)
+          .where('companyId', isEqualTo: PlateDocumentPaths.companyFor(
+              activeArea))
           .where('isSelected', isEqualTo: true)
           .where('selectedBy', isEqualTo: trimmedUserName)
           .where('type', whereIn: types)
@@ -842,6 +848,9 @@ class FirestorePlateRepository implements PlateRepository {
     try {
       final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection('plates')
+          .where('area', isEqualTo: activeArea)
+          .where('companyId', isEqualTo: PlateDocumentPaths.companyFor(
+              activeArea))
           .where('isSelected', isEqualTo: true)
           .where('selectedBy', isEqualTo: trimmedUserName)
           .get(), source: 'firestore_plate_repository.get');
@@ -896,6 +905,7 @@ class FirestorePlateRepository implements PlateRepository {
   Future<void> upsertViewItem({
     required String collection,
     required String area,
+    String? companyId,
     required String plateDocId,
     required String plateNumber,
     required String location,
@@ -907,8 +917,11 @@ class FirestorePlateRepository implements PlateRepository {
     final docId = plateDocId.trim();
     if (c.isEmpty || a.isEmpty || docId.isEmpty) return;
 
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _firestore.collection(c).doc(a).set(
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _firestore.collection(c).doc(
+      PlateDocumentPaths.viewId(a, companyId: companyId)).set(
       <String, dynamic>{
+        'companyId': PlateDocumentPaths.companyFor(a, companyId: companyId),
+        'areaId': PlateDocumentPaths.areaId(a, companyId: companyId),
         'area': a,
         'updatedAt': FieldValue.serverTimestamp(),
         'items': <String, dynamic>{
@@ -935,6 +948,7 @@ class FirestorePlateRepository implements PlateRepository {
   Future<void> removeViewItem({
     required String collection,
     required String area,
+    String? companyId,
     required String plateDocId,
   }) async {
     final c = collection.trim();
@@ -942,8 +956,11 @@ class FirestorePlateRepository implements PlateRepository {
     final docId = plateDocId.trim();
     if (c.isEmpty || a.isEmpty || docId.isEmpty) return;
 
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _firestore.collection(c).doc(a).set(
+    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _firestore.collection(c).doc(
+      PlateDocumentPaths.viewId(a, companyId: companyId)).set(
       <String, dynamic>{
+        'companyId': PlateDocumentPaths.companyFor(a, companyId: companyId),
+        'areaId': PlateDocumentPaths.areaId(a, companyId: companyId),
         'area': a,
         'updatedAt': FieldValue.serverTimestamp(),
         'items': <String, dynamic>{
@@ -984,6 +1001,7 @@ class FirestorePlateRepository implements PlateRepository {
   Stream<List<ViewRowData>> watchViewRows({
     required String collection,
     required String area,
+    String? companyId,
     required String primaryAtField,
   }) {
     final c = collection.trim();
@@ -993,7 +1011,8 @@ class FirestorePlateRepository implements PlateRepository {
     }
 
     return FirebaseActivityMonitor.observe(
-      _firestore.collection(c).doc(a).snapshots(),
+      _firestore.collection(c).doc(
+        PlateDocumentPaths.viewId(a, companyId: companyId)).snapshots(),
       origin: 'plates.view.snapshots',
     ).map(
           (snap) => _viewRowsFromSnapshot(
@@ -2147,6 +2166,7 @@ class FirestorePlateRepository implements PlateRepository {
 
     final aggregate = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
         .collection('plates')
+        .where('companyId', isEqualTo: PlateDocumentPaths.companyFor(trimmedArea))
         .where('area', isEqualTo: trimmedArea)
         .where('type', isEqualTo: plateType.firestoreValue)
         .count()
@@ -2168,10 +2188,12 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<List<PlateOutLogSearchResult>> searchPlateOutLogsByFourDigit({
+    required String companyId,
     required String plateFourDigit,
     required String area,
   }) async {
     final safeArea = _safeArea(area);
+    final safeCompany = PlateDocumentPaths.companyFor(safeArea, companyId: companyId);
     final fourDigit = plateFourDigit.trim();
 
     if (!RegExp(r'^\d{4}$').hasMatch(fourDigit)) {
@@ -2180,6 +2202,7 @@ class FirestorePlateRepository implements PlateRepository {
 
     final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
         .collectionGroup('plates')
+        .where('companyId', isEqualTo: safeCompany)
         .where('logScope', isEqualTo: 'plate_out_log')
         .where('area', isEqualTo: safeArea)
         .where('plate_four_digit', isEqualTo: fourDigit)

@@ -1,3 +1,6 @@
+import '../../location/data/services/location_company_scope.dart';
+import '../../../shared/area_remote_settings/application/area_snapshot_scope.dart';
+import '../../../app/utils/status_dialog.dart';
 import '../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -13,11 +16,24 @@ class PersonalVehicleStatusService {
   Future<PlateModel?> fetchCurrentVehiclePlate({
     required String plateNumber,
     required String area,
+    String? companyId,
   }) async {
     final normalizedArea = area.trim();
     final compact = normalizePersonalPlateNumber(plateNumber);
     if (normalizedArea.isEmpty || compact.isEmpty) return null;
 
+    final suppliedCompany = (companyId ?? '').trim();
+    if (suppliedCompany.isNotEmpty && AreaSnapshotScope.isBound &&
+        (AreaSnapshotScope.division != suppliedCompany || AreaSnapshotScope.area != normalizedArea)) {
+      throw StateError('PERSONAL_VEHICLE_SESSION_SCOPE_MISMATCH');
+    }
+    final company = suppliedCompany.isNotEmpty
+        ? suppliedCompany
+        : AreaSnapshotScope.isBound && AreaSnapshotScope.area == normalizedArea
+            ? AreaSnapshotScope.division
+            : await LocationCompanyScope.resolve(_firestore);
+    if (company == null || company.trim().isEmpty) throw StateError('PERSONAL_VEHICLE_COMPANY_REQUIRED');
+    StatusDialog.recordDebugOperation('personal.plates', 'company_scoped_query', details: {'companyId': company, 'area': normalizedArea});
     final variants = _plateNumberVariants(compact).take(10).toList(growable: false);
     if (variants.isEmpty) return null;
 
@@ -26,6 +42,7 @@ class PersonalVehicleStatusService {
     try {
       final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
           .collection('plates')
+          .where('companyId', isEqualTo: company)
           .where(PlateFields.area, isEqualTo: normalizedArea)
           .where(PlateFields.plateNumber, whereIn: variants)
           .limit(20)
@@ -86,6 +103,7 @@ class PersonalVehicleStatusService {
       try {
         final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
             .collection('plates')
+            .where('companyId', isEqualTo: company)
             .where(PlateFields.area, isEqualTo: normalizedArea)
             .where(PlateFields.plateFourDigit, isEqualTo: tail)
             .limit(20)

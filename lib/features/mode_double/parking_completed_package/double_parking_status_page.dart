@@ -478,6 +478,7 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage>
         .watchViewRows(
           collection: 'parking_completed_view',
           area: requestedArea,
+          companyId: division,
           primaryAtField: 'parkingCompletedAt',
         )
         .listen(

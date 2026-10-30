@@ -1,5 +1,6 @@
 import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
 import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/utils/status_dialog.dart';
 import 'dart:async';
 import 'dart:developer' as dev;
 
@@ -10,6 +11,7 @@ import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../enums/plate_type.dart';
 import '../models/plate_log_model.dart';
 import '../models/plate_model.dart';
+import 'plate_document_paths.dart';
 
 const String _kLocSep = ' - ';
 const String _kLocUnknown = '미지정';
@@ -190,15 +192,11 @@ class PlateWriteService {
   }
 
   String _fallbackPlateFromDocId(String docId) {
-    final idx = docId.lastIndexOf('_');
-    if (idx > 0) return docId.substring(0, idx);
-    return docId;
+    return PlateDocumentPaths.plateNumberFromId(docId);
   }
 
   String _fallbackAreaFromDocId(String docId) {
-    final idx = docId.lastIndexOf('_');
-    if (idx >= 0 && idx + 1 < docId.length) return docId.substring(idx + 1);
-    return '';
+    return PlateDocumentPaths.areaFromId(docId);
   }
 
   String _extractPlateNumberFromPlateDoc(
@@ -419,6 +417,19 @@ class PlateWriteService {
         }
 
         final before = snap.data() ?? <String, dynamic>{};
+        final viewCompanyId = (before['companyId'] ??
+                before[PlateFields.division] ??
+                before[PlateFields.company] ??
+                '')
+            .toString()
+            .trim();
+        StatusDialog.recordDebugOperation(
+          'plates', 'view_transaction_company_validation',
+          details: <String, Object?>{
+            'hasCompany': viewCompanyId.isNotEmpty,
+            'hasCanonicalCompanyField': (before['companyId'] ?? '').toString().trim().isNotEmpty,
+          },
+        );
 
         final fields = _enforceZeroFeeLock(
           Map<String, dynamic>.from(updatedFields),
@@ -532,7 +543,8 @@ class PlateWriteService {
           String collection,
           String area,
         ) =>
-            _firestore.collection(collection).doc(area);
+            _firestore.collection(collection).doc(
+              PlateDocumentPaths.viewId(area, companyId: viewCompanyId));
 
         void _txRemoveViewItem({
           required String collection,
@@ -545,6 +557,8 @@ class PlateWriteService {
           FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             ref,
             <String, dynamic>{
+              'companyId': PlateDocumentPaths.companyFor(area, companyId: viewCompanyId),
+              'areaId': PlateDocumentPaths.areaId(area, companyId: viewCompanyId),
               'area': area.trim(),
               'updatedAt': FieldValue.serverTimestamp(),
               'items': <String, dynamic>{
@@ -603,6 +617,8 @@ class PlateWriteService {
           FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             ref,
             <String, dynamic>{
+              'companyId': PlateDocumentPaths.companyFor(area, companyId: viewCompanyId),
+              'areaId': PlateDocumentPaths.areaId(area, companyId: viewCompanyId),
               'area': area.trim(),
               'updatedAt': FieldValue.serverTimestamp(),
               'items': <String, dynamic>{
@@ -822,10 +838,13 @@ class PlateWriteService {
       FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.delete, () => batch.delete(docRef));
 
       void removeFromView(String collection) {
-        final viewRef = _firestore.collection(collection).doc(normalizedArea);
+        final viewRef = _firestore.collection(collection).doc(
+          PlateDocumentPaths.viewId(normalizedArea));
         FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(
           viewRef,
           <String, dynamic>{
+            'companyId': PlateDocumentPaths.companyFor(normalizedArea),
+            'areaId': PlateDocumentPaths.areaId(normalizedArea),
             'area': normalizedArea,
             'updatedAt': FieldValue.serverTimestamp(),
             'items': <String, dynamic>{
@@ -1057,6 +1076,12 @@ class PlateWriteService {
         FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(docRef, update));
 
         final docArea = ((data['area'] as String?) ?? area).trim();
+        final docCompanyId = (data['companyId'] ??
+                data[PlateFields.division] ??
+                data[PlateFields.company] ??
+                '')
+            .toString()
+            .trim();
 
         if (typeEnum == PlateType.departureRequests && docArea.isNotEmpty) {
           if (!canUpsertDepView) {
@@ -1064,7 +1089,8 @@ class PlateWriteService {
           }
 
           final viewRef =
-              _firestore.collection('departure_requests_view').doc(docArea);
+              _firestore.collection('departure_requests_view').doc(
+                PlateDocumentPaths.viewId(docArea, companyId: docCompanyId));
 
           final plateNumber = ((data['plateNumber'] as String?) ??
                   _fallbackPlateFromDocId(id))
@@ -1078,6 +1104,8 @@ class PlateWriteService {
           FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             viewRef,
             <String, dynamic>{
+              'companyId': PlateDocumentPaths.companyFor(docArea, companyId: docCompanyId),
+              'areaId': PlateDocumentPaths.areaId(docArea, companyId: docCompanyId),
               'area': docArea,
               'updatedAt': FieldValue.serverTimestamp(),
               'items': <String, dynamic>{
@@ -1107,7 +1135,8 @@ class PlateWriteService {
           }
 
           final viewRef =
-              _firestore.collection('parking_requests_view').doc(docArea);
+              _firestore.collection('parking_requests_view').doc(
+                PlateDocumentPaths.viewId(docArea, companyId: docCompanyId));
 
           final plateNumber = ((data['plateNumber'] as String?) ??
                   _fallbackPlateFromDocId(id))
@@ -1121,6 +1150,8 @@ class PlateWriteService {
           FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             viewRef,
             <String, dynamic>{
+              'companyId': PlateDocumentPaths.companyFor(docArea, companyId: docCompanyId),
+              'areaId': PlateDocumentPaths.areaId(docArea, companyId: docCompanyId),
               'area': docArea,
               'updatedAt': FieldValue.serverTimestamp(),
               'items': <String, dynamic>{

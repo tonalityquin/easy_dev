@@ -7,6 +7,7 @@ import 'tts_user_filters.dart';
 
 class PlateTtsSessionRecoverySnapshot {
   const PlateTtsSessionRecoverySnapshot({
+    required this.companyId,
     required this.area,
     required this.mode,
     required this.filters,
@@ -15,6 +16,7 @@ class PlateTtsSessionRecoverySnapshot {
     required this.updatedAt,
   });
 
+  final String companyId;
   final String area;
   final String mode;
   final TtsUserFilters filters;
@@ -24,6 +26,7 @@ class PlateTtsSessionRecoverySnapshot {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
+      'companyId': companyId,
       'area': area,
       'mode': mode,
       'ttsFilters': filters.toMap(),
@@ -38,6 +41,7 @@ class PlateTtsSessionRecoverySnapshot {
     bool forceRestart = true,
   }) {
     return <String, dynamic>{
+      'companyId': companyId,
       'area': area,
       'mode': mode,
       'ttsFilters': filters.toMap(),
@@ -56,6 +60,7 @@ class PlateTtsSessionRecoverySnapshot {
       final rawUpdatedAt = map['updatedAt']?.toString().trim() ?? '';
       final updatedAt = DateTime.tryParse(rawUpdatedAt) ?? DateTime.now();
       return PlateTtsSessionRecoverySnapshot(
+        companyId: map['companyId']?.toString().trim() ?? '',
         area: map['area']?.toString().trim() ?? '',
         mode: map['mode']?.toString().trim() ?? '',
         filters: filters,
@@ -88,6 +93,7 @@ class PlateTtsSessionRecoveryStore {
   }
 
   static Future<void> save({
+    required String companyId,
     required String area,
     required String mode,
     required TtsUserFilters filters,
@@ -95,6 +101,7 @@ class PlateTtsSessionRecoveryStore {
     required String source,
   }) async {
     final snapshot = PlateTtsSessionRecoverySnapshot(
+      companyId: companyId.trim(),
       area: area.trim(),
       mode: mode.trim(),
       filters: filters,
@@ -105,7 +112,7 @@ class PlateTtsSessionRecoveryStore {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, jsonEncode(snapshot.toMap()));
     _log(
-      'saved area=${jsonEncode(snapshot.area)} mode=${jsonEncode(snapshot.mode)} clearMode=${snapshot.clearMode} filters=${jsonEncode(snapshot.filters.toMap())} source=${jsonEncode(snapshot.source)}',
+      'saved companyId=${jsonEncode(snapshot.companyId)} area=${jsonEncode(snapshot.area)} mode=${jsonEncode(snapshot.mode)} clearMode=${snapshot.clearMode} filters=${jsonEncode(snapshot.filters.toMap())} source=${jsonEncode(snapshot.source)}',
     );
   }
 
@@ -133,7 +140,7 @@ class PlateTtsSessionRecoveryStore {
         return null;
       }
       _log(
-        'loaded area=${jsonEncode(snapshot.area)} mode=${jsonEncode(snapshot.mode)} clearMode=${snapshot.clearMode} source=${jsonEncode(snapshot.source)} updatedAt=${snapshot.updatedAt.toIso8601String()}',
+        'loaded companyId=${jsonEncode(snapshot.companyId)} area=${jsonEncode(snapshot.area)} mode=${jsonEncode(snapshot.mode)} clearMode=${snapshot.clearMode} source=${jsonEncode(snapshot.source)} updatedAt=${snapshot.updatedAt.toIso8601String()}',
       );
       return snapshot;
     } catch (error, stackTrace) {
@@ -161,6 +168,7 @@ class PlateTtsSessionRecoveryStore {
     }
     return <String>[
       'Recovery snapshot: PRESENT',
+      'Recovery companyId: ${snapshot.companyId.isEmpty ? '-' : snapshot.companyId}',
       'Recovery area: ${snapshot.area.isEmpty ? '-' : snapshot.area}',
       'Recovery mode: ${snapshot.mode.isEmpty ? '-' : snapshot.mode}',
       'Recovery clearMode: ${snapshot.clearMode}',

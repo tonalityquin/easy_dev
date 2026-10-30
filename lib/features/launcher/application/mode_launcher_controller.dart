@@ -10,6 +10,8 @@ import 'package:provider/provider.dart';
 import '../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../app/auth/google_auth_session.dart';
 import '../../account/applications/user_state.dart';
+import '../../account/domain/models/session_account.dart';
+import '../../dev/application/area_state.dart';
 import '../../dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../../shared/auth/account_code_number.dart';
 import '../../../app/auth/gmail_sender_auth.dart';
@@ -162,6 +164,13 @@ class ModeLauncherController extends ChangeNotifier {
   TerminalAuthenticatedAccount? _authenticatedAccount;
   TerminalAuthenticatedAccount? _pendingManualAccount;
   bool _manualGoogleLoginSucceeded = false;
+  bool _developerPasswordLoginPending = false;
+  bool _developerDiagnosticsActive = false;
+  bool _developerDiagnosticsOwned = false;
+  SessionAccount? _developerPreviousWorkSession;
+  AreaRecord? _developerPreviousAreaRecord;
+  AreaState? _developerPreviousAreaState;
+  Map<String, Object?>? _developerPreviousPreferences;
   List<LauncherWorkAreaOption> _availableWorkAreas = <LauncherWorkAreaOption>[];
   LauncherWorkAreaOption? _selectedWorkArea;
   List<AppModeDefinition> _supportedModes = <AppModeDefinition>[];
@@ -756,6 +765,14 @@ class ModeLauncherController extends ChangeNotifier {
     if (_disposed) return;
     _devModeEnabled = DevAuth.devModeEnabled.value;
     _devAuthorized = _devModeEnabled;
+    if (!_devModeEnabled && _developerDiagnosticsActive) {
+      _developerDiagnosticsActive = false;
+      _developerDiagnosticsOwned = false;
+      LauncherDiagnostics.record(
+        'auth_developer_diagnostics_ended_externally',
+        scope: 'launcher_developer_password_auth',
+      );
+    }
     LauncherDiagnostics.record(
       'developer_mode_changed',
       meta: <String, Object?>{
@@ -1329,7 +1346,7 @@ class ModeLauncherController extends ChangeNotifier {
     return normalized == 'status' || normalized == '상태';
   }
 
-  ModeLauncherSubmitResult _submitNavigationCommand(String normalized) {
+  Future<ModeLauncherSubmitResult> _submitNavigationCommand(String normalized) async {
     switch (normalized) {
       case 'back':
       case '뒤로':
@@ -1337,7 +1354,7 @@ class ModeLauncherController extends ChangeNotifier {
         return _goBackAuthentication();
       case 'cancel':
       case '취소':
-        return _cancelAuthentication();
+        return await _cancelAuthentication();
       case 'modes':
       case 'mode':
       case '모드':
@@ -1392,6 +1409,7 @@ class ModeLauncherController extends ChangeNotifier {
       _runningCommand = '';
       return const ModeLauncherSubmitResult();
     }
+    _developerPasswordLoginPending = false;
     final snapshotStarted = await LauncherDebugAccountOverrideStore.begin();
     await LauncherDebugAccountOverrideStore.clearAccountKindBinding();
     _debugOverrideSnapshotActive = true;
@@ -1512,6 +1530,7 @@ class ModeLauncherController extends ChangeNotifier {
         }
         _authenticatedAccount = null;
         _pendingManualAccount = null;
+        _developerPasswordLoginPending = false;
         _availableWorkAreas = <LauncherWorkAreaOption>[];
         _selectedWorkArea = null;
         _supportedModes = <AppModeDefinition>[];
@@ -1565,6 +1584,7 @@ class ModeLauncherController extends ChangeNotifier {
         }
         _authenticatedAccount = null;
         _pendingManualAccount = null;
+        _developerPasswordLoginPending = false;
         _availableWorkAreas = <LauncherWorkAreaOption>[];
         _selectedWorkArea = null;
         _supportedModes = <AppModeDefinition>[];
@@ -1589,9 +1609,11 @@ class ModeLauncherController extends ChangeNotifier {
     }
   }
 
-  ModeLauncherSubmitResult _cancelAuthentication() {
+  Future<ModeLauncherSubmitResult> _cancelAuthentication() async {
     if (_busy) return const ModeLauncherSubmitResult();
+    await _endDeveloperDiagnosticsSession(source: 'launcher_developer_login_cancel');
     final restoredSession = _authenticatedAccount?.activated == true;
+    _developerPasswordLoginPending = false;
     if (restoredSession) {
       _selectedMode = null;
       _selectedWorkArea = null;
@@ -3083,6 +3105,7 @@ class ModeLauncherController extends ChangeNotifier {
       _enteredPassword = '';
       _authenticatedAccount = null;
       _pendingManualAccount = null;
+      _developerPasswordLoginPending = false;
       _availableWorkAreas = <LauncherWorkAreaOption>[];
       _selectedWorkArea = null;
       _supportedModes = <AppModeDefinition>[];
@@ -3460,6 +3483,7 @@ class ModeLauncherController extends ChangeNotifier {
     _selectedAccountKind = null;
     _authenticatedAccount = null;
     _pendingManualAccount = null;
+    _developerPasswordLoginPending = false;
     _availableWorkAreas = <LauncherWorkAreaOption>[];
     _selectedWorkArea = null;
     _supportedModes = <AppModeDefinition>[];
@@ -3531,6 +3555,10 @@ class ModeLauncherController extends ChangeNotifier {
       _runningCommand = '';
       return const ModeLauncherSubmitResult();
     }
+    final developerLoginPending =
+        _developerPasswordLoginPending && !restoredSession;
+    final developerUserState =
+        developerLoginPending ? context.read<UserState>() : null;
     final activated = await TerminalAuthCoordinator.activateHeadquarterContext(
       context,
       account: account,
@@ -3539,11 +3567,26 @@ class ModeLauncherController extends ChangeNotifier {
       verifiedAreaRecord: workArea.verifiedAreaRecord,
     );
     if (_disposed || !context.mounted) {
+      if (developerUserState != null) {
+        await _rollbackDeveloperModeLogin(
+          developerUserState,
+          source: 'launcher_developer_headquarter_activation',
+          reason: '본사 세션을 완료하지 못했습니다.',
+        );
+      }
       _busy = false;
       _runningCommand = '';
       return const ModeLauncherSubmitResult();
     }
     if (!activated.success) {
+      if (developerUserState != null) {
+        await _rollbackDeveloperModeLogin(
+          developerUserState,
+          source: 'launcher_developer_headquarter_activation',
+          reason: activated.message,
+        );
+        return const ModeLauncherSubmitResult();
+      }
       _append(TerminalLineType.error, '[ERROR] ${activated.message}');
       _busy = false;
       _runningCommand = '';
@@ -3555,6 +3598,12 @@ class ModeLauncherController extends ChangeNotifier {
       }
       notifyListeners();
       return const ModeLauncherSubmitResult();
+    }
+    if (developerLoginPending) {
+      _finalizeDeveloperModeLogin(
+        account: account,
+        targetRoute: AppRoutes.headquarterCommute,
+      );
     }
     _authenticatedAccount = account.copyWith(activated: true);
     _runtimeContextReady = true;
@@ -3647,6 +3696,10 @@ class ModeLauncherController extends ChangeNotifier {
       _runningCommand = '';
       return const ModeLauncherSubmitResult();
     }
+    final developerLoginPending =
+        _developerPasswordLoginPending && !restoredSession;
+    final developerUserState =
+        developerLoginPending ? context.read<UserState>() : null;
     final activated = await TerminalAuthCoordinator.activateMode(
       context,
       account: account,
@@ -3656,11 +3709,26 @@ class ModeLauncherController extends ChangeNotifier {
       verifiedAreaRecord: workArea?.verifiedAreaRecord,
     );
     if (_disposed || !context.mounted) {
+      if (developerUserState != null) {
+        await _rollbackDeveloperModeLogin(
+          developerUserState,
+          source: 'launcher_developer_mode_activation',
+          reason: '업무 모드를 완료하지 못했습니다.',
+        );
+      }
       _busy = false;
       _runningCommand = '';
       return const ModeLauncherSubmitResult();
     }
     if (!activated.success) {
+      if (developerUserState != null) {
+        await _rollbackDeveloperModeLogin(
+          developerUserState,
+          source: 'launcher_developer_mode_activation',
+          reason: activated.message,
+        );
+        return const ModeLauncherSubmitResult();
+      }
       _append(TerminalLineType.error, '[ERROR] ${activated.message}');
       _busy = false;
       _runningCommand = '';
@@ -3672,6 +3740,12 @@ class ModeLauncherController extends ChangeNotifier {
       }
       notifyListeners();
       return const ModeLauncherSubmitResult();
+    }
+    if (developerLoginPending) {
+      _finalizeDeveloperModeLogin(
+        account: account,
+        targetRoute: targetRoute,
+      );
     }
     _authenticatedAccount = account.copyWith(activated: true);
     _runtimeContextReady = true;
@@ -3726,6 +3800,12 @@ class ModeLauncherController extends ChangeNotifier {
         authenticationError: '계정 확인을 시작할 수 없습니다.',
       );
     }
+    if (!developerPasswordMode) {
+      await _endDeveloperDiagnosticsSession(
+        source: 'launcher_regular_account_login',
+      );
+    }
+    _developerPasswordLoginPending = false;
     _manualGoogleLoginSucceeded = false;
     final kind = _selectedAccountKind;
     if (kind == null) {
@@ -3956,6 +4036,7 @@ class ModeLauncherController extends ChangeNotifier {
     notifyListeners();
 
     if (developerPasswordMode) {
+      _developerPasswordLoginPending = true;
       if (debugDeveloperAnonymousAuth) {
         await LauncherDiagnostics.showStatus(
           context,
@@ -4169,7 +4250,9 @@ class ModeLauncherController extends ChangeNotifier {
     required String password,
     required bool reduceMotion,
   }) async {
-    if (_busy || _loginStage != TerminalLoginStage.credentials) {
+    if (_busy ||
+        _loginStage != TerminalLoginStage.credentials ||
+        !_developerPasswordLoginPending) {
       return const LauncherCredentialSubmitResult(
         authenticationError: '비밀번호 인증을 시작할 수 없습니다.',
       );
@@ -4307,6 +4390,26 @@ class ModeLauncherController extends ChangeNotifier {
       );
     }
 
+    final diagnosticsEnabled = await _enableDeveloperDiagnostics(
+      context,
+      account: authenticated,
+    );
+    if (!diagnosticsEnabled || _disposed || !context.mounted) {
+      _busy = false;
+      _runningCommand = '';
+      _loginStage = TerminalLoginStage.credentials;
+      _enteredPassword = '';
+      _errorSerial += 1;
+      LauncherDiagnostics.record(
+        'auth_developer_diagnostics_activation_failed',
+        scope: 'launcher_developer_password_auth',
+      );
+      if (!_disposed) notifyListeners();
+      return const LauncherCredentialSubmitResult(
+        authenticationError: '개발자 모드를 활성화하지 못했습니다.',
+      );
+    }
+
     await LauncherDiagnostics.showStatus(
       context,
       title: '개발자 비밀번호 인증 성공',
@@ -4325,11 +4428,310 @@ class ModeLauncherController extends ChangeNotifier {
       );
     }
     _pendingManualAccount = null;
+    LauncherDiagnostics.record(
+      'auth_developer_work_context_requested',
+      scope: 'launcher_developer_password_auth',
+      meta: const <String, Object?>{
+        'loginMethod': 'developer_password',
+        'diagnosticsEnabled': true,
+      },
+    );
+    debugPrint(
+      '[LAUNCHER_AUTH] developer_password_verified debug_enabled=true work_context=pending',
+    );
     return _completeAuthenticatedManualAccount(
       context,
       account: authenticated,
       reduceMotion: reduceMotion,
       manualGoogleLogin: false,
+    );
+  }
+
+  Future<bool> _enableDeveloperDiagnostics(
+    BuildContext context, {
+    required TerminalAuthenticatedAccount account,
+  }) async {
+    const source = 'launcher_developer_password_verified';
+    if (_disposed || !context.mounted) return false;
+    final enabledBeforeAttempt = DevAuth.devModeEnabled.value;
+    try {
+      final userState = context.read<UserState>();
+      final areaState = context.read<AreaState>();
+      final prefs = await SharedPreferences.getInstance();
+      if (_disposed || !context.mounted) return false;
+      await prefs.reload();
+      _developerPreviousWorkSession = userState.session;
+      _developerPreviousAreaState = areaState;
+      _developerPreviousAreaRecord = areaState.currentRecord;
+      _developerPreviousPreferences = <String, Object?>{
+        for (final key in const <String>[
+          'mode',
+          'selectedArea',
+          'division',
+          'personalAccountId',
+          'codeNumber',
+          'role',
+          'position',
+        ])
+          key: prefs.get(key),
+      };
+      await DevQuickActions.mountIfNeeded();
+      final enabled = await DebugSessionController.enable(source: source);
+      if (!enabled || !DevAuth.devModeEnabled.value) {
+        LauncherDiagnostics.record(
+          'auth_developer_diagnostics_enable_denied',
+          scope: source,
+          meta: <String, Object?>{
+            'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+          },
+        );
+        return false;
+      }
+      _developerDiagnosticsActive = true;
+      _developerDiagnosticsOwned = !enabledBeforeAttempt;
+      LauncherDiagnostics.record(
+        'auth_developer_diagnostics_enabled',
+        scope: 'launcher_developer_password_auth',
+        meta: <String, Object?>{
+          'loginMethod': 'developer_password',
+          'workContextReady': false,
+          'statusDialogCopy': true,
+          'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+        },
+      );
+      DebugSessionController.record(
+        'auth_developer_diagnostics_enabled',
+        source: source,
+        meta: const <String, Object?>{
+          'workContextReady': false,
+          'statusDialogCopy': true,
+        },
+      );
+      debugPrint(
+        '[LAUNCHER_AUTH] developer_diagnostics_enabled workContextReady=false statusDialogCopy=true',
+      );
+      try {
+        await DevQuickActions.mountIfNeeded();
+      } catch (error, stackTrace) {
+        LauncherDiagnostics.record(
+          'auth_developer_diagnostics_overlay_error',
+          scope: source,
+          meta: <String, Object?>{
+            'errorType': error.runtimeType.toString(),
+            'stack': stackTrace,
+          },
+        );
+      }
+      return true;
+    } catch (error, stackTrace) {
+      LauncherDiagnostics.record(
+        'auth_developer_diagnostics_enable_error',
+        scope: source,
+        meta: <String, Object?>{
+          'errorType': error.runtimeType.toString(),
+          'stack': stackTrace,
+        },
+      );
+      debugPrint(
+        '[LAUNCHER_AUTH] developer_diagnostics_enable_error error=$error\n$stackTrace',
+      );
+      return false;
+    }
+  }
+
+  Future<void> _endDeveloperDiagnosticsSession({required String source}) async {
+    if (!_developerDiagnosticsActive) return;
+    final wasOwned = _developerDiagnosticsOwned;
+    _developerDiagnosticsActive = false;
+    _developerDiagnosticsOwned = false;
+    _developerPasswordLoginPending = false;
+    _developerPreviousWorkSession = null;
+    _developerPreviousAreaRecord = null;
+    _developerPreviousAreaState = null;
+    _developerPreviousPreferences = null;
+    LauncherDiagnostics.record(
+      'auth_developer_diagnostics_exit',
+      scope: source,
+      meta: <String, Object?>{'ownedByLogin': wasOwned},
+    );
+    if (!wasOwned) return;
+    try {
+      await DebugSessionController.disable(source: source);
+    } catch (error, stackTrace) {
+      LauncherDiagnostics.record(
+        'auth_developer_diagnostics_disable_error',
+        scope: source,
+        meta: <String, Object?>{
+          'errorType': error.runtimeType.toString(),
+          'stack': stackTrace,
+        },
+      );
+    }
+  }
+
+  Future<void> _rollbackDeveloperModeLogin(
+    UserState userState, {
+    required String source,
+    required String reason,
+  }) async {
+    _developerPasswordLoginPending = false;
+    _runtimeContextReady = false;
+    _authenticatedAccount = null;
+    _pendingManualAccount = null;
+    _availableWorkAreas = <LauncherWorkAreaOption>[];
+    _selectedWorkArea = null;
+    _supportedModes = <AppModeDefinition>[];
+    _selectedMode = null;
+    _assignedMode = null;
+    _savedModeRaw = null;
+    _sessionRestoreSucceeded = false;
+    _workContextRestored = false;
+    _applicationContextReady = false;
+    _manualGoogleLoginSucceeded = false;
+    _enteredPassword = '';
+    _loginStage = TerminalLoginStage.credentials;
+    _busy = false;
+    _runningCommand = '';
+
+    final previousSession = _developerPreviousWorkSession;
+    final previousAreaState = _developerPreviousAreaState;
+    final previousAreaRecord = _developerPreviousAreaRecord;
+    final previousPrefs = _developerPreviousPreferences;
+
+    try {
+      if (previousSession is UserSessionAccount) {
+        userState.applyEphemeralLoginUser(previousSession.user);
+      } else if (previousSession is TabletSessionAccount) {
+        userState.applyEphemeralLoginTablet(previousSession.tablet);
+      } else if (userState.session != null) {
+        await userState.discardLocalLoginSession(source: source);
+      } else if (previousAreaState != null &&
+          previousAreaState.currentRecord != null) {
+        await previousAreaState.clearSession(source: source);
+      }
+      if (previousAreaRecord != null && previousAreaState != null) {
+        previousAreaState.applyLocalAreaRecord(
+          previousAreaRecord,
+          source: 'launcher_developer_session_restore',
+          syncWorkSession: false,
+        );
+      }
+      LauncherDiagnostics.record(
+        'auth_developer_work_session_restored',
+        scope: source,
+        meta: <String, Object?>{
+          'previousSessionAvailable': previousSession != null,
+          'previousAreaAvailable': previousAreaRecord != null,
+        },
+      );
+    } catch (error, stackTrace) {
+      LauncherDiagnostics.record(
+        'auth_developer_work_session_restore_error',
+        scope: source,
+        meta: <String, Object?>{
+          'errorType': error.runtimeType.toString(),
+          'stack': stackTrace,
+        },
+      );
+    }
+
+    if (previousPrefs != null) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        for (final entry in previousPrefs.entries) {
+          final value = entry.value;
+          if (value == null) {
+            await prefs.remove(entry.key);
+          } else if (value is String) {
+            await prefs.setString(entry.key, value);
+          } else if (value is bool) {
+            await prefs.setBool(entry.key, value);
+          } else if (value is int) {
+            await prefs.setInt(entry.key, value);
+          } else if (value is double) {
+            await prefs.setDouble(entry.key, value);
+          } else if (value is List<String>) {
+            await prefs.setStringList(entry.key, value);
+          }
+        }
+        LauncherDiagnostics.record(
+          'auth_developer_work_preferences_restored',
+          scope: source,
+          meta: <String, Object?>{'keyCount': previousPrefs.length},
+        );
+      } catch (error, stackTrace) {
+        LauncherDiagnostics.record(
+          'auth_developer_work_preferences_restore_error',
+          scope: source,
+          meta: <String, Object?>{
+            'errorType': error.runtimeType.toString(),
+            'stack': stackTrace,
+          },
+        );
+      }
+    }
+
+    _developerPreviousWorkSession = null;
+    _developerPreviousAreaRecord = null;
+    _developerPreviousAreaState = null;
+    _developerPreviousPreferences = null;
+    _errorSerial += 1;
+    _append(TerminalLineType.error, '[ERROR] $reason');
+    LauncherDiagnostics.record(
+      'auth_developer_work_session_failed',
+      scope: source,
+      meta: <String, Object?>{
+        'reason': reason,
+        'debugModeActive': DevAuth.devModeEnabled.value,
+        'diagnosticsPreserved': _developerDiagnosticsActive,
+      },
+    );
+    DebugSessionController.record(
+      'auth_developer_work_session_failed',
+      source: source,
+      meta: <String, Object?>{
+        'reason': reason,
+        'debugModeActive': DevAuth.devModeEnabled.value,
+      },
+    );
+    debugPrint(
+      '[LAUNCHER_AUTH] developer_work_session_failed source=$source reason=$reason debugMode=${DevAuth.devModeEnabled.value}',
+    );
+    if (!_disposed) notifyListeners();
+  }
+
+  void _finalizeDeveloperModeLogin({
+    required TerminalAuthenticatedAccount account,
+    required String targetRoute,
+  }) {
+    if (!_developerPasswordLoginPending) return;
+    _developerPasswordLoginPending = false;
+    _developerPreviousWorkSession = null;
+    _developerPreviousAreaRecord = null;
+    _developerPreviousAreaState = null;
+    _developerPreviousPreferences = null;
+    LauncherDiagnostics.record(
+      'auth_developer_work_context_activated',
+      scope: 'launcher_developer_password_auth',
+      meta: <String, Object?>{
+        'loginMethod': 'developer_password',
+        'debugMode': DevAuth.devModeEnabled.value,
+        'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+        'targetRoute': targetRoute,
+        'workContextActivated': true,
+      },
+    );
+    DebugSessionController.record(
+      'auth_developer_work_context_activated',
+      source: 'launcher_developer_password_login',
+      meta: <String, Object?>{
+        'debugMode': DevAuth.devModeEnabled.value,
+        'workContextActivated': true,
+        'targetRoute': targetRoute,
+      },
+    );
+    debugPrint(
+      '[LAUNCHER_AUTH] developer_work_context_activated targetRoute=$targetRoute debugMode=${DevAuth.devModeEnabled.value}',
     );
   }
 
@@ -4465,11 +4867,42 @@ class ModeLauncherController extends ChangeNotifier {
         'Loading work areas from local snapshot',
       );
       notifyListeners();
-      final resolution = await _resolveLauncherWorkAreas(
-        context,
-        account: account,
-        reduceMotion: reduceMotion,
-      );
+      late final LauncherWorkAreaResolution resolution;
+      try {
+        resolution = await _resolveLauncherWorkAreas(
+          context,
+          account: account,
+          reduceMotion: reduceMotion,
+        );
+      } catch (error, stackTrace) {
+        LauncherDiagnostics.record(
+          'auth_work_area_resolution_exception',
+          scope: 'launcher_developer_password_auth',
+          meta: <String, Object?>{
+            'errorType': error.runtimeType.toString(),
+            'stack': stackTrace,
+          },
+        );
+        debugPrint(
+          '[LAUNCHER_AUTH] work_area_resolution_exception error=$error\n$stackTrace',
+        );
+        if (_developerPasswordLoginPending) {
+          await _rollbackDeveloperModeLogin(
+            context.read<UserState>(),
+            source: 'launcher_developer_work_area_resolution',
+            reason: '업무 지역 정보를 불러오지 못했습니다.',
+          );
+        } else {
+          _busy = false;
+          _runningCommand = '';
+          _loginStage = TerminalLoginStage.credentials;
+          _errorSerial += 1;
+          if (!_disposed) notifyListeners();
+        }
+        return const LauncherCredentialSubmitResult(
+          authenticationError: '업무 지역 정보를 불러오지 못했습니다.',
+        );
+      }
       if (_disposed || !context.mounted) {
         _busy = false;
         _runningCommand = '';
@@ -4482,10 +4915,32 @@ class ModeLauncherController extends ChangeNotifier {
       _runningCommand = '';
       _loginStage = TerminalLoginStage.areaSelection;
       if (_availableWorkAreas.isEmpty) {
-        _append(
-          TerminalLineType.error,
-          '[ERROR] 업무 지역 정보를 불러오지 못했습니다.',
-        );
+        final developerWorkLoginPending = _developerPasswordLoginPending;
+        if (_developerDiagnosticsActive) {
+          DebugSessionController.record(
+            'auth_developer_work_area_resolution_failed',
+            source: 'launcher_developer_password_login',
+            meta: <String, Object?>{
+              'division': resolution.division,
+              'dataSource': resolution.dataSource,
+              'firebaseAreaDocumentReads': resolution.firebaseAreaDocumentReads,
+            },
+          );
+        }
+        if (developerWorkLoginPending) {
+          await _rollbackDeveloperModeLogin(
+            context.read<UserState>(),
+            source: 'launcher_developer_work_area_resolution',
+            reason: '업무 지역 정보를 불러오지 못했습니다.',
+          );
+        } else {
+          _developerPasswordLoginPending = false;
+          _append(
+            TerminalLineType.error,
+            '[ERROR] 업무 지역 정보를 불러오지 못했습니다.',
+          );
+          _errorSerial += 1;
+        }
         LauncherDiagnostics.record(
           'auth_work_area_selection_blocked',
           meta: <String, Object?>{
@@ -4496,8 +4951,7 @@ class ModeLauncherController extends ChangeNotifier {
             'firebaseWrites': 0,
           },
         );
-        _errorSerial += 1;
-        notifyListeners();
+        if (!_disposed) notifyListeners();
         return const LauncherCredentialSubmitResult(
           authenticationError: '업무 지역 정보를 불러오지 못했습니다.',
         );
@@ -4564,12 +5018,31 @@ class ModeLauncherController extends ChangeNotifier {
     _loginStage = TerminalLoginStage.modeSelection;
     await _appendSupportedModeListPaced(reduceMotion);
     if (_supportedModes.isEmpty) {
-      _append(
-        TerminalLineType.error,
-        '[ERROR] 활성화된 모드가 없습니다.',
-      );
-      _errorSerial += 1;
-      notifyListeners();
+      final developerWorkLoginPending = _developerPasswordLoginPending;
+      if (_developerDiagnosticsActive) {
+        DebugSessionController.record(
+          'auth_developer_supported_modes_empty',
+          source: 'launcher_developer_password_login',
+          meta: <String, Object?>{
+            'accountKind': TerminalAuthCoordinator.accountKindId(account.kind),
+          },
+        );
+      }
+      if (developerWorkLoginPending) {
+        await _rollbackDeveloperModeLogin(
+          context.read<UserState>(),
+          source: 'launcher_developer_supported_modes',
+          reason: '활성화된 모드가 없습니다.',
+        );
+      } else {
+        _developerPasswordLoginPending = false;
+        _append(
+          TerminalLineType.error,
+          '[ERROR] 활성화된 모드가 없습니다.',
+        );
+        _errorSerial += 1;
+      }
+      if (!_disposed) notifyListeners();
       return const LauncherCredentialSubmitResult(
         authenticationError: '활성화된 모드가 없습니다.',
       );
@@ -4659,6 +5132,17 @@ class ModeLauncherController extends ChangeNotifier {
         return const ModeLauncherSubmitResult();
       }
       if (verifiedArea == null) {
+        if (_developerDiagnosticsActive && !restoredSession) {
+          DebugSessionController.record(
+            'auth_developer_work_area_verification_failed',
+            source: 'launcher_developer_password_login',
+            meta: <String, Object?>{
+              'area': resolvedArea.areaName,
+              'division': resolvedArea.division,
+              'debugModeActive': DevAuth.devModeEnabled.value,
+            },
+          );
+        }
         if (!restoredSession) {
           _append(
             TerminalLineType.error,

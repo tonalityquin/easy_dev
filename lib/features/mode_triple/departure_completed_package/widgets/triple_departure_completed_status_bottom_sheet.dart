@@ -1,3 +1,4 @@
+import '../../../../shared/plate/domain/services/plate_document_paths.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../features/payment/widgets/billing_bottom_sheet.dart';
@@ -196,7 +197,7 @@ class _TripleDepartureCompletedStatusDockState
     final plateSnapshot = _plate;
     final repo = context.read<PlateRepository>();
     final performedBy = widget.performedBy;
-    final documentId = plateSnapshot.id.trim().isNotEmpty ? plateSnapshot.id.trim() : '${plateSnapshot.plateNumber}_${plateSnapshot.area}';
+    final documentId = plateSnapshot.id.trim().isNotEmpty ? plateSnapshot.id.trim() : PlateDocumentPaths.vehicleId(plateSnapshot.plateNumber, plateSnapshot.area);
     final request = PlateBillingSideDockRequest(
       plate: plateSnapshot,
       source: 'triple_departure_completed_status',
@@ -381,7 +382,7 @@ Future<PlateModel?> _cancelSettlement({
   final now = DateTime.now();
   final documentId = plate.id.trim().isNotEmpty
       ? plate.id.trim()
-      : '${plate.plateNumber}_${plate.area}';
+      : PlateDocumentPaths.vehicleId(plate.plateNumber, plate.area);
   final repo = context.read<PlateRepository>();
 
   try {

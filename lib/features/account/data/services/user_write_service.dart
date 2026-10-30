@@ -179,17 +179,21 @@ class UserWriteService {
 
   Future<void> _assertUniqueUserCodeNumber(
     String codeNumber, {
+    required String companyId,
     Set<String> excludeDocumentIds = const <String>{},
   }) async {
     final normalized = AccountCodeNumber.normalize(codeNumber);
     if (!AccountCodeNumber.isValid(normalized)) {
       throw StateError('INVALID_CODE_NUMBER');
     }
+    final company = companyId.trim();
+    if (company.isEmpty) throw StateError('ACCOUNT_COMPANY_ID_REQUIRED');
     final snapshots = await Future.wait(
       <Future<QuerySnapshot<Map<String, dynamic>>>>[
         FirebaseActivityMonitor.track(
           FirebaseActivityKind.read,
           () => _getUserCollectionRef()
+              .where('companyId', isEqualTo: company)
               .where('codeNumber', isEqualTo: normalized)
               .limit(10)
               .get(),
@@ -198,6 +202,7 @@ class UserWriteService {
         FirebaseActivityMonitor.track(
           FirebaseActivityKind.read,
           () => _getUserCollectionRef()
+              .where('companyId', isEqualTo: company)
               .where('phone', isEqualTo: normalized)
               .limit(10)
               .get(),
@@ -206,6 +211,7 @@ class UserWriteService {
         FirebaseActivityMonitor.track(
           FirebaseActivityKind.read,
           () => _getUserCollectionRef()
+              .where('companyId', isEqualTo: company)
               .where('handle', isEqualTo: normalized)
               .limit(10)
               .get(),
@@ -436,7 +442,7 @@ class UserWriteService {
   }
 
   Future<void> addUserCard(UserModel user) async {
-    await _assertUniqueUserCodeNumber(user.codeNumber);
+    await _assertUniqueUserCodeNumber(user.codeNumber, companyId: user.companyId);
     final normalizedCode = AccountCodeNumber.normalize(user.codeNumber);
     final userDocRef = _getUserCollectionRef().doc(user.id);
     final codeDocRef = _getUserCodeCollectionRef().doc(normalizedCode);
@@ -676,6 +682,7 @@ class UserWriteService {
     final nextCodeDocRef = _getUserCodeCollectionRef().doc(nextCode);
     await _assertUniqueUserCodeNumber(
       nextCode,
+      companyId: user.companyId,
       excludeDocumentIds: <String>{previousUserId, nextUserId},
     );
 

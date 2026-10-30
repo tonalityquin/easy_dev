@@ -1,3 +1,4 @@
+import '../utils/status_dialog.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -1151,6 +1152,7 @@ class FirebaseActivityMonitor extends ChangeNotifier {
       }
       result = await original;
     } catch (error) {
+      StatusDialog.recordFirestoreIndexError(error);
       stopwatch.stop();
       try {
         final commands = kind == FirebaseActivityKind.batch
@@ -1326,6 +1328,7 @@ class FirebaseActivityMonitor extends ChangeNotifier {
           sink.add(event);
         },
         handleError: (Object error, StackTrace stackTrace, sink) {
+          StatusDialog.recordFirestoreIndexError(error);
           instance.emit(
             FirebaseActivityKind.snapshot,
             FirebaseActivityPhase.failed,

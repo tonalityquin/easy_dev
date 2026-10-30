@@ -198,7 +198,14 @@ class CommonAttendanceService {
       }
 
       final now = recordedAt ?? DateTime.now();
+      ClockInRestorePoint? restorePoint;
+      bool? localWorkingBefore;
+      bool localWorkingKeyExisted = false;
       try {
+        restorePoint = await AttBrkRepository.instance.captureClockInRestorePoint(now);
+        final prefs = await SharedPreferences.getInstance();
+        localWorkingKeyExisted = prefs.containsKey('isWorking');
+        localWorkingBefore = prefs.getBool('isWorking');
         final session = await AttBrkRepository.instance.insertClockInWithSession(
           dateTime: now,
           attendance: attendance,
@@ -261,6 +268,14 @@ class CommonAttendanceService {
             'stack': stackTrace,
           },
         );
+        await _restoreRejectedClockIn(
+          attendance,
+          restorePoint: restorePoint,
+          attemptedAt: now,
+          previousWorking: localWorkingBefore,
+          workingKeyExisted: localWorkingKeyExisted,
+          trace: trace,
+        );
         return const AttendanceActionResult.failure(message: message);
       }
 
@@ -289,11 +304,33 @@ class CommonAttendanceService {
                     : 'working_state_remote_write_failed',
             'firebaseCode': error.code,
             'firebaseWrite': 1,
+            'document': 'user_accounts/${attendance.userId}',
+            'stage': 'remote_working_update',
             'message': message,
             'error': error,
             'stack': stackTrace,
           },
         );
+        if (permissionFailure ||
+            error.code == 'not-found' ||
+            error.code == 'unauthenticated' ||
+            error.code == 'failed-precondition') {
+          await _restoreRejectedClockIn(
+            attendance,
+            restorePoint: restorePoint,
+            attemptedAt: now,
+            previousWorking: localWorkingBefore,
+            workingKeyExisted: localWorkingKeyExisted,
+            trace: trace,
+          );
+        } else {
+          _record(
+            'clock_in_remote_uncertain_local_preserved',
+            attendance,
+            trace: trace,
+            extra: <String, Object?>{'firebaseCode': error.code},
+          );
+        }
         return AttendanceActionResult.failure(message: message);
       } catch (error, stackTrace) {
         const message =
@@ -807,6 +844,47 @@ class CommonAttendanceService {
         attendance,
         trace: trace,
         extra: <String, Object?>{
+          'error': error,
+          'stack': stackTrace,
+        },
+      );
+    }
+  }
+
+  static Future<void> _restoreRejectedClockIn(
+    AttendanceContext attendance, {
+    required ClockInRestorePoint? restorePoint,
+    required DateTime attemptedAt,
+    required bool? previousWorking,
+    required bool workingKeyExisted,
+    DeveloperOperationTrace? trace,
+  }) async {
+    if (restorePoint == null) return;
+    try {
+      await AttBrkRepository.instance.restoreClockInAttempt(
+        restorePoint: restorePoint,
+        attemptedAt: attemptedAt,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      if (workingKeyExisted && previousWorking != null) {
+        await prefs.setBool('isWorking', previousWorking);
+      } else {
+        await prefs.remove('isWorking');
+      }
+      await WorkSchedulePrefs.refreshReminderFromPrefs(prefs);
+      _record(
+        'clock_in_rejected_local_restored',
+        attendance,
+        trace: trace,
+        extra: const <String, Object?>{'localRestored': true},
+      );
+    } catch (error, stackTrace) {
+      _record(
+        'clock_in_rejected_local_restore_failed',
+        attendance,
+        trace: trace,
+        extra: <String, Object?>{
+          'localRestored': false,
           'error': error,
           'stack': stackTrace,
         },

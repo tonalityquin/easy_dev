@@ -1,3 +1,4 @@
+import '../../../../shared/plate/domain/services/plate_document_paths.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -170,7 +171,7 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
     final area =
     _plate.area.trim().isNotEmpty ? _plate.area.trim() : widget.area.trim();
 
-    return '${plateNumber}_$area';
+    return PlateDocumentPaths.vehicleId(plateNumber, area);
   }
 
   Future<bool> _autoPreBillFreeIfNeeded() async {
@@ -371,7 +372,7 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
     final plateState = context.read<MinorPlateState>();
     final plateId = _plate.id.trim().isNotEmpty
         ? _plate.id.trim()
-        : '${_plate.plateNumber}_${_plate.area}';
+        : PlateDocumentPaths.vehicleId(_plate.plateNumber, _plate.area);
     final now = DateTime.now();
     final fallbackPlate = _plate.copyWith(isLockedFee: false);
     parkingStatusTraceLog(

@@ -1,3 +1,4 @@
+import 'plate_document_paths.dart';
 import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:async';
 
@@ -31,6 +32,7 @@ class PlateQueryService {
   }) async {
     final query = _firestore
         .collection('plates')
+        .where('companyId', isEqualTo: PlateDocumentPaths.companyFor(area))
         .where('plate_four_digit', isEqualTo: plateFourDigit)
         .where('area', isEqualTo: area);
 
@@ -48,6 +50,7 @@ class PlateQueryService {
   }) async {
     final query = _firestore
         .collection('plates')
+        .where('companyId', isEqualTo: PlateDocumentPaths.companyFor(area))
         .where('plate_four_digit', isEqualTo: plateFourDigit)
         .where('area', isEqualTo: area)
         .where('type', isEqualTo: PlateType.parkingCompleted.firestoreValue);
@@ -72,6 +75,7 @@ class PlateQueryService {
 
     final query = _firestore
         .collection('plates')
+        .where('companyId', isEqualTo: PlateDocumentPaths.companyFor(area))
         .where('plate_four_digit', isEqualTo: plateFourDigit)
         .where('area', isEqualTo: area)
         .where('type', isEqualTo: type);
@@ -94,6 +98,7 @@ class PlateQueryService {
   }) async {
     final query = _firestore
         .collection('plates')
+        .where('companyId', isEqualTo: PlateDocumentPaths.companyFor(area))
         .where('plate_four_digit', isEqualTo: plateFourDigit)
         .where('area', isEqualTo: area)
         .where('type', isEqualTo: PlateType.departureCompleted.firestoreValue);

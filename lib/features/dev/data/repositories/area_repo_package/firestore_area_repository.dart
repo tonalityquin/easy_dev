@@ -63,7 +63,7 @@ class FirestoreAreaRepository implements AreaRepository {
     return jsonEncode(_normalizeRawValue(data));
   }
 
-  AreaRecord? _toAreaRecord(Map<String, dynamic>? data) {
+  AreaRecord? _toAreaRecord(Map<String, dynamic>? data, {String id = ''}) {
     if (data == null) return null;
 
     final name = (data['name'] ?? '').toString().trim();
@@ -97,6 +97,7 @@ class FirestoreAreaRepository implements AreaRepository {
         : const <String>[];
 
     return AreaRecord(
+      id: id,
       name: name,
       division: division.isEmpty ? 'default' : division,
       email: email,
@@ -130,7 +131,7 @@ class FirestoreAreaRepository implements AreaRepository {
     final docId = '$trimmedDivision-$trimmedArea';
     final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('areas').doc(docId).get(), source: 'firestore_area_repository.get');
     if (!doc.exists) return false;
-    final record = _toAreaRecord(doc.data());
+    final record = _toAreaRecord(doc.data(), id: doc.id);
     if (record == null ||
         record.name != trimmedArea ||
         record.division != trimmedDivision) {
@@ -161,7 +162,7 @@ class FirestoreAreaRepository implements AreaRepository {
       final doc = options == null ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => ref.get(), source: 'firestore_area_repository.get') : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => ref.get(options), source: 'firestore_area_repository.get');
       if (!doc.exists) return null;
 
-      final record = _toAreaRecord(doc.data());
+      final record = _toAreaRecord(doc.data(), id: doc.id);
       if (record == null) return null;
       if (record.name != trimmedArea || record.division != trimmedDivision) {
         return null;
@@ -182,7 +183,7 @@ class FirestoreAreaRepository implements AreaRepository {
     final qs = options == null ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(), source: 'firestore_area_repository.get') : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(options), source: 'firestore_area_repository.get');
 
     if (qs.docs.isEmpty) return null;
-    final record = _toAreaRecord(qs.docs.first.data());
+    final record = _toAreaRecord(qs.docs.first.data(), id: qs.docs.first.id);
     if (record == null) return null;
     await AreaSnapshotPersistence.persistRecord(
       record,
@@ -211,7 +212,7 @@ class FirestoreAreaRepository implements AreaRepository {
     final qs = options == null ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(), source: 'firestore_area_repository.get') : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(options), source: 'firestore_area_repository.get');
 
     final records = qs.docs
-        .map((doc) => _toAreaRecord(doc.data()))
+        .map((doc) => _toAreaRecord(doc.data(), id: doc.id))
         .whereType<AreaRecord>()
         .toList();
 

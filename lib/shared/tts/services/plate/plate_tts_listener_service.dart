@@ -5,6 +5,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
+import '../../../../app/utils/status_dialog.dart';
 
 import '../../../plate/domain/enums/plate_type.dart';
 import '../../../plate/domain/repositories/plate_tts_listener_repository.dart';
@@ -124,6 +125,7 @@ class PlateTtsListenerService {
   static bool _preferInMemoryFilters = false;
 
   static String? _lastKnownArea;
+  static String? _lastKnownCompany;
 
   static DateTime? _lastHydratedAt;
   static bool _hydrateBusy = false;
@@ -218,10 +220,12 @@ class PlateTtsListenerService {
   static int _listenSeq = 0;
 
   static String? _currentArea;
+  static String? _currentCompany;
   static String? _currentMode;
 
   static bool get isListening => _subscription != null;
   static String get currentArea => (_currentArea ?? '').trim();
+  static String get currentCompany => (_currentCompany ?? '').trim();
   static String get currentMode => (_currentMode ?? '').trim();
 
   static DateTime? _baselineUpdatedAt;
@@ -238,13 +242,16 @@ class PlateTtsListenerService {
 
   static Future<bool> start(
     String currentArea, {
+    required String companyId,
     bool force = false,
     String? mode,
     TtsUserFilters? filters,
   }) async {
     _lastKnownArea = currentArea.trim();
+    _lastKnownCompany = companyId.trim();
     return _startListening(
       currentArea,
+      companyId: companyId,
       force: force,
       mode: mode,
       filters: filters,
@@ -326,6 +333,7 @@ class PlateTtsListenerService {
             'policy($reason): effective master ON + no subscription → restart(area=$area)');
         await _startListening(
           area,
+          companyId: (_lastKnownCompany ?? '').trim(),
           force: true,
           mode: mode,
           filters: _filters,
@@ -350,6 +358,7 @@ class PlateTtsListenerService {
     }
 
     _currentArea = null;
+    _currentCompany = null;
     _currentMode = null;
     _baselineUpdatedAt = null;
     _baselineDocId = null;
@@ -360,6 +369,7 @@ class PlateTtsListenerService {
 
   static Future<bool> _startListening(
     String currentArea, {
+    required String companyId,
     bool force = false,
     String? mode,
     TtsUserFilters? filters,
@@ -369,8 +379,10 @@ class PlateTtsListenerService {
     await PlateLocalNotificationService.instance.ensureInitialized();
 
     final area = currentArea.trim();
-    if (area.isEmpty) {
-      _log('start ignored: empty area');
+    final company = companyId.trim();
+    if (area.isEmpty || company.isEmpty) {
+      _log('start ignored: missing company or area');
+      await stop();
       return false;
     }
 
@@ -389,6 +401,7 @@ class PlateTtsListenerService {
     if (!force &&
         _subscription != null &&
         _currentArea == area &&
+        _currentCompany == company &&
         _currentMode == resolvedMode) {
       _log('start no-op: already listening (area=$area, mode=$resolvedMode)');
       return true;
@@ -398,6 +411,7 @@ class PlateTtsListenerService {
     final int mySeq = _listenSeq;
 
     _lastKnownArea = area;
+    _lastKnownCompany = company;
 
     if (filters != null) {
       _enabled = true;
@@ -430,6 +444,8 @@ class PlateTtsListenerService {
     _baselineDocId = null;
 
     _currentArea = area;
+    _currentCompany = company;
+    StatusDialog.recordDebugOperation('tts.session', 'listener_start', details: {'companyId': company, 'area': area, 'mode': resolvedMode});
 
     final isTablet = _isTabletMode(resolvedMode);
 
@@ -443,7 +459,7 @@ class PlateTtsListenerService {
         'listen config: area=$area mode=$resolvedMode isTablet=$isTablet types=${typesToMonitor.map((e) => e.firestoreValue).toList()} (seq=$mySeq)');
 
     try {
-      await _fetchBaseline(area, typesToMonitor);
+      await _fetchBaseline(company, area, typesToMonitor);
 
       if (_baselineUpdatedAt != null && _baselineDocId != null) {
         _log(
@@ -457,6 +473,7 @@ class PlateTtsListenerService {
 
       _subscription = _repository
           .watchChanges(
+        companyId: company,
         area: area,
         types: typesToMonitor,
         startAfterUpdatedAt: _baselineUpdatedAt,
@@ -829,9 +846,10 @@ class PlateTtsListenerService {
   }
 
   static Future<void> _fetchBaseline(
-      String currentArea, List<PlateType> types) async {
+      String companyId, String currentArea, List<PlateType> types) async {
     try {
       final baseline = await _repository.fetchBaseline(
+        companyId: companyId,
         area: currentArea,
         types: types,
       );

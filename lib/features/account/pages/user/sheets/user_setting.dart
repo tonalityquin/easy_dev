@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -739,21 +740,27 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       final requiresCodeAllocation = !isEditMode ||
           !AccountCodeNumber.isValid(initialUser?.codeNumber ?? '');
       if (requiresCodeAllocation) {
+        Future<bool> codeReserved(String code) async {
+          try {
+            return await repository.getUserByAccountCode(code) != null;
+          } on FirebaseException catch (error) {
+            if (error.code == 'permission-denied') return true;
+            rethrow;
+          }
+        }
         var normalizedCode = AccountCodeNumber.normalize(
           _codeNumberController.text,
         );
-        var existing = await repository.getUserByAccountCode(normalizedCode);
+        var occupied = await codeReserved(normalizedCode);
         if (_codeEntryMode == UserCodeEntryMode.developerManual) {
-          if (existing != null) {
-            throw StateError('CODE_NUMBER_ALREADY_EXISTS');
-          }
+          if (occupied) throw StateError('CODE_NUMBER_ALREADY_EXISTS');
           trace.log(
             '개발자 직접 입력 코드번호 중복 검사 완료: code=${AccountCodeNumber.mask(normalizedCode)}',
             progress: 0.34,
           );
         } else {
           var attempts = 0;
-          while (existing != null && attempts < 8) {
+          while (occupied && attempts < 8) {
             attempts += 1;
             normalizedCode = AccountCodeNumber.generate();
             _codeNumberController.text = AccountCodeNumber.format(normalizedCode);
@@ -761,11 +768,9 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
               '코드번호 중복 감지 후 재발급: attempt=$attempts code=${AccountCodeNumber.mask(normalizedCode)}',
               progress: 0.34,
             );
-            existing = await repository.getUserByAccountCode(normalizedCode);
+            occupied = await codeReserved(normalizedCode);
           }
-          if (existing != null) {
-            throw StateError('CODE_NUMBER_GENERATION_FAILED');
-          }
+          if (occupied) throw StateError('CODE_NUMBER_GENERATION_FAILED');
         }
       }
 

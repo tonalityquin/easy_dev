@@ -79,6 +79,7 @@ class _ViewDocRowsFirestoreSyncState extends State<ViewDocRowsFirestoreSync> {
           .watchViewRows(
         collection: c,
         area: area,
+        companyId: company,
         primaryAtField: spec.primaryAtField,
       )
           .listen(

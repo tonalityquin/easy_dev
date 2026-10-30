@@ -1,3 +1,4 @@
+import '../../../../shared/plate/domain/services/plate_document_paths.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -467,7 +468,7 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
 
   String _plateDocId() {
     if (_plate.id.trim().isNotEmpty) return _plate.id.trim();
-    return '${_plate.plateNumber}_${_plate.area}';
+    return PlateDocumentPaths.vehicleId(_plate.plateNumber, _plate.area);
   }
 
   String get _effectiveLocation =>

@@ -9,6 +9,7 @@ import '../models/plate_status_draft.dart';
 import '../models/plate_status_lookup_result.dart';
 import 'plate_status_record.dart';
 import 'plate_billing_count_service.dart';
+import 'plate_document_paths.dart';
 
 const String _kLocSep = ' - ';
 const String _kLocUnknown = '미지정';
@@ -226,11 +227,11 @@ class PlateCreationService {
       currentRef,
       <String, dynamic>{
         'plateNumber': plateNumber,
-        'plateDocId': '${plateNumber}_$area',
+        'plateDocId': PlateDocumentPaths.vehicleId(plateNumber, area, companyId: companyId),
         'plateKey': _normalizedPlateKey(plateNumber),
         'plate_four_digit': _plateFourDigitValue(plateNumber),
         'source': 'PlateCreationService.addPlate',
-        'platesDocId': '${plateNumber}_$area',
+        'platesDocId': PlateDocumentPaths.vehicleId(plateNumber, area, companyId: companyId),
         'statusScope': 'plate_status',
         'monthKey': _monthKey(now),
         'customStatus': memo,
@@ -332,7 +333,13 @@ class PlateCreationService {
     String? sectorId,
     String? sectorName,
   }) async {
-    final String plateDocId = '${plateNumber}_$area';
+    final normalizedDivision = PlateDocumentPaths.companyFor(
+      area, companyId: division,
+    );
+    final areaId = PlateDocumentPaths.areaId(area, companyId: normalizedDivision);
+    final String plateDocId = PlateDocumentPaths.vehicleId(
+      plateNumber, area, companyId: normalizedDivision,
+    );
     final String statusActorName =
         userName.trim().isEmpty ? 'unknown' : userName.trim();
     final String statusMemo = (customStatus ?? '').trim();
@@ -341,7 +348,7 @@ class PlateCreationService {
         (billingType?.trim().isNotEmpty ?? false);
     final monthlyStatusRef = _firestore
         .collection(_monthlyPlateStatusCollection)
-        .doc(plateDocId);
+        .doc('${plateNumber}_$area');
     final DateTime statusWriteTime = DateTime.now();
     final currentHistoryStatusRef = _historyStatusRef(
       plateNumber: plateNumber,
@@ -445,8 +452,6 @@ class PlateCreationService {
       'hasSector=$hasSector sectorId=$normalizedSectorId '
       'sectorName=$normalizedSectorName',
     );
-    final normalizedDivision =
-        division.trim().isEmpty ? '미지정' : division.trim();
     final countedAt = DateTime.now();
 
     final base = PlateModel(
@@ -656,9 +661,11 @@ class PlateCreationService {
         }
 
         final completedViewRef =
-            _firestore.collection(_parkingCompletedViewCollection).doc(area);
+            _firestore.collection(_parkingCompletedViewCollection).doc(
+              PlateDocumentPaths.viewId(area, companyId: normalizedDivision));
         final requestsViewRef =
-            _firestore.collection(_parkingRequestsViewCollection).doc(area);
+            _firestore.collection(_parkingRequestsViewCollection).doc(
+              PlateDocumentPaths.viewId(area, companyId: normalizedDivision));
 
         if (snap.exists) {
           final data = snap.data();
@@ -692,6 +699,8 @@ class PlateCreationService {
 
           final partial = <String, dynamic>{
             PlateFields.type: plateType.firestoreValue,
+            'areaId': areaId,
+            'plateKey': PlateDocumentPaths.plateKey(plateNumber),
             PlateFields.company: normalizedDivision,
             PlateFields.division: normalizedDivision,
             if (shouldApplyPlateStatusFields)
@@ -740,6 +749,7 @@ class PlateCreationService {
                 requestsViewRef,
                 <String, dynamic>{
                   'companyId': normalizedDivision,
+                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': _buildParkingRequestsViewItem(
@@ -766,6 +776,7 @@ class PlateCreationService {
                 requestsViewRef,
                 <String, dynamic>{
                   'companyId': normalizedDivision,
+                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': <String, dynamic>{
@@ -785,6 +796,7 @@ class PlateCreationService {
                 completedViewRef,
                 <String, dynamic>{
                   'companyId': normalizedDivision,
+                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': _buildParkingCompletedViewItem(
@@ -810,6 +822,7 @@ class PlateCreationService {
                 requestsViewRef,
                 <String, dynamic>{
                   'companyId': normalizedDivision,
+                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': <String, dynamic>{
@@ -824,11 +837,13 @@ class PlateCreationService {
           final bool wasLocked = (data?['isLockedFee'] == true);
           if (wasLocked) {
             final countersRef =
-                _firestore.collection('plate_counters').doc('area_$area');
+                _firestore.collection('plate_counters').doc(
+                    PlateDocumentPaths.counterId(area, companyId: normalizedDivision));
             FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
               countersRef,
               {
                 'companyId': normalizedDivision,
+                'areaId': areaId,
                 'area': area,
                 'departureCompletedEvents': FieldValue.increment(1),
               },
@@ -853,6 +868,9 @@ class PlateCreationService {
         } else {
           final createdAtValue = FieldValue.serverTimestamp();
           final map = plateWithLog.toMap();
+          map['companyId'] = normalizedDivision;
+          map['areaId'] = areaId;
+          map['plateKey'] = PlateDocumentPaths.plateKey(plateNumber);
           map[PlateFields.company] = normalizedDivision;
           map[PlateFields.division] = normalizedDivision;
           map[PlateFields.createdAt] = createdAtValue;
@@ -871,6 +889,7 @@ class PlateCreationService {
                 requestsViewRef,
                 <String, dynamic>{
                   'companyId': normalizedDivision,
+                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': _buildParkingRequestsViewItem(
@@ -900,6 +919,7 @@ class PlateCreationService {
                 completedViewRef,
                 <String, dynamic>{
                   'companyId': normalizedDivision,
+                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': _buildParkingCompletedViewItem(
@@ -925,6 +945,7 @@ class PlateCreationService {
                 requestsViewRef,
                 <String, dynamic>{
                   'companyId': normalizedDivision,
+                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': <String, dynamic>{

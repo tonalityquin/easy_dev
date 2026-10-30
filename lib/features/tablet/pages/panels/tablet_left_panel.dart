@@ -209,6 +209,7 @@ class _DepartureRequestGridState extends State<_DepartureRequestGrid> {
     _stream = context.read<PlateRepository>().watchViewRows(
           collection: 'departure_requests_view',
           area: trimmedArea,
+          companyId: context.read<AreaState>().currentDivision,
           primaryAtField: 'departureRequestedAt',
         );
   }

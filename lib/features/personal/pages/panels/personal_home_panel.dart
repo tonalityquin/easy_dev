@@ -1,3 +1,5 @@
+import 'package:provider/provider.dart';
+import '../../../dev/application/area_state.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -187,9 +189,14 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
       _loadingMonthlyVehicleIds.add(vehicle.id);
     });
     try {
+      final areaState = context.read<AreaState>();
+      final companyId = areaState.currentArea.trim() == area
+          ? areaState.currentDivision.trim()
+          : '';
       final plate = await _statusService.fetchCurrentVehiclePlate(
         plateNumber: vehicle.plateNumber,
         area: area,
+        companyId: companyId,
       );
       final monthly = await _statusService.fetchMonthlyParkingStatus(
         plateNumber: vehicle.plateNumber,

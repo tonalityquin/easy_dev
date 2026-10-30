@@ -203,6 +203,7 @@ class _ParkingStatusPreviewCardAreaState
           .watchViewRows(
         collection: collection,
         area: area,
+            companyId: context.read<AreaState>().currentDivision,
         primaryAtField: _primaryAtFieldForCollection(collection),
       )
           .listen(

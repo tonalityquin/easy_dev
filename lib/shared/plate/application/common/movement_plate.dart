@@ -1,3 +1,4 @@
+import '../../domain/services/plate_document_paths.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -93,7 +94,8 @@ class MovementPlate extends ChangeNotifier {
     tabPrefsKey: _kReqTab,
   );
 
-  String _plateDocId(String plateNumber, String area) => '${plateNumber}_$area';
+  String _plateDocId(String plateNumber, String area) =>
+      PlateDocumentPaths.vehicleId(plateNumber, area);
 
   void _emitTrace(String message, MovementPlateTraceLog? traceLog) {
     if (traceLog != null) {

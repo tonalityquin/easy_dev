@@ -146,7 +146,7 @@ class SingleEndWorkReportService {
     List<LockedPlateRecord> plates;
     try {
       dev.log('[END] query plates...', name: 'SingleEndWorkReportService');
-      plates = await _repo.fetchLockedDepartureCompletedPlates(area: area);
+      plates = await _repo.fetchLockedDepartureCompletedPlates(companyId: division, area: area);
     } catch (e, st) {
       dev.log(
         '[END] plates query failed',
@@ -502,6 +502,7 @@ class SingleEndWorkReportService {
         progress: .72,
       );
       await _repo.appendPlateOutLogs(
+        companyId: division,
         area: area,
         plates: plates,
         sectorEnabled: sectorEnabled,
@@ -559,6 +560,7 @@ class SingleEndWorkReportService {
         );
         await _repo.cleanupLockedDepartureCompletedPlates(
           area: area,
+          companyId: division,
           plateDocIds: plates.map((e) => e.docId).toList(),
         );
         trace?.log(
@@ -890,9 +892,16 @@ class _DashboardEndReportSideDockState
         _recordDebug('counts_load_skipped reason=empty_current_area');
         return;
       }
+      final companyId = areaState.currentDivision.trim();
       final results = await Future.wait<int>(<Future<int>>[
-        _plateCountService.getDepartureCompletedAggCount(area),
-        _plateCountService.getDepartureCompletedExtraCount(area),
+        _plateCountService.getDepartureCompletedAggCount(
+          area,
+          companyId: companyId,
+        ),
+        _plateCountService.getDepartureCompletedExtraCount(
+          area,
+          companyId: companyId,
+        ),
       ]);
       _sysVehicleOutput = results[0];
       _sysDepartureExtra = results[1];

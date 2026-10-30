@@ -1,4 +1,5 @@
 import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/utils/status_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../plate/domain/enums/plate_type.dart';
@@ -22,16 +23,20 @@ class FirestorePlateTtsListenerRepository implements PlateTtsListenerRepository 
 
   @override
   Future<PlateTtsBaselineCursor> fetchBaseline({
+    required String companyId,
     required String area,
     required List<PlateType> types,
   }) async {
     final safeArea = area.trim();
-    if (safeArea.isEmpty || types.isEmpty) {
+    final safeCompany = companyId.trim();
+    if (safeArea.isEmpty || safeCompany.isEmpty || types.isEmpty) {
       return const PlateTtsBaselineCursor(updatedAt: null, docId: null);
     }
 
+    StatusDialog.recordDebugOperation('tts.plates', 'baseline_query', details: {'companyId': safeCompany, 'area': safeArea});
     final qs = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
         .collection('plates')
+        .where('companyId', isEqualTo: safeCompany)
         .where('area', isEqualTo: safeArea)
         .where('type', whereIn: types.map((e) => e.firestoreValue).toList(growable: false))
         .orderBy('updatedAt', descending: true)
@@ -55,18 +60,22 @@ class FirestorePlateTtsListenerRepository implements PlateTtsListenerRepository 
 
   @override
   Stream<PlateTtsChangeBatch> watchChanges({
+    required String companyId,
     required String area,
     required List<PlateType> types,
     DateTime? startAfterUpdatedAt,
     String? startAfterDocumentId,
   }) {
     final safeArea = area.trim();
-    if (safeArea.isEmpty || types.isEmpty) {
+    final safeCompany = companyId.trim();
+    if (safeArea.isEmpty || safeCompany.isEmpty || types.isEmpty) {
       return const Stream<PlateTtsChangeBatch>.empty();
     }
 
+    StatusDialog.recordDebugOperation('tts.plates', 'listen_start', details: {'companyId': safeCompany, 'area': safeArea});
     Query<Map<String, dynamic>> query = _firestore
         .collection('plates')
+        .where('companyId', isEqualTo: safeCompany)
         .where('area', isEqualTo: safeArea)
         .where('type', whereIn: types.map((e) => e.firestoreValue).toList(growable: false))
         .orderBy('updatedAt')
