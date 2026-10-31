@@ -570,11 +570,27 @@ class _DeveloperOperationStatusDialogState
                           ),
                         ),
                         const Spacer(),
-                        Text(
-                          '${logs.length}개',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
+                        AnimatedSwitcher(
+                          duration: fastMotion,
+                          transitionBuilder: (child, animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: ScaleTransition(
+                                scale: Tween<double>(
+                                  begin: 0.9,
+                                  end: 1,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Text(
+                            '${logs.length}개',
+                            key: ValueKey<int>(logs.length),
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ],
@@ -633,11 +649,16 @@ class _DeveloperOperationStatusDialogState
             actions: [
               OutlinedButton.icon(
                 onPressed: _copyDebugPrintCode,
-                icon: AnimatedSwitcher(
+                icon: AnimatedScale(
+                  scale: _copied ? 1.12 : 1,
                   duration: fastMotion,
-                  child: Icon(
-                    _copied ? Icons.check_rounded : Icons.copy_all_rounded,
-                    key: ValueKey<bool>(_copied),
+                  curve: Curves.easeOutBack,
+                  child: AnimatedSwitcher(
+                    duration: fastMotion,
+                    child: Icon(
+                      _copied ? Icons.check_rounded : Icons.copy_all_rounded,
+                      key: ValueKey<bool>(_copied),
+                    ),
                   ),
                 ),
                 label: AnimatedSwitcher(

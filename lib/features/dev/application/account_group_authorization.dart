@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,6 +12,8 @@ import '../../selector/application/dev_auth.dart';
 import 'login_gate_paths.dart';
 import 'developer_account_authorization.dart';
 
+enum AccountAuthorizationOutcome { approved, denied, temporaryFailure }
+
 class AccountGroupAuthorization {
   AccountGroupAuthorization._();
 
@@ -21,6 +25,31 @@ class AccountGroupAuthorization {
   static final ValueNotifier<bool> lastVerified = ValueNotifier<bool>(false);
 
   static Future<bool> verify({required String source}) async {
+    return await verifyDetailed(source: source) ==
+        AccountAuthorizationOutcome.approved;
+  }
+
+  static AccountAuthorizationOutcome _failureOutcome(Object error) {
+    if (error is TimeoutException) {
+      return AccountAuthorizationOutcome.temporaryFailure;
+    }
+    if (error is FirebaseException &&
+        const <String>{
+          'unavailable',
+          'deadline-exceeded',
+          'network-request-failed',
+          'network-error',
+          'timed-out',
+          'timeout',
+        }.contains(error.code.toLowerCase().trim())) {
+      return AccountAuthorizationOutcome.temporaryFailure;
+    }
+    return AccountAuthorizationOutcome.denied;
+  }
+
+  static Future<AccountAuthorizationOutcome> verifyDetailed({
+    required String source,
+  }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       lastVerified.value = false;
@@ -29,7 +58,7 @@ class AccountGroupAuthorization {
         source: source,
         reason: 'firebase_auth_missing',
       );
-      return false;
+      return AccountAuthorizationOutcome.denied;
     }
 
     try {
@@ -52,7 +81,7 @@ class AccountGroupAuthorization {
             group: group,
             reason: 'developer_identity_claims_invalid',
           );
-          return false;
+          return AccountAuthorizationOutcome.denied;
         }
       }
       if (!isDeveloper && user.isAnonymous) {
@@ -61,7 +90,7 @@ class AccountGroupAuthorization {
           'denied', source: source, group: group,
           reason: 'anonymous_administrator_not_allowed',
         );
-        return false;
+        return AccountAuthorizationOutcome.denied;
       }
       final firebaseClaims = claims['firebase'];
       final provider = firebaseClaims is Map
@@ -74,7 +103,7 @@ class AccountGroupAuthorization {
           'denied', source: source, group: group,
           reason: 'administrator_google_identity_required',
         );
-        return false;
+        return AccountAuthorizationOutcome.denied;
       }
       AccessGateDiagnostics.record(
         'started',
@@ -95,15 +124,20 @@ class AccountGroupAuthorization {
         group: group,
         reason: approved ? 'server_enabled' : 'server_disabled_or_missing',
       );
-      return approved;
+      return approved
+          ? AccountAuthorizationOutcome.approved
+          : AccountAuthorizationOutcome.denied;
     } catch (error) {
       lastVerified.value = false;
+      final outcome = _failureOutcome(error);
       AccessGateDiagnostics.record(
         'failed',
         source: source,
-        reason: error is FirebaseException ? error.code : error.runtimeType.toString(),
+        reason: error is FirebaseException
+            ? error.code
+            : error.runtimeType.toString(),
       );
-      return false;
+      return outcome;
     }
   }
 
@@ -111,25 +145,40 @@ class AccountGroupAuthorization {
     BuildContext context, {
     required String source,
   }) async {
-    final approved = await verify(source: source);
-    if (!context.mounted) return approved;
+    return await verifyWithStatusDetailed(context, source: source) ==
+        AccountAuthorizationOutcome.approved;
+  }
+
+  static Future<AccountAuthorizationOutcome> verifyWithStatusDetailed(
+    BuildContext context, {
+    required String source,
+  }) async {
+    final outcome = await verifyDetailed(source: source);
+    final approved = outcome == AccountAuthorizationOutcome.approved;
+    if (!context.mounted) return outcome;
 
     final developerMode = await DevAuth.isDevModeEnabled();
-    if (!context.mounted) return approved;
+    if (!context.mounted) return outcome;
 
     if (developerMode) {
       AccessGateDiagnostics.record(
         'status_open',
         source: source,
-        reason: approved ? 'approved' : 'denied',
+        reason: outcome.name,
       );
       await StatusDialog.show(
         context,
-        title: approved ? '서버 접근 승인 완료' : '서버 접근 승인 실패',
+        title: approved
+            ? '서버 접근 승인 완료'
+            : outcome == AccountAuthorizationOutcome.temporaryFailure
+                ? '서버 연결 확인 실패'
+                : '서버 접근 승인 실패',
         tone: approved ? StatusDialogTone.success : StatusDialogTone.failure,
         description: approved
             ? '서버 접근 승인이 확인되었습니다.'
-            : '현재 계정의 서버 접근 승인이 확인되지 않았습니다.',
+            : outcome == AccountAuthorizationOutcome.temporaryFailure
+                ? '서버 연결이 일시적으로 불안정합니다.'
+                : '현재 계정의 서버 접근 승인이 확인되지 않았습니다.',
         copyText: AccessGateDiagnostics.debugPrintCode,
         copyButtonLabel: 'debugPrint 코드 복사',
         visibleDuration: Duration.zero,
@@ -137,18 +186,22 @@ class AccountGroupAuthorization {
         useCommonUi: true,
         awaitManualClose: true,
       );
-      return approved;
+      return outcome;
     }
 
     if (!approved) {
       await StatusDialog.showFailure(
         context,
-        title: '서버 접근 승인 실패',
-        description: '현재 계정의 서버 접근 승인이 확인되지 않았습니다.',
+        title: outcome == AccountAuthorizationOutcome.temporaryFailure
+            ? '서버 연결 확인 실패'
+            : '서버 접근 승인 실패',
+        description: outcome == AccountAuthorizationOutcome.temporaryFailure
+            ? '서버 연결이 일시적으로 불안정합니다.'
+            : '현재 계정의 서버 접근 승인이 확인되지 않았습니다.',
         visibleDuration: const Duration(seconds: 4),
         useCommonUi: true,
       );
     }
-    return approved;
+    return outcome;
   }
 }

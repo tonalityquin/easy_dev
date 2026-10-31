@@ -23,7 +23,10 @@ abstract class UserRepository {
     String? selectedArea,
   });
 
-  Future<void> setUserActiveStatus(String userId, {required bool isActive});
+  Future<void> setUserActiveStatus(String userId, {
+    required bool isActive,
+    void Function(String)? onDiagnostic,
+  });
 
   Future<void> updateLoadCurrentAreaTablet(String tabletId, String currentArea);
   Future<void> areaPickerCurrentAreaTablet(String tabletId, String currentArea);

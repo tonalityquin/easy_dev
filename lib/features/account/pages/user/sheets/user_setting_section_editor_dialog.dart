@@ -27,6 +27,7 @@ class UserSettingSectionEditorDialog extends StatefulWidget {
     required this.manualCodeAllowed,
     required this.onRequestManualCodeEntry,
     required this.trace,
+    required this.onLoadGradePolicies,
     required this.onApply,
   });
 
@@ -37,6 +38,10 @@ class UserSettingSectionEditorDialog extends StatefulWidget {
   final bool manualCodeAllowed;
   final Future<bool> Function() onRequestManualCodeEntry;
   final DeveloperOperationTrace trace;
+  final Future<Map<String, CompanyGradePolicy>> Function(
+    String companyId, {
+    required bool forceRefresh,
+  }) onLoadGradePolicies;
   final ValueChanged<UserSettingsDraft> onApply;
 
   @override
@@ -59,7 +64,6 @@ class _UserSettingSectionEditorDialogState
   late final TextEditingController _emailController;
   late final TextEditingController _positionController;
   late Set<String> _permissionKeys;
-  final CompanyGradePolicyService _gradeService = CompanyGradePolicyService();
   Map<String, CompanyGradePolicy> _gradePolicies = <String, CompanyGradePolicy>{};
   bool _gradeLoading = false;
   String? _gradeError;
@@ -104,7 +108,10 @@ class _UserSettingSectionEditorDialogState
       _gradeError = null;
     });
     try {
-      final values = await _gradeService.loadAll(widget.companyId);
+      final values = await widget.onLoadGradePolicies(
+        widget.companyId,
+        forceRefresh: false,
+      );
       if (!mounted) return;
       setState(() {
         _gradePolicies = <String, CompanyGradePolicy>{
@@ -645,35 +652,74 @@ class _UserSettingSectionEditorDialogState
           duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
           curve: CommonUiMotion.enter,
           alignment: Alignment.topLeft,
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _gradePolicies.entries.map((entry) {
-              final selected = selectedPreset == entry.key;
-              final canApply = editable && !_gradeLoading &&
-                  selectedPreset != 'headquartersAdmin' &&
-                  AccountPermissionPolicy.mayGrant(actor.permissionKeys, entry.value.permissionKeys);
-              return OpsFormChip(
-                label: entry.value.name,
-                selected: selected,
-                icon: selected ? Icons.check_circle_rounded : Icons.shield_outlined,
-                onTap: () {
-                  if (!canApply) {
-                    widget.trace.log('계정 등급 선택 거부: preset=${entry.key}');
-                    return;
-                  }
-                  setState(() {
-                    _accountGradeId = entry.key;
-                    _permissionKeys = Set<String>.of(entry.value.permissionKeys);
-                  });
-                  widget.trace.log('계정 등급 선택: preset=${entry.key} count=${entry.value.permissionKeys.length}');
-                },
-              );
-            }).toList(growable: false),
+          child: AnimatedSwitcher(
+            duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+            switchInCurve: CommonUiMotion.enter,
+            switchOutCurve: CommonUiMotion.exit,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, .04),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Wrap(
+              key: ValueKey<String>(
+                _gradePolicies.entries
+                    .map((entry) => '${entry.key}:${entry.value.name}')
+                    .join('|'),
+              ),
+              spacing: 8,
+              runSpacing: 8,
+              children: _gradePolicies.entries.map((entry) {
+                final selected = selectedPreset == entry.key;
+                final canApply = editable && !_gradeLoading &&
+                    selectedPreset != 'headquartersAdmin' &&
+                    AccountPermissionPolicy.mayGrant(actor.permissionKeys, entry.value.permissionKeys);
+                return OpsFormChip(
+                  label: entry.value.name,
+                  selected: selected,
+                  icon: selected ? Icons.check_circle_rounded : Icons.shield_outlined,
+                  onTap: () {
+                    if (!canApply) {
+                      widget.trace.log('계정 등급 선택 거부: preset=${entry.key}');
+                      return;
+                    }
+                    setState(() {
+                      _accountGradeId = entry.key;
+                      _permissionKeys = Set<String>.of(entry.value.permissionKeys);
+                    });
+                    widget.trace.log('계정 등급 선택: preset=${entry.key} count=${entry.value.permissionKeys.length}');
+                  },
+                );
+              }).toList(growable: false),
+            ),
           ),
         ),
-        if (_gradeLoading) const LinearProgressIndicator(),
-        if (_gradeError != null) Text('등급 정책 조회 실패: $_gradeError'),
+        AnimatedSwitcher(
+          duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SizeTransition(sizeFactor: animation, child: child),
+          ),
+          child: _gradeLoading
+              ? const LinearProgressIndicator(
+                  key: ValueKey<String>('grade_editor_loading'),
+                )
+              : _gradeError != null
+                  ? Text(
+                      '등급 정책 조회 실패: $_gradeError',
+                      key: const ValueKey<String>('grade_editor_error'),
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey<String>('grade_editor_ready'),
+                    ),
+        ),
         const SizedBox(height: 10),
         AnimatedSwitcher(
           duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,

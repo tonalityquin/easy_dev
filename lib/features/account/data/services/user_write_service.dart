@@ -2,6 +2,7 @@ import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
 import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import '../../../dev/application/developer_account_authorization.dart';
 import '../../../../shared/auth/account_code_number.dart';
 import '../../applications/tablet_account_diagnostics.dart';
@@ -25,10 +26,11 @@ class _ShowAccountCounts {
     int activeDelta = 0,
     int inactiveDelta = 0,
   }) {
-    var active = activeCount + activeDelta;
-    var inactive = inactiveCount + inactiveDelta;
-    if (active < 0) active = 0;
-    if (inactive < 0) inactive = 0;
+    final active = activeCount + activeDelta;
+    final inactive = inactiveCount + inactiveDelta;
+    if (active < 0 || inactive < 0) {
+      throw StateError('ACCOUNT_COUNT_NEGATIVE_DELTA');
+    }
     return _ShowAccountCounts(activeCount: active, inactiveCount: inactive);
   }
 
@@ -153,15 +155,18 @@ class UserWriteService {
   }
 
   String _areaOfUser(UserModel u) {
-    final ca = (u.currentArea ?? '').trim();
-    if (ca.isNotEmpty) return ca;
-
-    final sa = (u.selectedArea ?? '').trim();
-    if (sa.isNotEmpty) return sa;
-
-    final a0 = (u.areas.isNotEmpty ? u.areas.first : '').trim();
-    if (a0.isNotEmpty) return a0;
-
+    final code = AccountCodeNumber.normalize(u.codeNumber);
+    final documentPrefix = '$code-';
+    if (AccountCodeNumber.isValid(code) && u.id.startsWith(documentPrefix)) {
+      final assigned = u.id.substring(documentPrefix.length).trim();
+      if (assigned.isNotEmpty) return assigned;
+    }
+    final assignedArea = (u.areas.isNotEmpty ? u.areas.first : '').trim();
+    if (assignedArea.isNotEmpty) return assignedArea;
+    final selectedArea = (u.selectedArea ?? '').trim();
+    if (selectedArea.isNotEmpty) return selectedArea;
+    final currentArea = (u.currentArea ?? '').trim();
+    if (currentArea.isNotEmpty) return currentArea;
     return _inferAreaFromHyphenId(u.id);
   }
 
@@ -276,116 +281,23 @@ class UserWriteService {
     };
   }
 
-  int? _asInt(dynamic v) => (v is int) ? v : null;
-
-  int _nonNegative(dynamic v) {
-    final i = _asInt(v);
-    if (i == null || i < 0) return 0;
-    return i;
-  }
-
   _ShowAccountCounts _countsFromMeta(Map<String, dynamic> data) {
-    final active = _nonNegative(data['activeCount']);
-    final inactiveRaw = _asInt(data['inactiveCount']);
-    final totalRaw = _asInt(data['totalCount']);
-    var inactive = inactiveRaw == null || inactiveRaw < 0 ? 0 : inactiveRaw;
-    if ((inactiveRaw == null || inactiveRaw < 0) && totalRaw != null && totalRaw >= active) {
-      inactive = totalRaw - active;
+    if (!AccountInitializationGuard.validCounts(data)) {
+      throw StateError('ACCOUNT_COUNT_META_INVALID');
     }
-    return _ShowAccountCounts(activeCount: active, inactiveCount: inactive);
+    return _ShowAccountCounts(
+      activeCount: data['activeCount'] as int,
+      inactiveCount: data['inactiveCount'] as int,
+    );
   }
 
-  bool _metaNeedsCountCompute(Map<String, dynamic> data, bool strict) {
-    if (strict) return true;
-    final active = _asInt(data['activeCount']);
-    final inactive = _asInt(data['inactiveCount']);
-    final total = _asInt(data['totalCount']);
-    if (active == null || active < 0) return true;
-    if (inactive == null || inactive < 0) return true;
-    if (total == null || total < 0) return true;
-    return total != active + inactive;
-  }
-
-  Future<_ShowAccountCounts> _ensureOrSyncAccountCounts({
-    required DocumentReference<Map<String, dynamic>> showDocRef,
-    required String division,
-    required String area,
-    required bool strict,
-    bool failOnError = false,
-    void Function(String)? onDiagnostic,
-  }) async {
+  Future<void> _verifyAccountInitialization(String division) async {
     final initialized = await AccountInitializationGuard.isInitializedFast(
-      firestore: _firestore, companyId: division);
-    if (!initialized) throw StateError('ACCOUNT_INITIALIZATION_REQUIRED:$division');
-    var stage = 'meta_get';
-    try {
-      final metaSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => showDocRef.get(), source: 'user_write_service.get');
-      if (!metaSnap.exists) throw StateError('ACCOUNT_META_MISSING:$division/$area');
-      final meta = metaSnap.data() ?? <String, dynamic>{};
-      if (!_metaNeedsCountCompute(meta, strict)) {
-        return _countsFromMeta(meta);
-      }
-
-      stage = 'company_write_guard';
-      final divisionRef = _firestore.collection('divisions').doc(division);
-      final before = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => divisionRef.get(const GetOptions(source: Source.server)), source: 'user_write_service.get');
-      if (!before.exists || before.data()?['accountWriteLocked'] == true ||
-          before.data()?['lifecycleStatus'] == 'closed' ||
-          before.data()?['lifecycleStatus'] == 'closing') {
-        throw StateError('COMPANY_ACCOUNT_WRITE_BLOCKED:$division');
-      }
-      final expectedVersion = before.data()?['accountWriteVersion'] is int
-          ? before.data()!['accountWriteVersion'] as int : 0;
-      stage = 'user_projection_list';
-      final qSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => showDocRef.collection('users').get(), source: 'user_write_service.get');
-      var active = 0;
-      var inactive = 0;
-      for (final doc in qSnap.docs) {
-        final data = doc.data();
-        final isActive = (data['isActive'] as bool?) ?? true;
-        if (isActive) {
-          active += 1;
-        } else {
-          inactive += 1;
-        }
-      }
-
-      final counts = _ShowAccountCounts(activeCount: active, inactiveCount: inactive);
-      stage = 'meta_set';
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
-        FirebaseActivityMonitor.beginTransactionAttempt();
-        final currentDivision = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(divisionRef), source: 'user_write_service.get');
-        final currentMeta = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(showDocRef), source: 'user_write_service.get');
-        if (!currentMeta.exists) throw StateError('ACCOUNT_META_MISSING:$division/$area');
-        final currentVersion = currentDivision.data()?['accountWriteVersion'] is int
-            ? currentDivision.data()!['accountWriteVersion'] as int : 0;
-        if (currentVersion != expectedVersion ||
-            currentDivision.data()?['accountWriteLocked'] == true ||
-            currentDivision.data()?['lifecycleStatus'] == 'closed' ||
-            currentDivision.data()?['lifecycleStatus'] == 'closing' ||
-            currentMeta.data()?['totalCount'] != metaSnap.data()?['totalCount'] ||
-            currentMeta.data()?['activeCount'] != metaSnap.data()?['activeCount'] ||
-            currentMeta.data()?['inactiveCount'] != metaSnap.data()?['inactiveCount']) {
-          throw StateError('COUNT_REBUILD_CONCURRENT_CHANGE:$division/$area');
-        }
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(showDocRef, <String, dynamic>{
-          ...counts.toMap(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        }));
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(divisionRef, <String, dynamic>{
-          'accountWriteVersion': FieldValue.increment(1),
-        }));
-      }), source: 'user_write_service.runTransaction');
-      onDiagnostic?.call('count_sync_success stage=$stage');
-      return counts;
-    } on FirebaseException catch (error) {
-      onDiagnostic?.call('count_sync_denied_or_failed stage=$stage code=${error.code}');
-      if (failOnError || strict) rethrow;
-      return const _ShowAccountCounts(activeCount: 0, inactiveCount: 0);
-    } catch (error) {
-      onDiagnostic?.call('count_sync_exception stage=$stage type=${error.runtimeType}');
-      if (failOnError || strict) rethrow;
-      return const _ShowAccountCounts(activeCount: 0, inactiveCount: 0);
+      firestore: _firestore,
+      companyId: division,
+    );
+    if (!initialized) {
+      throw StateError('ACCOUNT_INITIALIZATION_REQUIRED:$division');
     }
   }
 
@@ -458,12 +370,8 @@ class UserWriteService {
     final areaPolicyRef = await AreaAccountLimitPolicy.resolve(
       firestore: _firestore, companyId: division, areaName: area);
 
-    await _ensureOrSyncAccountCounts(
-      showDocRef: showDocRef,
-      division: division,
-      area: area,
-      strict: true,
-    );
+    await _verifyAccountInitialization(division);
+    debugPrint('[ACCOUNT-COUNT] operation=create countRebuild=skipped limitValidation=transaction');
 
     try {
       await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
@@ -497,6 +405,9 @@ class UserWriteService {
         final existingSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(showUserDocRef), source: 'user_write_service.get');
         final existingData = existingSnap.data() ?? <String, dynamic>{};
         final bool existed = existingSnap.exists;
+        if (existed) {
+          throw StateError('SHOW_USER_ALREADY_EXISTS:$showId/${user.id}');
+        }
         final bool existingActive = (existingData['isActive'] as bool?) ?? false;
 
         var activeDelta = 0;
@@ -718,20 +629,11 @@ class UserWriteService {
     final newAreaPolicyRef = await AreaAccountLimitPolicy.resolve(
       firestore: _firestore, companyId: newDivision, areaName: newArea);
 
-    await _ensureOrSyncAccountCounts(
-      showDocRef: newShowDocRef,
-      division: newDivision,
-      area: newArea,
-      strict: true,
-    );
-    if (showMoved) {
-      await _ensureOrSyncAccountCounts(
-        showDocRef: oldShowDocRef,
-        division: oldDivision,
-        area: oldArea,
-        strict: true,
-      );
+    await _verifyAccountInitialization(newDivision);
+    if (oldDivision != newDivision) {
+      await _verifyAccountInitialization(oldDivision);
     }
+    debugPrint('[ACCOUNT-COUNT] operation=update countRebuild=skipped projectionMoved=$showMoved');
 
     try {
       await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
@@ -754,10 +656,23 @@ class UserWriteService {
         final oldIdentityEmail = (previousRootData['email'] ?? '')
             .toString().trim().toLowerCase();
         final newIdentityEmail = user.email.trim().toLowerCase();
-        final newIdentityRef = newIdentityEmail.isEmpty ? null
+        final identityEmailChanged = oldIdentityEmail != newIdentityEmail;
+        final oldIdentityCompanyId =
+            (previousRootData['companyId'] ?? '').toString().trim();
+        final identityBindingUnchanged = !identityEmailChanged &&
+            previousUserId == nextUserId &&
+            oldIdentityCompanyId == user.companyId.trim();
+        final newIdentityRef = newIdentityEmail.isEmpty || identityBindingUnchanged
+            ? null
             : _firestore.collection('login_identity_accounts').doc(newIdentityEmail);
         final oldIdentityRef = oldIdentityEmail.isEmpty || oldIdentityEmail == newIdentityEmail
             ? null : _firestore.collection('login_identity_accounts').doc(oldIdentityEmail);
+        final identityAction = identityBindingUnchanged
+            ? 'unchanged_skip'
+            : newIdentityRef == null && oldIdentityRef == null
+                ? 'no_email'
+                : 'lookup_required';
+        debugPrint('[EMAIL-IDENTITY] operation=update action=$identityAction');
         final newIdentitySnap = newIdentityRef == null ? null : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(newIdentityRef), source: 'user_write_service.get');
         final oldIdentitySnap = oldIdentityRef == null ? null : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(oldIdentityRef), source: 'user_write_service.get');
         if (newIdentitySnap != null && newIdentitySnap.exists &&
@@ -769,7 +684,6 @@ class UserWriteService {
             oldIdentitySnap.data()?['accountId'] != previousUserId) {
           throw StateError('PREVIOUS_EMAIL_IDENTITY_CONFLICT');
         }
-        final identityEmailChanged = oldIdentityEmail != newIdentityEmail;
         if (identityEmailChanged && previousRootData['isInitialAdmin'] == true) {
           throw StateError('INITIAL_ADMIN_EMAIL_CHANGE_REQUIRES_DEVELOPER');
         }
@@ -874,15 +788,17 @@ class UserWriteService {
             _toUserAccountsMap(effectiveUser, isActive: targetActive),
             SetOptions(merge: true),
           ));
-          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
-            newShowDocRef,
-            _showMetaPayload(
-              division: newDivision,
-              area: newArea,
-              counts: counts1,
-            ),
-            SetOptions(merge: true),
-          ));
+          if (!currentShowUserSnap.exists) {
+            FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
+              newShowDocRef,
+              _showMetaPayload(
+                division: newDivision,
+                area: newArea,
+                counts: counts1,
+              ),
+              SetOptions(merge: true),
+            ));
+          }
           FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(newShowUserDocRef, userMap, SetOptions(merge: true)));
           FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
             nextCodeDocRef,
@@ -999,6 +915,9 @@ class UserWriteService {
         }
 
         final oldShowSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(oldShowDocRef), source: 'user_write_service.get');
+        if (!oldShowSnap.exists) {
+          throw StateError('ACCOUNT_META_MISSING:$oldDivision/$oldArea');
+        }
         final oldShowData = oldShowSnap.data() ?? <String, dynamic>{};
         final oldCounts0 = _countsFromMeta(oldShowData);
         final oldUserSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(oldShowUserDocRef), source: 'user_write_service.get');
@@ -1198,7 +1117,17 @@ class UserWriteService {
   Future<void> setUserActiveStatus(
     String userId, {
     required bool isActive,
+    void Function(String)? onDiagnostic,
   }) async {
+    void report(String message) {
+      final line = '[ACCOUNT-COUNT] $message';
+      if (onDiagnostic != null) {
+        onDiagnostic(line);
+      } else {
+        debugPrint(line);
+      }
+    }
+
     final userDocRef = _getUserCollectionRef().doc(userId);
 
     try {
@@ -1218,12 +1147,9 @@ class UserWriteService {
       final areaPolicyRef = await AreaAccountLimitPolicy.resolve(
         firestore: _firestore, companyId: division, areaName: area);
 
-      await _ensureOrSyncAccountCounts(
-        showDocRef: showDocRef,
-        division: division,
-        area: area,
-        strict: true,
-      );
+      await _verifyAccountInitialization(division);
+      report('operation=set_active countRebuild=skipped initialization=verified');
+      var countChanged = false;
 
       await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
         FirebaseActivityMonitor.beginTransactionAttempt();
@@ -1244,7 +1170,10 @@ class UserWriteService {
         }
 
         final userData = userSnap.data() ?? <String, dynamic>{};
-        final bool currentActive = (userData['isActive'] as bool?) ?? true;
+        if (userData['isActive'] is! bool) {
+          throw StateError('SHOW_USER_ACTIVE_STATE_INVALID:$userId');
+        }
+        final bool currentActive = userData['isActive'] as bool;
         final scheduleMigration = _weekdayScheduleMigrationPayload(current);
         final rootStatusPayload = <String, dynamic>{
           ...scheduleMigration,
@@ -1271,14 +1200,10 @@ class UserWriteService {
             },
             SetOptions(merge: true),
           ));
-          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
-            showDocRef,
-            _showMetaPayload(division: division, area: area, counts: counts0),
-            SetOptions(merge: true),
-          ));
           return;
         }
 
+        countChanged = true;
         var activeDelta = 0;
         var inactiveDelta = 0;
         if (isActive) {
@@ -1317,6 +1242,7 @@ class UserWriteService {
           SetOptions(merge: true),
         ));
       }), source: 'user_write_service.runTransaction');
+      report('operation=set_active transaction=committed metaWrite=$countChanged');
     } on FirebaseException {
       rethrow;
     } catch (_) {
@@ -1339,11 +1265,8 @@ class UserWriteService {
         onDiagnostic?.call('account_get_started collection=user_accounts');
         final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => userDocRef.get(), source: 'user_write_service.get');
         if (!snap.exists || snap.data() == null) {
-          onDiagnostic?.call('account_missing_delete_attempt collection=user_accounts');
-          stage = 'missing_account_delete';
-          await FirebaseActivityMonitor.track(FirebaseActivityKind.delete, () => userDocRef.delete(), source: 'user_write_service.delete');
-          onDiagnostic?.call('account_missing_delete_completed');
-          continue;
+          onDiagnostic?.call('account_missing_delete_blocked collection=user_accounts');
+          throw StateError('USER_NOT_FOUND:$id');
         }
         final prevUser = UserModel.fromMap(snap.id, snap.data()!);
         onDiagnostic?.call('account_get_success');
@@ -1360,16 +1283,11 @@ class UserWriteService {
           'delete_plan projection=true code_reservation=${codeDocRef != null} developer_manual_code=${AccountCodeNumber.isDeveloperManualCode(normalizedCode)}',
         );
 
-        stage = 'count_sync';
-        onDiagnostic?.call('count_sync_started collection=user_accounts_show');
-        await _ensureOrSyncAccountCounts(
-          showDocRef: showDocRef,
-          division: division,
-          area: area,
-          strict: true,
-          failOnError: true,
-          onDiagnostic: onDiagnostic,
-        );
+        stage = 'initialization_gate';
+        onDiagnostic?.call('account_initialization_gate_started');
+        await _verifyAccountInitialization(division);
+        onDiagnostic?.call('account_initialization_gate_passed count_rebuild=skipped');
+        debugPrint('[ACCOUNT-COUNT] operation=delete countRebuild=skipped limitValidation=transaction');
 
         stage = 'transaction_start';
         onDiagnostic?.call('transaction_started');
@@ -1386,6 +1304,9 @@ class UserWriteService {
           }
           stage = 'transaction_meta_get';
           final showSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(showDocRef), source: 'user_write_service.get');
+          if (!showSnap.exists) {
+            throw StateError('ACCOUNT_META_MISSING:$division/$area');
+          }
           final showData = showSnap.data() ?? <String, dynamic>{};
           final counts0 = _countsFromMeta(showData);
           stage = 'transaction_projection_get';
@@ -1393,7 +1314,10 @@ class UserWriteService {
           var counts1 = counts0;
           if (showUserSnap.exists) {
             final d = showUserSnap.data() ?? <String, dynamic>{};
-            final wasActive = (d['isActive'] as bool?) ?? false;
+            if (d['isActive'] is! bool) {
+              throw StateError('SHOW_USER_ACTIVE_STATE_INVALID:$id');
+            }
+            final wasActive = d['isActive'] as bool;
             counts1 = counts0.applyDeltas(
               activeDelta: wasActive ? -1 : 0,
               inactiveDelta: wasActive ? 0 : -1,
@@ -1416,11 +1340,13 @@ class UserWriteService {
           if (codeDocRef != null && codeSnap != null && codeSnap.exists) {
             FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => tx.delete(codeDocRef));
           }
-          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
-            showDocRef,
-            _showMetaPayload(division: division, area: area, counts: counts1),
-            SetOptions(merge: true),
-          ));
+          if (showUserSnap.exists) {
+            FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
+              showDocRef,
+              _showMetaPayload(division: division, area: area, counts: counts1),
+              SetOptions(merge: true),
+            ));
+          }
         }), source: 'user_write_service.runTransaction');
         onDiagnostic?.call('transaction_committed account_delete_success');
       } on FirebaseException catch (error) {

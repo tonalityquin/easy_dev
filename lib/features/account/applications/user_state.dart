@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../domain/models/account_permission_policy.dart';
+import '../data/services/company_grade_policy_selection_cache.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../../../app/auth/google_auth_session.dart';
@@ -61,9 +62,39 @@ class UserState extends ChangeNotifier {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _gradeSubscription;
   String _observedGradeKey = '';
   Set<String>? _gradePermissions;
+  (bool, String, String, String)? _gradeSelectionCacheOwner;
 
   void _watchGradePolicy() {
     final session = _session;
+    final (bool, String, String, String)? nextOwner = session == null
+        ? null
+        : (
+            session.isTablet,
+            session.companyId.trim(),
+            session.id.trim(),
+            session.email.trim().toLowerCase(),
+          );
+    if (_gradeSelectionCacheOwner != nextOwner) {
+      final previous = _gradeSelectionCacheOwner;
+      CompanyGradePolicySelectionCache.instance.clear();
+      _gradeSelectionCacheOwner = nextOwner;
+      LauncherDiagnostics.record(
+        'grade_selection_cache_cleared',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'reason': 'session_identity_changed',
+          'previousSession': previous == null
+              ? 'none'
+              : previous.$1 ? 'tablet' : 'user',
+          'nextSession': nextOwner == null
+              ? 'none'
+              : nextOwner.$1 ? 'tablet' : 'user',
+          'companyChanged': previous?.$2 != nextOwner?.$2,
+          'accountChanged': previous?.$3 != nextOwner?.$3,
+          'emailChanged': previous?.$4 != nextOwner?.$4,
+        },
+      );
+    }
     final key = session == null || session.isInitialAdmin || session.isTablet ||
             session.companyId.isEmpty || session.accountGradeId.isEmpty
         ? ''
@@ -442,6 +473,7 @@ class UserState extends ChangeNotifier {
   Future<void> setSelectedUserActiveStatus(
     bool isActive, {
     void Function(String)? onError,
+    void Function(String)? onDiagnostic,
   }) async {
     final selectedId = _selectedUserId;
     if (selectedId == null) {
@@ -450,7 +482,11 @@ class UserState extends ChangeNotifier {
     }
 
     try {
-      await _repository.setUserActiveStatus(selectedId, isActive: isActive);
+      await _repository.setUserActiveStatus(
+        selectedId,
+        isActive: isActive,
+        onDiagnostic: onDiagnostic,
+      );
 
       final area = _areaState.currentArea.trim();
       final idx = _userList.indexWhere((u) => u.id == selectedId);

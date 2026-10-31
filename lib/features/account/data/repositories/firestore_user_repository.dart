@@ -102,8 +102,15 @@ class FirestoreUserRepository implements UserRepository {
   Future<void> deleteTablets(List<String> ids) => _writeService.deleteTablets(ids);
 
   @override
-  Future<void> setUserActiveStatus(String userId, {required bool isActive}) =>
-      _writeService.setUserActiveStatus(userId, isActive: isActive);
+  Future<void> setUserActiveStatus(String userId, {
+    required bool isActive,
+    void Function(String)? onDiagnostic,
+  }) =>
+      _writeService.setUserActiveStatus(
+        userId,
+        isActive: isActive,
+        onDiagnostic: onDiagnostic,
+      );
 
   @override
   Future<void> updateLogOutUserStatus(String userId, {bool? isWorking, bool? isSaved}) =>

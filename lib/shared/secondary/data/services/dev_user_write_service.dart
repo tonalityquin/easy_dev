@@ -22,10 +22,11 @@ class _DevAccountCounts {
     int activeDelta = 0,
     int inactiveDelta = 0,
   }) {
-    var active = activeCount + activeDelta;
-    var inactive = inactiveCount + inactiveDelta;
-    if (active < 0) active = 0;
-    if (inactive < 0) inactive = 0;
+    final active = activeCount + activeDelta;
+    final inactive = inactiveCount + inactiveDelta;
+    if (active < 0 || inactive < 0) {
+      throw StateError('ACCOUNT_COUNT_NEGATIVE_DELTA');
+    }
     return _DevAccountCounts(
       activeCount: active,
       inactiveCount: inactive,
@@ -138,110 +139,24 @@ class DevUserWriteService {
     }
   }
 
-  int? _intValue(dynamic value) => value is int ? value : null;
-
-  int _nonNegative(dynamic value) {
-    final parsed = _intValue(value);
-    if (parsed == null || parsed < 0) return 0;
-    return parsed;
-  }
-
   _DevAccountCounts _countsFromMeta(Map<String, dynamic> data) {
-    final active = _nonNegative(data['activeCount']);
-    final inactiveRaw = _intValue(data['inactiveCount']);
-    final totalRaw = _intValue(data['totalCount']);
-    var inactive = inactiveRaw == null || inactiveRaw < 0 ? 0 : inactiveRaw;
-    if ((inactiveRaw == null || inactiveRaw < 0) &&
-        totalRaw != null &&
-        totalRaw >= active) {
-      inactive = totalRaw - active;
+    if (!AccountInitializationGuard.validCounts(data)) {
+      throw StateError('ACCOUNT_COUNT_META_INVALID');
     }
     return _DevAccountCounts(
-      activeCount: active,
-      inactiveCount: inactive,
+      activeCount: data['activeCount'] as int,
+      inactiveCount: data['inactiveCount'] as int,
     );
   }
 
-  bool _metaNeedsCountCompute(Map<String, dynamic> data) {
-    final active = _intValue(data['activeCount']);
-    final inactive = _intValue(data['inactiveCount']);
-    final total = _intValue(data['totalCount']);
-    if (active == null || active < 0) return true;
-    if (inactive == null || inactive < 0) return true;
-    if (total == null || total < 0) return true;
-    return total != active + inactive;
-  }
-
-  Future<void> _ensureAccountCounts({
-    required DocumentReference<Map<String, dynamic>> showRef,
-    required String division,
-    required String area,
-    void Function(String message)? log,
-  }) async {
+  Future<void> _verifyAccountInitialization(String division) async {
     final initialized = await AccountInitializationGuard.isInitializedFast(
-      firestore: _firestore, companyId: division);
-    if (!initialized) throw StateError('ACCOUNT_INITIALIZATION_REQUIRED:$division');
-    final metaSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => showRef.get(), source: 'dev_user_write_service.get');
-    if (!metaSnap.exists) throw StateError('ACCOUNT_META_MISSING:$division/$area');
-    final meta = metaSnap.data() ?? <String, dynamic>{};
-    if (!_metaNeedsCountCompute(meta)) {
-      log?.call(
-        'DevUserWriteService count meta 사용: division=$division area=$area active=${meta['activeCount']} inactive=${meta['inactiveCount']} total=${meta['totalCount']}',
-      );
-      return;
-    }
-
-    final divisionRef = _firestore.collection('divisions').doc(division);
-    final before = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => divisionRef.get(const GetOptions(source: Source.server)), source: 'dev_user_write_service.get');
-    if (!before.exists || before.data()?['accountWriteLocked'] == true ||
-        before.data()?['lifecycleStatus'] == 'closed' ||
-        before.data()?['lifecycleStatus'] == 'closing') {
-      throw StateError('COMPANY_ACCOUNT_WRITE_BLOCKED:$division');
-    }
-    final expectedVersion = before.data()?['accountWriteVersion'] is int
-        ? before.data()!['accountWriteVersion'] as int : 0;
-    final usersSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => showRef.collection('users').get(), source: 'dev_user_write_service.get');
-    var active = 0;
-    var inactive = 0;
-    for (final doc in usersSnap.docs) {
-      final isActive = (doc.data()['isActive'] as bool?) ?? true;
-      if (isActive) {
-        active += 1;
-      } else {
-        inactive += 1;
-      }
-    }
-    final counts = _DevAccountCounts(
-      activeCount: active,
-      inactiveCount: inactive,
+      firestore: _firestore,
+      companyId: division,
     );
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
-        FirebaseActivityMonitor.beginTransactionAttempt();
-      final currentDivision = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(divisionRef), source: 'dev_user_write_service.get');
-      final currentMeta = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(showRef), source: 'dev_user_write_service.get');
-      if (!currentMeta.exists) throw StateError('ACCOUNT_META_MISSING:$division/$area');
-      final currentVersion = currentDivision.data()?['accountWriteVersion'] is int
-          ? currentDivision.data()!['accountWriteVersion'] as int : 0;
-      if (currentVersion != expectedVersion ||
-          currentDivision.data()?['accountWriteLocked'] == true ||
-          currentDivision.data()?['lifecycleStatus'] == 'closed' ||
-          currentDivision.data()?['lifecycleStatus'] == 'closing' ||
-          currentMeta.data()?['totalCount'] != metaSnap.data()?['totalCount'] ||
-          currentMeta.data()?['activeCount'] != metaSnap.data()?['activeCount'] ||
-          currentMeta.data()?['inactiveCount'] != metaSnap.data()?['inactiveCount']) {
-        throw StateError('COUNT_REBUILD_CONCURRENT_CHANGE:$division/$area');
-      }
-      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(showRef, <String, dynamic>{
-        ...counts.toMap(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }));
-      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(divisionRef, <String, dynamic>{
-        'accountWriteVersion': FieldValue.increment(1),
-      }));
-    }), source: 'dev_user_write_service.runTransaction');
-    log?.call(
-      'DevUserWriteService count meta 복구: division=$division area=$area active=$active inactive=$inactive total=${counts.totalCount}',
-    );
+    if (!initialized) {
+      throw StateError('ACCOUNT_INITIALIZATION_REQUIRED:$division');
+    }
   }
 
   void _assertActiveLimit({
@@ -320,12 +235,8 @@ class DevUserWriteService {
       'DevUserWriteService create 시작: id=${AccountCodeNumber.maskDocumentId(user.id)} division=$normalizedDivision area=$normalizedArea',
     );
 
-    await _ensureAccountCounts(
-      showRef: showRef,
-      division: normalizedDivision,
-      area: normalizedArea,
-      log: log,
-    );
+    await _verifyAccountInitialization(normalizedDivision);
+    log?.call('account_count create preflight=skipped initialization=verified limitValidation=transaction');
 
     await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
         FirebaseActivityMonitor.beginTransactionAttempt();
@@ -485,20 +396,11 @@ class DevUserWriteService {
       'DevUserWriteService update 시작: oldId=${AccountCodeNumber.maskDocumentId(oldUserId)} newId=${AccountCodeNumber.maskDocumentId(newUserId)} old=$oldShowId new=$newShowId',
     );
 
-    await _ensureAccountCounts(
-      showRef: newShowRef,
-      division: newDivision,
-      area: newArea,
-      log: log,
-    );
-    if (showChanged) {
-      await _ensureAccountCounts(
-        showRef: oldShowRef,
-        division: oldDivision,
-        area: oldArea,
-        log: log,
-      );
+    await _verifyAccountInitialization(newDivision);
+    if (oldDivision != newDivision) {
+      await _verifyAccountInitialization(oldDivision);
     }
+    log?.call('account_count update preflight=skipped initialization=verified showChanged=$showChanged');
 
     await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
         FirebaseActivityMonitor.beginTransactionAttempt();
@@ -558,10 +460,21 @@ class DevUserWriteService {
       }
       final newEmail = user.email.trim().toLowerCase();
       final oldEmail = (oldRootData['email'] ?? '').toString().trim().toLowerCase();
-      final newIdentityRef = newEmail.isEmpty ? null
+      final oldCompanyId = (oldRootData['companyId'] ?? '').toString().trim();
+      final identityBindingUnchanged = oldEmail == newEmail &&
+          oldUserId == newUserId &&
+          oldCompanyId == user.companyId.trim();
+      final newIdentityRef = newEmail.isEmpty || identityBindingUnchanged
+          ? null
           : _firestore.collection('login_identity_accounts').doc(newEmail);
       final oldIdentityRef = oldEmail.isEmpty || oldEmail == newEmail ? null
           : _firestore.collection('login_identity_accounts').doc(oldEmail);
+      final identityAction = identityBindingUnchanged
+          ? 'unchanged_skip'
+          : newIdentityRef == null && oldIdentityRef == null
+              ? 'no_email'
+              : 'sync_required';
+      log?.call('email_identity update action=$identityAction');
       final newIdentitySnap = newIdentityRef == null ? null
           : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(newIdentityRef), source: 'dev_user_write_service.get');
       final oldIdentitySnap = oldIdentityRef == null ? null
@@ -659,15 +572,18 @@ class DevUserWriteService {
         FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => tx.delete(oldShowUserRef));
       }
       FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(newShowUserRef, showMap, SetOptions(merge: true)));
-      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
-        newShowRef,
-        _metaPayload(
-          division: newDivision,
-          area: newArea,
-          counts: newCounts1,
-        ),
-        SetOptions(merge: true),
-      ));
+      log?.call('account_count update projectionMoved=$showChanged projectionExisted=$oldShowUserExists metaWrite=${showChanged || !oldShowUserExists}');
+      if (showChanged || !oldShowUserExists) {
+        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
+          newShowRef,
+          _metaPayload(
+            division: newDivision,
+            area: newArea,
+            counts: newCounts1,
+          ),
+          SetOptions(merge: true),
+        ));
+      }
       if (showChanged) {
         FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
           oldShowRef,

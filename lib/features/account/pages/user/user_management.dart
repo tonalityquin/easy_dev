@@ -426,6 +426,7 @@ class _UserManagementState extends State<UserManagement> {
 
       await userState.setSelectedUserActiveStatus(
         toActive,
+        onDiagnostic: (message) => trace.log(message),
         onError: (message) {
           statusError = message;
         },

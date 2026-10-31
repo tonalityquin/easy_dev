@@ -1076,13 +1076,37 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         context: _contextLabel,
       );
       _commandInputFocusNode.unfocus();
+      var skipRequested = false;
       await _showLauncherDialog(
         builder: (dialogContext) => _LauncherRestartNoticeDialog(
           reduceMotion: _reduceMotion,
           onStatus: _showDeveloperStatus,
           onOpened: _handleLauncherDialogOpened,
+          onClosing: _handleLauncherDialogClosing,
+          onSkip: () {
+            skipRequested = true;
+            Navigator.of(dialogContext, rootNavigator: true).pop();
+          },
         ),
       );
+      if (skipRequested) {
+        if (mounted) {
+          _setLauncherDialogPhase(
+            _LauncherDialogPhase.closed,
+            source: 'manual_google_login_restart_skipped',
+          );
+        }
+        LauncherDiagnostics.record(
+          'manual_google_login_restart_navigation_resumed',
+          scope: 'auth',
+          meta: const <String, Object?>{'restartSkipped': true},
+        );
+        ParkinWorkinTerminalDiagnostics.record(
+          'manual_google_login_restart_navigation_resumed',
+          context: _contextLabel,
+        );
+        return false;
+      }
       return true;
     } catch (error) {
       LauncherDiagnostics.record(
@@ -4955,6 +4979,8 @@ class _MiniTerminalFrame extends StatefulWidget {
     required this.reduceMotion,
     required this.onStatus,
     this.onHelp,
+    this.onTitleTap,
+    this.titleTapCount = 0,
     required this.onOpenCompleted,
     required this.child,
   });
@@ -4963,6 +4989,8 @@ class _MiniTerminalFrame extends StatefulWidget {
   final bool reduceMotion;
   final VoidCallback onStatus;
   final VoidCallback? onHelp;
+  final VoidCallback? onTitleTap;
+  final int titleTapCount;
   final VoidCallback onOpenCompleted;
   final Widget child;
 
@@ -4975,6 +5003,51 @@ class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
   late final AnimationController _controller;
   bool _openReported = false;
   bool _closing = false;
+
+  Widget _buildTitle() {
+    final title = Text(
+      widget.title,
+      key: widget.onTitleTap == null
+          ? null
+          : ValueKey<int>(widget.titleTapCount),
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: _terminalText,
+        fontFamily: 'monospace',
+        fontSize: 11.5,
+        fontWeight: FontWeight.w800,
+        letterSpacing: .55,
+      ),
+    );
+    if (widget.onTitleTap == null) return title;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTitleTap,
+      child: AnimatedSwitcher(
+        duration: widget.reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        layoutBuilder: (currentChild, previousChildren) => Stack(
+          alignment: Alignment.centerLeft,
+          children: <Widget>[
+            ...previousChildren,
+            if (currentChild != null) currentChild,
+          ],
+        ),
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            alignment: Alignment.centerLeft,
+            scale: Tween<double>(begin: .92, end: 1).animate(animation),
+            child: child,
+          ),
+        ),
+        child: title,
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -5141,19 +5214,7 @@ class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    widget.title,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: _terminalText,
-                                      fontFamily: 'monospace',
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: .55,
-                                    ),
-                                  ),
-                                ),
+                                Expanded(child: _buildTitle()),
                                 AnimatedSwitcher(
                                   duration: widget.reduceMotion
                                       ? Duration.zero
@@ -5288,11 +5349,15 @@ class _LauncherRestartNoticeDialog extends StatefulWidget {
     required this.reduceMotion,
     required this.onStatus,
     required this.onOpened,
+    required this.onClosing,
+    required this.onSkip,
   });
 
   final bool reduceMotion;
   final VoidCallback onStatus;
   final VoidCallback onOpened;
+  final VoidCallback onClosing;
+  final VoidCallback onSkip;
 
   @override
   State<_LauncherRestartNoticeDialog> createState() =>
@@ -5304,9 +5369,13 @@ class _LauncherRestartNoticeDialogState
   static const String _notice =
       "로그인한 계정과 앱 사용의 안정화를 위해 하단의 '재시작' 버튼을 눌러 앱을 다시 시작해주세요.";
 
+  final GlobalKey<_MiniTerminalFrameState> _frameKey =
+      GlobalKey<_MiniTerminalFrameState>();
   bool _opened = false;
   bool _typingCompleted = false;
   bool _restarting = false;
+  bool _skipRequested = false;
+  int _titleTapCount = 0;
 
   void _handleOpened() {
     if (!mounted) return;
@@ -5314,8 +5383,71 @@ class _LauncherRestartNoticeDialogState
     widget.onOpened();
   }
 
+  void _handleTitleTap() {
+    if (!_opened || _restarting || _skipRequested) return;
+    setState(() => _titleTapCount += 1);
+    LauncherDiagnostics.record(
+      'manual_google_login_restart_title_tapped',
+      scope: 'auth',
+      meta: <String, Object?>{
+        'tapCount': _titleTapCount,
+        'requiredTaps': 5,
+      },
+    );
+    ParkinWorkinTerminalDiagnostics.record(
+      'manual_google_login_restart_title_tapped',
+      context: 'launcher',
+      meta: <String, Object?>{'tapCount': _titleTapCount},
+    );
+    if (_titleTapCount == 5) {
+      _skipRequested = true;
+      unawaited(_skipWithAnimation());
+    } else {
+      unawaited(HapticFeedback.selectionClick());
+    }
+  }
+
+  Future<void> _skipWithAnimation() async {
+    LauncherDiagnostics.record(
+      'manual_google_login_restart_skipped',
+      scope: 'auth',
+      meta: const <String, Object?>{
+        'tapCount': 5,
+        'restartSkipped': true,
+      },
+    );
+    ParkinWorkinTerminalDiagnostics.record(
+      'manual_google_login_restart_skipped',
+      context: 'launcher',
+      meta: const <String, Object?>{'tapCount': 5},
+    );
+    try {
+      await HapticFeedback.lightImpact();
+      if (!mounted) return;
+      if (!widget.reduceMotion) {
+        await Future<void>.delayed(const Duration(milliseconds: 180));
+      }
+      if (!mounted) return;
+      widget.onClosing();
+      await _frameKey.currentState?.close();
+    } catch (error) {
+      LauncherDiagnostics.record(
+        'manual_google_login_restart_skip_animation_failed',
+        scope: 'auth',
+        meta: <String, Object?>{'errorType': error.runtimeType.toString()},
+      );
+      ParkinWorkinTerminalDiagnostics.record(
+        'manual_google_login_restart_skip_animation_failed',
+        context: 'launcher',
+        meta: <String, Object?>{'errorType': error.runtimeType.toString()},
+      );
+    }
+    if (!mounted) return;
+    widget.onSkip();
+  }
+
   Future<void> _restart() async {
-    if (_restarting || !_typingCompleted) return;
+    if (_restarting || _skipRequested || !_typingCompleted) return;
     setState(() => _restarting = true);
     try {
       await HapticFeedback.mediumImpact();
@@ -5343,9 +5475,12 @@ class _LauncherRestartNoticeDialogState
     return PopScope(
       canPop: false,
       child: _MiniTerminalFrame(
+        key: _frameKey,
         title: 'APP RESTART',
         reduceMotion: widget.reduceMotion,
         onStatus: widget.onStatus,
+        onTitleTap: _handleTitleTap,
+        titleTapCount: _titleTapCount,
         onOpenCompleted: _handleOpened,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -5391,7 +5526,7 @@ class _LauncherRestartNoticeDialogState
               child: _TerminalDialogActionButton(
                 label: '재시작',
                 busy: _restarting,
-                enabled: _typingCompleted && !_restarting,
+                enabled: _typingCompleted && !_restarting && !_skipRequested,
                 reduceMotion: widget.reduceMotion,
                 onPressed: _restart,
               ),

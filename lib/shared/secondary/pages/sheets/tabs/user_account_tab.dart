@@ -7,6 +7,7 @@ import '../../../../../features/account/presentation/widgets/permission_detail_l
 import 'package:provider/provider.dart';
 import '../../../../../features/account/domain/models/account_permission_policy.dart';
 import '../../../../../features/account/data/services/company_grade_policy_service.dart';
+import '../../../../../features/account/data/services/company_grade_policy_selection_cache.dart';
 import '../../../application/account_assignment_resolver.dart';
 import '../../../application/account_primary_assignment.dart';
 import 'package:flutter/services.dart';
@@ -115,8 +116,18 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   final Map<String, Map<String, dynamic>> _editedUsers = <String, Map<String, dynamic>>{};
   final DevUserWriteService _devUserWriteService = DevUserWriteService();
   final Map<String, Future<List<String>>> _primaryAreaFutures = <String, Future<List<String>>>{};
-  final Map<String, Future<Map<String, CompanyGradePolicy>>> _gradePolicyFutures =
-      <String, Future<Map<String, CompanyGradePolicy>>>{};
+  Future<Map<String, CompanyGradePolicy>> _loadCachedGradePolicies(
+    String companyId, {
+    bool forceRefresh = false,
+    void Function(String event)? onEvent,
+  }) {
+    return CompanyGradePolicySelectionCache.instance.load(
+      companyId,
+      forceRefresh: forceRefresh,
+      onEvent: onEvent,
+    );
+  }
+
   final Set<String> _savingIds = <String>{};
   bool _creating = false;
   String? _selectedUserId;
@@ -740,6 +751,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         onRequestManualCodeEntry: () =>
             _isManualCodeAuthorized(interactive: true),
         fetchAreasForDivision: _fetchAreaNamesForDivision,
+        onLoadGradePolicies: _loadCachedGradePolicies,
       ),
     );
 
@@ -1443,11 +1455,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         ),
         const SizedBox(height: 10),
         FutureBuilder<Map<String, CompanyGradePolicy>>(
-          future: _gradePolicyFutures.putIfAbsent(
+          future: CompanyGradePolicySelectionCache.instance.load(
             (updated['companyId'] ?? widget.selectedDivision ?? '').toString(),
-            () => CompanyGradePolicyService().loadAll(
-              (updated['companyId'] ?? widget.selectedDivision ?? '').toString(),
-            ),
           ),
           builder: (context, snapshot) {
             if (snapshot.hasError) return Text('등급 정책 조회 실패: ${snapshot.error}');
@@ -1791,7 +1800,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                           );
                           if (!mounted) return;
                           setState(() {
-                            _gradePolicyFutures.clear();
+                            CompanyGradePolicySelectionCache.instance
+                                .invalidate(widget.selectedDivision!);
                             _refreshTick++;
                           });
                         },
@@ -1873,6 +1883,7 @@ class _CreateUserAccountDialog extends StatefulWidget {
     required this.groupApproved,
     required this.onRequestManualCodeEntry,
     required this.fetchAreasForDivision,
+    required this.onLoadGradePolicies,
   });
 
   final List<String> divisionList;
@@ -1883,6 +1894,11 @@ class _CreateUserAccountDialog extends StatefulWidget {
   final bool groupApproved;
   final Future<bool> Function() onRequestManualCodeEntry;
   final Future<List<String>> Function(String division) fetchAreasForDivision;
+  final Future<Map<String, CompanyGradePolicy>> Function(
+    String companyId, {
+    required bool forceRefresh,
+    void Function(String event)? onEvent,
+  }) onLoadGradePolicies;
 
   @override
   State<_CreateUserAccountDialog> createState() => _CreateUserAccountDialogState();
@@ -1903,6 +1919,8 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
   String _accountGradeId = '';
   final CompanyGradePolicyService _policyService = CompanyGradePolicyService();
   Map<String, CompanyGradePolicy> _gradePolicies = <String, CompanyGradePolicy>{};
+  final List<String> _gradePolicyTrace = <String>[];
+  int _gradeLoadRequestId = 0;
   bool _loadingGradePolicies = false;
   String? _gradePolicyError;
   UserCodeEntryMode _codeEntryMode = UserCodeEntryMode.generated;
@@ -1990,7 +2008,37 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     });
   }
 
-  Future<void> _loadGradePolicies() async {
+  void _logGradePolicy(String message) {
+    final line = '[GRADE_POLICY_CACHE] $message';
+    debugPrint(line);
+    _gradePolicyTrace.add(line);
+    if (_gradePolicyTrace.length > 100) {
+      _gradePolicyTrace.removeAt(0);
+    }
+  }
+
+  Future<void> _showGradePolicyStatus() async {
+    if (!mounted || !DevAuth.devModeEnabled.value) return;
+    final code = _gradePolicyTrace.isEmpty
+        ? 'debugPrint(${jsonEncode('[GRADE_POLICY_CACHE] 기록 없음')});'
+        : _gradePolicyTrace
+            .map((line) => 'debugPrint(${jsonEncode(line)});')
+            .join('\n');
+    await StatusDialog.showSuccess(
+      context,
+      title: '계정 등급 조회 STATUS',
+      description: '등급 정책 조회 기록',
+      copyText: code,
+      copyButtonLabel: 'debugPrint 코드 복사',
+      isolateCopyText: true,
+      visibleDuration: Duration.zero,
+      awaitManualClose: true,
+      useCommonUi: true,
+    );
+  }
+
+  Future<void> _loadGradePolicies({bool forceRefresh = false}) async {
+    final requestId = ++_gradeLoadRequestId;
     final company = _selectedDivision?.trim() ?? '';
     setState(() {
       _loadingGradePolicies = true;
@@ -2000,12 +2048,26 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
       _accountGradeId = '';
     });
     if (company.isEmpty) {
+      _logGradePolicy('event=skipped reason=company_empty');
       if (mounted) setState(() => _loadingGradePolicies = false);
       return;
     }
+    _logGradePolicy(
+      'event=request company=$company mode=${forceRefresh ? 'refresh' : 'cached'} request=$requestId',
+    );
     try {
-      final policies = await _policyService.loadAll(company);
-      if (!mounted || _selectedDivision != company) return;
+      final policies = await widget.onLoadGradePolicies(
+        company,
+        forceRefresh: forceRefresh,
+        onEvent: (event) => _logGradePolicy(
+          'event=$event company=$company request=$requestId',
+        ),
+      );
+      if (!mounted || _selectedDivision?.trim() != company ||
+          requestId != _gradeLoadRequestId) return;
+      _logGradePolicy(
+        'event=ready company=$company count=${policies.length} request=$requestId',
+      );
       setState(() {
         _gradePolicies = <String, CompanyGradePolicy>{
           for (final entry in policies.entries)
@@ -2014,8 +2076,11 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
         _loadingGradePolicies = false;
       });
     } catch (error, stackTrace) {
-      debugPrint('[ACCOUNT-CREATE] grade policies failed: $error\n$stackTrace');
-      if (!mounted || _selectedDivision != company) return;
+      _logGradePolicy(
+        'event=failed company=$company request=$requestId error=$error stack=$stackTrace',
+      );
+      if (!mounted || _selectedDivision?.trim() != company ||
+          requestId != _gradeLoadRequestId) return;
       setState(() {
         _loadingGradePolicies = false;
         _gradePolicyError = error.toString();
@@ -2154,7 +2219,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     try {
       final policy = await _policyService.load(_selectedDivision!, _accountGradeId);
       if (!policy.matches(_selectedPermissionKeys)) {
-        await _loadGradePolicies();
+        await _loadGradePolicies(forceRefresh: true);
         throw StateError('ACCOUNT_GRADE_POLICY_CHANGED');
       }
     } catch (error, stackTrace) {
@@ -2454,7 +2519,16 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
     return AlertDialog(
-      title: const Text('신규 계정 생성'),
+      title: Row(
+        children: [
+          const Expanded(child: Text('신규 계정 생성')),
+          if (DevAuth.devModeEnabled.value)
+            IconButton(
+              onPressed: _showGradePolicyStatus,
+              icon: const Icon(Icons.bug_report_rounded),
+            ),
+        ],
+      ),
       content: SizedBox(
         width: 590,
         child: SingleChildScrollView(
@@ -2658,34 +2732,59 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                       ),
                       const SizedBox(height: 12),
                       AnimatedSize(
-                        duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 240),
-                        curve: Curves.easeInOutCubic,
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          children: [
-                            for (final entry in _gradePolicies.entries)
-                              ChoiceChip(
-                                label: Text(entry.value.name),
-                                selected: _accountGradeId == entry.key,
-                                onSelected: !_loadingGradePolicies &&
-                                        entry.value.permissionKeys.every(widget.permissionList.contains)
-                                    ? (_) => setState(() {
-                                        _errorText = null;
-                                        _accountGradeId = entry.key;
-                                        _selectedPermissionKeys
-                                          ..clear()
-                                          ..addAll(entry.value.permissionKeys);
-                                      })
-                                    : null,
-                              ),
-                          ],
+                        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                        curve: CommonUiMotion.enter,
+                        child: AnimatedSwitcher(
+                          duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                          switchInCurve: CommonUiMotion.enter,
+                          switchOutCurve: CommonUiMotion.exit,
+                          transitionBuilder: (child, animation) => FadeTransition(
+                            opacity: animation,
+                            child: SizeTransition(sizeFactor: animation, child: child),
+                          ),
+                          child: Wrap(
+                            key: ValueKey<String>(
+                              '${_selectedDivision ?? ''}:${_loadingGradePolicies ? 'loading' : _gradePolicies.keys.join(',')}',
+                            ),
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: [
+                              for (final entry in _gradePolicies.entries)
+                                ChoiceChip(
+                                  label: Text(entry.value.name),
+                                  selected: _accountGradeId == entry.key,
+                                  onSelected: !_loadingGradePolicies &&
+                                          entry.value.permissionKeys.every(widget.permissionList.contains)
+                                      ? (_) => setState(() {
+                                          _errorText = null;
+                                          _accountGradeId = entry.key;
+                                          _selectedPermissionKeys
+                                            ..clear()
+                                            ..addAll(entry.value.permissionKeys);
+                                        })
+                                      : null,
+                                ),
+                            ],
+                          ),
                         ),
                       ),
-                      if (_loadingGradePolicies)
-                        const LinearProgressIndicator(),
-                      if (_gradePolicyError != null)
-                        Text('등급 정책 조회 실패: $_gradePolicyError'),
+                      AnimatedSwitcher(
+                        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                        switchInCurve: CommonUiMotion.enter,
+                        switchOutCurve: CommonUiMotion.exit,
+                        child: _loadingGradePolicies
+                            ? const LinearProgressIndicator(
+                                key: ValueKey<String>('create_grade_loading'),
+                              )
+                            : _gradePolicyError != null
+                                ? Text(
+                                    '등급 정책 조회 실패: $_gradePolicyError',
+                                    key: const ValueKey<String>('create_grade_error'),
+                                  )
+                                : const SizedBox.shrink(
+                                    key: ValueKey<String>('create_grade_ready'),
+                                  ),
+                      ),
                       AnimatedSwitcher(
                         duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
                         child: Column(
