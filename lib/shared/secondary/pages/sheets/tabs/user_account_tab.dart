@@ -1,4 +1,6 @@
 import '../../../../../app/diagnostics/firebase_activity_meter.dart';
+import '../../../../../app/models/account_role.dart';
+import '../../../../../app/models/account_role_diagnostics.dart';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../../app/utils/status_dialog.dart';
 import '../../../data/services/dev_user_write_service.dart';
+import '../../../../../features/account/data/services/user_account_show_map.dart';
 import '../../../../../features/account/domain/models/user/user_model.dart';
 import '../../../../../features/dev/application/developer_account_authorization.dart';
 import '../../../../../features/selector/application/dev_auth.dart';
@@ -39,19 +42,7 @@ class UserAccountsTab extends StatefulWidget {
 }
 
 class _UserAccountsTabState extends State<UserAccountsTab> {
-  static const List<String> _roles = <String>[
-    'dev',
-    'adminBillMonthly',
-    'adminBillMonthlyTablet',
-    'adminBill',
-    'adminBillTablet',
-    'adminCommon',
-    'adminCommonTablet',
-    'userLocationMonthly',
-    'userMonthly',
-    'userCommon',
-    'fieldCommon',
-  ];
+  static final List<String> _roles = RoleType.values.map((role) => role.name).toList(growable: false);
 
   final Map<String, Map<String, dynamic>> _editedUsers = <String, Map<String, dynamic>>{};
   final DevUserWriteService _devUserWriteService = DevUserWriteService();
@@ -59,6 +50,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   final Set<String> _savingIds = <String>{};
   bool _creating = false;
   String? _selectedUserId;
+  String? _loadingRootUserId;
   int _refreshTick = 0;
   String? _scopeAreasDivision;
   Future<List<String>>? _scopeAreasFuture;
@@ -157,7 +149,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       'email': d['email'] ?? '',
       'divisions': divisions,
       'areas': areas,
-      'role': d['role'] ?? 'fieldCommon',
+      'role': d['role'] ?? '',
       'modes': List<String>.from(d['modes'] ?? const <String>[]),
       'position': d['position'] ?? '',
       'currentArea': resolvedPrimaryArea.isEmpty ? null : resolvedPrimaryArea,
@@ -241,16 +233,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     return future;
   }
 
-  List<String> _withPrimaryFirst(List<String> source, String primary) {
-    final normalized = source
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty && value != primary)
-        .toSet()
-        .toList(growable: true);
-    normalized.insert(0, primary);
-    return normalized;
-  }
-
   String _primaryDivisionOf(Map<String, dynamic> data) {
     final explicit = (data['_primaryDivision'] ?? '').toString().trim();
     if (explicit.isNotEmpty) return explicit;
@@ -295,16 +277,32 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     }
   }
 
-  Future<QuerySnapshot<Map<String, dynamic>>> _fetchUsersForArea(
+  Future<List<MapEntry<String, Map<String, dynamic>>>> _fetchUsersForArea(
     String division,
     String area,
   ) async {
     final showId = _showDocId(division, area);
-    return FirebaseFirestore.instance
-        .collection('user_accounts_show')
-        .doc(showId)
-        .collection('users')
-        .get(const GetOptions(source: Source.serverAndCache)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/user_account_tab.dart');
+    final parent = FirebaseFirestore.instance
+        .collection('user_accounts_show').doc(showId);
+    final snapshot = await parent.get(
+      const GetOptions(source: Source.serverAndCache),
+    ).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/user_account_tab.dart');
+    final indexed = <String, Map<String, dynamic>>{};
+    if (!UserAccountShowMap.isComplete(snapshot.data())) {
+      final legacy = await parent.collection('users').get(
+        const GetOptions(source: Source.serverAndCache),
+      ).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/user_account_tab.dart');
+      for (final doc in legacy.docs) {
+        indexed[doc.id] = doc.data();
+      }
+    }
+    for (final entry in UserAccountShowMap.entries(snapshot.data())) {
+      indexed[entry.key] = entry.value;
+    }
+    AccountRoleDiagnostics.record(
+      'dev_user_map_list_loaded users=${indexed.length} legacyFallback=${!UserAccountShowMap.isComplete(snapshot.data())}',
+    );
+    return indexed.entries.toList(growable: false);
   }
 
   String _showDocId(String? division, String? area) {
@@ -313,36 +311,16 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     return '$d-$a';
   }
 
-  String? _limitValueFromError(Object e, String key) {
-    final raw = e.toString();
-    final idx = raw.indexOf(key);
-    if (idx < 0) return null;
-    final rest = raw.substring(idx + key.length).trim();
-    final end = rest.indexOf(RegExp(r'[^0-9]'));
-    final value = end < 0 ? rest : rest.substring(0, end);
-    return value.trim().isEmpty ? null : value.trim();
-  }
-
-  String? _activeLimitFromError(Object e) {
-    return _limitValueFromError(e, 'ACTIVE_LIMIT_REACHED:');
-  }
-
-  String? _totalLimitFromError(Object e) {
-    return _limitValueFromError(e, 'TOTAL_LIMIT_REACHED:');
-  }
-
-  Future<void> _showAccountLimitFailureDialog(
+  Future<void> _showAccountSaveFailureDialog(
     Object e, {
     required String fallbackTitle,
-    required String activeTitle,
-    required String totalTitle,
   }) async {
     final raw = e.toString();
     if (raw.contains('MANUAL_CODE_NOT_AUTHORIZED')) {
       await StatusDialog.showFailure(
         context,
         title: '개발자 인증이 필요합니다',
-        description: '개발자 모드와 개발자 계정 인증 상태를 확인한 뒤 다시 시도하세요.',
+        description: '개발자 모드와 계정 인증 상태를 확인하세요.',
         useCommonUi: true,
       );
       return;
@@ -362,57 +340,15 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       await StatusDialog.showFailure(
         context,
         title: '동일 계정이 이미 존재합니다',
-        description: '같은 계정 ID 또는 동일 지역 projection이 이미 존재합니다. 코드번호와 현재 지역을 확인하세요.',
+        description: '코드번호 또는 계정 ID가 중복되었습니다.',
         useCommonUi: true,
       );
       return;
     }
-    if (raw.contains('USER_NOT_FOUND')) {
-      await StatusDialog.showFailure(
-        context,
-        title: '원본 계정을 찾지 못했습니다',
-        description: '계정 목록을 새로 불러온 뒤 다시 수정하세요.',
-        useCommonUi: true,
-      );
-      return;
-    }
-    if (raw.contains('ACCOUNT_LIMIT_NOT_CONFIGURED')) {
-      await StatusDialog.showFailure(
-        context,
-        title: '계정 리밋 설정 필요',
-        description: '선택한 지역의 activeLimit과 totalLimit이 설정되지 않았습니다. 리밋 관리에서 두 값을 저장한 뒤 다시 시도하세요.',
-        useCommonUi: true,
-      );
-      return;
-    }
-    final activeLimit = _activeLimitFromError(e);
-    if (activeLimit != null) {
-      await StatusDialog.showFailure(
-        context,
-        title: activeTitle,
-        description:
-            '선택한 지역의 활성 계정 한도에 도달했습니다. 활성 계정은 최대 ${activeLimit}개까지만 사용할 수 있습니다. 기존 활성 계정을 비활성화하거나 리밋 설정에서 활성 한도를 늘린 뒤 다시 시도하세요.',
-        useCommonUi: true,
-      );
-      return;
-    }
-
-    final totalLimit = _totalLimitFromError(e);
-    if (totalLimit != null) {
-      await StatusDialog.showFailure(
-        context,
-        title: totalTitle,
-        description:
-            '선택한 지역의 전체 계정 생성 한도에 도달했습니다. 활성 계정과 비활성 계정을 합쳐 최대 ${totalLimit}개까지만 생성할 수 있습니다. 기존 계정을 삭제하거나 리밋 설정에서 전체 한도를 늘린 뒤 다시 시도하세요.',
-        useCommonUi: true,
-      );
-      return;
-    }
-
     await StatusDialog.showFailure(
       context,
       title: fallbackTitle,
-      description: '계정 정보를 저장하는 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인한 뒤 다시 시도하세요.',
+      description: '계정 저장 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인하세요.',
       useCommonUi: true,
     );
   }
@@ -422,8 +358,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     Map<String, dynamic> oldData,
     Map<String, dynamic> newData,
   ) async {
-    final primaryDivision = _primaryDivisionOf(newData);
-    final primaryArea = _primaryAreaOf(newData);
+    var primaryDivision = _primaryDivisionOf(newData);
+    var primaryArea = _primaryAreaOf(newData);
     final trace = await DeveloperOperationTrace.start(
       context: context,
       title: '운영 계정 수정',
@@ -434,6 +370,20 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     );
 
     try {
+      final originalSnapshot = await FirebaseFirestore.instance
+          .collection('user_accounts')
+          .doc(oldId)
+          .get(const GetOptions(source: Source.server));
+      if (!originalSnapshot.exists || originalSnapshot.data() == null) {
+        throw StateError('USER_NOT_FOUND');
+      }
+      final storedData = originalSnapshot.data()!;
+      primaryDivision = _primaryDivisionOf(storedData);
+      primaryArea = _primaryAreaOf(storedData);
+      trace.log('account_assignments_read_from_server assignedCount=${List<dynamic>.from(storedData['areas'] ?? const <dynamic>[]).length}');
+      if (RoleType.fromName((newData['role'] ?? '').toString()) == null) {
+        throw StateError('INVALID_ACCOUNT_ROLE');
+      }
       if (primaryDivision.isEmpty || primaryArea.isEmpty) {
         throw StateError('PRIMARY_ASSIGNMENT_REQUIRED');
       }
@@ -459,18 +409,15 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       newData['codeNumber'] = codeNumber;
       newData.remove('phone');
       final englishName = await _fetchEnglishNameByArea(primaryDivision, primaryArea) ?? primaryArea;
-      final normalizedNewData = Map<String, dynamic>.from(newData);
-      normalizedNewData['divisions'] = _withPrimaryFirst(
-        List<String>.from(normalizedNewData['divisions'] ?? const <String>[]),
-        primaryDivision,
-      );
-      normalizedNewData['areas'] = _withPrimaryFirst(
-        List<String>.from(normalizedNewData['areas'] ?? const <String>[]),
-        primaryArea,
-      );
-      normalizedNewData['currentArea'] = primaryArea;
-      normalizedNewData['selectedArea'] = primaryArea;
-      normalizedNewData['englishSelectedAreaName'] = englishName;
+      final normalizedNewData = <String, dynamic>{...storedData, ...newData};
+      normalizedNewData['divisions'] =
+          List<String>.from(storedData['divisions'] ?? const <String>[]);
+      normalizedNewData['areas'] =
+          List<String>.from(storedData['areas'] ?? const <String>[]);
+      normalizedNewData['currentArea'] = storedData['currentArea'];
+      normalizedNewData['selectedArea'] = storedData['selectedArea'];
+      normalizedNewData['englishSelectedAreaName'] =
+          storedData['englishSelectedAreaName'] ?? englishName;
       normalizedNewData.remove('_primaryDivision');
 
       final user = UserModel.fromMap(newId, normalizedNewData);
@@ -479,7 +426,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         progress: 0.18,
       );
       trace.log(
-        'DevUserWriteService 전용 경로로 원본/projection/count/limit 업데이트를 요청합니다. breakDays=${user.breakDays.join(',')}',
+        'DevUserWriteService 전용 경로로 원본/경량 View 업데이트를 요청합니다. breakDays=${user.breakDays.join(',')}',
         progress: 0.38,
       );
       final previousDivision = (widget.selectedDivision ?? '').trim();
@@ -539,11 +486,9 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         );
         return;
       }
-      await _showAccountLimitFailureDialog(
+      await _showAccountSaveFailureDialog(
         e,
         fallbackTitle: StatusDialog.userAccountSaveFailed,
-        activeTitle: '계정 저장 불가',
-        totalTitle: '계정 저장 불가',
       );
     }
   }
@@ -631,7 +576,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         progress: 0.3,
       );
       trace.log(
-        '전역 코드 인덱스 정책 적용: user_account_codes reservation과 일반 User 저장을 동일 transaction으로 요청합니다.',
+        '전역 코드 인덱스 정책 적용: user_account_codes reservation과 일반 User 저장을 동일 batch로 요청합니다.',
         progress: 0.34,
       );
       trace.log(
@@ -671,11 +616,9 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         stackTrace: st,
       );
       if (!mounted || trace.developerMode) return;
-      await _showAccountLimitFailureDialog(
+      await _showAccountSaveFailureDialog(
         e,
         fallbackTitle: StatusDialog.userAccountSaveFailed,
-        activeTitle: '계정 생성 불가',
-        totalTitle: '계정 생성 불가',
       );
     } finally {
       if (mounted) {
@@ -825,7 +768,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '최신 근무 스키마와 지역 리밋을 기준으로 생성합니다.',
+                    '계정 원본과 경량 목록 정보를 함께 저장합니다.',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -875,7 +818,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   }) {
     final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final divisions = List<String>.from(updated['divisions'] ?? const <String>[]);
     final primaryDivision = _primaryDivisionOf(updated);
     final divisionValue = divisionList.contains(primaryDivision) ? primaryDivision : null;
     return OpsDockListSurface(
@@ -903,19 +845,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                     ),
                   )
                   .toList(growable: false),
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() {
-                  final nextDivisions = divisions.contains(value)
-                      ? divisions
-                      : <String>[...divisions, value];
-                  updated['_primaryDivision'] = value;
-                  updated['divisions'] = nextDivisions;
-                  updated['currentArea'] = null;
-                  updated['selectedArea'] = null;
-                  _editedUsers[id] = _copyUser(updated);
-                });
-              },
+              onChanged: null,
               decoration: opsInputDecoration(
                 context,
                 label: '현재 회사',
@@ -983,17 +913,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                 ),
                               )
                               .toList(growable: false),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setState(() {
-                              final currentAreas = List<String>.from(updated['areas'] ?? const <String>[]);
-                              if (!currentAreas.contains(value)) currentAreas.add(value);
-                              updated['areas'] = currentAreas;
-                              updated['currentArea'] = value;
-                              updated['selectedArea'] = value;
-                              _editedUsers[id] = _copyUser(updated);
-                            });
-                          },
+                          onChanged: null,
                           decoration: opsInputDecoration(
                             context,
                             label: '현재 지역',
@@ -1042,53 +962,12 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           runSpacing: 7,
           children: [
             for (final division in List<String>.from(updated['divisions'] ?? const <String>[]))
-              InputChip(
-                label: Text(division),
-                onDeleted: division == _primaryDivisionOf(updated)
-                    ? null
-                    : () {
-                  setState(() {
-                    final list = List<String>.from(updated['divisions'] ?? const <String>[]);
-                    list.remove(division);
-                    updated['divisions'] = list;
-                    _editedUsers[id] = _copyUser(updated);
-                  });
-                },
-              ),
-            ActionChip(
-              label: const Text('회사 추가'),
-              onPressed: () async {
-                final current = List<String>.from(updated['divisions'] ?? const <String>[]).toSet();
-                final candidates = divisionList.where((value) => !current.contains(value)).toList();
-                if (candidates.isEmpty) return;
-                final selected = await showCommonOverlayDialog<String>(
-                  context: context,
-                  builder: (dialogContext) => SimpleDialog(
-                    title: const Text('회사 추가'),
-                    children: candidates
-                        .map(
-                          (division) => SimpleDialogOption(
-                            onPressed: () => Navigator.of(dialogContext).pop(division),
-                            child: Text(division),
-                          ),
-                        )
-                        .toList(growable: false),
-                  ),
-                );
-                if (selected == null || !mounted) return;
-                setState(() {
-                  final list = List<String>.from(updated['divisions'] ?? const <String>[]);
-                  list.add(selected);
-                  updated['divisions'] = list;
-                  _editedUsers[id] = _copyUser(updated);
-                });
-              },
-            ),
+              InputChip(label: Text(division)),
           ],
         ),
         const SizedBox(height: 10),
         Text(
-          '접근 가능 지역',
+          '접근 가능 지역 · DB에서 관리',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: tokens.textSecondary,
                 fontWeight: FontWeight.w700,
@@ -1100,61 +979,17 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           runSpacing: 7,
           children: [
             for (final area in List<String>.from(updated['areas'] ?? const <String>[]))
-              InputChip(
-                label: Text(area),
-                onDeleted: area == _primaryAreaOf(updated)
-                    ? null
-                    : () {
-                  setState(() {
-                    final list = List<String>.from(updated['areas'] ?? const <String>[]);
-                    list.remove(area);
-                    updated['areas'] = list;
-                    _editedUsers[id] = _copyUser(updated);
-                  });
-                },
-              ),
-            ActionChip(
-              label: const Text('지역 추가'),
-              onPressed: () async {
-                final divisions = List<String>.from(updated['divisions'] ?? const <String>[]);
-                final areas = await getAreasByDivisions(divisions);
-                if (!mounted) return;
-                final current = List<String>.from(updated['areas'] ?? const <String>[]).toSet();
-                final candidates = areas.where((value) => !current.contains(value)).toList();
-                if (candidates.isEmpty) return;
-                final selected = await showCommonOverlayDialog<String>(
-                  context: context,
-                  builder: (dialogContext) => SimpleDialog(
-                    title: const Text('지역 추가'),
-                    children: candidates
-                        .map(
-                          (area) => SimpleDialogOption(
-                            onPressed: () => Navigator.of(dialogContext).pop(area),
-                            child: Text(area),
-                          ),
-                        )
-                        .toList(growable: false),
-                  ),
-                );
-                if (selected == null || !mounted) return;
-                setState(() {
-                  final list = List<String>.from(updated['areas'] ?? const <String>[]);
-                  list.add(selected);
-                  updated['areas'] = list;
-                  _editedUsers[id] = _copyUser(updated);
-                });
-              },
-            ),
+              InputChip(label: Text(area)),
           ],
         ),
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
-          value: _roles.contains(updated['role']) ? updated['role'] as String : _roles.last,
+          value: _roles.contains(updated['role']) ? updated['role'] as String : null,
           items: _roles
               .map(
                 (role) => DropdownMenuItem<String>(
                   value: role,
-                  child: Text(role),
+                  child: Text(RoleType.fromName(role)?.label ?? role),
                 ),
               )
               .toList(growable: false),
@@ -1232,165 +1067,223 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       );
     }
     return OpsDockListSurface(
-      child: FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        key: ValueKey<String>('$division-$area-$_refreshTick'),
-        future: _fetchUsersForArea(division, area),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const SizedBox(
-              height: 280,
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
-          if (snapshot.hasError) {
-            return SizedBox(
-              height: 280,
-              child: OpsEmptyState(
-                icon: Icons.error_outline_rounded,
-                title: '계정 목록을 불러오지 못했습니다',
-                message: snapshot.error.toString(),
-              ),
-            );
-          }
-          final docs = snapshot.data?.docs ?? const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-          if (docs.isEmpty) {
-            return const SizedBox(
-              height: 280,
-              child: OpsEmptyState(
-                icon: Icons.person_off_outlined,
-                title: '등록된 계정이 없습니다',
-                message: '신규 계정에서 첫 운영 계정을 생성하세요.',
-              ),
-            );
-          }
-          return ListView.separated(
-            padding: EdgeInsets.zero,
-            itemCount: docs.length,
-            separatorBuilder: (_, __) => Divider(
-              height: 1,
-              thickness: 1,
-              color: tokens.borderSubtle,
-            ),
-            itemBuilder: (context, index) {
-              final doc = docs[index];
-              final data = doc.data();
-              final id = doc.id;
-              final base = _editedUsers[id] ?? _copyUser(
-                data,
-                primaryDivision: division,
-                primaryArea: area,
+      child: AnimatedSwitcher(
+        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, .035),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        ),
+        child: FutureBuilder<List<MapEntry<String, Map<String, dynamic>>>>(
+          key: ValueKey<String>('$division-$area-$_refreshTick'),
+          future: _fetchUsersForArea(division, area),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                height: 280,
+                child: Center(child: CircularProgressIndicator()),
               );
-              final updated = _copyUser(base);
-              final selected = _selectedUserId == id;
-              final active = (updated['isActive'] as bool?) ?? true;
-              final role = (updated['role'] ?? '').toString();
-              final position = (updated['position'] ?? '').toString().trim();
-              return CommonAnimatedReveal(
-                delay: reduceMotion ? Duration.zero : Duration(milliseconds: index * 22),
-                offset: const Offset(.016, 0),
-                child: OpsDockSelectableRowSurface(
-                  selected: selected,
-                  selectionColor: tokens.accent,
-                  selectedContainer: tokens.accentContainer,
-                  onTap: () {
-                    setState(() {
-                      _selectedUserId = selected ? null : id;
-                      if (!selected) {
-                        _editedUsers.putIfAbsent(
-                          id,
-                          () => _copyUser(
-                            data,
-                            primaryDivision: division,
-                            primaryArea: area,
-                          ),
-                        );
-                      }
-                    });
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              color: active ? tokens.successContainer : tokens.surfaceSelected,
-                              borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                            ),
-                            alignment: Alignment.center,
-                            child: Icon(
-                              active ? Icons.person_rounded : Icons.person_off_rounded,
-                              size: 20,
-                              color: active ? tokens.success : tokens.iconSecondary,
-                            ),
-                          ),
-                          const SizedBox(width: 11),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  (updated['name'] ?? '').toString().trim().isEmpty
-                                      ? id
-                                      : (updated['name'] ?? '').toString(),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: tokens.textPrimary,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '$role${position.isEmpty ? '' : ' · $position'} · ${active ? '활성' : '비활성'}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: tokens.textSecondary,
-                                      ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  id,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                        color: tokens.textSecondary,
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          AnimatedRotation(
-                            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                            turns: selected ? .5 : 0,
-                            child: Icon(Icons.keyboard_arrow_down_rounded, color: tokens.iconSecondary),
-                          ),
-                        ],
-                      ),
-                      AnimatedSize(
-                        duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
-                        curve: Curves.easeOutCubic,
-                        alignment: Alignment.topCenter,
-                        child: selected
-                            ? _buildUserEditor(
-                                context,
-                                id: id,
-                                data: data,
-                                updated: updated,
-                                divisionList: divisionList,
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                    ],
-                  ),
+            }
+            if (snapshot.hasError) {
+              return SizedBox(
+                height: 280,
+                child: OpsEmptyState(
+                  icon: Icons.error_outline_rounded,
+                  title: '계정 목록을 불러오지 못했습니다',
+                  message: snapshot.error.toString(),
                 ),
               );
-            },
-          );
-        },
+            }
+            final docs = snapshot.data ?? const <MapEntry<String, Map<String, dynamic>>>[];
+            if (docs.isEmpty) {
+              return const SizedBox(
+                height: 280,
+                child: OpsEmptyState(
+                  icon: Icons.person_off_outlined,
+                  title: '등록된 계정이 없습니다',
+                  message: '신규 계정에서 첫 운영 계정을 생성하세요.',
+                ),
+              );
+            }
+            return ListView.separated(
+              padding: EdgeInsets.zero,
+              itemCount: docs.length,
+              separatorBuilder: (_, __) => Divider(
+                height: 1,
+                thickness: 1,
+                color: tokens.borderSubtle,
+              ),
+              itemBuilder: (context, index) {
+                final doc = docs[index];
+                final data = doc.value;
+                final id = doc.key;
+                final base = _editedUsers[id] ?? _copyUser(
+                  data,
+                  primaryDivision: division,
+                  primaryArea: area,
+                );
+                final updated = _copyUser(base);
+                final selected = _selectedUserId == id;
+                final active = (updated['isActive'] as bool?) ?? true;
+                final role = (updated['role'] ?? '').toString();
+                final position = (updated['position'] ?? '').toString().trim();
+                return CommonAnimatedReveal(
+                  delay: reduceMotion ? Duration.zero : Duration(milliseconds: index * 22),
+                  offset: const Offset(.016, 0),
+                  child: OpsDockSelectableRowSurface(
+                    selected: selected,
+                    selectionColor: tokens.accent,
+                    selectedContainer: tokens.accentContainer,
+                    onTap: () async {
+                      if (_loadingRootUserId != null) return;
+                      if (selected) {
+                        setState(() => _selectedUserId = null);
+                        return;
+                      }
+                      setState(() => _loadingRootUserId = id);
+                      AccountRoleDiagnostics.record('dev_user_edit_root_load_start view=map');
+                      try {
+                        final original = await FirebaseFirestore.instance
+                            .collection('user_accounts').doc(id)
+                            .get(const GetOptions(source: Source.server))
+                            .trackFirestore(
+                              'GET',
+                              'shared/secondary/pages/sheets/tabs/user_account_tab.dart',
+                            );
+                        if (!original.exists || original.data() == null) {
+                          throw StateError('USER_NOT_FOUND');
+                        }
+                        if (!mounted) return;
+                        AccountRoleDiagnostics.record('dev_user_edit_root_load_complete found=true');
+                        setState(() {
+                          _selectedUserId = id;
+                          _editedUsers[id] = _copyUser(
+                            original.data()!,
+                            primaryDivision: division,
+                            primaryArea: area,
+                          );
+                        });
+                      } catch (error) {
+                        AccountRoleDiagnostics.record(
+                          'dev_user_edit_root_load_failed type=${error.runtimeType}',
+                        );
+                        if (!mounted) return;
+                        await StatusDialog.showFailure(
+                          context,
+                          title: '계정 원본을 불러오지 못했습니다',
+                          description: '네트워크 상태를 확인하고 다시 선택하세요.',
+                          useCommonUi: true,
+                        );
+                      } finally {
+                        if (mounted) setState(() => _loadingRootUserId = null);
+                      }
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: active ? tokens.successContainer : tokens.surfaceSelected,
+                                borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                              ),
+                              alignment: Alignment.center,
+                              child: Icon(
+                                active ? Icons.person_rounded : Icons.person_off_rounded,
+                                size: 20,
+                                color: active ? tokens.success : tokens.iconSecondary,
+                              ),
+                            ),
+                            const SizedBox(width: 11),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    (updated['name'] ?? '').toString().trim().isEmpty
+                                        ? id
+                                        : (updated['name'] ?? '').toString(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                          color: tokens.textPrimary,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '$role${position.isEmpty ? '' : ' · $position'} · ${active ? '활성' : '비활성'}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: tokens.textSecondary,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    id,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                          color: tokens.textSecondary,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            AnimatedSwitcher(
+                              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                              child: _loadingRootUserId == id
+                                  ? SizedBox(
+                                      key: ValueKey<String>('root_loading_$id'),
+                                      width: 20,
+                                      height: 20,
+                                      child: const CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : AnimatedRotation(
+                                      key: ValueKey<String>('root_loaded_$id'),
+                                      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                                      turns: selected ? .5 : 0,
+                                      child: Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        color: tokens.iconSecondary,
+                                      ),
+                                    ),
+                            ),
+                          ],
+                        ),
+                        AnimatedSize(
+                          duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+                          curve: Curves.easeOutCubic,
+                          alignment: Alignment.topCenter,
+                          child: selected
+                              ? _buildUserEditor(
+                                  context,
+                                  id: id,
+                                  data: data,
+                                  updated: updated,
+                                  divisionList: divisionList,
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
@@ -1517,7 +1410,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
 
   String? _selectedDivision;
   String? _selectedArea;
-  String _selectedRole = 'fieldCommon';
+  String _selectedRole = 'branchStaff';
   UserCodeEntryMode _codeEntryMode = UserCodeEntryMode.generated;
   final Set<String> _selectedModes = <String>{'single'};
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
@@ -1533,9 +1426,9 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
     _selectedDivision = widget.divisionList.contains(widget.initialDivision)
         ? widget.initialDivision
         : (widget.divisionList.isNotEmpty ? widget.divisionList.first : null);
-    _selectedRole = widget.roleList.contains('fieldCommon')
-        ? 'fieldCommon'
-        : (widget.roleList.isNotEmpty ? widget.roleList.last : 'fieldCommon');
+    _selectedRole = widget.roleList.contains('branchStaff')
+        ? 'branchStaff'
+        : (widget.roleList.isNotEmpty ? widget.roleList.last : 'branchStaff');
     _codeNumberController.text = AccountCodeNumber.format(AccountCodeNumber.generate());
     _startByDay = <String, TimeOfDay?>{
       for (final day in _days) day: null,
@@ -2177,7 +2070,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                       DropdownButtonFormField<String>(
                         value: widget.roleList.contains(_selectedRole)
                             ? _selectedRole
-                            : widget.roleList.last,
+                            : null,
                         isExpanded: true,
                         decoration: opsInputDecoration(
                           context,
@@ -2189,7 +2082,7 @@ class _CreateUserAccountDialogState extends State<_CreateUserAccountDialog> {
                               (role) => DropdownMenuItem<String>(
                                 value: role,
                                 child: Text(
-                                  role,
+                                  RoleType.fromName(role)?.label ?? role,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),

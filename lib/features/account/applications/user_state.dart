@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../../../app/auth/google_auth_session.dart';
+import '../../../app/models/account_area_access.dart';
+import '../../../app/models/account_role_diagnostics.dart';
 import '../../../app/init/work_schedule_prefs.dart';
 import '../../../app/utils/area_context_debug_trace.dart';
 import '../../../app/utils/dev_firebase_debug_dialog.dart';
@@ -341,19 +343,8 @@ class UserState extends ChangeNotifier {
     await setWorkingStatus(!isWorking);
   }
 
-  String? _tryParseLimitError(Object e, String key) {
-    final s = e.toString();
-    final idx = s.indexOf(key);
-    if (idx < 0) return null;
-    return s.substring(idx + key.length).trim();
-  }
-
-  String? _tryParseActiveLimitError(Object e) {
-    return _tryParseLimitError(e, 'ACTIVE_LIMIT_REACHED:');
-  }
-
-  String? _tryParseTotalLimitError(Object e) {
-    return _tryParseLimitError(e, 'TOTAL_LIMIT_REACHED:');
+  Future<UserModel?> getUserDetailFromServer(String userId) {
+    return _repository.getUserByIdFromServer(userId);
   }
 
   Future<void> setSelectedUserActiveStatus(
@@ -379,16 +370,6 @@ class UserState extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      final activeLimit = _tryParseActiveLimitError(e);
-      if (activeLimit != null && isActive) {
-        onError?.call('활성화 제한에 도달했습니다. (최대 $activeLimit)');
-        return;
-      }
-      final totalLimit = _tryParseTotalLimitError(e);
-      if (totalLimit != null) {
-        onError?.call('전체 계정 제한에 도달했습니다. (최대 $totalLimit)');
-        return;
-      }
       onError?.call('계정 활성 상태 변경 실패: $e');
     }
   }
@@ -984,16 +965,6 @@ class UserState extends ChangeNotifier {
       return true;
     } catch (e, st) {
       debugPrint('updateUserCardAsAdmin error: $e\n$st');
-      final activeLimit = _tryParseActiveLimitError(e);
-      if (activeLimit != null) {
-        onError?.call('활성화 제한에 도달했습니다. (최대 $activeLimit)');
-        return false;
-      }
-      final totalLimit = _tryParseTotalLimitError(e);
-      if (totalLimit != null) {
-        onError?.call('전체 계정 제한에 도달했습니다. (최대 $totalLimit)');
-        return false;
-      }
       onError?.call('사용자 수정 실패: $e');
       return false;
     }
@@ -1204,16 +1175,6 @@ class UserState extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      final activeLimit = _tryParseActiveLimitError(e);
-      if (activeLimit != null) {
-        onError?.call('활성화 제한에 도달했습니다. (최대 $activeLimit)');
-        return;
-      }
-      final totalLimit = _tryParseTotalLimitError(e);
-      if (totalLimit != null) {
-        onError?.call('전체 계정 제한에 도달했습니다. (최대 $totalLimit)');
-        return;
-      }
       onError?.call('사용자 추가 실패: $e');
     }
   }
@@ -1921,6 +1882,14 @@ class UserState extends ChangeNotifier {
     }
 
     if (_user == null) return;
+    final companyName = _user!.divisions.firstOrNull?.trim() ?? '';
+    if (!AccountAreaAccess.isAssigned(_user!.areas, normalizedArea) ||
+        (companyName == normalizedArea &&
+            !AccountAreaAccess.isHeadOfficeRole(_user!.role))) {
+      AccountRoleDiagnostics.record('user_state_area_denied assigned=false');
+      return;
+    }
+    AccountRoleDiagnostics.record('user_state_area_allowed assigned=true');
 
     _user = _user!.copyWith(currentArea: normalizedArea);
     _session = UserSessionAccount(_user!);

@@ -1,10 +1,10 @@
 import '../../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../../features/account/data/services/user_account_show_map.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../../app/models/capability.dart';
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
-import '../../../../../app/utils/status_dialog.dart';
 import '../../../../../app/utils/snackbar_helper.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
@@ -115,7 +115,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
       final areaRef = firestore.collection('areas').doc('$division-$areaName');
       final showRef = firestore.collection('user_accounts_show').doc('$division-$areaName');
       trace.log(
-        '지역 스키마 확인: division=$division area=$areaName modes=${result.settings.modeKeys.join(',')} capabilities=${result.settings.capabilityKeys.join(',')} thirdPartyFields=excluded limits=${result.settings.activeLimit ?? 'unset'}/${result.settings.totalLimit ?? 'unset'}',
+        '지역 스키마 확인: division=$division area=$areaName modes=${result.settings.modeKeys.join(',')} capabilities=${result.settings.capabilityKeys.join(',')} thirdPartyFields=excluded counts=display_only',
         progress: 0.16,
       );
       await firestore.runTrackedActivityTransaction((transaction) async {
@@ -139,8 +139,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
           result.settings.accountMetaPayload(
             division: division,
             area: areaName,
-            activeCount: 0,
-            inactiveCount: 0,
           ),
         );
       }).trackFirestore('TRANSACTION', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
@@ -177,46 +175,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
   Future<void> _openEditDialog(DevAreaListItem item) async {
     if (_mutating) return;
     setState(() => _editingAreaId = item.documentId);
-    int? activeLimit;
-    int? totalLimit;
-    try {
-      final meta = await FirebaseFirestore.instance
-          .collection('user_accounts_show')
-          .doc('${item.division}-${item.name}')
-          .get(const GetOptions(source: Source.serverAndCache)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
-      final data = meta.data() ?? <String, dynamic>{};
-      activeLimit = data['activeLimit'] is int ? data['activeLimit'] as int : null;
-      totalLimit = data['totalLimit'] is int ? data['totalLimit'] as int : null;
-    } catch (error, stackTrace) {
-      if (mounted) setState(() => _editingAreaId = null);
-      if (!mounted) return;
-      final trace = await DeveloperOperationTrace.start(
-        context: context,
-        title: '지역 설정 불러오기',
-        initialMessage: '지역 계정 정책을 불러오지 못해 수정 화면을 열지 않습니다.',
-        useCommonUi: true,
-        developerModeMessage: '개발자 모드 ON: 지역 설정 조회 실패 로그를 debugPrint 코드로 복사할 수 있습니다.',
-        standardModeMessage: '개발자 모드 OFF: 지역 설정 조회 실패 로그를 콘솔에 기록합니다.',
-      );
-      trace.log(
-        '계정 정책 조회 실패: division=${item.division} area=${item.name} existingLimitPreserved=true',
-        progress: 0.35,
-      );
-      await trace.fail(
-        '계정 정책을 확인하지 못해 기존 리밋을 보호하기 위해 지역 수정을 중단했습니다.',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      if (!mounted || trace.developerMode) return;
-      await StatusDialog.showFailure(
-        context,
-        title: '지역 설정을 불러오지 못했습니다',
-        description: '기존 계정 리밋을 보호하기 위해 수정 화면을 열지 않았습니다. 네트워크 상태를 확인한 뒤 다시 시도하세요.',
-        useCommonUi: true,
-      );
-      return;
-    }
-    if (!mounted) return;
     final result = await showCommonOverlayDialog<_AreaEditorResult>(
       context: context,
       barrierDismissible: false,
@@ -224,8 +182,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
         division: item.division,
         isEdit: true,
         initial: item,
-        initialActiveLimit: activeLimit,
-        initialTotalLimit: totalLimit,
       ),
     );
     if (!mounted) return;
@@ -248,7 +204,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
     try {
       final firestore = FirebaseFirestore.instance;
       final areaRef = firestore.collection('areas').doc(item.documentId);
-      final showRef = firestore.collection('user_accounts_show').doc('${item.division}-${item.name}');
       trace.log(
         '저장 필드 확인: englishName=${settings.englishName} modes=${item.isHeadquarter ? DevAreaModePolicy.canonicalModes.join(',') : settings.modeKeys.join(',')} capabilities=${settings.capabilityKeys.join(',')} thirdPartyFields=preserved-not-written isHeadquarter=${item.isHeadquarter}',
         progress: 0.2,
@@ -278,22 +233,8 @@ class _AddAreaTabState extends State<AddAreaTab> {
                   includeCreatedAt: false,
                 ),
         );
-        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', result: 'staged');
-        transaction.set(
-          showRef,
-          <String, dynamic>{
-            'division': item.division,
-            'area': item.name,
-            if (settings.activeLimit != null) 'activeLimit': settings.activeLimit,
-            if (settings.totalLimit != null) 'totalLimit': settings.totalLimit,
-            if (settings.activeLimit == null) 'activeLimit': FieldValue.delete(),
-            if (settings.totalLimit == null) 'totalLimit': FieldValue.delete(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
       }).trackFirestore('TRANSACTION', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
-      trace.log('Area 최신 필드와 계정 정책 저장 완료', progress: 0.9);
+      trace.log('Area 최신 필드 저장 완료: counts=display_only', progress: 0.9);
       _refreshAreas();
       await trace.succeed('지역 설정 수정이 완료되었습니다.');
       if (!mounted) return;
@@ -344,12 +285,17 @@ class _AddAreaTabState extends State<AddAreaTab> {
     try {
       final firestore = FirebaseFirestore.instance;
       final showRef = firestore.collection('user_accounts_show').doc('${item.division}-${item.name}');
-      final projectionSnap = await showRef
-          .collection('users')
-          .limit(1)
-          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
-      if (projectionSnap.docs.isNotEmpty) {
+      final showSnap = await showRef.get(
+        const GetOptions(source: Source.server),
+      ).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+      if (UserAccountShowMap.users(showSnap.data()).isNotEmpty) {
         throw StateError('RELATED_USER_PROJECTION_EXISTS');
+      }
+      final legacySnap = await showRef.collection('users').limit(1).get(
+        const GetOptions(source: Source.server),
+      ).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+      if (legacySnap.docs.isNotEmpty) {
+        throw StateError('RELATED_LEGACY_USER_PROJECTION_EXISTS');
       }
       final accountCandidates = await firestore
           .collection('user_accounts')
@@ -362,7 +308,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
         return divisions.contains(item.division);
       });
       trace.log(
-        '연관 계정 검사 완료: projectionExists=${projectionSnap.docs.isNotEmpty} sourceCandidates=${accountCandidates.docs.length} sourceMatch=$accountExists',
+        '연관 계정 검사 완료: projectionExists=${UserAccountShowMap.users(showSnap.data()).isNotEmpty || legacySnap.docs.isNotEmpty} sourceCandidates=${accountCandidates.docs.length} sourceMatch=$accountExists',
         progress: 0.42,
       );
       if (accountExists) throw StateError('RELATED_USER_ACCOUNT_EXISTS');
@@ -717,15 +663,11 @@ class _AreaEditorDialog extends StatefulWidget {
     required this.division,
     required this.isEdit,
     this.initial,
-    this.initialActiveLimit,
-    this.initialTotalLimit,
   });
 
   final String division;
   final bool isEdit;
   final DevAreaListItem? initial;
-  final int? initialActiveLimit;
-  final int? initialTotalLimit;
 
   @override
   State<_AreaEditorDialog> createState() => _AreaEditorDialogState();
@@ -735,8 +677,6 @@ class _AreaEditorDialogState extends State<_AreaEditorDialog> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _divisionController = TextEditingController();
   final TextEditingController _englishController = TextEditingController();
-  final TextEditingController _activeLimitController = TextEditingController();
-  final TextEditingController _totalLimitController = TextEditingController();
 
   Set<String> _modes = <String>{};
   Set<Capability> _capabilities = <Capability>{};
@@ -755,12 +695,6 @@ class _AreaEditorDialogState extends State<_AreaEditorDialog> {
           : DevAreaModePolicy.normalizeModes(initial.modes);
       _capabilities = Set<Capability>.of(initial.capabilities);
     }
-    if (widget.initialActiveLimit != null) {
-      _activeLimitController.text = widget.initialActiveLimit.toString();
-    }
-    if (widget.initialTotalLimit != null) {
-      _totalLimitController.text = widget.initialTotalLimit.toString();
-    }
   }
 
   @override
@@ -768,8 +702,6 @@ class _AreaEditorDialogState extends State<_AreaEditorDialog> {
     _nameController.dispose();
     _divisionController.dispose();
     _englishController.dispose();
-    _activeLimitController.dispose();
-    _totalLimitController.dispose();
     super.dispose();
   }
 
@@ -782,15 +714,11 @@ class _AreaEditorDialogState extends State<_AreaEditorDialog> {
     final settingsError = DevManagementValidation.validateAreaSettings(
       englishName: _englishController.text,
       modes: _modes,
-      activeLimit: _activeLimitController.text,
-      totalLimit: _totalLimitController.text,
     );
     if (settingsError != null) {
       setState(() => _errorText = settingsError);
       return;
     }
-    final activeLimit = DevManagementValidation.parseOptionalLimit(_activeLimitController.text);
-    final totalLimit = DevManagementValidation.parseOptionalLimit(_totalLimitController.text);
     Navigator.of(context).pop(
       _AreaEditorResult(
         name: areaName,
@@ -798,8 +726,6 @@ class _AreaEditorDialogState extends State<_AreaEditorDialog> {
           englishName: _englishController.text.trim(),
           modes: Set<String>.of(_modes),
           capabilities: Set<Capability>.of(_capabilities),
-          activeLimit: activeLimit,
-          totalLimit: totalLimit,
         ),
       ),
     );
@@ -877,8 +803,6 @@ class _AreaEditorDialogState extends State<_AreaEditorDialog> {
                       const SizedBox(height: 12),
                       DevAreaSettingsFields(
                         englishNameController: _englishController,
-                        activeLimitController: _activeLimitController,
-                        totalLimitController: _totalLimitController,
                         selectedModes: _modes,
                         selectedCapabilities: _capabilities,
                         showModeSelector: initial?.isHeadquarter != true,

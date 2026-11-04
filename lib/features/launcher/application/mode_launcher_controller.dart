@@ -30,6 +30,8 @@ import '../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../../dev/page/dialogs/plate_billing_count_dialog.dart';
 import '../../dev/page/sheets/dev_quick_actions.dart';
 import 'launcher_work_area_option.dart';
+import '../../../app/models/account_area_access.dart';
+import '../../../app/models/account_role_diagnostics.dart';
 import 'launcher_work_area_resolver.dart';
 import 'launcher_work_area_server_resolver.dart';
 import '../../selector/application/dev_auth.dart';
@@ -855,7 +857,7 @@ class ModeLauncherController extends ChangeNotifier {
       final area = _availableWorkAreas[index];
       _append(
         TerminalLineType.output,
-        '${index + 1}  ${area.areaName}',
+        '${index + 1}  ${area.isAllowed ? '' : '[잠금] '}${area.areaName}',
       );
     }
     _append(TerminalLineType.system, '────────────────────────────────────────');
@@ -885,7 +887,7 @@ class ModeLauncherController extends ChangeNotifier {
       final area = _availableWorkAreas[index];
       await _appendPaced(
         TerminalLineType.output,
-        '${index + 1}  ${area.areaName}',
+        '${index + 1}  ${area.isAllowed ? '' : '[잠금] '}${area.areaName}',
         reduceMotion,
       );
     }
@@ -2543,7 +2545,7 @@ class ModeLauncherController extends ChangeNotifier {
             notifyListeners();
             return;
           }
-          final firstArea = _availableWorkAreas.first;
+          final firstArea = _firstWorkAreaForSelection;
           LauncherDiagnostics.record(
             'auth_restore_work_area_selection_ready',
             meta: <String, Object?>{
@@ -3392,12 +3394,18 @@ class ModeLauncherController extends ChangeNotifier {
   }
 
   String? _workAreaAutoSelectReason() {
-    if (_availableWorkAreas.isEmpty) return null;
-    if (_availableWorkAreas.length == 1) return 'single_area';
-    if (_availableWorkAreas.first.isHeadquarter) {
-      return 'headquarter_priority';
-    }
+    final allowed = _availableWorkAreas.where((area) => area.isAllowed).toList();
+    if (allowed.isEmpty) return null;
+    if (allowed.length == 1) return 'single_area';
+    if (allowed.first.isHeadquarter) return 'headquarter_priority';
     return null;
+  }
+
+  LauncherWorkAreaOption get _firstWorkAreaForSelection {
+    for (final area in _availableWorkAreas) {
+      if (area.isAllowed) return area;
+    }
+    return _availableWorkAreas.first;
   }
 
   String _workAreaAutoSelectMessage(String reason) {
@@ -4479,7 +4487,7 @@ class ModeLauncherController extends ChangeNotifier {
         );
       }
       await _appendWorkAreaListPaced(reduceMotion);
-      final firstArea = _availableWorkAreas.first;
+      final firstArea = _firstWorkAreaForSelection;
       LauncherDiagnostics.record(
         'auth_work_area_selection_ready',
         meta: <String, Object?>{
@@ -4618,6 +4626,31 @@ class ModeLauncherController extends ChangeNotifier {
       notifyListeners();
       return const ModeLauncherSubmitResult();
     }
+
+    final user = account.user;
+    final assigned = user != null && AccountAreaAccess.canUseArea(
+      role: user.role,
+      division: selected.division,
+      divisions: user.divisions,
+      areas: user.areas,
+      area: selected.areaName,
+      isHeadquarter: selected.isHeadquarter,
+    );
+    if (!selected.isAllowed || !assigned) {
+      final message = selected.deniedReason.isNotEmpty
+          ? selected.deniedReason
+          : AccountAreaAccess.notAssigned;
+      _append(TerminalLineType.error, '[DENIED] $message');
+      _errorSerial += 1;
+      AccountRoleDiagnostics.record(
+        'launcher_area_denied assigned=$assigned allowed=${selected.isAllowed} headquarter=${selected.isHeadquarter}',
+      );
+      notifyListeners();
+      return const ModeLauncherSubmitResult();
+    }
+    AccountRoleDiagnostics.record(
+      'launcher_area_allowed headquarter=${selected.isHeadquarter}',
+    );
 
     var resolvedArea = selected;
     final requiredServerResolution = resolvedArea.requiresServerAreaResolution;

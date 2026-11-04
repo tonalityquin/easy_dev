@@ -9,6 +9,8 @@ import '../../applications/tablet_account_diagnostics.dart';
 import '../../../../shared/auth/account_code_number.dart';
 import '../../domain/models/tablet/tablet_model.dart';
 import '../../domain/models/user/user_model.dart';
+import 'user_account_show_map.dart';
+import '../../../../app/models/account_role_diagnostics.dart';
 
 class UserReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -91,13 +93,21 @@ class UserReadService {
 
     try {
       final showRef = _getUserShowCollectionRef()
-          .doc(_showDocId(division, area))
-          .collection('users')
-          .doc(id);
+          .doc(_showDocId(division, area));
       final showSnap = viewOptions == null
           ? await showRef.get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart')
           : await showRef.get(viewOptions).trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
-      final active = showSnap.data()?['isActive'];
+      var active = UserAccountShowMap.account(showSnap.data(), id)?['isActive'];
+      if (active is! bool && !UserAccountShowMap.isComplete(showSnap.data())) {
+        final legacySnap = viewOptions == null
+            ? await showRef.collection('users').doc(id).get().trackFirestore(
+                'GET', 'features/account/data/services/user_read_service.dart',
+              )
+            : await showRef.collection('users').doc(id).get(viewOptions).trackFirestore(
+                'GET', 'features/account/data/services/user_read_service.dart',
+              );
+        active = legacySnap.data()?['isActive'];
+      }
       if (active is! bool) {
         debugPrint(
           'user_accounts isActive 확인 실패 → userId=$id reason=view_state_missing',
@@ -613,27 +623,41 @@ class UserReadService {
     }
   }
 
-  Future<List<UserModel>> refreshUsersByDivisionAreaFromShow(String division,
-      String area) async {
+  Future<List<UserModel>> refreshUsersByDivisionAreaFromShow(
+    String division,
+    String area,
+  ) async {
     final docId = _showDocId(division, area);
-    debugPrint(
-        '🔥 Firestore 호출 시작 (users_show) → $division / $area → docId=$docId');
-
+    debugPrint('Firestore users_show Map 조회 시작 → docId=$docId');
     try {
-      final usersRef =
-      _getUserShowCollectionRef().doc(docId).collection('users');
-      final snap = await usersRef.get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
-
-      final users = snap.docs
-          .map((doc) => _userFromShowData(doc.id, doc.data()))
+      final parent = _getUserShowCollectionRef().doc(docId);
+      final snap = await parent.get().trackFirestore(
+        'GET', 'features/account/data/services/user_read_service.dart',
+      );
+      final indexed = <String, Map<String, dynamic>>{};
+      if (!UserAccountShowMap.isComplete(snap.data())) {
+        final legacy = await parent.collection('users').get().trackFirestore(
+          'GET', 'features/account/data/services/user_read_service.dart',
+        );
+        for (final doc in legacy.docs) {
+          indexed[doc.id] = doc.data();
+        }
+      }
+      for (final entry in UserAccountShowMap.entries(snap.data())) {
+        indexed[entry.key] = entry.value;
+      }
+      final users = indexed.entries
+          .map((entry) => _userFromShowData(entry.key, entry.value))
           .toList(growable: false);
-
+      AccountRoleDiagnostics.record(
+        'user_show_map_read_complete users=${users.length} legacyFallback=${!UserAccountShowMap.isComplete(snap.data())}',
+      );
       await updateCacheWithUsers(area.trim(), users);
       return users;
     } on FirebaseException {
       rethrow;
-    } catch (e) {
-      debugPrint('refreshUsersByDivisionAreaFromShow 예외: $e');
+    } catch (error) {
+      debugPrint('refreshUsersByDivisionAreaFromShow 예외: $error');
       rethrow;
     }
   }
@@ -643,30 +667,37 @@ class UserReadService {
     String area,
   ) async {
     final docId = _showDocId(division, area);
-    debugPrint(
-      'Firestore active users_show 조회 시작 → $division / $area → docId=$docId',
-    );
-
+    debugPrint('Firestore active users_show Map 조회 시작 → docId=$docId');
     try {
-      final usersRef =
-          _getUserShowCollectionRef().doc(docId).collection('users');
-      final snap = await usersRef
-          .where('isActive', isEqualTo: true)
-          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
-
-      final users = snap.docs
-          .map((doc) => _userFromShowData(doc.id, doc.data()))
+      final parent = _getUserShowCollectionRef().doc(docId);
+      final snap = await parent.get().trackFirestore(
+        'GET', 'features/account/data/services/user_read_service.dart',
+      );
+      final indexed = <String, Map<String, dynamic>>{};
+      if (!UserAccountShowMap.isComplete(snap.data())) {
+        final legacy = await parent.collection('users').get().trackFirestore(
+          'GET', 'features/account/data/services/user_read_service.dart',
+        );
+        for (final doc in legacy.docs) {
+          indexed[doc.id] = doc.data();
+        }
+      }
+      for (final entry in UserAccountShowMap.entries(snap.data())) {
+        indexed[entry.key] = entry.value;
+      }
+      final users = indexed.entries
+          .where((entry) => entry.value['isActive'] == true)
+          .map((entry) => _userFromShowData(entry.key, entry.value))
           .toList(growable: false);
-
-      debugPrint(
-        'Firestore active users_show 조회 완료 → $division / $area → count=${users.length}',
+      AccountRoleDiagnostics.record(
+        'user_show_map_active_read_complete users=${users.length} legacyFallback=${!UserAccountShowMap.isComplete(snap.data())}',
       );
       return users;
     } on FirebaseException {
       rethrow;
-    } catch (e, st) {
+    } catch (error, stackTrace) {
       debugPrint(
-        'refreshActiveUsersByDivisionAreaFromShow 예외 → $division / $area → $e\nStackTrace:\n$st',
+        'refreshActiveUsersByDivisionAreaFromShow 예외 → $division / $area → $error\nStackTrace:\n$stackTrace',
       );
       rethrow;
     }

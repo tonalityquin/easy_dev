@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/models/account_role.dart';
 import '../../../app/models/capability.dart';
+export '../../../app/models/account_role.dart';
 import '../../../features/account/pages/tablet/tablet_management.dart';
 import '../../../features/account/pages/user/user_management.dart';
 import '../../../features/location/pages/location_management.dart';
@@ -107,168 +109,26 @@ const SecondaryInfo tabAreaManage = SecondaryInfo(
   Icon(Icons.add_location_alt),
 );
 
-enum RoleType {
-  dev,
-  adminBillMonthly,
-  adminBillMonthlyTablet,
-  adminBill,
-  adminBillTablet,
-  adminCommon,
-  adminCommonTablet,
-  userLocationMonthly,
-  userMonthly,
-  userCommon,
-  fieldCommon;
-
-  String get label {
-    switch (this) {
-      case RoleType.dev:
-        return '개발자(태블릿 O)';
-      case RoleType.adminBillMonthly:
-        return '모두 열린 관리자(태블릿 X)';
-      case RoleType.adminBillMonthlyTablet:
-        return '모두 열린 관리자(태블릿 O)';
-      case RoleType.adminBill:
-        return '정산만 열린 관리자(태블릿 X)';
-      case RoleType.adminBillTablet:
-        return '정산만 열린 관리자(태블릿 O)';
-      case RoleType.adminCommon:
-        return '공통 관리자(태블릿 X)';
-      case RoleType.adminCommonTablet:
-        return '공통 관리자(태블릿 O)';
-      case RoleType.userLocationMonthly:
-        return '모두 열린 유저(태블릿 X)';
-      case RoleType.userMonthly:
-        return '정기 주차만 열린 유저(태블릿 X)';
-      case RoleType.userCommon:
-        return '공통 유저(태블릿 X)';
-      case RoleType.fieldCommon:
-        return '공통 필드(태블릿 X)';
-    }
-  }
-
-  static RoleType fromName(String name) {
-    return RoleType.values.firstWhere(
-      (e) => e.name == name,
-      orElse: () {
-        switch (name) {
-          case 'adminBillMonthlyTablet':
-            return RoleType.adminBillMonthlyTablet;
-          case 'adminBillTablet':
-            return RoleType.adminBillTablet;
-          case 'adminCommonTablet':
-            return RoleType.adminCommonTablet;
-          case 'adminBillMonthly':
-            return RoleType.adminBillMonthly;
-          case 'adminBill':
-            return RoleType.adminBill;
-          case 'adminCommon':
-            return RoleType.adminCommon;
-          case 'userLocationMonthly':
-            return RoleType.userLocationMonthly;
-          case 'userMonthly':
-            return RoleType.userMonthly;
-          case 'fieldCommon':
-            return RoleType.fieldCommon;
-          case 'dev':
-            return RoleType.dev;
-          default:
-            return RoleType.userCommon;
-        }
-      },
-    );
-  }
-}
-
 final Map<RoleType, Set<Section>> kRolePolicy = {
-  RoleType.dev: {
-    Section.local,
-    Section.backend,
-    Section.area,
-    Section.user,
-    Section.sector,
-    Section.location,
-    Section.rule,
-    Section.tablet,
-    Section.monthly,
-    Section.bill,
+  RoleType.ceo: {
+    Section.user, Section.sector, Section.location, Section.rule,
+    Section.tablet, Section.monthly, Section.bill,
   },
-  RoleType.adminBillMonthly: {
-    Section.local,
-    Section.backend,
-    Section.user,
-    Section.sector,
-    Section.location,
-    Section.rule,
-    Section.monthly,
-    Section.bill,
+  RoleType.headAdmin: {
+    Section.user, Section.sector, Section.location, Section.rule,
+    Section.tablet, Section.monthly, Section.bill,
   },
-  RoleType.adminBillMonthlyTablet: {
-    Section.local,
-    Section.backend,
-    Section.user,
-    Section.sector,
-    Section.location,
-    Section.rule,
-    Section.tablet,
-    Section.monthly,
-    Section.bill,
+  RoleType.headStaff: {
+    Section.user, Section.sector, Section.location, Section.rule,
+    Section.tablet, Section.monthly, Section.bill,
   },
-  RoleType.adminBill: {
-    Section.local,
-    Section.backend,
-    Section.user,
-    Section.sector,
-    Section.location,
-    Section.rule,
-    Section.bill,
+  RoleType.branchAdmin: <Section>{},
+  RoleType.branchProAdmin: {
+    Section.user, Section.sector, Section.location,
+    Section.tablet, Section.monthly, Section.bill,
   },
-  RoleType.adminBillTablet: {
-    Section.local,
-    Section.backend,
-    Section.user,
-    Section.sector,
-    Section.location,
-    Section.rule,
-    Section.tablet,
-    Section.bill,
-  },
-  RoleType.adminCommon: {
-    Section.local,
-    Section.backend,
-    Section.user,
-    Section.sector,
-    Section.location,
-    Section.rule,
-  },
-  RoleType.adminCommonTablet: {
-    Section.local,
-    Section.backend,
-    Section.user,
-    Section.sector,
-    Section.location,
-    Section.rule,
-    Section.tablet,
-  },
-  RoleType.userLocationMonthly: {
-    Section.local,
-    Section.backend,
-    Section.location,
-    Section.monthly,
-  },
-  RoleType.userMonthly: {
-    Section.local,
-    Section.backend,
-    Section.monthly,
-  },
-  RoleType.userCommon: {
-    Section.local,
-    Section.backend,
-  },
-  RoleType.fieldCommon: {
-    Section.local,
-    Section.backend,
-  },
+  RoleType.branchStaff: <Section>{},
+  RoleType.branchProStaff: {Section.monthly, Section.bill},
 };
 
 final Map<Section, SecondaryInfo> kSectionTab = {

@@ -1,6 +1,6 @@
 # ParkinWorkin — 기술 명세 및 개발 초기화
 
-초기 설계 기준은 `261103 1901.zip`이며, Firebase Activity Center V2는 `261103 2300.zip`, Plate TTS 계측 분리는 `261103 2347.zip`, **AppBar 높이 복원은 `261104 0027.zip`, Firebase 계측 세션·로컬 보존은 `261104 0117.zip`, 저널 복구·범위별 COST·파일 커서 조회·종료 상태 정정은 `261104 0202.zip`, 사용자 상태·출퇴근 요청 중복 방지는 `261104 0236.zip`, 2차 비용 최적화는 `261104 1413.zip`**을 기준으로 한다. APP RESTART 건너뛰기와 개발자 로그인 성공 시 디버그 모드 자동 활성화 등 기존 동작은 유지한다. 이 문서는 2026-11-03 제공된 Firestore Security Rules, 실제 Dart 코드 및 명시적으로 전달된 초기 백엔드 상태를 구분해 설명한다. 코드의 정적 확인과 실제 Firebase 프로젝트의 배포·실행 검증은 서로 다르다.
+초기 설계 기준은 `261103 1901.zip`이며, Firebase Activity Center V2는 `261103 2300.zip`, Plate TTS 계측 분리는 `261103 2347.zip`, **AppBar 높이 복원은 `261104 0027.zip`, Firebase 계측 세션·로컬 보존은 `261104 0117.zip`, 저널 복구·범위별 COST·파일 커서 조회·종료 상태 정정은 `261104 0202.zip`, 사용자 상태·출퇴근 요청 중복 방지는 `261104 0236.zip`, 2차 비용 최적화는 `261104 1413.zip`**을 기준으로 한다. APP RESTART 건너뛰기와 개발자 로그인 성공 시 디버그 모드 자동 활성화 등 기존 동작은 유지한다. 이 문서는 `261104 2123.zip`을 기준으로 한 지역 선택 말풍선 화면 경계·글자 확대·스크롤 대응과 2026-11-04 제공된 Firestore Security Rules, 실제 Dart 코드 및 명시적으로 전달된 초기 백엔드 상태를 구분해 설명한다. 코드의 정적 확인과 실제 Firebase 프로젝트의 배포·실행 검증은 서로 다르다.
 
 ## 1. 변경할 수 없는 설계 전제
 
@@ -29,10 +29,12 @@
 | `lib/features/launcher/application/mode_launcher_controller.dart` | 로그인 명령, 계정/지역/모드 진행, 개발자 비밀번호 성공 후 디버그 상태 활성화 |
 | `lib/features/launcher/application/terminal_auth_coordinator.dart` | 계정 유형, 로그인과 업무 계정 검증 |
 | `lib/app/auth/google_auth_session.dart` | 외부 계정과 Firebase 인증 세션 관리 |
-| `lib/features/launcher/application/dev_bootstrap_service.dart` | 개발용 회사·본사 지역·메타·계정 조건부 생성/복구 |
-| `lib/shared/secondary/pages/sheets/tabs/dev_management_common.dart` | 지역과 계정 메타 생성 Payload 계약 |
-| `lib/shared/secondary/data/services/dev_user_write_service.dart` | 계정 원본·코드 예약·메타·사용자 View의 계정 생성 트랜잭션 |
-| `lib/features/account/domain/models/user/user_model.dart` | 일반 업무 계정 데이터 필드 |
+| `lib/features/launcher/application/dev_bootstrap_service.dart` | 개발용 회사·본사 지역·표시 전용 Count 초기값·계정/예약/경량 View 조건부 생성·복구 |
+| `lib/shared/secondary/pages/sheets/tabs/dev_management_common.dart` | 지역 생성 Payload 및 표시 전용 Count 초기값 계약 |
+| `lib/shared/secondary/data/services/dev_user_write_service.dart` | 개발자 계정의 Root·코드 예약·경량 View 원자적 Batch 생성 및 수정·이동 트랜잭션 |
+| `lib/features/account/domain/models/user/user_model.dart` | 일반 업무 계정 원본 전체 필드 |
+| `lib/features/account/domain/models/user/user_account_view_projection.dart` | 지역별 계정 관리 View의 9개 필드 Projection 명세 |
+| `lib/shared/page/widget/picker_sheet/area_denied_bubble.dart` | 최초 런처·본사 사이드독·지역 선택 시트가 재사용하는 화면 경계 보정 플로팅 말풍선, 큰 글자용 높이 제한·내부 스크롤, 목록 스크롤 시작 즉시 종료, 애니메이션 및 개발자 진단 |
 | `lib/app/terminal/application/parkinworkin_terminal_diagnostics.dart` | `debugPrint` 진단 수집, 개발자 Status Dialog와 Firebase 활동 로그 복사 |
 | `lib/app/diagnostics/firebase_activity_meter.dart` | Firebase/Firestore/Storage API 계측, 메모리 이벤트·카운터, 호출부 확장 |
 | `lib/app/diagnostics/firebase_activity_journal.dart` | 세션별 JSONL 저장, 실패 재시도·부분 쓰기 복구, 보관 범위별 COST 집계, 파일 커서 기반 100건 조회 |
@@ -131,29 +133,31 @@ Mini Terminal의 오픈 660ms, 닫힘 410ms, 내용 페이드·스케일과 입�
 | --- | --- | --- | --- |
 | 1 | `divisions/dev` | 내용 확인 후 **쓰기 0회**, `accountWriteLocked=true`이면 중단 | 회사 생성, 안전한 신규 코드로 `initialAdminAccountId` 지정 |
 | 2 | `areas/dev-dev` | `division`, `name`, `isHeadquarter` 일치 검사 후 보존 | `headquarterAreaPayload()` 사용하여 생성 |
-| 3 | `user_accounts_show/dev-dev` | 집계와 계정 제한값 검사 후 보존 | `accountMetaPayload()`로 0명 메타 생성 |
-| 4 | `user_accounts/{accountId}` | 이름 `dev`, 역할 `dev`, 코드, 회사·지역, 등록 이메일 일치 확인 | `DevUserWriteService.createUser()`로 신규 생성 |
-| 5 | `user_account_codes/{codeNumber}` | 기존 예약이 같은 사용자를 가리키는지 확인 | 계정 생성 트랜잭션에서 예약 |
-| 6 | `user_accounts_show/dev-dev/users/{accountId}` | 코드와 활성 상태 검증 후 보존 | 계정 생성 트랜잭션에서 조회용 문서 생성 |
+| 3 | `user_accounts_show/dev-dev` | 회사·지역 식별자 확인 후 기존 표시용 Count 값을 보존 | `accountMetaPayload()`로 0명 메타 생성 |
+| 4 | `user_accounts/{accountId}` | 이름 `dev`, 역할 `headAdmin`, 코드, 회사·지역, 등록 이메일 일치 확인 | `DevUserWriteService.createUser()`로 신규 생성 |
+| 5 | `user_account_codes/{codeNumber}` | 기존 예약이 같은 사용자를 가리키는지 확인 | 신규 계정 Batch에서 예약, 기존 계정은 검증 후 누락분만 복구 |
+| 6 | `user_accounts_show/dev-dev`의 `users.{accountId}` 중첩 Map | 코드·Role·지역·활성 상태 검증 후 보존 | 계정 생성 Batch에서 경량 View 생성 |
 
-`areas/dev-dev`는 본사 지역이며 `name=dev`, `englishName=dev`, `division=dev`, `isHeadquarter=true`, `modes=[single,double,triple,minor]`, 개발 테스트용 capability 목록, 서버 `createdAt/updatedAt`을 사용한다. 새 메타에는 `activeLimit=100`, `totalLimit=100`, `activeCount=0`, `inactiveCount=0`, `totalCount=0`을 기록한다. **기존 메타의 제한값·집계는 자동 초기화하지 않는다.** 신규 계정 생성 후 정상 집계는 `1/0/1`이다.
+`areas/dev-dev`는 본사 지역이며 `name=dev`, `englishName=dev`, `division=dev`, `isHeadquarter=true`, `modes=[single,double,triple,minor]`, 개발 테스트용 capability 목록, 서버 `createdAt/updatedAt`을 사용한다. 새 메타에는 **표시 전용** `activeCount=0`, `inactiveCount=0`, `totalCount=0`을 초기값으로 기록한다. `activeLimit`, `totalLimit`은 새로 작성하지 않는다. 기존 메타의 Count 값은 계정 CRUD에 의해 자동으로 변경되지 않는다. 신규 계정 생성 후에도 표시 전용 Count 값이 자동으로 1/0/1로 증가하지 않는 것은 의도된 동작이다.
 
-개발 계정은 `name=dev`, `role=dev`, `isActive=true`, `divisions=[dev]`, `areas=[dev]`, `currentArea=dev`, `selectedArea=dev`, 네 가지 정규 모드, 연결된 이메일을 가진다. 코드번호는 `AccountCodeNumber.isValid()`를 충족한다. 기존 회사의 `initialAdminAccountId=aef260e9aa1-dev`가 있다면 계정 ID와 코드번호는 해당 참조에 따른다. 회사가 새로 생성될 경우에는 `AccountCodeNumber.generate()`의 무작위 코드를 사용한다.
+개발 계정은 `name=dev`, `role=headAdmin`, `isActive=true`, `divisions=[dev]`, `areas=[dev]`, `currentArea=dev`, `selectedArea=dev`, 네 가지 정규 모드, 연결된 이메일을 가진다. 코드번호는 `AccountCodeNumber.isValid()`를 충족한다. 기존 회사의 `initialAdminAccountId=aef260e9aa1-dev`가 있다면 계정 ID와 코드번호는 해당 참조에 따른다. 회사가 새로 생성될 경우에는 `AccountCodeNumber.generate()`의 무작위 코드를 사용한다.
 
-계정 생성은 기존 `DevUserWriteService.createUser()`를 재사용한다. 이것은 `user_accounts` 원본, `user_account_codes` 예약, 상위 메타 집계, `users` 하위 문서의 **4개 문서를 한 트랜잭션에서 기록**한다. 회사·지역·메타는 별도의 존재 확인 트랜잭션을 사용한다. 계정 생성 도중 오류가 나면 앞서 생성한 지역·메타는 남을 수 있으므로 다음 실행에서 다시 확인하며, 임의 삭제하거나 이전 문서를 덮어쓰지 않는다.
+계정 생성은 `DevUserWriteService.createUser()`를 사용하며, `user_accounts` 원본, `user_account_codes` 예약, 지역 문서 내 `users.{accountId}` Map 항목의 **3개 대상 문서를 하나의 Batch로 기록**한다. `DevBootstrapResult.writeOperations`의 `accountCreated`도 3건으로 계산한다. 기존 계정의 조회용 View만 누락돼 복구한 경우 `projectionRepaired`는 1건, 코드번호 예약과 View를 함께 복구한 경우에는 합계 2건으로 계산한다. 이 계산은 실제 실행한 문서 쓰기 건수의 합이며 서비스 요청 횟수나 Firebase 청구 금액을 의미하지 않는다. 개발자 생성 경로는 예약 코드 GET 1회와 Root 존재 GET 1회를 수행한다. 회사·지역·표시용 메타 초기화는 별도의 존재 확인 트랜잭션을 사용한다. 계정 생성 도중 오류가 나면 앞서 생성한 지역·메타는 남을 수 있으므로 다음 실행에서 다시 확인하며, 임의 삭제하거나 이전 문서를 덮어쓰지 않는다.
 
 ### 기존 데이터와 재실행
 
 - 이미 완성된 `dev` 회사·지역·메타·계정은 재사용하고 쓰지 않는다. 도움말 버튼 중복 입력은 UI에서 차단한다.
 - 신규 문서 생성은 Firestore 트랜잭션의 존재 검사 후 수행한다. 다른 기기에서 동시에 생성하면 기존 계정·예약 충돌을 다시 확인한다.
-- 기존 계정의 코드번호 예약 문서가 없으면 동일 계정을 가리키도록 복구할 수 있다. View 사용자 문서가 없고 상위 집계가 확실히 0일 때만 사용자 View와 집계 1을 복구한다.
-- 메타·조회용 문서가 서로 모순되거나, 회사 참조·계정 이메일·역할·코드·지역이 충돌하면 수정을 중단한다. 다른 계정·버전·집계를 임의 재작성하지 않는다.
+- 기존 계정의 코드번호 예약 문서가 없으면 동일 계정을 가리키도록 복구할 수 있다. View 사용자 문서가 없으면 Root·예약 소유자·Role·지역 검증을 거쳐 경량 View만 복구하며 Count 필드는 건드리지 않는다.
+- 조회용 문서·회사 참조·계정 이메일·역할·코드·지역이 충돌하면 수정을 중단한다. 표시 전용 Count 값과 실제 사용자 수를 비교해 자동 복구하거나 회사·계정 원본을 임의 재작성하지 않는다.
 - 기존 회사에 `initialAdminAccountId`가 없거나 형식이 잘못된 경우에는 신규 계정을 추측해서 만들지 않고 사용자 확인을 요구한다.
 - 계정 생성은 `password`를 저장하지 않는다. 따라서 dev 계정의 일반 이메일 기반 로그인 가능성과 **개발자 비밀번호 로그인 가능 여부는 별개**이며, 저장된 비밀번호가 없다면 후자의 인증은 성공하지 않는다. 기본·고정 비밀번호를 새로 심지 않는다.
 
 ## 6. 진단 기록·복사·오류 처리
 
 `DevBootstrapService`는 요청, 회사·지역 준비, 계정 쓰기 단계, 성공·실패를 `ParkinWorkinTerminalDiagnostics.record()`로 기록하며 내부적으로 `debugPrint`를 호출한다. 계정 코드번호, 이메일, 인증 토큰은 새 초기화 진단에 원문으로 기록하지 않는다. 기존 서비스의 상세 메시지를 그대로 노출하는 대신 단계별 이벤트와 처리된 문서 수를 기록한다.
+
+최초 개발자 초기화 완료 기록의 `writeOperations`는 회사·본사 지역·표시용 메타 생성 각 1건과 신규 계정 Batch 3건을 합산하므로 모두 신규 생성되면 6건이다. 경량 View만 복구하면 1건으로 기록한다. 기존 STATUS의 완료 안내와 복사한 `debugPrint(...)` 코드에 동일한 수정 수치가 반영된다. 최초 초기화에 없는 문서를 새로 쓰는 경우에만 실제 쓰기가 발생한다.
 
 로그 복사는 기존 `ParkinWorkinTerminalDiagnostics.debugPrintCode` 형식을 유지한다. 개발자 `STATUS`에서는 클립보드 버튼을 누를 때 `debugPrintCodeWithJournal()`로 기존 진단과 로컬 보관된 현재 세션의 Firebase 기록을 비동기로 합친다. APP RESTART 건너뛰기 및 디버그 자동 활성화도 `LauncherDiagnostics.record()` 및 `ParkinWorkinTerminalDiagnostics.record()`에 기록되어 `debugPrint(...)` 코드 복사 대상에 포함된다. 개발자 `STATUS` Dialog의 클립보드 버튼은 진입 시 및 복사 실행 직전에 `DevAuth.isDevModeEnabled()`로 권한을 재확인하며, 별도의 제목 5회 탭 복사는 개발자 권한을 제공하지 않는다. 진단 복사 과정에는 Firestore 읽기·쓰기가 필요 없다. UI는 연결 실패·권한 만료·문서 충돌과 일반 네트워크 오류를 구분해 표시한다.
 
@@ -268,6 +272,8 @@ Firebase Auth·Google Auth·App Check의 진단 이벤트는 실제 Firebase 과
 
 트랜잭션은 `runTrackedActivityTransaction()`으로 실행한다. `Zone`에 시도별 `STAGE_*` 작업 수를 저장하고, 재시도 중 실패한 시도의 수를 버리고 **최종 Firestore Future 성공 이후 마지막 성공 시도에서 확인된 쓰기만 `COMMITTED_TRANSACTION`으로 기록**한다. 배치는 `trackedActivityBatch()`가 `set/update/delete` 횟수를 수집하고 원래 `WriteBatch.commit()` 성공 후 `COMMITTED_BATCH`를 기록한다. 커밋 실패는 확정 집계 0건이며 기존 `BATCH`·`TRANSACTION` 로그와 예외 처리는 유지한다. SDK에 드러나지 않은 서버 내부 동작과 기존 `STAGE_*`가 삽입되지 않은 트랜잭션 작업은 관측 범위 밖일 수 있다.
 
+중첩 Map 계정 상태 변경·계정 삭제·레거시 필드 정리는 `FieldPath`를 키로 사용하는 부분 업데이트를 전달한다. `FirebaseActivityWriteBatch.update()`는 문자열 필드명과 `FieldPath`를 모두 담을 수 있도록 `Map<Object, Object?>`를 받고, 원래 Firestore Batch에 그대로 위임한다. `FieldValue.delete()`로 **문서 내부 Map 필드**를 제거하는 호출은 `update()`에 해당해 `WRITE`로 계측하며, 문서 자체를 제거하는 `batch.delete()`만 `DELETE`로 계측한다. 성공한 `commit()` 이후에만 확정 작업 수를 기록한다.
+
 `COST`는 전체 활동 로그의 별칭이 아니라 전용 분석 화면이다. `OBSERVED`는 호출 수·반환 문서 수·캐시/서버 응답·확정 쓰기·삭제·스냅샷·Storage 처리 바이트를 제시한다. `ESTIMATED`는 현재 SDK 관측값으로 확정 과금액을 산출할 수 없다는 조건을 표시하며 **임의 금액을 생성하지 않는다**. `UNAVAILABLE`에는 인덱스 읽기·Rules 의존 읽기·저장 용량·SDK 내부 재시도·다른 클라이언트 비용을 명시한다. COST 복사 버튼은 전체 이벤트가 아닌 이 세 범주의 요약을 `debugPrint(...)`로 출력한다.
 
 Storage 작업에서는 Firebase Storage `TaskSnapshot.bytesTransferred`, `getData()` 반환 바이트, GCS `Media.stream` 실제 소비 크기, GCS 공개 URL HTTP 응답 `bodyBytes.length`를 각각 계측한다. 메타데이터만 조회하는 `storage.objects.get`은 `DOWNLOAD`이 아니라 `METADATA`로 분류한다. 요청 본문 크기·객체 크기·실제 네트워크 청구 전송량은 서로 다른 수치다. HTTP 계측은 확인된 `storage.googleapis.com` CSV 다운로드 호출부에만 연결하며 외부 이미지 로더가 자체 실행하는 다운로드는 포함하지 않을 수 있다.
@@ -345,11 +351,13 @@ Firebase UID를 업무 accountId로 바꾸거나 GCS `publicRead`를 제거하�
 | 개발자 로그인 성공 후 디버그 ON | 승인 검사와 로컬 SharedPreferences 갱신, 추가 Firestore 쓰기 없음 | 실패 시 추가 인증·업무 조회를 수행하지 않고 로그인 완료 차단 |
 | 첫 실행에서 이미 있는 `divisions/dev` 검사 | 트랜잭션 문서 읽기, 회사 쓰기 0 | 기존 버전 보존 및 불필요한 쓰기 방지 |
 | 없는 지역·메타 생성 | 각 문서 1회 쓰기 | 최초 실행만 |
-| 신규 dev 계정 | 원본·코드 예약·메타 갱신·사용자 View, 총 4개 문서 쓰기 | 기존 생성 서비스를 재사용. 중복 조회·트랜잭션 재시도 가능 |
-| 최초 정상 생성의 핵심 쓰기 | 회사 존재 시 6회, 회사 부재 시 7회 | 읽기·트랜잭션 재시도·복구는 별도. 이것은 실제 청구 실측치가 아님 |
+| 신규 dev 계정 | 원본·코드 예약·경량 View, 총 3개 문서 쓰기 | 코드 예약 GET 1 + Root 존재 GET 1, Batch 쓰기 3건, 완료 진단에서도 `accountCreated=3`건으로 계산. 카운트 메타 갱신 없음 |
+| 기존 dev 계정의 누락된 View 복구 | 경량 View 문서 SET 1건 | `projectionRepaired=1`건으로 계산, 예약 문서까지 복구한 경우 합계 2건. Count 갱신 없음 |
+| 최초 정상 생성의 핵심 쓰기 | 신규 개발 회사·본사·메타 3건과 계정 3건, 합계 최대 6건 | 기존 회사·지역 존재 여부에 따라 달라짐. 실제 청구 실측치가 아님 |
 | 완전한 상태에서 재실행 | 정상 흐름에서 쓰기 0, 확인 읽기 발생 | 정기 실행/자동 리스너 없음 |
 | 계정 연결 | Google/Firebase 인증 API, 별도 Firestore 사용자 문서 생성 없음 | 요금제에 따라 인증 비용 정책 별도 |
-| 계정 중복 검사 | `DevUserWriteService`가 `codeNumber`, `phone`, `handle` 쿼리 실행 | 비어 있는 쿼리에도 최소 읽기 과금 가능 |
+| 계정 중복 검사 | 일반 신규 계정은 코드 예약 GET 1회, 개발자 신규 계정은 코드 예약 GET 1회 + Root GET 1회 | 인덱스 완전성 검증은 운영 선행 조건 |
+| 중첩 Map `FieldPath` Batch 타입 호환 | 래퍼의 `update()` 매개변수 형식만 확장, 실제 SET·UPDATE·DELETE 요청 건수 불변 | 추가 Firestore 조회·쓰기·요금 절감 없음; 기존 계측을 그대로 적용 |
 | 실시간 차량·음성 수신 | Firestore `snapshots()` 읽기 및 재연결 | 이용량에 따라 과금, 정상 기능이므로 유지 |
 | 음성 전송 후 정리 | 전송마다 정리 대상 최대 32개 조회 | 전송량 증가 시 실제 비용을 계측하고 최적화 판단 |
 | GCS 공개 이미지 | 저장·요청·다운로드 네트워크 사용량 | `publicRead` 유지, 전송 트래픽 관찰 |
@@ -390,14 +398,21 @@ Firebase UID를 업무 accountId로 바꾸거나 GCS `publicRead`를 제거하�
 | 개인형·태블릿형에서 개발 초기화 함수 실행 조건 검사 | 즉시 종료, 이 기능으로 인한 Firestore 조회·쓰기는 없음 |
 | 기존 `divisions/dev` 존재 | `accountWriteVersion=11`, `areaConfigVersion=3`, `initialAdminAccountId=aef260e9aa1-dev`, 생성 시각 등 보존 |
 | `accountWriteLocked=true` | 초기화 중단, 회사 원본 유지 |
-| 지역·메타·계정 모두 없음 | 누락 문서만 트랜잭션 생성, 계정 원본/예약/상위 메타/하위 View 생성 |
+| 지역·메타·계정 모두 없음 | 누락 문서만 트랜잭션 생성, 계정 원본/예약/상위 메타 문서 내부 사용자 Map 생성 |
 | 도움말 두 번 실행 | 최초 1회만 생성, 두 번째는 존재 확인 후 쓰기 없음 |
 | 코드 예약 충돌·계정 이메일 불일치 | 자동 덮어쓰기 금지, 오류 표시 |
-| 계정 원본만 있고 View 누락/집계 0 | 조건 충족 시 View와 카운터 복구 |
-| 원본과 View 또는 집계 충돌 | 자동 복구 금지, 기존 자료 보존 |
+| 계정 원본만 있고 View 누락 | Root·예약 검증 후 경량 View만 복구, Count 미변경, `writeOperations`에 1건 반영 |
+| 회사·본사·메타·개발자 계정 모두 신규 생성 | `writeOperations=6`, STATUS 진단 및 Firebase 문서 쓰기 수와 일치 |
+| 코드 예약과 View 모두 누락된 기존 개발자 계정 | 검증 후 문서 2건 복구, `writeOperations=2` |
+| 원본과 View의 코드·Role·지역 충돌 | 자동 덮어쓰기 금지, 기존 자료 보존 |
 | 회사·지역 일부만 생성 후 네트워크 오류 | 재실행 시 남은 데이터 보존, 누락 단계만 수행 |
 | 제목 연속 5회 탭 | `debugPrint(...)` 복사, 도움말 실행과 무관 |
 | 전역 개발자 모드 ON에서 `STATUS` | 기존 진단 Dialog와 `debugPrint 코드 복사` 사용 가능 |
+| 계정 A 활성·비활성 상태 변경 | Root·지역 Map의 계정 A 상태만 변경하고 같은 지역 계정 B 및 표시용 Count 보존, `COMMITTED_BATCH` 확인 |
+| 계정 A 삭제 | Root·코드 예약 문서 삭제와 `users.{계정A}` Map 필드 삭제가 정상 실행되고 계정 B Map 보존 |
+| 기존 Map의 `password` Backfill | 대상 `users.{계정ID}.password` 필드만 제거하고 기존 계정·상위 메타 보존 |
+| 중첩 Map 계측 래퍼 정적 검사 | `Map<Object, Object?>` 인자 전달에 따른 타입 오류가 `flutter analyze`에서 사라짐 |
+| 개발자 STATUS 로그 증가·클립보드 | 진단 건수 Fade·Slide, 모션 감소 시 0ms, 개발자 모드 ON에서 `debugPrint(...)` 코드 복사 가능 |
 | 애니메이션 감소 설정 | 효과가 즉시 전환되어도 기능 유지 |
 | 작업 완료 후 기존 로그인 | 이름·코드 입력 및 이메일 일치 검증 유지, 개발자 비밀번호는 별도 요건 |
 | APP RESTART 제목 4회 탭 | Dialog 유지, 네이티브 재시작 없음, 업무 화면 이동 없음 |
@@ -570,6 +585,23 @@ Firebase UID를 업무 accountId로 바꾸거나 GCS `publicRead`를 제거하�
 
 이 패치는 제공된 Flutter 분석기 진단 두 오류와 두 경고를 대상으로 한 최소 수정이다. 현재 작업 환경에 Flutter·Dart SDK가 없어 `flutter analyze`와 실기기 실행은 수행하지 못했다. 완전한 프로젝트에서 `flutter analyze`로 네 진단이 해소되는지 확인해야 한다.
 
+### 2026-11-05 중첩 Map `FieldPath` 및 Firebase Activity Batch 호환 수정
+
+이전 `261104 0020.zip` 기준의 수정 기록은 그대로 보존한다. 지역 문서 내부 `users` 중첩 Map으로 전환된 `261105 0340.zip`에서는 기존 `Map<String, dynamic>` 매개변수로 `Map<Object, Object?>`를 받지 못해 활성 상태 변경, 계정 삭제 및 상태 Backfill 호출부에서 타입 불일치가 발생한다. 이번 변경은 공통 래퍼만 확장하며 계정 CRUD의 필드 경로와 저장 횟수는 수정하지 않는다.
+
+| 항목 | 수정 전 | 수정 후 | 근거 |
+| --- | --- | --- | --- |
+| `firebase_activity_meter.dart` | `update(DocumentReference<Object?>, Map<String, dynamic>)` | `update(DocumentReference<Object?>, Map<Object, Object?>)` | `FieldPath`와 문자열 키를 동시에 허용 |
+| `user_write_service.dart` 활성 상태 변경 | `statusPayload()`의 Map 타입을 래퍼가 거부 | 호출부 유지, 래퍼가 그대로 전달 | 선택한 계정 Map의 상태 필드만 수정 |
+| `user_write_service.dart` 계정 삭제 | `deletePayload()`의 Map 타입을 래퍼가 거부 | 호출부 유지, 래퍼가 그대로 전달 | 다른 계정을 보존하며 특정 Map 키 삭제 |
+| `user_active_state_backfill_service.dart` | `password` 필드 삭제용 Map 타입을 래퍼가 거부 | 호출부 유지, 래퍼가 그대로 전달 | 레거시 필드만 삭제하고 원본 정보 보존 |
+| `developer_operation_status_dialog.dart` | 로그 건수 라벨은 즉시 변경 | 220ms Fade·Slide `AnimatedSwitcher` 추가 | STATUS의 진단 누적 상태를 구분하고 `disableAnimations`에 따라 0ms 적용 |
+
+Batch 래퍼는 원래 `WriteBatch.update()`를 호출한 뒤 `_writes`를 1 증가시키고, `commit()`이 성공해야 `COMMITTED_BATCH`를 기록한다. 이 계측 원칙과 `AccountRoleDiagnostics`·`DeveloperOperationTrace`의 개발자 모드 ON `debugPrint(...)` 복사 권한 검사는 유지한다. `FieldPath`의 사용자 ID를 점 구분 문자열로 변환하거나 `users` 전체 Map을 덮어쓰지 않는다. Firestore 읽기·쓰기·삭제 요청량은 타입 변경 자체로 달라지지 않는다.
+
+소스 ZIP에 `pubspec.yaml` 및 실제 Flutter/Dart SDK가 포함되지 않아 의존성 버전 기반의 컴파일 성공 여부는 여기서 확인할 수 없다. 프로젝트에서 `flutter analyze`로 위 세 호출의 타입 오류 제거를 확인하고, 활성 상태 변경·삭제·Backfill·STATUS 복사 및 모션 감소 설정을 실제 기기와 Firestore에서 검증해야 한다. 정적 구조 확인만으로 실행 성공이나 요금 절감을 선언하지 않는다.
+
+
 ### 2026-11-04 앱 실행 전체 구간 Firebase Activity Journal 추가
 
 **변경 기준 ZIP: `261104 0117.zip`.** 수정 범위는 계측 엔진과 신규 Journal, `main.dart` 초기화, Firebase Auth Bridge, 앱 종료 서비스, Activity Center Dialog, 터미널 `STATUS`, 개발자 전용 Status Dialog 복사 경로 및 README다. 헤더는 56dp, 우측 패널은 116×48dp를 유지하며 Plate TTS·포그라운드 서비스 및 Firestore Rules는 변경하지 않는다.
@@ -618,3 +650,346 @@ Firebase UID를 업무 accountId로 바꾸거나 GCS `publicRead`를 제거하�
 문서 원본 필드 값을 서버에서 추가 조회해 비교하지 않으며, **이번 앱 실행 중 성공한 원격 상태 쓰기를 확인한 경우에만** 순차 중복 UPDATE를 생략한다. 직접 계정 모델 쓰기는 상태 확인 캐시를 무효화한다. 필드 값이나 사용자 식별자가 새 `optimization` 이벤트에 저장되지 않는다. Firestore 자체의 유료 SDK 호출과 로컬 생략 진단을 구분한다.
 
 현재 배포 자료에는 완전한 Flutter 프로젝트 루트와 Dart/Flutter SDK가 없어 `flutter analyze`, Android 빌드, 실제 Firestore READ·WRITE 절감 및 운영 Rules/레거시 데이터 확인은 수행하지 못했다. 정적 구조 검사나 ZIP 무결성만으로 실기기에서의 성공을 보장하지 않는다. 수정한 Dart 파일의 주석은 제거하고 신규 `hintText`는 삽입하지 않는다.
+
+
+## 11. 일반 계정 역할 7종 및 접근 정책 — 2026-11-04 소스 수정안
+
+### 11.1 일반 계정의 역할 코드 및 표시명
+
+일반 계정은 `role` 필드에 아래 영어 문자열 중 하나를 저장한다. 화면에는 해당 한글명을 표시한다. 저장 필드 이름과 Firebase Authentication UID는 변경하지 않는다. 태블릿 계정의 별도 직급 역할 9종은 변경하지 않는다.
+
+| 한글 표시명 | role |
+| --- | --- |
+| 대표자 | `ceo` |
+| 본사 관리자 | `headAdmin` |
+| 본사 직원 | `headStaff` |
+| 지사 관리자 | `branchAdmin` |
+| 지사 심화 관리자 | `branchProAdmin` |
+| 지사 직원 | `branchStaff` |
+| 지사 심화 직원 | `branchProStaff` |
+
+### 11.2 일반 계정의 관리 기능 권한표
+
+허용은 역할 정책상 허용을 의미한다. `sector`, `location`, `rule`, `tablet`, `monthly`, `bill`은 지역별 capability가 활성화되어야 화면에서 실행할 수 있다. `user`는 역할 정책으로 판단한다.
+
+| 역할 | 계정 | 섹터 | 구역 | 업무 규칙 | 태블릿 | 정기 주차 | 정산 |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| `ceo` | O | O | O | O | O | O | O |
+| `headAdmin` | O | O | O | O | O | O | O |
+| `headStaff` | O | O | O | O | O | O | O |
+| `branchAdmin` | X | X | X | X | X | X | X |
+| `branchProAdmin` | O | O | O | X | O | O | O |
+| `branchStaff` | X | X | X | X | X | X | X |
+| `branchProStaff` | X | X | X | X | X | O | O |
+
+총 49개 역할/관리 기능 조합 중 허용 29개, 비허용 20개다. 명칭의 관리자·직원 여부로 관리 기능을 자동 상속하지 않는다. 공통 정책은 `lib/app/models/account_role.dart`와 `lib/shared/secondary/application/secondary_info.dart`의 `kRolePolicy`에 둔다. 일반 계정 역할 enum의 중복 정의를 제거하고 관리 화면과 계정 편집 화면은 같은 모델을 사용한다.
+
+### 11.3 본사 운영 관리와 지사 업무 접근의 분리
+
+`divisions`는 사용자 회사 소속, `areas`는 허용된 지역 이름 배열, `selectedArea`와 `currentArea`는 현재 선택·실행 중인 업무 지역으로 구분한다. 회사명과 같은 지역명이 본사 지역명으로 사용된다. `ceo`, `headAdmin`, `headStaff`가 회사명에 해당하는 본사 지역으로 진입하려면 `areas`에 그 지역이 배정되어 있어야 하고, 실제 회사·지역 문서에 `isHeadquarter=true`가 확인되어야 한다. 문자열 이름 일치만으로 본사 지역임을 확정하지 않는다.
+
+본사 역할 3종의 7개 운영 관리 기능과 회사 소속 지사 관리 데이터 접근 방침은 유지한다. **지사의 실제 업무 세션 진입은 별도 권한**이며 본사 역할이더라도 사용자 문서의 `areas`에 대상 지사 이름이 있어야 허용한다. 회사·지역 유효성, 모드 지원 여부도 추가로 검사한다. `selectedArea`를 다른 지사명으로 바꾸는 것으로 업무 접근 권한을 얻을 수 없다.
+
+회사 소속 전체 지역 마스터를 런처 SQLite Snapshot 또는 회사별 Firestore 지역 조회로 확보하고, 지역 선택 목록에는 같은 회사의 모든 지사를 표시한다. `areas`에 배정되지 않은 지사는 반투명·잠금 아이콘으로 나타나며 터치하면 `현재 계정에 허용되지 않은 지역입니다.`라는 말풍선 안내를 표시한다. 실제 지역 이동과 업무 활성화는 진행하지 않는다. 배정 지역이라도 해당 모드가 없다면 모드 미지원 안내를 보여준다. 다른 회사의 지역은 표시·선택하지 않는다.
+
+지사 지역 배정과 회수는 개발자가 Firestore 일반 계정 문서의 `areas` 필드를 직접 관리한다. 앱에서는 기존 사용자 정보를 편집해도 최신 서버 문서의 `areas`, `divisions`, `currentArea`, `selectedArea`를 보존한다. 지역 배정 변경은 사용자 데이터의 재조회 또는 재로그인 후에 반영하며, 기존 실행 세션에 대한 즉시 실시간 권한 회수는 별도로 보장하지 않는다.
+
+### 11.4 관리 기능 외의 화면·운영 정책
+
+`single` 관리 메뉴는 계정 관리 권한에 따라 표시하고, 리더/필드 화면은 공통 역할의 필드 화면 분류를 사용한다. 대시보드 관리 메뉴 및 보고서의 기존 `fieldCommon` 분기는 신규 역할의 관리 메뉴 여부로 대체한다. 정기 주차 버튼 및 실행은 모두 관리 권한 `monthly`와 지역 capability가 있어야 허용한다. 일반 계정에서 타인의 음성 메시지 삭제는 `ceo`, `headAdmin`, `branchProAdmin`에게 허용하며 태블릿 계정의 기존 `admin` 삭제 허용은 유지한다. 본인 메시지 삭제도 기존 규칙을 유지한다. 이 항목들은 7개 관리 기능 외에 코드의 명시적 보수적 운용 정책이며, 별도 운영 권한표가 확정되면 다시 조정해야 한다.
+
+개발자 관련 `local`, `backend`, `area`는 일반 계정 7개 관리 기능에 포함되지 않는다. 기존 DevAuth 모드 및 개발자 승인 기능을 독립적으로 유지하며, 개발자 모드가 꺼져 있으면 해당 메뉴에 접근하지 않는다. 개발자 `STATUS` 다이얼로그는 역할 및 지역 권한 판정 기록을 `debugPrint(...)` 코드로 복사할 수 있다. 로그는 개발자 모드 ON에서만 수집·표시하고 복사 시점에도 개발자 모드를 재확인한다. 역할 선택 전환과 기존 STATUS 다이얼로그는 모션 감소 옵션을 반영해 애니메이션을 표시한다. 신규 힌트 텍스트 및 주석은 삽입하지 않는다.
+
+### 11.5 기존 계정 DB 직접 변경 및 개발 초기화
+
+기존 계정의 DB 역할값은 운영자가 직접 수정한다. 앱 안에서 기존 11개 문자열을 신규 7개 문자열로 변환하거나 마이그레이션하는 코드는 작성하지 않는다. 알 수 없는 일반 계정 `role` 값의 로그인은 거절하고, 관리 기능 권한을 자동 승격하지 않는다. 계정 편집 화면도 알 수 없는 기존 역할을 임의의 신규 역할로 저장하지 않는다. 저장 데이터의 `role` 필드명은 유지한다.
+
+개발용 `divisions/dev`, `areas/dev-dev`, `name=dev`, `initialAdminAccountId`는 변경하지 않는다. 새로 생성하는 개발용 일반 계정의 역할은 `headAdmin`으로 설정한다. 기존 개발 계정이 이 역할과 다르면 앱에서 덮어쓰지 않고 검증 실패로 처리한다. 기존 계정의 DB 역할값 수동 수정은 운영자의 책임이다.
+
+### 11.6 변경 위치
+
+| 파일 | 개편 내용 |
+| --- | --- |
+| `lib/app/models/account_role.dart` | 단일 일반 역할 모델·한글 표시명·본사 범위·특수 UI 권한 |
+| `lib/shared/secondary/application/secondary_info.dart`, `secondary_state.dart` | 관리 기능 7종별 역할 판정과 개발자 모드 분리 |
+| `lib/features/account/pages/user/sheets/` | 7개 역할의 생성·편집·저장 및 미인식 역할 거부 |
+| `lib/shared/secondary/pages/sheets/tabs/user_account_tab.dart` | 개발자 관리 계정 목록 및 신규 역할 선택 |
+| `lib/features/dashboard/side_docks/common/` | 정기 주차 표시와 실행 권한 일치, 운영 메뉴 정책 |
+| `lib/features/mode_single/page/single_inside_screen.dart` | 역할별 단일 화면 분기와 관리 메뉴 |
+| `lib/features/voice/controllers/voice_runtime_controller.dart` | 명시적 음성 메시지 삭제 조건 |
+| `lib/features/dashboard/side_docks/common/headquarter_work_area_side_dock.dart` | 회사 전체 지사 표시와 `areas` 미배정 지사 잠금 |
+| `lib/features/headquarter/application/navigation/headquarter_context_navigation_coordinator.dart` | Snapshot 회사 검증 및 `areas`에 배정된 업무 지역 이동 |
+| `lib/features/launcher/application/terminal_auth_coordinator.dart` | 미인식 역할 차단, 본사 검증 및 `areas` 기반 업무 진입 검사 |
+| `lib/features/launcher/application/dev_bootstrap_service.dart` | 새 개발용 일반 계정 역할 `headAdmin` 적용 |
+| `lib/app/models/account_role_diagnostics.dart`, `lib/app/utils/status_dialog.dart` | 개발자 모드의 권한 로그 수집 및 코드 복사 |
+
+### 11.7 제외 및 검증 상태
+
+Firestore Security Rules와 기존 DB 계정값은 수정하지 않는다. 기존 계정의 자동 마이그레이션, 개인 계정 및 태블릿 역할 체계, 회사·지사 문서 ID, 실제 Firebase Rules 배포, 서버 권한 강화 작업은 포함하지 않는다. 제공된 소스에는 Flutter 프로젝트 루트(`pubspec.yaml`, Android/iOS 빌드 설정)가 포함되어 있지 않으므로 실제 컴파일, Firebase 연동 테스트, 실기기 동작, 49개 관리 권한 전수 UI 테스트는 별도 검증이 필요하다. 소스 파일 변경과 런타임 검증 완료는 구분한다.
+
+### 11.8 기존 지역 필드와 세션 접근의 실제 기준
+
+| 필드 또는 검증값 | 역할 | 예시 |
+| --- | --- | --- |
+| `role` | 일반 계정 7개 역할 | `headStaff` |
+| `divisions` | 계정이 속한 회사명 배열 | `["ABC회사"]` |
+| `areas` | 개발자가 DB에서 직접 지정하는 허용 지역 | `["ABC회사", "강남지사"]` |
+| `selectedArea` | 현재 선택한 지역. 권한 자체가 아님 | `"ABC회사"` |
+| `currentArea` | 현재 업무 지역. 권한 자체가 아님 | `"ABC회사"` |
+| 지역 문서 `isHeadquarter` | 실제 본사 확인 | `true` |
+| 지역 문서 `modes` | 해당 지역에서 지원하는 업무 모드 | `["single", "double"]` |
+
+계정 역할 `headStaff`는 7개 운영 관리 기능을 모두 허용하나, 지사 업무 모드 진입은 `areas`와 지역 모드 지원 여부로 제한한다. `areas=["ABC회사", "강남지사"]`라면 ABC회사는 본사 세션 진입 대상으로 검증하고 강남지사는 지사 업무 선택이 가능하다. 같은 회사의 서초·송파지사는 목록에 보이더라도 잠금 상태가 된다.
+
+### 11.9 지역 목록, 안내 애니메이션 및 진단 기록
+
+| 화면 또는 경로 | 수정 정책 |
+| --- | --- |
+| 최초 런처 지역 목록 | SQLite Snapshot에서 해당 회사의 전체 지역 표시, 배정 여부로 활성/잠금 분류 |
+| 런처의 서버 대체 조회 | `getAreasByDivision`으로 회사 전체 지역을 조회하고 배정 여부 분류. 단일 지역만 가져오는 낡은 대체 경로 제거 |
+| 런처 자동 선택 및 텍스트 명령 | 잠금 지역 자동 선택 금지. 직접 입력으로 선택해도 거절 |
+| 본사 지역 사이드독 | 모든 회사 소속 지사 표시, 미배정 카드 반투명·잠금 및 터치 시 말풍선 |
+| `double`, `triple`, `minor`의 지역 시트 | 지역 마스터 전체 목록을 공통 UI로 표시, 배정·모드 미충족 지역 잠금 |
+| 실제 이동·활성화 함수 | 카드 선택 여부와 독립적으로 계정 `areas` 배정과 회사·본사·모드 검증 수행 |
+| 미허용 지역 안내 우선순위 | 계정의 `areas`에 미배정된 지역은 업무 모드 지원 여부와 무관하게 `현재 계정에 허용되지 않은 지역입니다.`를 표시한다. 배정된 지역에서만 모드 미지원 안내를 사용한다. |
+| 말풍선 배치 | 최초 런처, 본사 사이드독, 공통 지역 선택 시트는 같은 `AreaDeniedBubble` 컴포넌트를 사용한다. 안내는 선택한 지역 항목에 따라 이동하며 카드 크기와 스크롤 목록의 배치를 바꾸지 않는다. |
+| 플로팅 형태 | 카드 중앙을 우선하되 루트 오버레이의 좌우·상하 안전 여백 12dp 안으로 위치를 보정한다. 글꼴 배율·줄바꿈 높이와 위아래 가용 공간을 비교해 방향·최대 높이를 계산한다. 내용이 표시 높이를 초과하면 말풍선 내부를 스크롤해 원문 전체를 읽을 수 있으며 닫기 버튼을 제공한다. 수평으로 이동해도 삼각형 꼬리는 대상 카드를 향한다. |
+| 모션 정책 | 잠금 카드의 `AnimatedOpacity`/`AnimatedContainer`를 유지하고 말풍선은 약 180ms Fade+Slide 등장, 일반 높이에서는 약 2초 후 약 140ms 퇴장한다. 높이가 제한된 긴 안내는 읽는 도중 자동으로 사라지지 않도록 2초 타이머를 설정하지 않으며 닫기 버튼·목록 스크롤·화면 종료 시 닫는다. 모션 감소 시 전환 시간 없이 표시한다. |
+| 반복 터치·화면 종료 | 일반 말풍선 반복 터치는 자동 닫힘 시간을 다시 시작한다. 목록의 스크롤이 시작되면 즉시 닫고 타이머·스크롤 감지를 해제한다. 다른 지역을 선택하면 이전 말풍선을 제거하며 화면이 해제되면 오버레이·타이머·감시 리스너를 정리한다. 최초 런처처럼 별도 스크롤 목록이 없는 화면은 기존 동작을 유지한다. |
+| 개발자 모드 ON | 허용/차단·말풍선 등장·가로/세로 위치 보정·높이 제한 여부 및 스크롤 시작으로 닫힌 사유를 `debugPrint`로 기록하며 STATUS 다이얼로그에서 `debugPrint(...)` 코드를 클립보드로 복사한다. 복사 시 개발자 모드를 다시 확인한다. |
+| 개발자 모드 OFF | 개발자 권한 진단 기록 및 STATUS 복사 기능을 제한한다. |
+
+말풍선은 카드에 따라 움직이는 일시적인 루트 오버레이로 표시한다. 지역 목록의 가장 가까운 `Scrollable`에서 스크롤이 시작되면 즉시 종료하여 카드 이동 중 오래된 화면 경계 보정을 유지하지 않는다. 높이가 제한된 말풍선 안에서의 안내 스크롤만 터치를 허용하고 일반 말풍선은 기존처럼 터치를 통과시킨다. 화면 회전·뷰포트 크기 변화 시 기존 말풍선을 제거하고 새 위치에서 다시 표시할 수 있도록 한다. 입력 위젯의 `hintText`나 `helperText`를 추가하지 않는다. 개발자 진단 기록은 이름, 계정 코드번호, 이메일 등의 개인정보를 저장하지 않으며 역할 코드와 허용 여부 위주의 이벤트를 기록한다. `AreaMasterSelectableData`는 `assignedAreas`로 미배정 여부를 먼저 판정하며, 지역 접근 허용·거부 조건과 계정 업무 모드 권한은 변경하지 않는다.
+
+### 11.10 DB 수동 배정·계정 수정·검증 시나리오
+
+계정 신규 생성은 본사 또는 현재 선택 지역을 기본 배정하며, 기존 계정의 지사 배정과 회수는 개발자가 DB에서 직접 수행한다. 앱의 계정 편집과 운영 계정 편집은 최신 서버 문서를 읽어 `areas` 배열을 보존한다. 별도의 역할 또는 지역 마이그레이션 코드는 생성하지 않는다. Firestore Rules 변경은 이번 수정에 포함되지 않는다. 현행 Rules는 앱의 `areas` 기반 업무 선택 제한을 서버에서 강제하지 않는다.
+
+| 검증 시나리오 | 예상 결과 |
+| --- | --- |
+| `headStaff`가 회사명과 같은 본사 지역에 배정, 지역 문서 `isHeadquarter=true` | 본사 세션 허용 |
+| 배정되지 않은 회사 소속 지사 | 목록 표시·잠금·탭 안내, 업무 진입 차단 |
+| 배정된 회사 소속 지사에서 지원 모드 존재 | 해당 업무 모드 진입 허용 |
+| 배정됐으나 모드 미지원인 지사 | 목록 잠금과 모드 미지원 안내 |
+| 다른 회사의 지사 | 목록 제외 및 직접 진입 거부 |
+| 최초 로그인, 세션 복원, 터미널 직접 명령 | 똑같이 지역 배정 판정 |
+| 계정의 역할·이름 수정 | DB에 배정한 지역 배열이 보존됨 |
+| DB에서 지역 배정 수정 | 계정 정보 재조회 또는 재로그인 후 목록 잠금 상태 변경 |
+| 개발자 모드 ON/OFF | ON일 때만 역할/지역 진단 코드 복사 허용 |
+| 감소된 모션 설정 | 말풍선과 선택 카드 애니메이션 시간 0 |
+| 기존 관리 권한 7×7과 태블릿·개인 계정 | 변경하지 않음 |
+
+
+SQLite 지역 목록 및 DB 동시 수정 관련 기존 정책은 이번 변경의 범위에서 제외한다. 공통 지역 선택 시트는 로컬 Snapshot이 없으면 기존 지역 마스터 갱신 안내를 표시하며, 재로그인이 반드시 전체 지역 Snapshot을 생성한다고 보장하지 않는다. 계정 편집 시 DB의 `areas` 배열을 최신 조회로 보존하는 현재 방식은 그대로 두고, 조회와 저장 사이 개발자가 `areas`를 수정하는 경쟁 상황에는 덮어쓰기 가능성이 남아 있음을 명시한다. 이미 DB에 덮어써진 배열은 재로그인만으로 복구되지 않는다.
+
+이 패치의 소스는 빌드 설정 없는 코드 스냅샷에서 변경한 것이므로 실제 `flutter analyze`, 단말 실행, Firestore 연동 및 STATUS 클립보드 동작 검증을 완료했다고 주장하지 않는다. 지역 조회가 Snapshot 부재로 서버 조회로 전환되는 경우 회사별 지역 문서 개수에 따른 읽기가 추가 발생할 수 있다. 이를 비용 계측으로 별도 관찰한다.
+
+### 11.11 지역 접근 안내 및 플로팅 말풍선 개선 검증
+
+| 시나리오 | 예상 결과 |
+| --- | --- |
+| `areas`에 없는 지역이며 업무 모드도 미지원 | `현재 계정에 허용되지 않은 지역입니다.`로 안내 통일 |
+| `areas`에 없는 지역이지만 업무 모드 지원 | 같은 미허용 지역 안내 및 실제 진입 차단 |
+| `areas`에 있는 지역이지만 업무 모드 미지원 | 기존 업무 모드 미지원 안내 유지 |
+| 최초 런처 잠금 지역 터치 | 터치한 행에 연결된 플로팅 말풍선, 기존 선택 상태 유지 |
+| 본사 사이드독 잠금 지역 터치 | 같은 안내 컴포넌트 사용, 업무 지역 이동 없음 |
+| `double`·`triple`·`minor` 선택 시트 잠금 지역 터치 | 말풍선만 표시하고 선택·업무 실행하지 않음 |
+| 반복 터치 | 여러 말풍선이 겹치지 않고 자동 종료 시간 재시작 |
+| 다른 지역 터치 및 화면 종료 | 기존 말풍선 닫힘, 오버레이·타이머 정리 |
+| 화면 상단의 잠금 지역 선택 | 실제 말풍선 높이와 사용 가능한 공간을 비교해 아래쪽으로 전환 |
+| 화면 좌우 가장자리의 잠금 지역 선택 | 말풍선이 좌우 12dp 안전 여백을 넘어가지 않으며 삼각형 꼬리는 원래 카드를 향함 |
+| 화면 하단의 잠금 지역 선택 | 실제 상하 공간을 계산해 말풍선의 위치와 방향 보정 |
+| 글꼴 확대·여러 줄 안내 | 텍스트 너비·높이를 측정하고 화면 내 최대 높이로 제한해 줄바꿈 유지. 넘치는 내용은 내부 스크롤로 전체 열람 |
+| 긴 안내에 대한 종료 | 제한된 높이의 말풍선은 2초 자동 닫힘 대신 내부 스크롤과 닫기 버튼 제공 |
+| 본사 사이드독의 목록 스크롤 시작 | 말풍선 즉시 제거, 기존 2초 타이머 취소 및 스크롤 리스너 정리 |
+| `double`·`triple`·`minor` 지역 목록 스크롤 시작 | 말풍선 즉시 제거, 이동 중 화면 밖으로 따라가지 않음 |
+| 스크롤 후 다른 잠금 지역 터치 | 새 위치에서 말풍선 표시 및 새로운 종료 시간 적용 |
+| 원래 스크롤 목록이 없는 최초 런처 | 추가 스크롤 감지 없이 기존 말풍선 정책 유지 |
+| 화면 회전·뷰포트 크기 변경 | 기존 오버레이를 안전하게 제거하고 다음 터치에서 새 크기 기준으로 재계산 |
+| 모션 감소 설정 | 말풍선 Fade·Slide 전환 없이 표시·제거 |
+| 개발자 모드 ON | 접근 거부 및 말풍선 진단이 `debugPrint`에 기록되며 STATUS에서 `debugPrint(...)` 코드 복사 가능 |
+| 개발자 모드 OFF | 개발자 진단 기록·복사 제한 |
+| 지역 배정·SQLite·계정 편집·Firestore Rules | 기존 접근·동기화·DB 저장 정책 그대로 유지 |
+
+`lib/shared/page/widget/picker_sheet/area_denied_bubble.dart`가 세 지역 선택 화면의 플로팅 UI와 루트 오버레이 좌우·상하 경계 보정, 방향 꼬리 위치, 기존 Fade·Slide 애니메이션 및 개발자 모드의 진단 기록을 담당한다. `lib/features/headquarter/application/area/area_master_cache.dart`의 `rejectionReason()`은 지역 배정을 먼저 확인한다. 기존 인라인 안내는 `common_area_picker_sheet.dart`, `headquarter_work_area_side_dock.dart`, `parkinworkin_terminal_screen.dart`에서 제거한다. 변경 파일의 신규 주석과 `hintText`·`helperText`는 추가하지 않는다. 현재 소스 스냅샷에는 `pubspec.yaml`과 Flutter SDK/프로젝트 빌드 환경이 포함되어 있지 않으므로 완전한 Dart 컴파일·실행 테스트 및 실제 기기 애니메이션 검증은 별도로 수행해야 한다.
+
+
+### 2026-11-04 말풍선 화면 경계 보정 변경
+
+`261104 2041.zip`을 기준으로 공통 말풍선 위젯의 위치 계산과 이 README만 변경한다. 기존 7개 일반 역할·49개 관리 권한, `areas` 지역 접근 검사, 최초 런처·본사 사이드독·공통 지역 시트의 호출 구조, SQLite 동기화, DB 계정 저장, Firestore Rules 및 개발자 STATUS 다이얼로그의 복사 구현은 수정하지 않는다.
+
+| 검증 항목 | 결과 또는 확인 경계 |
+| --- | --- |
+| 공통 말풍선의 가로 경계 계산 | 루트 오버레이 좌우 안전 여백 안으로 위치를 보정하고 삼각형 꼬리 위치도 조정 |
+| 세로 위치 결정 | 글자 크기와 실제 측정한 안내 높이 및 가용 공간으로 계산 |
+| 화면 회전 및 화면 크기 변경 | 기존 오버레이를 정리하고 재표시 시 새 크기로 계산 |
+| 애니메이션·자동 종료 | 기존 180ms 등장, 140ms 퇴장, 2초 자동 닫힘 및 모션 감소 유지 |
+| 진단 코드 복사 | 기존 `AccountRoleDiagnostics`가 개발자 모드 ON일 때만 `debugPrint` 기록. 기존 `status_dialog.dart`가 해당 코드 복사 |
+| 소스 검사 | 수정된 전체 Dart 원문·상대 import·주석·`hintText` 및 `helperText` 존재 여부 확인 |
+| 실행 검증 | Flutter SDK와 `pubspec.yaml`이 없는 소스 스냅샷이므로 Flutter 컴파일 및 단말별 렌더링은 미검증 |
+
+
+### 2026-11-04 큰 글씨 및 스크롤 중 말풍선 보완
+
+`261104 2123.zip`을 기준으로 `lib/shared/page/widget/picker_sheet/area_denied_bubble.dart`와 이 README의 전체 파일만 수정한다. 일반 지역 안내의 180ms Fade·Slide 등장, 140ms 퇴장, 2초 자동 닫힘 및 화면 좌우 12dp 경계 보정은 유지한다. 말풍선 자연 높이가 사용 가능한 공간보다 크면 최대 표시 높이를 적용하고 내부 스크롤과 명시적인 닫기 버튼을 제공하여 글씨를 임의로 줄이거나 원문을 잘라내지 않는다. 이 경우 원문을 읽는 동안 2초 타이머로 자동 닫지 않는다. 가장 가까운 지역 목록이 스크롤을 시작하면 말풍선을 즉시 제거하고 스크롤 리스너도 해제한다.
+
+| 검증 항목 | 확인 기준 |
+| --- | --- |
+| 큰 글자 및 낮은 화면 | 말풍선 높이가 루트 오버레이의 안전 영역 이내이며 내부 스크롤로 안내 원문을 읽을 수 있음 |
+| 일반 글자 및 화면 크기 | 기존 모양·터치 통과·2초 자동 종료·Fade·Slide 유지 |
+| 상위 지역 목록 스크롤 시작 | 즉시 말풍선 제거, 타이머 취소, 감시 리스너 정리 |
+| 말풍선 내부 내용 스크롤 | 지역 목록 스크롤과 구분되어 안내 내용 스크롤 가능 |
+| 반복 터치 및 화면 종료 | 오버레이·타이머·감시 리스너 중복 또는 잔존 없음 |
+| 개발자 모드 ON/OFF | ON에서만 높이 제한·스크롤 종료 진단 `debugPrint` 기록, 기존 STATUS 코드 복사 경로 유지 |
+| 비대상 기능 | 일반 역할 7종 및 권한 49개, 지사 접근 정책, SQLite, DB 계정 저장, Firestore Rules 변경 없음 |
+| 검증 범위 | 정적 코드 검사와 실제 Flutter SDK 기반 컴파일·접근성·스크롤 동작 검증을 구별함 |
+
+
+## 12. 지역별 중첩 Map 기반 계정 CRUD·Count 표시 전용 정책 (2026-11-05)
+
+### 12.1 적용 범위 및 저장 계약
+
+일반·개발자 계정의 최초 생성, 신규 생성, 수정, 지역 이동, 활성 상태 전환, 삭제, 관리 목록 조회, 개발자 기존 계정 복구에 동일한 구조를 사용한다. 계정 원본인 `user_accounts/{userId}`에는 근무시간·휴무·권한 등 기존 전체 필드를 유지하며, 코드번호 예약 `user_account_codes/{codeNumber}`도 유지한다. 계정 View는 **지역별 문서 `user_accounts_show/{division}-{area}` 내부의 `users` Map 필드**에 저장한다. 하위 컬렉션 `users/{userId}`에 신규 계정을 생성하지 않는다.
+
+```text
+user_accounts/{userId}                         계정 Root 원본
+user_account_codes/{codeNumber}                 코드번호 예약
+user_accounts_show/{division}-{area}            지역별 View 문서
+  division, area, updatedAt
+  totalCount, activeCount, inactiveCount         표시용, CRUD에서 변경 금지
+  usersMapComplete                               신규 지역은 true
+  users (Map)
+    {userId} (Map)
+      name, codeNumber, email, role, position
+      modes, isActive, areas, divisions
+      updatedAt, disabledAt(비활성인 경우)
+```
+
+`UserAccountViewProjection.fromUser` 또는 `fromMap`이 9개 목록용 기본 필드만 생성하며, `UserAccountShowMap`이 문서 내부 Map의 읽기, 특정 계정 Map의 전체 교체, 개별 계정의 상태 변경, 계정 키 삭제를 담당한다. `SetOptions(mergeFields: [FieldPath(['users', userId]), 'updatedAt'])` 또는 `FieldPath` 기반의 필드 업데이트를 사용하여 **다른 사용자 Map과 Count 세 필드를 덮어쓰지 않는다.** 사용자 ID에 점(`.`)이 포함되더라도 필드 경로를 문자열 결합으로 조립하지 않는다.
+
+### 12.2 Count와 Limit 정책
+
+지역 문서의 `totalCount`, `activeCount`, `inactiveCount`는 **명시적인 표시 전용 값**이다. 새 회사·지역의 메타 문서를 생성할 때 0으로 초기화하지만, 이후 계정 생성·수정·지역 이동·활성 전환·삭제·초기 개발자 복구에서 자동 계산하거나 갱신하지 않는다. 실제 계정 수와 다른 값이 표시될 수 있다. `activeLimit`, `totalLimit`, Count 재집계·제한 검증 기능은 제거한다. 기존 DB의 Limit 필드는 별도 관리 작업 전까지 물리적으로 남아 있을 수 있다. `전체/활성/비활성` 필터는 각 사용자 Map의 `isActive` 기준으로 계속 동작한다.
+
+### 12.3 최초 회사·지역 및 개발자 계정 생성
+
+`DevAreaSettingsDraft.accountMetaPayload`는 `division`, `area`, Count 세 값, 빈 `users` Map, `usersMapComplete=true`, `updatedAt`을 기록한다. 최초 개발자 계정 생성은 Root·예약·**`dev-dev` 지역 문서의 `users.{accountId}` Map**에 원자적 Batch 3건을 기록한다. Root가 기존에 있는데 Map 항목만 없는 경우 `DevBootstrapService`는 Root의 이름·이메일·코드번호·Role(`headAdmin`)·소속·활성 상태를 검증하고 해당 Map 항목만 트랜잭션으로 복구한다. 기존 Map 항목이 충돌하면 자동 덮어쓰지 않는다. 신규 회사·본사·메타 3건과 계정 Batch 3건을 모두 생성하는 경우 `writeOperations=6`이며, Map 항목만 복구하는 경우 1건으로 계산한다.
+
+기존 하위 컬렉션 데이터는 자동으로 일괄 삭제하지 않는다. 새 초기화와 일반·개발자 계정 CRUD는 더 이상 하위 문서에 신규 View를 저장하지 않으며, 기존 계정의 수정·상태 변경은 해당 계정을 Map에 반영하고 필요 시 이전 하위 문서를 정리한다.
+
+### 12.4 일반·개발자 계정 생성 비용 및 STATUS
+
+| 저장 작업 | 일반 신규 생성 | 개발자 신규 생성 |
+| --- | --- | --- |
+| 코드번호 예약 중복 확인 | 서버 GET 1회 | 서버 GET 1회 |
+| Root 계정 존재 확인 | 생성 과정의 별도 GET 없음 | 서버 GET 1회 |
+| Root 전체 계정 문서 | Batch SET 1건 | Batch SET 1건 |
+| 코드번호 예약 문서 | Batch SET 1건 | Batch SET 1건 |
+| `user_accounts_show/{division}-{area}`의 사용자 Map 항목 | Batch SET 1건 | Batch SET 1건 |
+| 기본 작업 합계 | **1 Read + 3 Writes** | **2 Reads + 3 Writes** |
+
+자동 코드번호 충돌 재시도, 사전 검증, 기존 데이터 및 Firestore 트랜잭션 재시도는 위 최소 건수에 포함하지 않는다. 지역 View 상위 문서를 쓰므로 기존의 '상위 메타 쓰기 없음'이라는 표현을 사용하지 않는다. 상위 문서의 사용자 Map만 변경하며 **Count 값은 변경하지 않는다.** 계정 수 제한 기능도 되살리지 않는다.
+
+`user_setting.dart`는 실제 코드번호 서버 검사 전에 **향후 실행할 작업**으로 `코드번호 중복 여부를 확인하고, 중복이 없으면 계정 원본·예약 인덱스·지역 Map View 3건을 동일 Batch로 저장합니다.`를 기록한다. 검사의 실제 결과와 Batch 커밋 성공은 별도의 진단으로 확인한다.
+
+### 12.5 계정 수정·활성 변경·지역 이동·삭제
+
+| 동작 | Map 변경 | Root·예약 처리 |
+| --- | --- | --- |
+| 기존 계정 수정 | `users.{userId}` 경량 Map 교체 | 근무시간·휴무·활성 상태 보존, 코드 예약 소유권 검증 |
+| 계정 ID 또는 지역 변경 | 이전 Map 키 삭제 및 새 지역 Map 키 생성 | 기존 Root 이전 및 코드 예약 갱신 |
+| 활성/비활성 변경 | 해당 계정 Map의 `isActive`, `disabledAt`, `updatedAt` 변경 | Root `isActive`·스케줄 정합성 유지 |
+| 계정 삭제 | 해당 계정 Map 키 삭제 | Root 및 소유 코드번호 예약 삭제 |
+
+이동·수정 중 기존 하위 사용자 문서가 남아 있다면 동일 트랜잭션에서 이전 문서를 제거한다. 읽기 단계에서 대상 Map 및 기존 하위 문서의 ID 충돌을 검사한다. 동일 지역의 다른 계정 Map을 덮어쓰지 않으며, 이전·새 지역이 다를 경우 양쪽 문서의 변경을 원자적으로 처리한다. 문서 크기 제한, 동시 편집 시 재시도, 보안 규칙 검사에 따른 실패는 정상적으로 오류로 처리한다.
+
+활성·비활성 변경은 `UserAccountShowMap.statusPayload()`의 `FieldPath(['users', userId, ...])`를 사용하고, 계정 삭제는 `UserAccountShowMap.deletePayload()`의 `FieldPath(['users', userId])`에 `FieldValue.delete()`를 적용한다. 상태 Backfill은 `FieldPath(['users', userId, 'password'])`로 오래된 View 비밀번호 필드만 정리한다. 이 세 부분 UPDATE는 `FirebaseActivityWriteBatch.update()`의 `Map<Object, Object?>` 계약을 통과해야 한다. 다른 계정 Map과 표시용 Count는 갱신하지 않는다.
+
+### 12.6 목록 조회·원본 상세 조회·전환기 호환성
+
+신규 지역은 `usersMapComplete=true`이므로 지역 View 문서 **1회 GET으로 계정 목록을 구성**한다. 계정 30개를 읽더라도 문서 읽기 1건이지만 전체 Map이 전송된다. 기존 지역에 마이그레이션 완료 표시가 없다면 기존 `users/{userId}` 하위 컬렉션을 추가로 읽고, Map의 동일 ID 항목을 우선하여 병합한다. 따라서 전환기에는 목록 조회가 1 Read로 줄어든다고 보장하지 않는다. 활성 계정 조회는 Map 및 필요 시 구형 View를 병합한 뒤 앱에서 `isActive=true`로 필터링한다.
+
+관리 목록은 경량 Map으로 표시하되, 일반·개발자 계정의 **상세 수정은 Root 원본을 서버에서 먼저 읽은 다음** 진행한다. Root 조회 실패 시 근무 일정·휴무를 빈 값으로 대체한 편집 화면을 열지 않는다. 회사·지역 삭제는 새 Map과 구형 하위 컬렉션 어느 쪽에든 계정이 있으면 차단한다. 기존 Root와 연결되는 업무 기능, 로그인, Role 7종·권한 49종, 지역 접근, 태블릿, SQLite는 기존 계약을 유지한다.
+
+### 12.7 개발자 모드 ON의 진단·클립보드·애니메이션
+
+`AccountRoleDiagnostics.record`는 개발자 모드 ON일 때만 `debugPrint`를 출력하고 STATUS에 복사 가능한 `debugPrint(...)` 코드를 쌓는다. `DeveloperOperationTrace` 역시 기존 STATUS 다이얼로그의 클립보드 복사 기능과 개발자 모드 재확인 절차를 그대로 사용한다. 신규 View 진단은 `view=map`으로 기록하고, 초기 개발 환경의 `dev_bootstrap_map_complete`는 생성·복구 문서 수를 기록한다. 이메일·원문 코드번호·인증정보를 새 진단에 기록하지 않는다.
+
+| 진단 단계 | 의미 |
+| --- | --- |
+| 신규 생성 예정 진행 안내 | 검사 및 저장 이전, 성공 확정 아님 |
+| `user_create_code_check reads=1 duplicate=false` | 해당 코드번호 예약 문서 검증 |
+| `user_create_batch_start writes=3 view=map` | Root·예약·지역 Map 3개 문서 Batch 요청 |
+| `user_create_batch_committed writes=3 view=map` | Batch 커밋 성공 |
+| `user_show_map_read_complete` | 지역 Map 목록 파싱 완료, 레거시 병합 여부 포함 |
+| `dev_user_map_list_loaded` | 개발자 계정 Map 목록 조회, 레거시 병합 여부 포함 |
+| `dev_bootstrap_map_complete` | 최초 개발 환경 생성·복구의 계산상 문서 쓰기 횟수 |
+
+기존 저장 진행률 및 STATUS Fade·Scale 애니메이션, 상태 `AnimatedSwitcher`, 입력 상태 문구 Fade·Slide, Root 상세 로딩 전환을 유지한다. 개발자 계정 목록의 지역 변경·새로고침에는 **Fade·Slide `AnimatedSwitcher`**를 추가하고, 기존 행별 `CommonAnimatedReveal` 및 원본 로딩 `AnimatedSwitcher`도 유지한다. `MediaQuery.disableAnimations`가 활성화되면 추가된 전환 시간이 0이 된다. 수정 Dart에는 주석을 넣지 않으며 `hintText`, `helperText`를 추가하지 않는다.
+
+개발자 STATUS의 `debugPrint` 기록 건수 라벨에도 220ms Fade·Slide `AnimatedSwitcher`를 적용한다. 기록이 늘어날 때 라벨만 전환되며 기존 진행률·성공/실패·복사 버튼은 유지한다. `MediaQuery.disableAnimations`가 활성화되면 로그 건수 전환도 0ms로 처리한다. `AccountRoleDiagnostics`와 `DeveloperOperationTrace`가 수집한 코드는 개발자 모드 ON에서만 기존 STATUS 복사 경로로 제공하고, 복사 직전에 모드를 재확인한다.
+
+### 12.8 비용·확장성·보안 유의사항
+
+| 작업 | 과거 개별 View | 신규 중첩 Map |
+| --- | --- | --- |
+| 동일 지역 사용자 30명 전체 조회 | 30개 사용자 문서 읽기 | **완료 표시가 있는 지역은 1개 지역 문서 읽기** |
+| 일반 계정 하나 신규 생성 | Root·코드·사용자 View 3 Writes | Root·코드·지역 Map 3 Writes |
+| 계정 활성 상태 갱신 | Root + 사용자 View 2 Writes | Root + 지역 Map 2 Writes, 레거시 이전 시 추가 가능 |
+| 계정 수정·지역 이동·삭제 | 개별 하위 문서 처리 | Map 필드 변경, 레거시 정리 시 추가 처리 |
+
+Firestore 단일 문서는 최대 **1MiB**이므로 지역별 사용자가 과도하게 증가하면 더 이상 중첩 Map을 확장할 수 없다. 목록을 일부만 보여주더라도 문서 1개 전체를 전송한다. 특정 지역 문서의 동시 쓰기 집중, 문서 인덱스 및 FieldPath, 지역 문서 전체에 걸친 Rules 읽기 권한을 배포 전에 점검해야 한다. 구형 하위 View에만 허용한 Rules로는 상위 Map 읽기·쓰기가 실패할 수 있다. 프로젝트에 포함되지 않은 실제 운영 Rules는 이 패치가 자동으로 수정하지 않는다.
+
+### 12.9 회귀 검증 기준
+
+| 시나리오 | 성공 조건 |
+| --- | --- |
+| 개발자 최초 생성 | `user_accounts_show/dev-dev` 문서 내부 `users` Map에 개발자 계정이 생성됨 |
+| 최초 개발자 복구 | Root·예약 검증 후 `users` Map 항목만 복구, Count 불변 |
+| 일반/개발자 계정 생성 | 새 계정 Map 추가, 기존 항목 손실 없음, Batch 3문서 |
+| 동일 지역 계정 수정 | 해당 ID의 Map만 변경, 다른 계정과 Count 보존 |
+| 지역 이동 및 ID 변경 | 이전 Map 키 삭제, 대상 Map 키 추가, 중복 없음 |
+| 활성 상태·삭제 | Map/Root/예약 동기화, Count 불변 |
+| 계측 Batch `FieldPath` 상태 UPDATE | `flutter analyze` 타입 오류 없음, 대상 계정만 변경, `COMMITTED_BATCH` 쓰기 건수 기록 |
+| 계측 Batch `FieldPath` Map 키 삭제 | 특정 계정만 Map에서 삭제, 문서 내부 필드 삭제는 WRITE로 집계 |
+| 상태 Backfill `FieldPath` 정리 | 대상 Map의 `password` 필드만 삭제, 다른 사용자와 Count 불변 |
+| STATUS 로그 건수 애니메이션 | 220ms Fade·Slide 전환, 모션 감소 시 0ms, 클립보드 복사 유지 |
+| 동일 지역 동시 사용자 생성 | 양쪽 사용자 Map이 유지되거나 충돌 시 명확한 오류 |
+| 신규 지역 목록 조회 | 지역 문서 1 GET로 목록 구성, 활성 필터 정상 |
+| 구형 지역 목록 조회 | Map 우선 및 하위 View 폴백으로 기존 계정 누락 없음 |
+| 기존 계정 상세 수정 | Root GET 후 근무시간·휴무 보존 |
+| 회사·지역 삭제 | Map 또는 레거시 하위 View에 계정 있으면 차단 |
+| 개발자 모드 ON | STATUS의 `debugPrint(...)` 코드 복사에 Map 진단 포함 |
+| 모션 감소 | 새로운 Fade·Slide 전환이 0ms로 처리됨 |
+| 보안 및 비용 | Firestore Rules 허용·거부, 1MiB, 청구 리포트 확인 |
+
+## 13. 지역별 계정 Map 스키마와 정합성
+
+### 13.1 단일 지역 문서의 Map 구조
+
+`user_accounts_show/{division}-{area}` 안의 `users`는 Map이며, `users.{userId}`의 값도 경량 Map이다. `users` 하위 컬렉션을 신규 저장 대상으로 사용하지 않는다. 신규 지역에만 `usersMapComplete=true`를 기록하고, 그 지역의 읽기에서는 레거시 폴백을 생략한다. 기존 지역은 자동 완료 처리하지 않는다.
+
+### 13.2 쓰기 및 읽기의 정합성
+
+Root가 전체 계정의 원본이다. Map은 목록 표시용 복제 자료이므로 편집 초기값으로 사용하지 않는다. 계정 항목 쓰기는 `FieldPath(['users', userId])`를 사용해 해당 계정 Map만 교체하고, 삭제는 `FieldPath`의 개별 키 삭제를 수행한다. 다른 계정 Map이나 표시용 Count 세 값은 갱신하지 않는다. 트랜잭션·Batch 원자성은 복수 문서의 변경을 함께 처리하는 데 사용한다.
+
+문서 내부 Map 필드 변경과 레거시 비밀번호 필드 삭제에서 생성한 `Map<Object, Object?>`는 Firebase Activity 계측 Batch 래퍼도 수용해야 한다. 이는 Flutter/Dart 타입 호환을 위한 변경이며 Region Map 스키마, Count 관리 정책, 원자적 저장 및 비용을 변경하지 않는다.
+
+### 13.3 데이터 보호 정책
+
+이전 하위 View 문서를 읽을 수 있어도 자동 일괄 삭제하거나 Root 전체를 덮어쓰지 않는다. 사용자 작업으로 해당 계정을 수정하거나 상태를 변경할 때 기존 하위 문서를 Map으로 이전할 수 있으며, 별도 전체 마이그레이션은 배포 승인과 원본 대조가 선행되어야 한다. 기존 Count 값은 실제 계정 수와 다를 수 있다.
+
+### 13.4 배포 전 확인
+
+정적 코드 검토는 Flutter 컴파일·Firebase 실환경 권한·단말기 클립보드 및 성능 검증을 대신하지 않는다. SDK가 있는 프로젝트에서 `flutter analyze`, 실제 신규/복구/수정/이동/삭제, Rules, 1MiB 제한, 동시 쓰기 및 STATUS 동작을 확인한다.
+
+## 14. 기존 하위 View에서 중첩 Map으로의 수동 전환
+
+1. 운영 DB의 `user_accounts`, `user_account_codes`, `user_accounts_show` 메타 및 각 지역의 기존 `users` 하위 문서를 백업한다.
+2. 각 하위 사용자 ID를 Root 및 예약 인덱스와 대조하고 코드번호·활성 상태·소속·Role 불일치나 중복을 확인한다.
+3. 지역별 경량 Projection으로 구성한 Map의 Firestore 문서 크기가 1MiB 이하인지, 동시 쓰기와 Rules 접근 정책이 허용되는지 검증한다.
+4. 지역 문서의 다른 사용자 Map과 Count를 보존하면서 누락된 `users.{userId}` 항목만 기록한다. 기존 항목이 Root와 충돌하면 덮어쓰지 않고 중단한다.
+5. 전환 전·후 계정 ID와 중요 필드를 교차 검증한다. 모든 계정이 옮겨졌고 구형 문서 정리까지 끝난 경우에만 해당 지역의 `usersMapComplete=true`를 승인된 별도 작업으로 기록한다.
+6. 검증 실패 시 Root·예약·구형 View는 삭제하지 않는다. 기존 하위 컬렉션 정리와 완료 플래그 변경을 앱 실행 또는 계정 목록 조회 중 자동으로 수행하지 않는다.
+
+신규 회사·지역과 초기 개발자 생성은 이미 Map에 쓰므로 새로 생성된 지역의 수동 이전은 필요하지 않다. `usersMapComplete`가 없는 기존 지역은 목록 조회 시 Map과 구형 하위 컬렉션을 병합하므로, 이전이 끝날 때까지 **읽기 비용이 1문서로 줄어든다고 가정하지 않는다.**

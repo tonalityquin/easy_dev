@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../../app/models/account_area_access.dart';
+import '../../../../app/models/account_role_diagnostics.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/di/routes.dart';
@@ -148,7 +150,12 @@ class HeadquarterContextNavigationCoordinator {
           .map((value) => value.trim())
           .where((value) => value.isNotEmpty)
           .toSet();
-      if (!userAreaNames.contains(areaName)) {
+      final session = userState.session;
+      final assigned = AccountAreaAccess.isAssigned(userAreaNames, areaName);
+      AccountRoleDiagnostics.record(
+        'area_navigation role=${session?.role ?? 'unknown'} assigned=$assigned',
+      );
+      if (!assigned) {
         await fail('현재 계정에서 선택한 업무 지역을 사용할 수 없습니다.');
         return;
       }
@@ -166,8 +173,21 @@ class HeadquarterContextNavigationCoordinator {
         area: areaName,
       );
       if (!context.mounted) return;
-      if (snapshotArea == null) {
-        await fail('본사 다운로드 데이터에서 선택한 지역을 찾을 수 없습니다.');
+      if (snapshotArea == null || snapshotArea.division.trim() != division) {
+        await fail('같은 회사의 업무 지역을 확인할 수 없습니다.');
+        return;
+      }
+      if (snapshotArea.isHeadquarter &&
+          (session == null ||
+              session.isTablet ||
+              !AccountAreaAccess.canUseHeadquarter(
+                role: session.role,
+                division: division,
+                divisions: session.divisions,
+                areas: session.areas,
+                area: areaName,
+              ))) {
+        await fail('본사 계정에서만 사용할 수 있는 지역입니다.');
         return;
       }
 

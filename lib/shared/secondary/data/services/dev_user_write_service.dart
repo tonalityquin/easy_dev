@@ -2,41 +2,10 @@ import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../features/account/domain/models/user/user_model.dart';
+import '../../../../features/account/domain/models/user/user_account_view_projection.dart';
+import '../../../../features/account/data/services/user_account_show_map.dart';
+import '../../../../app/models/account_role_diagnostics.dart';
 import '../../../auth/account_code_number.dart';
-
-class _DevAccountCounts {
-  const _DevAccountCounts({
-    required this.activeCount,
-    required this.inactiveCount,
-  });
-
-  final int activeCount;
-  final int inactiveCount;
-
-  int get totalCount => activeCount + inactiveCount;
-
-  _DevAccountCounts applyDeltas({
-    int activeDelta = 0,
-    int inactiveDelta = 0,
-  }) {
-    var active = activeCount + activeDelta;
-    var inactive = inactiveCount + inactiveDelta;
-    if (active < 0) active = 0;
-    if (inactive < 0) inactive = 0;
-    return _DevAccountCounts(
-      activeCount: active,
-      inactiveCount: inactive,
-    );
-  }
-
-  Map<String, int> toMap() {
-    return <String, int>{
-      'activeCount': activeCount,
-      'inactiveCount': inactiveCount,
-      'totalCount': totalCount,
-    };
-  }
-}
 
 class DevUserWriteService {
   DevUserWriteService({FirebaseFirestore? firestore})
@@ -71,11 +40,7 @@ class DevUserWriteService {
   }
 
   Map<String, dynamic> _projectionPayload(UserModel user) {
-    final map = Map<String, dynamic>.from(user.toMap());
-    map['password'] = FieldValue.delete();
-    map['startTime'] = FieldValue.delete();
-    map['endTime'] = FieldValue.delete();
-    return map;
+    return UserAccountViewProjection.fromUser(user);
   }
 
 
@@ -125,242 +90,58 @@ class DevUserWriteService {
     }
   }
 
-  int? _intValue(dynamic value) => value is int ? value : null;
-
-  int _nonNegative(dynamic value) {
-    final parsed = _intValue(value);
-    if (parsed == null || parsed < 0) return 0;
-    return parsed;
-  }
-
-  int? _configuredLimit(dynamic value) {
-    if (value is int && value >= 0) return value;
-    return null;
-  }
-
-  _DevAccountCounts _countsFromMeta(Map<String, dynamic> data) {
-    final active = _nonNegative(data['activeCount']);
-    final inactiveRaw = _intValue(data['inactiveCount']);
-    final totalRaw = _intValue(data['totalCount']);
-    var inactive = inactiveRaw == null || inactiveRaw < 0 ? 0 : inactiveRaw;
-    if ((inactiveRaw == null || inactiveRaw < 0) &&
-        totalRaw != null &&
-        totalRaw >= active) {
-      inactive = totalRaw - active;
-    }
-    return _DevAccountCounts(
-      activeCount: active,
-      inactiveCount: inactive,
-    );
-  }
-
-  bool _metaNeedsCountCompute(Map<String, dynamic> data) {
-    final active = _intValue(data['activeCount']);
-    final inactive = _intValue(data['inactiveCount']);
-    final total = _intValue(data['totalCount']);
-    if (active == null || active < 0) return true;
-    if (inactive == null || inactive < 0) return true;
-    if (total == null || total < 0) return true;
-    return total != active + inactive;
-  }
-
-  Future<void> _ensureAccountCounts({
-    required DocumentReference<Map<String, dynamic>> showRef,
-    required String division,
-    required String area,
-    void Function(String message)? log,
-  }) async {
-    final metaSnap = await showRef.get().trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
-    final meta = metaSnap.data() ?? <String, dynamic>{};
-    if (!_metaNeedsCountCompute(meta)) {
-      log?.call(
-        'DevUserWriteService count meta 사용: division=$division area=$area active=${meta['activeCount']} inactive=${meta['inactiveCount']} total=${meta['totalCount']}',
-      );
-      return;
-    }
-
-    final usersSnap = await showRef.collection('users').get().trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
-    var active = 0;
-    var inactive = 0;
-    for (final doc in usersSnap.docs) {
-      final isActive = (doc.data()['isActive'] as bool?) ?? true;
-      if (isActive) {
-        active += 1;
-      } else {
-        inactive += 1;
-      }
-    }
-    final counts = _DevAccountCounts(
-      activeCount: active,
-      inactiveCount: inactive,
-    );
-    await showRef.set(
-      <String, dynamic>{
-        'division': division,
-        'area': area,
-        ...counts.toMap(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    ).trackFirestore('SET', 'shared/secondary/data/services/dev_user_write_service.dart');
-    log?.call(
-      'DevUserWriteService count meta 복구: division=$division area=$area active=$active inactive=$inactive total=${counts.totalCount}',
-    );
-  }
-
-  void _assertConfiguredLimits(Map<String, dynamic> data) {
-    if (_configuredLimit(data['activeLimit']) == null ||
-        _configuredLimit(data['totalLimit']) == null) {
-      throw StateError('ACCOUNT_LIMIT_NOT_CONFIGURED');
-    }
-  }
-
-  void _assertActiveLimit({
-    required _DevAccountCounts counts,
-    required int activeDelta,
-    required int limit,
-  }) {
-    if (activeDelta <= 0) return;
-    if (counts.activeCount >= limit ||
-        counts.activeCount + activeDelta > limit) {
-      throw StateError('ACTIVE_LIMIT_REACHED:$limit');
-    }
-  }
-
-  void _assertTotalLimit({
-    required _DevAccountCounts counts,
-    required int totalDelta,
-    required int limit,
-  }) {
-    if (totalDelta <= 0) return;
-    if (counts.totalCount >= limit ||
-        counts.totalCount + totalDelta > limit) {
-      throw StateError('TOTAL_LIMIT_REACHED:$limit');
-    }
-  }
-
-  Map<String, dynamic> _metaPayload({
-    required String division,
-    required String area,
-    required _DevAccountCounts counts,
-  }) {
-    return <String, dynamic>{
-      'division': division,
-      'area': area,
-      ...counts.toMap(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-  }
-
   Future<void> createUser({
     required UserModel user,
     required String division,
     required String area,
     void Function(String message)? log,
   }) async {
-    await _assertUniqueUserCodeNumber(user.codeNumber);
-    final normalizedCode = AccountCodeNumber.normalize(user.codeNumber);
-    final normalizedDivision = division.trim();
-    final normalizedArea = area.trim();
-    final showId = _showId(normalizedDivision, normalizedArea);
+    final code = AccountCodeNumber.normalize(user.codeNumber);
+    if (!AccountCodeNumber.isValid(code)) throw StateError('INVALID_CODE_NUMBER');
+    final company = division.trim();
+    final region = area.trim();
+    final showId = _showId(company, region);
     final rootRef = _users.doc(user.id);
-    final codeRef = _codes.doc(normalizedCode);
-    final showRef = _shows.doc(showId);
-    final showUserRef = showRef.collection('users').doc(user.id);
-
-    log?.call(
-      'DevUserWriteService create 시작: id=${AccountCodeNumber.maskDocumentId(user.id)} division=$normalizedDivision area=$normalizedArea',
+    final codeRef = _codes.doc(code);
+    final viewRef = _shows.doc(showId);
+    log?.call('DevUserWriteService create 시작: map=true counts=disabled');
+    final codeSnap = await codeRef.get(
+      const GetOptions(source: Source.server),
+    ).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
+    if (codeSnap.exists) throw StateError('CODE_NUMBER_ALREADY_EXISTS');
+    final rootSnap = await rootRef.get(
+      const GetOptions(source: Source.server),
+    ).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
+    if (rootSnap.exists) throw StateError('USER_ALREADY_EXISTS');
+    final rootMap = <String, dynamic>{
+      ..._rootPayload(user),
+      'isActive': user.isActive,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    final viewMap = <String, dynamic>{
+      ..._projectionPayload(user),
+      'updatedAt': FieldValue.serverTimestamp(),
+      if (!user.isActive) 'disabledAt': FieldValue.serverTimestamp(),
+    };
+    final batch = _firestore.trackedActivityBatch(
+      'shared/secondary/data/services/dev_user_write_service.dart',
     );
-
-    await _ensureAccountCounts(
-      showRef: showRef,
-      division: normalizedDivision,
-      area: normalizedArea,
-      log: log,
+    batch.set(rootRef, rootMap);
+    batch.set(codeRef, _reservationPayload(
+      userId: user.id,
+      codeNumber: code,
+      area: region,
+    ));
+    batch.set(
+      viewRef,
+      UserAccountShowMap.putPayload(user.id, viewMap),
+      UserAccountShowMap.putOptions(user.id),
     );
-
-    await _firestore.runTrackedActivityTransaction((tx) async {
-      final rootSnap = await tx.get(rootRef).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
-      final codeSnap = await tx.get(codeRef).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
-      if (rootSnap.exists) {
-        throw StateError('USER_ALREADY_EXISTS:${user.id}');
-      }
-      if (codeSnap.exists) {
-        throw StateError('CODE_NUMBER_ALREADY_EXISTS');
-      }
-
-      final showSnap = await tx.get(showRef).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
-      final showData = showSnap.data() ?? <String, dynamic>{};
-      _assertConfiguredLimits(showData);
-      final activeLimit = _configuredLimit(showData['activeLimit'])!;
-      final totalLimit = _configuredLimit(showData['totalLimit'])!;
-      final counts0 = _countsFromMeta(showData);
-
-      final showUserSnap = await tx.get(showUserRef).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
-      if (showUserSnap.exists) {
-        throw StateError('SHOW_USER_ALREADY_EXISTS:$showId/${user.id}');
-      }
-
-      final activeDelta = user.isActive ? 1 : 0;
-      final inactiveDelta = user.isActive ? 0 : 1;
-      _assertTotalLimit(
-        counts: counts0,
-        totalDelta: 1,
-        limit: totalLimit,
-      );
-      _assertActiveLimit(
-        counts: counts0,
-        activeDelta: activeDelta,
-        limit: activeLimit,
-      );
-      final counts1 = counts0.applyDeltas(
-        activeDelta: activeDelta,
-        inactiveDelta: inactiveDelta,
-      );
-
-      final rootMap = <String, dynamic>{
-        ..._rootPayload(user),
-        'isActive': user.isActive,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-      final showMap = _projectionPayload(user)
-        ..['createdAt'] = FieldValue.serverTimestamp()
-        ..['updatedAt'] = FieldValue.serverTimestamp()
-        ..['isActive'] = user.isActive
-        ..['disabledAt'] = user.isActive
-            ? FieldValue.delete()
-            : FieldValue.serverTimestamp();
-
-      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
-
-      tx.set(rootRef, rootMap);
-      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
-      tx.set(
-        codeRef,
-        _reservationPayload(
-          userId: user.id,
-          codeNumber: normalizedCode,
-          area: normalizedArea,
-        ),
-      );
-      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
-      tx.set(
-        showRef,
-        _metaPayload(
-          division: normalizedDivision,
-          area: normalizedArea,
-          counts: counts1,
-        ),
-        SetOptions(merge: true),
-      );
-      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
-      tx.set(showUserRef, showMap, SetOptions(merge: true));
-    }).trackFirestore('TRANSACTION', 'shared/secondary/data/services/dev_user_write_service.dart');
-
-    log?.call(
-      'DevUserWriteService create 완료: id=${AccountCodeNumber.maskDocumentId(user.id)} show=$showId',
-    );
+    AccountRoleDiagnostics.record('dev_user_create_batch_start writes=3 view=map');
+    await batch.commit();
+    AccountRoleDiagnostics.record('dev_user_create_batch_committed writes=3 view=map');
+    log?.call('DevUserWriteService create 완료: map=true writes=3');
   }
 
   Future<void> updateUser({
@@ -372,221 +153,124 @@ class DevUserWriteService {
     required String targetArea,
     void Function(String message)? log,
   }) async {
-    final oldUserId = previousUserId.trim();
-    final newUserId = user.id.trim();
+    final oldId = previousUserId.trim();
+    final newId = user.id.trim();
     final newCode = AccountCodeNumber.normalize(user.codeNumber);
-    if (!AccountCodeNumber.isValid(newCode)) {
-      throw StateError('INVALID_CODE_NUMBER');
-    }
+    if (!AccountCodeNumber.isValid(newCode)) throw StateError('INVALID_CODE_NUMBER');
     await _assertUniqueUserCodeNumber(
-      newCode,
-      excludeDocumentIds: <String>{oldUserId, newUserId},
+      newCode, excludeDocumentIds: <String>{oldId, newId},
     );
-    final oldDivision = previousDivision.trim();
-    final oldArea = previousArea.trim();
-    final newDivision = targetDivision.trim();
-    final newArea = targetArea.trim();
-    final oldShowId = _showId(oldDivision, oldArea);
-    final newShowId = _showId(newDivision, newArea);
-    final idChanged = oldUserId != newUserId;
-    final showChanged = oldShowId != newShowId;
-
-    final oldRootRef = _users.doc(oldUserId);
-    final newRootRef = _users.doc(newUserId);
-    final oldShowRef = _shows.doc(oldShowId);
-    final newShowRef = _shows.doc(newShowId);
-    final oldShowUserRef = oldShowRef.collection('users').doc(oldUserId);
-    final newShowUserRef = newShowRef.collection('users').doc(newUserId);
-
-    log?.call(
-      'DevUserWriteService update 시작: oldId=${AccountCodeNumber.maskDocumentId(oldUserId)} newId=${AccountCodeNumber.maskDocumentId(newUserId)} old=$oldShowId new=$newShowId',
-    );
-
-    await _ensureAccountCounts(
-      showRef: newShowRef,
-      division: newDivision,
-      area: newArea,
-      log: log,
-    );
-    if (showChanged) {
-      await _ensureAccountCounts(
-        showRef: oldShowRef,
-        division: oldDivision,
-        area: oldArea,
-        log: log,
-      );
-    }
-
+    final oldRootRef = _users.doc(oldId);
+    final newRootRef = _users.doc(newId);
+    final oldViewRef = _shows.doc(_showId(previousDivision, previousArea));
+    final newViewRef = _shows.doc(_showId(targetDivision, targetArea));
+    final oldLegacyRef = oldViewRef.collection('users').doc(oldId);
+    final newLegacyRef = newViewRef.collection('users').doc(newId);
+    AccountRoleDiagnostics.record('dev_user_update_start view=map counts=disabled');
     await _firestore.runTrackedActivityTransaction((tx) async {
-      final oldRootSnap = await tx.get(oldRootRef).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
+      final oldRootSnap = await tx.get(oldRootRef).trackFirestore(
+        'GET', 'shared/secondary/data/services/dev_user_write_service.dart',
+      );
       if (!oldRootSnap.exists || oldRootSnap.data() == null) {
-        throw StateError('USER_NOT_FOUND:$oldUserId');
+        throw StateError('USER_NOT_FOUND:$oldId');
       }
-      final oldRootData = oldRootSnap.data()!;
-      final oldCode = _rootAccountCode(oldRootData);
-      final oldCodeRef = oldCode.isEmpty ? null : _codes.doc(oldCode);
+      final oldData = oldRootSnap.data()!;
+      final oldCode = _rootAccountCode(oldData);
       final newCodeRef = _codes.doc(newCode);
-      final sameCode = oldCode == newCode;
-      final newCodeSnap = await tx.get(newCodeRef).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
-      final oldCodeSnap = sameCode || oldCodeRef == null
+      final oldCodeRef = oldCode.isEmpty ? null : _codes.doc(oldCode);
+      final newCodeSnap = await tx.get(newCodeRef).trackFirestore(
+        'GET', 'shared/secondary/data/services/dev_user_write_service.dart',
+      );
+      final oldCodeSnap = oldCodeRef == null || oldCode == newCode
           ? newCodeSnap
-          : await tx.get(oldCodeRef).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
-      final newCodeOwner = (newCodeSnap.data()?['userId'] ?? '').toString();
-      if (newCodeSnap.exists &&
-          newCodeOwner != oldUserId &&
-          newCodeOwner != newUserId) {
+          : await tx.get(oldCodeRef).trackFirestore(
+              'GET', 'shared/secondary/data/services/dev_user_write_service.dart',
+            );
+      final codeOwner = (newCodeSnap.data()?['userId'] ?? '').toString();
+      if (newCodeSnap.exists && codeOwner != oldId && codeOwner != newId) {
         throw StateError('CODE_NUMBER_ALREADY_EXISTS');
       }
-      if (idChanged) {
-        final newRootSnap = await tx.get(newRootRef).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
-        if (newRootSnap.exists) {
-          throw StateError('USER_ALREADY_EXISTS:$newUserId');
+      if (oldId != newId) {
+        final newRootSnap = await tx.get(newRootRef).trackFirestore(
+          'GET', 'shared/secondary/data/services/dev_user_write_service.dart',
+        );
+        if (newRootSnap.exists) throw StateError('USER_ALREADY_EXISTS:$newId');
+      }
+      final oldViewSnap = await tx.get(oldViewRef).trackFirestore(
+        'GET', 'shared/secondary/data/services/dev_user_write_service.dart',
+      );
+      final oldLegacySnap = await tx.get(oldLegacyRef).trackFirestore(
+        'GET', 'shared/secondary/data/services/dev_user_write_service.dart',
+      );
+      final moved = oldViewRef.path != newViewRef.path || oldId != newId;
+      final newViewSnap = oldViewRef.path == newViewRef.path
+          ? oldViewSnap
+          : await tx.get(newViewRef).trackFirestore(
+              'GET', 'shared/secondary/data/services/dev_user_write_service.dart',
+            );
+      if (moved) {
+        if (UserAccountShowMap.account(newViewSnap.data(), newId) != null) {
+          throw StateError('SHOW_USER_ALREADY_EXISTS:$newId');
+        }
+        final newLegacySnap = await tx.get(newLegacyRef).trackFirestore(
+          'GET', 'shared/secondary/data/services/dev_user_write_service.dart',
+        );
+        if (newLegacySnap.exists && newLegacyRef.path != oldLegacyRef.path) {
+          throw StateError('SHOW_USER_ALREADY_EXISTS:$newId');
         }
       }
-
-      final newShowSnap = await tx.get(newShowRef).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
-      final newShowData = newShowSnap.data() ?? <String, dynamic>{};
-      final newCounts0 = _countsFromMeta(newShowData);
-      final oldShowSnap = showChanged ? await tx.get(oldShowRef).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart') : newShowSnap;
-      final oldShowData = oldShowSnap.data() ?? <String, dynamic>{};
-      final oldCounts0 = _countsFromMeta(oldShowData);
-
-      final oldShowUserSnap = await tx.get(oldShowUserRef).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
-      final oldShowUserData = oldShowUserSnap.data() ?? <String, dynamic>{};
-      final oldShowUserExists = oldShowUserSnap.exists;
-      final sameProjectionRef = !showChanged && !idChanged;
-      final newShowUserSnap = sameProjectionRef
-          ? oldShowUserSnap
-          : await tx.get(newShowUserRef).trackFirestore('GET', 'shared/secondary/data/services/dev_user_write_service.dart');
-      if (!sameProjectionRef && newShowUserSnap.exists) {
-        throw StateError('SHOW_USER_ALREADY_EXISTS:$newShowId/$newUserId');
-      }
-
-      final oldActive =
-          (oldShowUserData['isActive'] as bool?) ?? user.isActive;
-      final targetActive = oldShowUserExists ? oldActive : user.isActive;
-      var oldCounts1 = oldCounts0;
-      var newCounts1 = newCounts0;
-
-      if (showChanged) {
-        if (oldShowUserExists) {
-          oldCounts1 = oldCounts0.applyDeltas(
-            activeDelta: oldActive ? -1 : 0,
-            inactiveDelta: oldActive ? 0 : -1,
-          );
-        }
-        _assertConfiguredLimits(newShowData);
-        final activeLimit = _configuredLimit(newShowData['activeLimit'])!;
-        final totalLimit = _configuredLimit(newShowData['totalLimit'])!;
-        _assertTotalLimit(
-          counts: newCounts0,
-          totalDelta: 1,
-          limit: totalLimit,
-        );
-        _assertActiveLimit(
-          counts: newCounts0,
-          activeDelta: targetActive ? 1 : 0,
-          limit: activeLimit,
-        );
-        newCounts1 = newCounts0.applyDeltas(
-          activeDelta: targetActive ? 1 : 0,
-          inactiveDelta: targetActive ? 0 : 1,
-        );
-      } else if (!oldShowUserExists) {
-        _assertConfiguredLimits(newShowData);
-        final activeLimit = _configuredLimit(newShowData['activeLimit'])!;
-        final totalLimit = _configuredLimit(newShowData['totalLimit'])!;
-        _assertTotalLimit(
-          counts: newCounts0,
-          totalDelta: 1,
-          limit: totalLimit,
-        );
-        _assertActiveLimit(
-          counts: newCounts0,
-          activeDelta: targetActive ? 1 : 0,
-          limit: activeLimit,
-        );
-        newCounts1 = newCounts0.applyDeltas(
-          activeDelta: targetActive ? 1 : 0,
-          inactiveDelta: targetActive ? 0 : 1,
-        );
-      }
-
-      final rootCreatedAt = oldRootSnap.data()?['createdAt'];
+      final active = (oldData['isActive'] as bool?) ?? user.isActive;
       final rootMap = <String, dynamic>{
         ..._rootPayload(user),
-        'isActive': targetActive,
-        'createdAt': rootCreatedAt ?? FieldValue.serverTimestamp(),
+        'isActive': active,
+        'createdAt': oldData['createdAt'] ?? FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
-      final showCreatedAt = oldShowUserData['createdAt'] ?? rootCreatedAt;
-      final showMap = _projectionPayload(user)
-        ..['createdAt'] = showCreatedAt ?? FieldValue.serverTimestamp()
-        ..['updatedAt'] = FieldValue.serverTimestamp()
-        ..['isActive'] = targetActive
-        ..['disabledAt'] = targetActive
-            ? FieldValue.delete()
-            : (oldShowUserData['disabledAt'] ?? FieldValue.serverTimestamp());
-
-      if (idChanged) {
-        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
-        tx.set(newRootRef, rootMap);
-        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
-        tx.delete(oldRootRef);
-      } else {
-        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
+      final previous = UserAccountShowMap.account(oldViewSnap.data(), oldId) ??
+          oldLegacySnap.data();
+      final summary = <String, dynamic>{
+        ..._projectionPayload(user),
+        'isActive': active,
+        'updatedAt': FieldValue.serverTimestamp(),
+        if (!active)
+          'disabledAt': previous?['disabledAt'] ?? FieldValue.serverTimestamp(),
+      };
+      if (oldId == newId) {
         tx.set(newRootRef, rootMap, SetOptions(merge: true));
+      } else {
+        tx.set(newRootRef, rootMap);
+        tx.delete(oldRootRef);
       }
-      if ((showChanged || idChanged) && oldShowUserExists) {
-        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
-        tx.delete(oldShowUserRef);
-      }
-      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
-      tx.set(newShowUserRef, showMap, SetOptions(merge: true));
-      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
-      tx.set(
-        newShowRef,
-        _metaPayload(
-          division: newDivision,
-          area: newArea,
-          counts: newCounts1,
-        ),
-        SetOptions(merge: true),
-      );
-      if (showChanged) {
-        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
+      if (moved && oldViewRef.path == newViewRef.path &&
+          UserAccountShowMap.account(oldViewSnap.data(), oldId) != null) {
+        tx.update(newViewRef, <Object, Object?>{
+          ...UserAccountShowMap.deletePayload(oldId),
+          FieldPath(<String>['users', newId]): summary,
+        });
+      } else {
+        if (moved &&
+            UserAccountShowMap.account(oldViewSnap.data(), oldId) != null) {
+          tx.update(oldViewRef, UserAccountShowMap.deletePayload(oldId));
+        }
         tx.set(
-          oldShowRef,
-          _metaPayload(
-            division: oldDivision,
-            area: oldArea,
-            counts: oldCounts1,
-          ),
-          SetOptions(merge: true),
+          newViewRef,
+          UserAccountShowMap.putPayload(newId, summary),
+          UserAccountShowMap.putOptions(newId),
         );
       }
-      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
-      tx.set(
-        newCodeRef,
-        _reservationPayload(
-          userId: newUserId,
-          codeNumber: newCode,
-          area: newArea,
-          createdAt: newCodeSnap.data()?['createdAt'],
-        ),
-        SetOptions(merge: true),
-      );
-      if (!sameCode &&
-          oldCodeRef != null &&
-          oldCodeSnap.exists &&
-          (oldCodeSnap.data()?['userId'] ?? '').toString() == oldUserId) {
-        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/secondary/data/services/dev_user_write_service.dart', result: 'staged');
+      if (oldLegacySnap.exists) tx.delete(oldLegacyRef);
+      tx.set(newCodeRef, _reservationPayload(
+        userId: newId,
+        codeNumber: newCode,
+        area: targetArea.trim(),
+        createdAt: newCodeSnap.data()?['createdAt'],
+      ), SetOptions(merge: true));
+      if (oldCodeRef != null && oldCode != newCode && oldCodeSnap.exists &&
+          (oldCodeSnap.data()?['userId'] ?? '').toString() == oldId) {
         tx.delete(oldCodeRef);
       }
     }).trackFirestore('TRANSACTION', 'shared/secondary/data/services/dev_user_write_service.dart');
-
-    log?.call(
-      'DevUserWriteService update 완료: oldId=$oldUserId newId=$newUserId old=$oldShowId new=$newShowId',
-    );
+    AccountRoleDiagnostics.record('dev_user_update_committed view=map counts=disabled');
+    log?.call('DevUserWriteService update 완료: view=map');
   }
 }

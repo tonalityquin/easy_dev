@@ -1,6 +1,7 @@
 import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'user_account_show_map.dart';
 
 typedef UserActiveStateBackfillLogger = void Function(
   String message,
@@ -74,35 +75,46 @@ class UserActiveStateBackfillService {
     final conflictIds = <String>{};
     final viewIds = <String>{};
     final passwordRefs = <DocumentReference<Map<String, dynamic>>>[];
+    final mapPasswords = <MapEntry<DocumentReference<Map<String, dynamic>>, String>>[];
     var viewTotal = 0;
     var duplicateViews = 0;
     var viewStateMissing = 0;
 
+    void registerView(String id, Map<String, dynamic> data) {
+      viewTotal += 1;
+      viewIds.add(id);
+      final active = data['isActive'];
+      if (active is! bool) {
+        viewStateMissing += 1;
+        return;
+      }
+      final previous = activeByUserId[id];
+      if (previous == null) {
+        activeByUserId[id] = active;
+      } else {
+        duplicateViews += 1;
+        if (previous != active) conflictIds.add(id);
+      }
+    }
+
     for (var index = 0; index < viewRootSnapshot.docs.length; index += 1) {
       final parent = viewRootSnapshot.docs[index];
-      final users = await parent.reference.collection('users').get(
-        const GetOptions(source: Source.server),
-      ).trackFirestore('GET', 'features/account/data/services/user_active_state_backfill_service.dart');
-      for (final userDoc in users.docs) {
-        viewTotal += 1;
-        viewIds.add(userDoc.id);
-        final data = userDoc.data();
-        if (data.containsKey('password')) {
-          passwordRefs.add(userDoc.reference);
+      final mapEntries = UserAccountShowMap.entries(parent.data());
+      final mapIds = <String>{};
+      for (final entry in mapEntries) {
+        mapIds.add(entry.key);
+        registerView(entry.key, entry.value);
+        if (entry.value.containsKey('password')) {
+          mapPasswords.add(MapEntry(parent.reference, entry.key));
         }
-        final active = data['isActive'];
-        if (active is! bool) {
-          viewStateMissing += 1;
-          continue;
-        }
-        final previous = activeByUserId[userDoc.id];
-        if (previous == null) {
-          activeByUserId[userDoc.id] = active;
-        } else {
-          duplicateViews += 1;
-          if (previous != active) {
-            conflictIds.add(userDoc.id);
-          }
+      }
+      if (!UserAccountShowMap.isComplete(parent.data())) {
+        final legacy = await parent.reference.collection('users').get(
+          const GetOptions(source: Source.server),
+        ).trackFirestore('GET', 'features/account/data/services/user_active_state_backfill_service.dart');
+        for (final doc in legacy.docs) {
+          if (doc.data().containsKey('password')) passwordRefs.add(doc.reference);
+          if (!mapIds.contains(doc.id)) registerView(doc.id, doc.data());
         }
       }
       final progress = viewRootSnapshot.docs.isEmpty
@@ -152,6 +164,33 @@ class UserActiveStateBackfillService {
           'View password 정리: $viewPasswordsRemoved/${passwordRefs.length}',
           0.22 + (end / passwordRefs.length) * 0.08,
         );
+      }
+    }
+
+    if (mapPasswords.isNotEmpty) {
+      for (var offset = 0; offset < mapPasswords.length; offset += _batchLimit) {
+        final end = offset + _batchLimit < mapPasswords.length
+            ? offset + _batchLimit
+            : mapPasswords.length;
+        final batch = _firestore.trackedActivityBatch(
+          'features/account/data/services/user_active_state_backfill_service.dart',
+        );
+        for (final item in mapPasswords.sublist(offset, end)) {
+          batch.update(item.key, <Object, Object?>{
+            FieldPath(<String>['users', item.value, 'password']):
+                FieldValue.delete(),
+          });
+        }
+        try {
+          await batch.commit().trackFirestore(
+            'BATCH',
+            'features/account/data/services/user_active_state_backfill_service.dart',
+          );
+          viewPasswordsRemoved += end - offset;
+        } on FirebaseException catch (error) {
+          failedWrites += end - offset;
+          debugPrint('user_accounts_show Map password 정리 실패 code=${error.code}');
+        }
       }
     }
 

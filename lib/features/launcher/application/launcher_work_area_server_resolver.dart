@@ -1,4 +1,5 @@
 import '../../account/domain/models/user/user_model.dart';
+import '../../../app/models/account_area_access.dart';
 import '../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import 'app_mode_definition.dart';
 import 'app_mode_registry.dart';
@@ -14,101 +15,101 @@ class LauncherWorkAreaServerResolver {
     required AreaRepository areaRepository,
   }) async {
     final division = user.divisions.firstOrNull?.trim() ?? '';
-    final authorizedAreas = user.areas
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet()
-        .toList(growable: false);
+    if (division.isEmpty) {
+      return const LauncherWorkAreaResolution(
+        hasSnapshot: false,
+        division: '',
+        areas: <LauncherWorkAreaOption>[],
+        dataSource: 'division_missing',
+        serverFallbackUsed: true,
+      );
+    }
 
-    if (division.isEmpty || authorizedAreas.isEmpty) {
+    try {
+      final records = await areaRepository.getAreasByDivision(
+        division,
+        serverOnly: true,
+      );
+      final ids = accountModes.map((mode) => mode.id).toSet();
+      final areas = <LauncherWorkAreaOption>[];
+      for (final record in records) {
+        if (record.division.trim() != division || record.name.trim().isEmpty) {
+          continue;
+        }
+        final modes = AppModeRegistry.supportedModes(
+          record.modes,
+          allowedIds: ids,
+        );
+        final assigned = AccountAreaAccess.isAssigned(
+          user.areas,
+          record.name,
+        );
+        final allowed = AccountAreaAccess.canUseArea(
+          role: user.role,
+          division: division,
+          divisions: user.divisions,
+          areas: user.areas,
+          area: record.name,
+          isHeadquarter: record.isHeadquarter,
+        ) && (record.isHeadquarter || modes.isNotEmpty);
+        areas.add(LauncherWorkAreaOption(
+          division: division,
+          areaName: record.name.trim(),
+          isHeadquarter: record.isHeadquarter,
+          supportedModes: List<AppModeDefinition>.unmodifiable(modes),
+          isAllowed: allowed,
+          deniedReason: AccountAreaAccess.deniedReason(
+            isAssigned: assigned,
+            isHeadquarter: record.isHeadquarter,
+            isHeadOffice: AccountAreaAccess.isHeadOfficeRole(user.role),
+            modeAvailable: modes.isNotEmpty,
+          ),
+          verifiedAreaRecord: record,
+          dataSource: 'server_division_areas',
+        ));
+      }
+      areas.sort((a, b) {
+        if (a.isHeadquarter != b.isHeadquarter) {
+          return a.isHeadquarter ? -1 : 1;
+        }
+        return a.areaName.toLowerCase().compareTo(b.areaName.toLowerCase());
+      });
       LauncherDiagnostics.record(
-        'auth_work_area_server_bootstrap_blocked',
+        'auth_work_area_server_division_ready',
         meta: <String, Object?>{
           'division': division,
-          'authorizedAreaCount': authorizedAreas.length,
-          'reason': division.isEmpty ? 'division_empty' : 'authorized_area_empty',
-          'firebaseAreaDocumentReads': 0,
+          'areaCount': areas.length,
+          'allowedAreaCount': areas.where((area) => area.isAllowed).length,
+          'firebaseAreaDocumentReads': records.length,
           'firebaseWrites': 0,
+          'dataSource': 'server_division_areas',
+        },
+      );
+      return LauncherWorkAreaResolution(
+        hasSnapshot: false,
+        division: division,
+        areas: List<LauncherWorkAreaOption>.unmodifiable(areas),
+        dataSource: 'server_division_areas',
+        firebaseAreaDocumentReads: records.length,
+        serverFallbackUsed: true,
+        headquarterFastPath: false,
+      );
+    } catch (error) {
+      LauncherDiagnostics.record(
+        'auth_work_area_server_division_error',
+        meta: <String, Object?>{
+          'division': division,
+          'errorType': error.runtimeType.toString(),
         },
       );
       return LauncherWorkAreaResolution(
         hasSnapshot: false,
         division: division,
         areas: const <LauncherWorkAreaOption>[],
-        dataSource: 'server_bootstrap_unavailable',
+        dataSource: 'server_division_error',
         serverFallbackUsed: true,
       );
     }
-
-    if (authorizedAreas.length == 1) {
-      final areaName = authorizedAreas.first;
-      LauncherDiagnostics.record(
-        'auth_work_area_single_server_fetch_start',
-        meta: <String, Object?>{
-          'division': division,
-          'area': areaName,
-          'documentId': '$division-$areaName',
-          'authorizedAreaCount': 1,
-          'firebaseAreaDocumentReadAttempt': 1,
-          'firebaseWrites': 0,
-        },
-      );
-      final option = await verifyArea(
-        division: division,
-        areaName: areaName,
-        accountModes: accountModes,
-        areaRepository: areaRepository,
-        source: 'single_area_snapshot_miss',
-      );
-      return LauncherWorkAreaResolution(
-        hasSnapshot: false,
-        division: division,
-        areas: option == null
-            ? const <LauncherWorkAreaOption>[]
-            : <LauncherWorkAreaOption>[option],
-        dataSource: option == null
-            ? 'server_single_area_missing'
-            : 'server_single_area',
-        firebaseAreaDocumentReads: 1,
-        serverFallbackUsed: true,
-        headquarterFastPath: option?.isHeadquarter == true,
-      );
-    }
-
-    final firstArea = authorizedAreas.first;
-    final headquarterCandidate = firstArea == division;
-    final option = LauncherWorkAreaOption(
-      division: division,
-      areaName: firstArea,
-      isHeadquarter: headquarterCandidate,
-      supportedModes: const <AppModeDefinition>[],
-      requiresServerHeadquarterVerification: headquarterCandidate,
-      requiresServerAreaResolution: true,
-      dataSource: 'user_profile_first_area',
-    );
-    LauncherDiagnostics.record(
-      'auth_work_area_multi_first_bootstrap_ready',
-      meta: <String, Object?>{
-        'division': division,
-        'authorizedAreaCount': authorizedAreas.length,
-        'authorizedAreas': authorizedAreas.join(','),
-        'selectedArrayIndex': 0,
-        'selectedArea': firstArea,
-        'headquarterCandidate': headquarterCandidate,
-        'firebaseAreaDocumentReads': 0,
-        'firebaseWrites': 0,
-        'dataSource': 'user_profile_first_area',
-      },
-    );
-    return LauncherWorkAreaResolution(
-      hasSnapshot: false,
-      division: division,
-      areas: <LauncherWorkAreaOption>[option],
-      dataSource: 'user_profile_first_area',
-      firebaseAreaDocumentReads: 0,
-      serverFallbackUsed: true,
-      headquarterFastPath: headquarterCandidate,
-    );
   }
 
   static Future<LauncherWorkAreaOption?> verifyArea({

@@ -279,8 +279,6 @@ class _DivisionCreateDialog extends StatefulWidget {
 class _DivisionCreateDialogState extends State<_DivisionCreateDialog> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _englishController = TextEditingController();
-  final TextEditingController _activeLimitController = TextEditingController();
-  final TextEditingController _totalLimitController = TextEditingController();
 
   Set<Capability> _capabilities = <Capability>{};
   String? _errorText;
@@ -289,8 +287,6 @@ class _DivisionCreateDialogState extends State<_DivisionCreateDialog> {
   void dispose() {
     _nameController.dispose();
     _englishController.dispose();
-    _activeLimitController.dispose();
-    _totalLimitController.dispose();
     super.dispose();
   }
 
@@ -307,15 +303,11 @@ class _DivisionCreateDialogState extends State<_DivisionCreateDialog> {
     final settingsError = DevManagementValidation.validateAreaSettings(
       englishName: _englishController.text,
       modes: DevAreaModePolicy.headquarterModes,
-      activeLimit: _activeLimitController.text,
-      totalLimit: _totalLimitController.text,
     );
     if (settingsError != null) {
       setState(() => _errorText = settingsError);
       return;
     }
-    final activeLimit = DevManagementValidation.parseOptionalLimit(_activeLimitController.text);
-    final totalLimit = DevManagementValidation.parseOptionalLimit(_totalLimitController.text);
     Navigator.of(context).pop(
       DivisionCreateRequest(
         name: name,
@@ -323,8 +315,6 @@ class _DivisionCreateDialogState extends State<_DivisionCreateDialog> {
           englishName: _englishController.text.trim(),
           modes: Set<String>.of(DevAreaModePolicy.headquarterModes),
           capabilities: Set<Capability>.of(_capabilities),
-          activeLimit: activeLimit,
-          totalLimit: totalLimit,
         ),
       ),
     );
@@ -391,8 +381,6 @@ class _DivisionCreateDialogState extends State<_DivisionCreateDialog> {
                       const SizedBox(height: 12),
                       DevAreaSettingsFields(
                         englishNameController: _englishController,
-                        activeLimitController: _activeLimitController,
-                        totalLimitController: _totalLimitController,
                         selectedModes: DevAreaModePolicy.headquarterModes,
                         selectedCapabilities: _capabilities,
                         showModeSelector: false,

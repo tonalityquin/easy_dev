@@ -1165,13 +1165,13 @@ class OpsDockStatusSegmentItem<T> {
   const OpsDockStatusSegmentItem({
     required this.value,
     required this.label,
-    required this.count,
+    this.count,
     required this.color,
   });
 
   final T value;
   final String label;
-  final int count;
+  final int? count;
   final Color color;
 }
 
@@ -1260,20 +1260,23 @@ class _OpsDockStatusSegment<T> extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                       ),
                 ),
-                const SizedBox(width: 4),
-                AnimatedDefaultTextStyle(
-                  duration:
-                      reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: selected ? item.color : tokens.textPrimary,
-                            fontWeight: FontWeight.w900,
-                          ) ??
-                      TextStyle(
-                        color: selected ? item.color : tokens.textPrimary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                  child: Text('${item.count}'),
-                ),
+                if (item.count != null) ...[
+                  const SizedBox(width: 4),
+                  AnimatedDefaultTextStyle(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : CommonUiMotion.selection,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: selected ? item.color : tokens.textPrimary,
+                              fontWeight: FontWeight.w900,
+                            ) ??
+                        TextStyle(
+                          color: selected ? item.color : tokens.textPrimary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                    child: Text('${item.count}'),
+                  ),
+                ],
               ],
             ),
           ),

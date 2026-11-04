@@ -22,7 +22,9 @@ class SecondaryAccountWorkspaceState extends ChangeNotifier {
   String? _editingUserId;
   bool _settingsSaving = false;
   bool _settingsDirty = false;
+  String? _createdAccountAreaKey;
   int _settingsNavigationRequestId = 0;
+  int _editSessionToken = 0;
   final Map<UserSettingsSection, UserSettingsSectionState> _sectionStates =
       <UserSettingsSection, UserSettingsSectionState>{
     UserSettingsSection.identity: UserSettingsSectionState.incomplete,
@@ -43,6 +45,22 @@ class SecondaryAccountWorkspaceState extends ChangeNotifier {
   bool get settingsSaving => _settingsSaving;
   bool get settingsDirty => _settingsDirty;
   int get settingsNavigationRequestId => _settingsNavigationRequestId;
+  int get editSessionToken => _editSessionToken;
+  void markCreatedAccount({required String division, required String area}) {
+    _createdAccountAreaKey = '${division.trim()}|${area.trim()}';
+    log('created_account_local_refresh_ready');
+  }
+
+  bool consumeCreatedAccountRefresh({
+    required String division,
+    required String area,
+  }) {
+    final expected = '${division.trim()}|${area.trim()}';
+    final saved = _createdAccountAreaKey;
+    _createdAccountAreaKey = null;
+    return saved != null && saved == expected;
+  }
+
   Map<UserSettingsSection, UserSettingsSectionState> get sectionStates =>
       Map<UserSettingsSection, UserSettingsSectionState>.unmodifiable(
         _sectionStates,
@@ -78,6 +96,7 @@ class SecondaryAccountWorkspaceState extends ChangeNotifier {
   }
 
   void openCreate({required String source}) {
+    _createdAccountAreaKey = null;
     _view = SecondaryAccountView.settings;
     _settingsMode = UserSettingsMode.create;
     _editingUserId = null;
@@ -94,11 +113,13 @@ class SecondaryAccountWorkspaceState extends ChangeNotifier {
     String userId, {
     required String source,
   }) {
+    _createdAccountAreaKey = null;
     final normalized = userId.trim();
     if (normalized.isEmpty) {
       log('settings_edit_blocked reason=empty_user_id source=$source');
       return;
     }
+    _editSessionToken += 1;
     _view = SecondaryAccountView.settings;
     _settingsMode = UserSettingsMode.edit;
     _editingUserId = normalized;
@@ -229,6 +250,7 @@ class SecondaryAccountWorkspaceState extends ChangeNotifier {
     _activeSettingsSection = UserSettingsSection.identity;
     _settingsSaving = false;
     _settingsDirty = false;
+    _createdAccountAreaKey = null;
     _settingsNavigationRequestId = 0;
     _resetSectionStates(create: true);
     log('workspace_reset source=$source changed=$changed');

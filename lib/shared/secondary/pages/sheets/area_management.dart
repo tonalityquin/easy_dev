@@ -1,5 +1,6 @@
 import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../features/account/data/services/user_account_show_map.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../app/utils/developer_operation_status_dialog.dart';
@@ -8,7 +9,6 @@ import '../../../../design_system/common_ui/common_ui_theme.dart';
 import 'tabs/add_area_tab.dart';
 import 'tabs/dev_management_common.dart';
 import 'tabs/division_management_tab.dart';
-import 'tabs/status_mapping_helper.dart';
 import 'tabs/user_account_tab.dart';
 import '../../widgets/ops_console_widgets.dart';
 
@@ -31,7 +31,7 @@ class _AreaManagementState extends State<AreaManagement>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadDivisions();
   }
 
@@ -95,7 +95,7 @@ class _AreaManagementState extends State<AreaManagement>
       final accountMetaRef = firestore.collection('user_accounts_show').doc('$name-$name');
       final settings = request.settings;
       trace.log(
-        '생성 스키마 확인: division=$name modes=${DevAreaModePolicy.canonicalModes.join(',')} capabilities=${settings.capabilityKeys.join(',')} thirdPartyFields=excluded limits=${settings.activeLimit ?? 'unset'}/${settings.totalLimit ?? 'unset'}',
+        '생성 스키마 확인: division=$name modes=${DevAreaModePolicy.canonicalModes.join(',')} capabilities=${settings.capabilityKeys.join(',')} thirdPartyFields=excluded counts=display_only',
         progress: 0.14,
       );
       trace.log(
@@ -138,8 +138,6 @@ class _AreaManagementState extends State<AreaManagement>
           settings.accountMetaPayload(
             division: name,
             area: name,
-            activeCount: 0,
-            inactiveCount: 0,
           ),
         );
       }).trackFirestore('TRANSACTION', 'shared/secondary/pages/sheets/area_management.dart');
@@ -209,12 +207,17 @@ class _AreaManagementState extends State<AreaManagement>
         final areaName = (areaDoc.data()['name'] ?? '').toString().trim();
         if (areaName.isEmpty) continue;
         final showRef = firestore.collection('user_accounts_show').doc('$name-$areaName');
-        final projectionSnap = await showRef
-            .collection('users')
-            .limit(1)
-            .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart');
-        if (projectionSnap.docs.isNotEmpty) {
+        final showSnap = await showRef.get(
+          const GetOptions(source: Source.server),
+        ).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart');
+        if (UserAccountShowMap.users(showSnap.data()).isNotEmpty) {
           throw StateError('RELATED_USER_PROJECTION_EXISTS:$areaName');
+        }
+        final legacySnap = await showRef.collection('users').limit(1).get(
+          const GetOptions(source: Source.server),
+        ).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart');
+        if (legacySnap.docs.isNotEmpty) {
+          throw StateError('RELATED_LEGACY_USER_PROJECTION_EXISTS:$areaName');
         }
       }
       trace.log('계정 원본 및 projection 비어 있음 확인 완료', progress: 0.46);
@@ -304,7 +307,6 @@ class _AreaManagementState extends State<AreaManagement>
             setState(() => _accountSelectedArea = value);
           },
         ),
-        const StatusMappingHelper(),
       ],
     );
 
@@ -323,13 +325,11 @@ class _AreaManagementState extends State<AreaManagement>
               Tab(icon: Icon(Icons.location_city, size: 17), text: '지역'),
               Tab(icon: Icon(Icons.business, size: 17), text: '회사'),
               Tab(icon: Icon(Icons.manage_accounts, size: 17), text: '계정'),
-              Tab(icon: Icon(Icons.settings, size: 17), text: '리밋'),
             ]
           : const [
               Tab(icon: Icon(Icons.location_city), text: '지역 관리'),
               Tab(icon: Icon(Icons.business), text: '회사 관리'),
               Tab(icon: Icon(Icons.manage_accounts), text: '계정 관리'),
-              Tab(icon: Icon(Icons.settings), text: '리밋 관리'),
             ],
     );
 

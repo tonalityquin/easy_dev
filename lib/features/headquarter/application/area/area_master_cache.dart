@@ -1,4 +1,5 @@
 import '../../../../app/models/capability.dart';
+import '../../../../app/models/account_area_access.dart';
 import '../../../dev/data/repositories/area_repo_package/firestore_area_repository.dart';
 import '../../domain/models/headquarter_download_snapshot.dart';
 import '../snapshot/headquarter_snapshot_download_service.dart';
@@ -41,11 +42,32 @@ class AreaMasterSelectableData {
     required this.hasCache,
     required this.selectableAreas,
     required this.isHeadquarterByName,
+    this.visibleAreas = const <String>[],
+    this.modeSupportedAreas = const <String>{},
+    this.assignedAreas = const <String>{},
+    this.headquarterAllowed = true,
   });
 
   final bool hasCache;
   final List<String> selectableAreas;
   final Map<String, bool> isHeadquarterByName;
+  final List<String> visibleAreas;
+  final Set<String> modeSupportedAreas;
+  final Set<String> assignedAreas;
+  final bool headquarterAllowed;
+
+  String rejectionReason(String area) {
+    if (!assignedAreas.contains(area)) {
+      return AccountAreaAccess.notAssigned;
+    }
+    if (isHeadquarterByName[area] == true && !headquarterAllowed) {
+      return AccountAreaAccess.headquarterUnavailable;
+    }
+    if (!selectableAreas.contains(area)) {
+      return AccountAreaAccess.modeUnavailable;
+    }
+    return '';
+  }
 }
 
 class AreaMasterCache {
@@ -133,6 +155,7 @@ class AreaMasterCache {
     required String division,
     required List<String> userAreas,
     required String modeKey,
+    String role = '',
   }) async {
     final snapshot = await readSnapshot(division);
     if (snapshot == null) {
@@ -144,27 +167,36 @@ class AreaMasterCache {
     }
 
     final normalizedMode = modeKey.trim().toLowerCase();
-    final itemByName = <String, AreaMasterItem>{
-      for (final item in snapshot.items) item.name: item,
-    };
     final isHeadquarterByName = <String, bool>{
       for (final item in snapshot.items) item.name: item.isHeadquarter,
     };
 
-    final selectableAreas = <String>[];
-    for (final area in userAreas) {
-      final name = area.trim();
-      if (name.isEmpty) continue;
-      final item = itemByName[name];
-      if (item == null) continue;
-      if (!item.modes.contains(normalizedMode)) continue;
-      selectableAreas.add(name);
-    }
+    final assigned = userAreas.map((area) => area.trim()).toSet();
+    final visibleAreas = snapshot.items
+        .map((item) => item.name.trim())
+        .where((name) => name.isNotEmpty)
+        .toList(growable: false);
+    final modeSupported = snapshot.items
+        .where((item) => item.modes.contains(normalizedMode))
+        .map((item) => item.name.trim())
+        .toSet();
+    final headquarterAllowed = AccountAreaAccess.isHeadOfficeRole(role);
+    final selectableAreas = visibleAreas
+        .where((name) =>
+            assigned.contains(name) &&
+            modeSupported.contains(name) &&
+            (isHeadquarterByName[name] != true ||
+                (headquarterAllowed && name == division.trim())))
+        .toList(growable: false);
 
     return AreaMasterSelectableData(
       hasCache: true,
       selectableAreas: selectableAreas,
       isHeadquarterByName: isHeadquarterByName,
+      visibleAreas: visibleAreas,
+      modeSupportedAreas: modeSupported,
+      assignedAreas: assigned,
+      headquarterAllowed: headquarterAllowed,
     );
   }
 

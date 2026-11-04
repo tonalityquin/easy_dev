@@ -4,11 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../app/auth/google_auth_session.dart';
 import '../../../app/models/capability.dart';
 import '../../../app/terminal/application/parkinworkin_terminal_diagnostics.dart';
+import '../../../app/models/account_role_diagnostics.dart';
 import '../../../app/utils/secure_auth_diagnostics.dart';
 import '../../../shared/auth/account_code_number.dart';
 import '../../../shared/secondary/data/services/dev_user_write_service.dart';
 import '../../../shared/secondary/pages/sheets/tabs/dev_management_common.dart';
 import '../../account/domain/models/user/user_model.dart';
+import '../../account/domain/models/user/user_account_view_projection.dart';
+import '../../account/data/services/user_account_show_map.dart';
 import '../../dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../dev/application/developer_account_authorization.dart';
 
@@ -44,9 +47,9 @@ class DevBootstrapResult {
       (divisionCreated ? 1 : 0) +
       (areaCreated ? 1 : 0) +
       (metaCreated ? 1 : 0) +
-      (accountCreated ? 4 : 0) +
+      (accountCreated ? 3 : 0) +
       (reservationRepaired ? 1 : 0) +
-      (projectionRepaired ? 2 : 0);
+      (projectionRepaired ? 1 : 0);
 
   bool get unchanged => writeOperations == 0;
 }
@@ -82,8 +85,6 @@ class DevBootstrapService {
   static const String division = 'dev';
   static const String area = 'dev';
   static const String areaDocumentId = 'dev-dev';
-  static const int defaultActiveLimit = 100;
-  static const int defaultTotalLimit = 100;
 
   final FirebaseFirestore _firestore;
 
@@ -120,8 +121,6 @@ class DevBootstrapService {
         englishName: area,
         modes: DevAreaModePolicy.headquarterModes,
         capabilities: Capability.values.toSet(),
-        activeLimit: defaultActiveLimit,
-        totalLimit: defaultTotalLimit,
       );
       final fallbackCode = AccountCodeNumber.generate();
       final fallbackAccountId = AccountCodeNumber.documentId(
@@ -186,28 +185,9 @@ class DevBootstrapService {
                 areaData['isHeadquarter'] != true)) {
           throw const DevBootstrapException('기존 개발 지역 정보가 일치하지 않습니다.');
         }
-        if (metaSnap.exists) {
-          final activeLimit = metaData['activeLimit'];
-          final totalLimit = metaData['totalLimit'];
-          final activeCount = metaData['activeCount'];
-          final inactiveCount = metaData['inactiveCount'];
-          final totalCount = metaData['totalCount'];
-          if (metaData['division'] != division ||
-              metaData['area'] != area ||
-              activeLimit is! int ||
-              totalLimit is! int ||
-              activeLimit < 1 ||
-              totalLimit < 1 ||
-              activeCount is! int ||
-              inactiveCount is! int ||
-              totalCount is! int ||
-              activeCount < 0 ||
-              inactiveCount < 0 ||
-              totalCount != activeCount + inactiveCount) {
-            throw const DevBootstrapException(
-              '기존 개발 지역의 계정 제한 또는 집계를 확인해야 합니다.',
-            );
-          }
+        if (metaSnap.exists &&
+            (metaData['division'] != division || metaData['area'] != area)) {
+          throw const DevBootstrapException('기존 개발 지역 정보가 일치하지 않습니다.');
         }
 
         if (!divisionSnap.exists) {
@@ -239,8 +219,6 @@ class DevBootstrapService {
             settings.accountMetaPayload(
               division: division,
               area: area,
-              activeCount: 0,
-              inactiveCount: 0,
             ),
           );
         }
@@ -263,7 +241,7 @@ class DevBootstrapService {
       final codeNumber = accountId.substring(0, accountId.length - 4);
       final rootRef = _firestore.collection('user_accounts').doc(accountId);
       final codeRef = _firestore.collection('user_account_codes').doc(codeNumber);
-      final showUserRef = metaRef.collection('users').doc(accountId);
+      final showUserRef = metaRef;
       final rootSnap = await rootRef.get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
       var accountCreated = false;
       var reservationRepaired = false;
@@ -275,7 +253,6 @@ class DevBootstrapService {
           rootRef: rootRef,
           codeRef: codeRef,
           metaRef: metaRef,
-          showUserRef: showUserRef,
           codeNumber: codeNumber,
           email: email,
         );
@@ -286,7 +263,8 @@ class DevBootstrapService {
             await codeRef.get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
         final showUserSnap =
             await showUserRef.get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
-        if (codeSnap.exists || showUserSnap.exists) {
+        final showEntry = UserAccountShowMap.account(showUserSnap.data(), accountId);
+        if (codeSnap.exists || showEntry != null) {
           throw const DevBootstrapException(
             '이미 사용 중인 계정 코드 또는 조회 문서가 있습니다.',
           );
@@ -304,7 +282,7 @@ class DevBootstrapService {
           isWorking: false,
           name: 'dev',
           codeNumber: codeNumber,
-          role: 'dev',
+          role: 'headAdmin',
           selectedArea: area,
           isActive: true,
         );
@@ -336,8 +314,7 @@ class DevBootstrapService {
             rootRef: rootRef,
             codeRef: codeRef,
             metaRef: metaRef,
-            showUserRef: showUserRef,
-            codeNumber: codeNumber,
+              codeNumber: codeNumber,
             email: email,
           );
           reservationRepaired = repaired.reservationRepaired;
@@ -352,6 +329,9 @@ class DevBootstrapService {
         accountCreated: accountCreated,
         reservationRepaired: reservationRepaired,
         projectionRepaired: projectionRepaired,
+      );
+      AccountRoleDiagnostics.record(
+        'dev_bootstrap_map_complete writes=${result.writeOperations} accountCreated=$accountCreated projectionRepaired=$projectionRepaired',
       );
       _record('dev_bootstrap_completed', meta: <String, Object?>{
         'writeOperations': result.writeOperations,
@@ -378,7 +358,7 @@ class DevBootstrapService {
             codeNumber ||
         (data['email'] ?? '').toString().trim().toLowerCase() !=
             email.trim().toLowerCase() ||
-        data['role'] != 'dev' ||
+        data['role'] != 'headAdmin' ||
         data['isActive'] != true ||
         accountAreas is! List ||
         !accountAreas.contains(area) ||
@@ -394,7 +374,6 @@ class DevBootstrapService {
     required DocumentReference<Map<String, dynamic>> rootRef,
     required DocumentReference<Map<String, dynamic>> codeRef,
     required DocumentReference<Map<String, dynamic>> metaRef,
-    required DocumentReference<Map<String, dynamic>> showUserRef,
     required String codeNumber,
     required String email,
   }) async {
@@ -402,7 +381,6 @@ class DevBootstrapService {
       final rootSnap = await tx.get(rootRef).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
       final codeSnap = await tx.get(codeRef).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
       final metaSnap = await tx.get(metaRef).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
-      final showUserSnap = await tx.get(showUserRef).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
       if (!rootSnap.exists || !metaSnap.exists) {
         throw const DevBootstrapException('개발 계정 원본 또는 메타가 없습니다.');
       }
@@ -414,12 +392,12 @@ class DevBootstrapService {
               codeSnap.data()?['codeNumber'] != codeNumber)) {
         throw const DevBootstrapException('기존 코드번호 예약 정보가 충돌합니다.');
       }
-      final projection = showUserSnap.data() ?? <String, dynamic>{};
-      if (showUserSnap.exists &&
+      final projection = UserAccountShowMap.account(metaSnap.data(), rootRef.id) ?? <String, dynamic>{};
+      if (projection.isNotEmpty &&
           (projection['codeNumber'] != codeNumber ||
               projection['name'] != 'dev' ||
               projection['isActive'] != true ||
-              projection['role'] != 'dev' ||
+              projection['role'] != 'headAdmin' ||
               (projection['email'] ?? '').toString().trim().toLowerCase() !=
                   email.trim().toLowerCase() ||
               projection['areas'] is! List ||
@@ -427,25 +405,6 @@ class DevBootstrapService {
               projection['divisions'] is! List ||
               !(projection['divisions'] as List).contains(division))) {
         throw const DevBootstrapException('기존 계정 조회 문서가 일치하지 않습니다.');
-      }
-      final meta = metaSnap.data()!;
-      if (showUserSnap.exists &&
-          (meta['totalCount'] is! int ||
-              meta['activeCount'] is! int ||
-              (meta['totalCount'] as int) < 1 ||
-              (meta['activeCount'] as int) < 1)) {
-        throw const DevBootstrapException(
-          '기존 조회 문서와 계정 집계가 달라 자동 변경하지 않습니다.',
-        );
-      }
-      if (!showUserSnap.exists) {
-        if (meta['totalCount'] != 0 ||
-            meta['activeCount'] != 0 ||
-            meta['inactiveCount'] != 0) {
-          throw const DevBootstrapException(
-            '기존 계정 수와 조회 문서가 달라 자동 복구하지 않습니다.',
-          );
-        }
       }
       if (!codeSnap.exists) {
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/launcher/application/dev_bootstrap_service.dart', result: 'staged');
@@ -457,28 +416,19 @@ class DevBootstrapService {
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
-      if (!showUserSnap.exists) {
-        final projection = Map<String, dynamic>.from(rootData)
-          ..remove('password')
-          ..remove('startTime')
-          ..remove('endTime')
-          ..remove('disabledAt');
-        projection['createdAt'] =
-            rootData['createdAt'] ?? FieldValue.serverTimestamp();
+      if (projection.isEmpty) {
+        final projection = UserAccountViewProjection.fromMap(rootData);
         projection['updatedAt'] = FieldValue.serverTimestamp();
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/launcher/application/dev_bootstrap_service.dart', result: 'staged');
-        tx.set(showUserRef, projection);
-        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'features/launcher/application/dev_bootstrap_service.dart', result: 'staged');
-        tx.update(metaRef, <String, dynamic>{
-          'activeCount': 1,
-          'inactiveCount': 0,
-          'totalCount': 1,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+        tx.set(
+          metaRef,
+          UserAccountShowMap.putPayload(rootRef.id, projection),
+          UserAccountShowMap.putOptions(rootRef.id),
+        );
       }
       return _DevAccountRepair(
         reservationRepaired: !codeSnap.exists,
-        projectionRepaired: !showUserSnap.exists,
+        projectionRepaired: projection.isEmpty,
       );
     }).trackFirestore('TRANSACTION', 'features/launcher/application/dev_bootstrap_service.dart');
   }

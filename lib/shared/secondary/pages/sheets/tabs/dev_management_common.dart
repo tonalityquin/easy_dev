@@ -81,15 +81,11 @@ class DevAreaSettingsDraft {
     required this.englishName,
     required this.modes,
     required this.capabilities,
-    required this.activeLimit,
-    required this.totalLimit,
   });
 
   final String englishName;
   final Set<String> modes;
   final Set<Capability> capabilities;
-  final int? activeLimit;
-  final int? totalLimit;
 
   List<String> get modeKeys {
     final values = DevAreaModePolicy.normalizeModes(modes).toList()..sort();
@@ -153,17 +149,15 @@ class DevAreaSettingsDraft {
   Map<String, dynamic> accountMetaPayload({
     required String division,
     required String area,
-    required int activeCount,
-    required int inactiveCount,
   }) {
     return <String, dynamic>{
       'division': division.trim(),
       'area': area.trim(),
-      'activeCount': activeCount,
-      'inactiveCount': inactiveCount,
-      'totalCount': activeCount + inactiveCount,
-      if (activeLimit != null) 'activeLimit': activeLimit,
-      if (totalLimit != null) 'totalLimit': totalLimit,
+      'activeCount': 0,
+      'inactiveCount': 0,
+      'totalCount': 0,
+      'users': <String, dynamic>{},
+      'usersMapComplete': true,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }
@@ -249,42 +243,14 @@ class DevManagementValidation {
     return value.trim().replaceAll('/', '-').replaceAll(RegExp(r'\s+'), ' ');
   }
 
-  static int? parseOptionalLimit(String value) {
-    final normalized = value.trim();
-    if (normalized.isEmpty) return null;
-    final parsed = int.tryParse(normalized);
-    if (parsed == null || parsed < 0 || parsed > (1 << 30)) return -1;
-    return parsed;
-  }
-
-  static String? validateLimits({
-    required String activeText,
-    required String totalText,
-  }) {
-    final active = parseOptionalLimit(activeText);
-    final total = parseOptionalLimit(totalText);
-    if (active == -1) return '활성 계정 제한값을 확인하세요.';
-    if (total == -1) return '전체 계정 제한값을 확인하세요.';
-    final eitherConfigured = active != null || total != null;
-    if (eitherConfigured && (active == null || total == null)) {
-      return '계정 제한은 활성과 전체 값을 함께 입력하세요.';
-    }
-    if (active != null && total != null && active > total) {
-      return '활성 계정 제한은 전체 계정 제한보다 클 수 없습니다.';
-    }
-    return null;
-  }
-
   static String? validateAreaSettings({
     required String englishName,
     required Set<String> modes,
-    required String activeLimit,
-    required String totalLimit,
   }) {
     if (englishName.trim().isEmpty) return '영문 이름을 입력하세요.';
     if (modes.isEmpty) return '운영 모드를 1개 이상 선택하세요.';
     if (!DevAreaModePolicy.areCanonical(modes)) return '운영 모드를 다시 선택하세요.';
-    return validateLimits(activeText: activeLimit, totalText: totalLimit);
+    return null;
   }
 }
 
@@ -292,8 +258,6 @@ class DevAreaSettingsFields extends StatelessWidget {
   const DevAreaSettingsFields({
     super.key,
     required this.englishNameController,
-    required this.activeLimitController,
-    required this.totalLimitController,
     required this.selectedModes,
     required this.selectedCapabilities,
     required this.onModesChanged,
@@ -303,8 +267,6 @@ class DevAreaSettingsFields extends StatelessWidget {
   });
 
   final TextEditingController englishNameController;
-  final TextEditingController activeLimitController;
-  final TextEditingController totalLimitController;
   final Set<String> selectedModes;
   final Set<Capability> selectedCapabilities;
   final ValueChanged<Set<String>> onModesChanged;
@@ -450,68 +412,6 @@ class DevAreaSettingsFields extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        CommonAnimatedReveal(
-          delay: reduceMotion ? Duration.zero : const Duration(milliseconds: 60),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _sectionLabel(context, '계정 정책', Icons.manage_accounts_rounded),
-              const SizedBox(height: 8),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final narrow = constraints.maxWidth < 430;
-                  final activeField = TextField(
-                    controller: activeLimitController,
-                    enabled: enabled,
-                    keyboardType: TextInputType.number,
-                    textInputAction: narrow ? TextInputAction.next : TextInputAction.done,
-                    decoration: opsInputDecoration(
-                      context,
-                      label: '활성 계정 제한',
-                      prefixIcon: const Icon(Icons.person_rounded),
-                    ),
-                  );
-                  final totalField = TextField(
-                    controller: totalLimitController,
-                    enabled: enabled,
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.done,
-                    decoration: opsInputDecoration(
-                      context,
-                      label: '전체 계정 제한',
-                      prefixIcon: const Icon(Icons.groups_rounded),
-                    ),
-                  );
-                  if (narrow) {
-                    return Column(
-                      children: [
-                        activeField,
-                        const SizedBox(height: 10),
-                        totalField,
-                      ],
-                    );
-                  }
-                  return Row(
-                    children: [
-                      Expanded(child: activeField),
-                      const SizedBox(width: 10),
-                      Expanded(child: totalField),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '두 값을 비우면 리밋 미설정 상태로 저장됩니다.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: tokens.textSecondary,
-                      height: 1.35,
-                    ),
               ),
             ],
           ),

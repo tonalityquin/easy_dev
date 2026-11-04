@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../design_system/common_ui/common_ui_components.dart';
+import '../models/account_role_diagnostics.dart';
 import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/selector/application/dev_auth.dart';
 
@@ -20,9 +21,11 @@ class StatusDialog {
 
   static List<String> get debugLines => List<String>.unmodifiable(_debugLines);
 
-  static String get debugPrintCode => _debugLines
-      .map((line) => 'debugPrint(${jsonEncode(line)});')
-      .join('\n');
+  static String get debugPrintCode => <String>[
+        ..._debugLines.map((line) => 'debugPrint(${jsonEncode(line)});'),
+        if (AccountRoleDiagnostics.debugPrintCode.isNotEmpty)
+          AccountRoleDiagnostics.debugPrintCode,
+      ].join('\n');
 
   static void _record(
     String event, {
@@ -142,7 +145,8 @@ class StatusDialog {
           description: trimmedDescription,
           copyText: effectiveCopyText,
           copyTextProvider: copyTextProvider,
-          requireDeveloperModeForCopy: requireDeveloperModeForCopy,
+          requireDeveloperModeForCopy: requireDeveloperModeForCopy ||
+              effectiveCopyText.contains('debugPrint('),
           copyButtonLabel: trimmedCopyText.isEmpty && currentDebugCode.isNotEmpty
               ? 'debugPrint 코드 복사'
               : copyButtonLabel,
@@ -352,9 +356,8 @@ class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
   Future<void> _copyDebug() async {
     if (widget.debugCopyText.isEmpty) return;
     try {
-      if (widget.requireDeveloperModeForCopy &&
-          (!DevAuth.devModeEnabled.value ||
-              !await DevAuth.isDevModeEnabled())) return;
+      if (!DevAuth.devModeEnabled.value ||
+          !await DevAuth.isDevModeEnabled()) return;
       await Clipboard.setData(ClipboardData(text: widget.debugCopyText));
       if (!mounted) return;
       setState(() => _debugCopied = true);

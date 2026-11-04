@@ -128,7 +128,7 @@ class _MonthlyProductivityBody extends StatelessWidget {
     final roleType = RoleType.fromName(roleName);
     final roleAllowed =
         (kRolePolicy[roleType] ?? const <Section>{}).contains(Section.monthly);
-    final canUseMonthly = hasCapability && roleAllowed && roleName != 'fieldCommon';
+    final canUseMonthly = hasCapability && roleAllowed;
 
     return AnimatedSwitcher(
       duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false

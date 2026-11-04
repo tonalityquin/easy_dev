@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/di/routes.dart';
 import '../../../../app/models/capability.dart';
+import '../../../../app/models/account_role.dart';
+import '../../../../shared/secondary/application/secondary_info.dart';
 import '../../../../app/init/logout_helper.dart';
 import '../../../../app/theme/theme_settings_dialog.dart';
 import '../../../../app/utils/operational_data_sync_workflow.dart';
@@ -68,11 +70,8 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
   bool _detailBusy = false;
   _OpsDashboardView _view = _OpsDashboardView.dashboard;
 
-  bool _isFieldCommon(UserState userState) {
-    final dynamic rawRole = userState.session?.role;
-    final role =
-        rawRole is String ? rawRole.trim() : (rawRole?.toString().trim() ?? '');
-    return role == 'fieldCommon';
+  bool _hasNoManagementMenu(UserState userState) {
+    return !(RoleType.fromName(userState.role)?.hasManagementMenu ?? false);
   }
 
   String _normalizeSearch(String value) {
@@ -95,7 +94,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
     final userState = context.read<UserState>();
     final actions = _actions(
       context,
-      _isFieldCommon(userState),
+      _hasNoManagementMenu(userState),
       developerMode: _developerMode,
     );
     final filtered = _filterActions(actions, _searchController.text);
@@ -434,7 +433,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
 
   List<_DashboardAction> _actions(
     BuildContext context,
-    bool isFieldCommon, {
+    bool hasNoManagementMenu, {
     required bool developerMode,
   }) {
     final tokens = CommonUiTheme.of(context);
@@ -463,7 +462,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       ),
     ];
 
-    if (!isFieldCommon) {
+    if (!hasNoManagementMenu) {
       actions.addAll([
         _DashboardAction(
           id: 'work_start_report',
@@ -612,7 +611,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       ]);
     }
 
-    if (!isFieldCommon) {
+    if (!hasNoManagementMenu) {
       actions.add(
         _DashboardAction(
           id: 'secondary',
@@ -704,11 +703,11 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       360.0,
       (width * 0.92).clamp(240.0, double.infinity),
     );
-    final isFieldCommon = _isFieldCommon(userState);
+    final hasNoManagementMenu = _hasNoManagementMenu(userState);
     final developerMode = await _refreshDeveloperMode();
     final actions = _actions(
       context,
-      isFieldCommon,
+      hasNoManagementMenu,
       developerMode: developerMode,
     );
     final filteredActions = _filterActions(actions, _searchController.text);
@@ -757,8 +756,10 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         .join(',');
     final hasMonthlyCapability =
         areaState.capabilitiesOfCurrentArea.contains(Capability.monthly);
-    final monthlyVisible = hasMonthlyCapability && !isFieldCommon;
-    trace.log('fieldCommon=$isFieldCommon', progress: 0.75);
+    final role = RoleType.fromName(userState.role);
+    final monthlyVisible = hasMonthlyCapability &&
+        (kRolePolicy[role] ?? const <Section>{}).contains(Section.monthly);
+    trace.log('hasNoManagementMenu=$hasNoManagementMenu', progress: 0.75);
     trace.log('monthlyCapability=$hasMonthlyCapability', progress: 0.76);
     trace.log('monthlyVisible=$monthlyVisible', progress: 0.765);
     trace.log('businessUi=common_side_dock_action_tile', progress: 0.768);
@@ -890,14 +891,14 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
   void _logBusinessVisibility({
     required bool canUseMonthly,
     required bool hasMonthlyCapability,
-    required bool isFieldCommon,
+    required bool hasNoManagementMenu,
   }) {
     final signature =
-        '$canUseMonthly:$hasMonthlyCapability:$isFieldCommon:${widget.modeLabel}';
+        '$canUseMonthly:$hasMonthlyCapability:$hasNoManagementMenu:${widget.modeLabel}';
     if (_lastBusinessDebugSignature == signature) return;
     _lastBusinessDebugSignature = signature;
     debugPrint(
-      '[OpsDashboardSideDock] business_section mode=${widget.modeLabel} monthlyVisible=$canUseMonthly monthlyCapability=$hasMonthlyCapability fieldCommon=$isFieldCommon workRuleVisible=true workManualVisible=true departureVisible=true',
+      '[OpsDashboardSideDock] business_section mode=${widget.modeLabel} monthlyVisible=$canUseMonthly monthlyCapability=$hasMonthlyCapability hasNoManagementMenu=$hasNoManagementMenu workRuleVisible=true workManualVisible=true departureVisible=true',
     );
   }
 
@@ -911,12 +912,14 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final hasMonthlyCapability =
         areaState.capabilitiesOfCurrentArea.contains(Capability.monthly);
-    final isFieldCommon = userState.role.trim() == 'fieldCommon';
-    final canUseMonthly = hasMonthlyCapability && !isFieldCommon;
+    final role = RoleType.fromName(userState.role);
+    final hasNoManagementMenu = !(role?.hasManagementMenu ?? false);
+    final canUseMonthly = hasMonthlyCapability &&
+        (kRolePolicy[role] ?? const <Section>{}).contains(Section.monthly);
     _logBusinessVisibility(
       canUseMonthly: canUseMonthly,
       hasMonthlyCapability: hasMonthlyCapability,
-      isFieldCommon: isFieldCommon,
+      hasNoManagementMenu: hasNoManagementMenu,
     );
 
     final actions = <_DashboardAction>[
@@ -1081,7 +1084,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
                         final filtered = _filterActions(
                           _actions(
                             context,
-                            _isFieldCommon(userState),
+                            _hasNoManagementMenu(userState),
                             developerMode: _developerMode,
                           ),
                           _searchController.text,
@@ -1267,10 +1270,10 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
       builder: (context, userState, areaState, _) {
         final reduceMotion =
             MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-        final isFieldCommon = _isFieldCommon(userState);
+        final hasNoManagementMenu = _hasNoManagementMenu(userState);
         final actions = _actions(
           context,
-          isFieldCommon,
+          hasNoManagementMenu,
           developerMode: _developerMode,
         );
         final dashboardChildren = <Widget>[

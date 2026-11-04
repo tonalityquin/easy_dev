@@ -18,6 +18,7 @@ import '../../init/startup_tasks.dart';
 import '../../init/work_status_notification.dart';
 import '../../theme/theme_debug_trace.dart';
 import '../../utils/status_dialog.dart';
+import '../../models/account_role_diagnostics.dart';
 import '../../utils/secure_auth_diagnostics.dart';
 
 class ParkinWorkinTerminalDiagnostics {
@@ -68,11 +69,17 @@ class ParkinWorkinTerminalDiagnostics {
       ..._lines,
     ];
     if (merged.isEmpty) {
-      return 'debugPrint(${jsonEncode('[PARKINWORKIN_TERMINAL] 기록된 로그가 없습니다.')});';
+      final roleCode = AccountRoleDiagnostics.debugPrintCode;
+      return roleCode.isNotEmpty
+          ? roleCode
+          : 'debugPrint(${jsonEncode('[PARKINWORKIN_TERMINAL] 기록된 로그가 없습니다.')});';
     }
-    return merged
+    final ordinary = merged
         .map((line) =>
             'debugPrint(${jsonEncode(SecureAuthDiagnostics.redact(line))});')
+        .join('\n');
+    return <String>[ordinary, AccountRoleDiagnostics.debugPrintCode]
+        .where((part) => part.isNotEmpty)
         .join('\n');
   }
 
@@ -98,9 +105,11 @@ class ParkinWorkinTerminalDiagnostics {
             'debugPrint(${jsonEncode(SecureAuthDiagnostics.redact(line))});')
         .join('\n');
     final activity = await FirebaseActivityMeter.instance.exportJournalCode();
-    return <String>[ordinary, activity]
-        .where((part) => part.isNotEmpty)
-        .join('\n');
+    return <String>[
+      ordinary,
+      AccountRoleDiagnostics.debugPrintCode,
+      activity,
+    ].where((part) => part.isNotEmpty).join('\n');
   }
 
   static Future<void> showStatus(

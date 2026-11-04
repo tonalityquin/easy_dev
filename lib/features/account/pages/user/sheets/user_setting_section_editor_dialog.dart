@@ -582,7 +582,11 @@ class _UserSettingSectionEditorDialogState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DropdownButtonFormField<RoleType>(
+        AnimatedSize(
+          duration: _reduceMotion ? Duration.zero : const Duration(milliseconds: 220),
+          curve: Curves.easeInOutCubic,
+          alignment: Alignment.topCenter,
+          child: DropdownButtonFormField<RoleType>(
           value: _role,
           isExpanded: true,
           decoration: opsInputDecoration(
@@ -603,6 +607,7 @@ class _UserSettingSectionEditorDialogState
             setState(() => _role = value);
             widget.trace.log('권한 선택 변경: role=${value.name}');
           },
+          ),
         ),
         const SizedBox(height: 12),
         Wrap(

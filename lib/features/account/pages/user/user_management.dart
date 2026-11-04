@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/utils/developer_operation_status_dialog.dart';
+import '../../../../app/models/account_role_diagnostics.dart';
 import '../../../../app/utils/status_dialog.dart';
+import '../../../../app/models/account_role.dart';
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../shared/auth/account_code_number.dart';
@@ -83,6 +85,18 @@ class _UserManagementState extends State<UserManagement> {
 
   Future<void> _initialRefresh() async {
     final userState = context.read<UserState>();
+    final areaState = context.read<AreaState>();
+    final skipServerRefresh = _workspaceState?.consumeCreatedAccountRefresh(
+          division: areaState.currentDivision,
+          area: areaState.currentArea,
+        ) ??
+        false;
+    if (skipServerRefresh) {
+      _clearSelection(userState, reason: 'create_local_refresh');
+      _log('initial_refresh_skipped reason=created_account_local count=${userState.users.length}');
+      AccountRoleDiagnostics.record('user_create_list_refresh_skipped reason=local_cache');
+      return;
+    }
     _log('initial_refresh_started');
     try {
       await userState.refreshUsersBySelectedAreaAndCache();
@@ -265,11 +279,6 @@ class _UserManagementState extends State<UserManagement> {
     });
   }
 
-  String? _limitNumberFromMessage(String message) {
-    final match = RegExp(r'최대\s*(\d+)').firstMatch(message);
-    return match?.group(1);
-  }
-
   Future<void> _showAccountFailureDialog(
     BuildContext context, {
     required String title,
@@ -277,24 +286,10 @@ class _UserManagementState extends State<UserManagement> {
     required String fallbackDescription,
   }) async {
     if (!context.mounted) return;
-
-    final limit = _limitNumberFromMessage(message);
-    String description = fallbackDescription;
-
-    if (message.contains('활성화 제한')) {
-      description = limit == null
-          ? '선택한 지역의 활성 계정 한도에 도달했습니다. 기존 활성 계정을 비활성화하거나 리밋 설정에서 활성 한도를 늘린 뒤 다시 시도하세요.'
-          : '선택한 지역의 활성 계정 한도에 도달했습니다. 활성 계정은 최대 ${limit}개까지만 사용할 수 있습니다. 기존 활성 계정을 비활성화하거나 리밋 설정에서 활성 한도를 늘린 뒤 다시 시도하세요.';
-    } else if (message.contains('전체 계정 제한')) {
-      description = limit == null
-          ? '선택한 지역의 전체 계정 생성 한도에 도달했습니다. 기존 계정을 삭제하거나 리밋 설정에서 전체 한도를 늘린 뒤 다시 시도하세요.'
-          : '선택한 지역의 전체 계정 생성 한도에 도달했습니다. 활성 계정과 비활성 계정을 합쳐 최대 ${limit}개까지만 생성할 수 있습니다. 기존 계정을 삭제하거나 리밋 설정에서 전체 한도를 늘린 뒤 다시 시도하세요.';
-    }
-
     await StatusDialog.showFailure(
       context,
       title: title,
-      description: description,
+      description: fallbackDescription,
       useCommonUi: true,
     );
   }
@@ -439,7 +434,7 @@ class _UserManagementState extends State<UserManagement> {
             title: toActive ? '계정 활성화 불가' : '계정 비활성화 불가',
             message: statusError!,
             fallbackDescription: toActive
-                ? '계정을 활성화하는 중 문제가 발생했습니다. 선택한 지역의 계정 제한과 네트워크 상태를 확인한 뒤 다시 시도하세요.'
+                ? '계정을 활성화하는 중 문제가 발생했습니다. 네트워크 상태와 계정 정보를 확인한 뒤 다시 시도하세요.'
                 : '계정을 비활성화하는 중 문제가 발생했습니다. 네트워크 상태를 확인한 뒤 다시 시도하세요.',
           );
         }
@@ -463,7 +458,7 @@ class _UserManagementState extends State<UserManagement> {
           title: toActive ? '계정 활성화 불가' : '계정 비활성화 불가',
           message: '${toActive ? '계정 활성화' : '계정 비활성화'} 실패: $error',
           fallbackDescription: toActive
-              ? '계정을 활성화하는 중 문제가 발생했습니다. 선택한 지역의 계정 제한과 네트워크 상태를 확인한 뒤 다시 시도하세요.'
+              ? '계정을 활성화하는 중 문제가 발생했습니다. 네트워크 상태와 계정 정보를 확인한 뒤 다시 시도하세요.'
               : '계정을 비활성화하는 중 문제가 발생했습니다. 네트워크 상태를 확인한 뒤 다시 시도하세요.',
         );
       }
@@ -562,7 +557,7 @@ class _UserManagementState extends State<UserManagement> {
       user.name,
       user.codeNumber,
       user.email,
-      user.role,
+      RoleType.fromName(user.role)?.label ?? '유효하지 않은 권한',
       user.position ?? '',
       user.modes.join(' '),
       user.areas.join(' '),
@@ -721,9 +716,6 @@ class _UserManagementState extends State<UserManagement> {
 
   Widget _buildStatusSegments({
     required BuildContext context,
-    required int totalCount,
-    required int activeCount,
-    required int inactiveCount,
   }) {
     final tokens = CommonUiTheme.of(context);
     return OpsDockStatusSegments<_UserStatusFilter>(
@@ -732,19 +724,16 @@ class _UserManagementState extends State<UserManagement> {
         OpsDockStatusSegmentItem<_UserStatusFilter>(
           value: _UserStatusFilter.all,
           label: '전체',
-          count: totalCount,
           color: tokens.accent,
         ),
         OpsDockStatusSegmentItem<_UserStatusFilter>(
           value: _UserStatusFilter.active,
           label: '활성',
-          count: activeCount,
           color: tokens.success,
         ),
         OpsDockStatusSegmentItem<_UserStatusFilter>(
           value: _UserStatusFilter.inactive,
           label: '비활성',
-          count: inactiveCount,
           color: tokens.iconSecondary,
         ),
       ],
@@ -955,8 +944,10 @@ class _UserManagementState extends State<UserManagement> {
     final currentArea = areaState.currentArea.trim();
     final currentDivision = areaState.currentDivision.trim();
 
+    final companyWide =
+        RoleType.fromName(userState.role)?.isHeadOffice ?? false;
     bool inCurrentScope(UserModel user) {
-      final areaOk = currentArea.isEmpty || user.areas.contains(currentArea);
+      final areaOk = companyWide || currentArea.isEmpty || user.areas.contains(currentArea);
       final divisionOk =
           currentDivision.isEmpty || user.divisions.contains(currentDivision);
       return areaOk && divisionOk;
@@ -965,8 +956,6 @@ class _UserManagementState extends State<UserManagement> {
     final scopedUsers = userState.users.where(inCurrentScope).toList();
     final visibleUsers =
         scopedUsers.where(_matchesStatus).where(_matchesSearch).toList();
-    final activeCount = scopedUsers.where((user) => user.isActive).length;
-    final inactiveCount = scopedUsers.length - activeCount;
     final selectedUser = visibleUsers.firstWhereOrNull(
       (user) => user.id == userState.selectedUserId,
     );
@@ -1019,20 +1008,35 @@ class _UserManagementState extends State<UserManagement> {
                 padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
                 child: _buildStatusSegments(
                   context: context,
-                  totalCount: scopedUsers.length,
-                  activeCount: activeCount,
-                  inactiveCount: inactiveCount,
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
                 child: Row(
                   children: [
-                    Text(
-                      '${visibleUsers.length}명 표시',
-                      style: textTheme.labelSmall?.copyWith(
-                        color: tokens.textSecondary,
-                        fontWeight: FontWeight.w700,
+                    AnimatedSwitcher(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 220),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 0.12),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      child: Text(
+                        '계정 목록',
+                        key: ValueKey<String>('account_list_${_statusFilter.name}'),
+                        style: textTheme.labelSmall?.copyWith(
+                          color: tokens.textSecondary,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     const Spacer(),

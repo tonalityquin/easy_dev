@@ -57,7 +57,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     for (final section in UserSettingsSection.values) section: GlobalKey(),
   };
 
-  RoleType _selectedRole = RoleType.fieldCommon;
+  RoleType _selectedRole = RoleType.branchStaff;
   UserCodeEntryMode _codeEntryMode = UserCodeEntryMode.generated;
   final Set<String> _selectedModes = <String>{};
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
@@ -166,7 +166,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       _codeNumberController.text = AccountCodeNumber.format(AccountCodeNumber.generate());
       _emailController.clear();
       _positionController.clear();
-      _selectedRole = RoleType.fieldCommon;
+      _selectedRole = RoleType.branchStaff;
       _selectedModes
         ..clear()
         ..add('single');
@@ -189,10 +189,13 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     );
     _emailController.text = user.email.split('@').first;
     _positionController.text = user.position ?? '';
-    _selectedRole = RoleType.values.firstWhere(
-      (role) => role.name == user.role,
-      orElse: () => RoleType.fieldCommon,
-    );
+    final parsedRole = RoleType.fromName(user.role);
+    if (parsedRole == null) {
+      _saveError = '유효하지 않은 계정 권한입니다. DB의 role 값을 확인하세요.';
+      _selectedRole = RoleType.branchStaff;
+    } else {
+      _selectedRole = parsedRole;
+    }
     _selectedModes
       ..clear()
       ..addAll(_normalizeAndFilterModes(user.modes));
@@ -599,12 +602,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   }
 
   String _friendlySaveError(String message) {
-    final limit = RegExp(r'최대\s*(\d+)').firstMatch(message)?.group(1);
-    if (message.contains('활성화 제한')) {
-      return limit == null
-          ? '선택한 지역의 활성 계정 한도에 도달했습니다.'
-          : '선택한 지역의 활성 계정은 최대 $limit개까지 사용할 수 있습니다.';
-    }
     if (message.contains('MANUAL_CODE_NOT_AUTHORIZED')) {
       return '개발자 모드와 개발자 계정 인증을 다시 확인하세요.';
     }
@@ -614,11 +611,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     if (message.contains('CODE_NUMBER_ALREADY_EXISTS') ||
         message.contains('USER_ALREADY_EXISTS')) {
       return '이미 사용 중인 코드번호입니다.';
-    }
-    if (message.contains('전체 계정 제한')) {
-      return limit == null
-          ? '선택한 지역의 전체 계정 한도에 도달했습니다.'
-          : '선택한 지역의 계정은 최대 $limit개까지 등록할 수 있습니다.';
     }
     return message.trim().isEmpty
         ? '계정 정보를 저장하지 못했습니다. 입력 내용을 유지했습니다.'
@@ -632,6 +624,10 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       _validationSubmitted = true;
       _saveError = null;
     });
+    if (isEditMode && RoleType.fromName(widget.initialUser?.role) == null) {
+      setState(() => _saveError = '기존 계정의 role 값이 신규 7종에 없습니다. DB에서 role을 먼저 변경하세요.');
+      return;
+    }
     _syncSectionStates(source: 'submit_validation');
     final invalidSection = _firstInvalidSection();
     if (invalidSection != null) {
@@ -701,38 +697,32 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         progress: 0.28,
       );
 
-      final requiresCodeAllocation = !isEditMode ||
-          !AccountCodeNumber.isValid(initialUser?.codeNumber ?? '');
-      if (requiresCodeAllocation) {
-        var normalizedCode = AccountCodeNumber.normalize(
+      if (isEditMode &&
+          !AccountCodeNumber.isValid(initialUser?.codeNumber ?? '')) {
+        final normalizedCode = AccountCodeNumber.normalize(
           _codeNumberController.text,
         );
-        var existing = await repository.getUserByAccountCode(normalizedCode);
-        if (_codeEntryMode == UserCodeEntryMode.developerManual) {
-          if (existing != null) {
-            throw StateError('CODE_NUMBER_ALREADY_EXISTS');
-          }
-          trace.log(
-            '개발자 직접 입력 코드번호 중복 검사 완료: code=${AccountCodeNumber.mask(normalizedCode)}',
-            progress: 0.34,
-          );
-        } else {
-          var attempts = 0;
-          while (existing != null && attempts < 8) {
-            attempts += 1;
-            normalizedCode = AccountCodeNumber.generate();
-            _codeNumberController.text = AccountCodeNumber.format(normalizedCode);
-            trace.log(
-              '코드번호 중복 감지 후 재발급: attempt=$attempts code=${AccountCodeNumber.mask(normalizedCode)}',
-              progress: 0.34,
-            );
-            existing = await repository.getUserByAccountCode(normalizedCode);
-          }
-          if (existing != null) {
-            throw StateError('CODE_NUMBER_GENERATION_FAILED');
-          }
+        final existing = await repository.getUserByAccountCode(normalizedCode);
+        if (existing != null && existing.id != initialUser?.id) {
+          throw StateError('CODE_NUMBER_ALREADY_EXISTS');
         }
       }
+      trace.log(
+        isEditMode
+            ? '계정 수정은 기존 코드번호·레거시 조회 정책을 유지합니다.'
+            : '신규 계정은 예약 문서 단일 서버 조회, 중복 시 자동 코드만 재발급합니다.',
+        progress: 0.34,
+      );
+
+      final freshUser = initialUser == null
+          ? null
+          : await repository.getUserByIdFromServer(initialUser.id);
+      if (initialUser != null && freshUser == null) {
+        throw StateError('ACCOUNT_OR_ASSIGNMENTS_NOT_FOUND');
+      }
+      trace.log(
+        'account_area_assignments_preserved edit=${initialUser != null} assignedCount=${freshUser?.areas.length ?? 1}',
+      );
 
       final normalizedBreakDays = _normalizedBreakDays();
       final workingDays = _workingDaySet().toList(growable: false);
@@ -742,7 +732,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       );
 
       final user = UserModel(
-        id: AccountCodeNumber.documentId(
+        id: freshUser?.id ?? AccountCodeNumber.documentId(
           codeNumber: _codeNumberController.text,
           area: area,
         ),
@@ -752,24 +742,21 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         role: _selectedRole.name,
         modes: normalizedModes,
         position: _positionController.text.trim(),
-        areas: <String>[area],
-        divisions: <String>[division],
-        currentArea: area,
-        selectedArea: selectedArea,
-        englishSelectedAreaName: englishName ?? area,
-        isSelected: initialUser?.isSelected ?? false,
-        isWorking: false,
-        isSaved: false,
+        areas: freshUser?.areas ?? <String>[area],
+        divisions: freshUser?.divisions ?? <String>[division],
+        currentArea: freshUser?.currentArea ?? area,
+        selectedArea: freshUser?.selectedArea ?? selectedArea,
+        englishSelectedAreaName:
+            freshUser?.englishSelectedAreaName ?? englishName ?? area,
+        isSelected: freshUser?.isSelected ?? false,
+        isWorking: freshUser?.isWorking ?? false,
+        isSaved: freshUser?.isSaved ?? false,
         breakDays: normalizedBreakDays,
         startTimeByWeekday: Map<String, TimeOfDay?>.of(_startByDay),
         endTimeByWeekday: Map<String, TimeOfDay?>.of(_endByDay),
         isActive: initialUser?.isActive ?? true,
       );
 
-      trace.log(
-        '전역 코드 인덱스 정책 적용: user_account_codes reservation과 일반 User 저장을 동일 transaction으로 요청합니다.',
-        progress: 0.54,
-      );
       trace.log('계정 모델 구성 완료: Firestore 저장을 요청합니다.', progress: 0.58);
       String? saveError;
       bool saved = true;
@@ -782,13 +769,54 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
           },
         );
       } else {
-        await userState.addUserCard(
-          user,
-          onError: (message) {
-            saveError = message;
-          },
+        trace.log(
+          '코드번호 중복 여부를 확인하고, 중복이 없으면 계정 원본·예약 인덱스·지역 Map View 3건을 동일 Batch로 저장합니다.',
+          progress: 0.60,
         );
-        saved = saveError == null;
+        var candidate = user;
+        var retryCount = 0;
+        saved = false;
+        while (true) {
+          String? attemptError;
+          await userState.addUserCard(
+            candidate,
+            onError: (message) {
+              attemptError = message;
+            },
+          );
+          final failure = attemptError;
+          if (failure == null) {
+            saved = true;
+            break;
+          }
+          if (_codeEntryMode == UserCodeEntryMode.generated &&
+              failure.contains('CODE_NUMBER_ALREADY_EXISTS') &&
+              retryCount < 8) {
+            retryCount += 1;
+            final nextCode = AccountCodeNumber.generate();
+            candidate = candidate.copyWith(
+              id: AccountCodeNumber.documentId(
+                codeNumber: nextCode,
+                area: area,
+              ),
+              codeNumber: nextCode,
+            );
+            _codeNumberController.text = AccountCodeNumber.format(nextCode);
+            trace.log(
+              '코드번호 충돌 후 재발급: attempt=$retryCount code=${AccountCodeNumber.mask(nextCode)}',
+              progress: 0.64,
+            );
+            continue;
+          }
+          saveError = failure;
+          break;
+        }
+        trace.log(
+          saved
+              ? '신규 계정 Batch 저장 성공: 예약 코드 검사 1회/시도, 원자적 문서 쓰기 3건'
+              : '신규 계정 Batch 저장 실패 또는 검증 거부',
+          progress: 0.88,
+        );
       }
 
       if (!saved || saveError != null) {
@@ -822,6 +850,9 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         isEditMode ? '계정 수정이 완료되었습니다.' : '계정 생성이 완료되었습니다.',
         useCommonUi: true,
       );
+      if (!isEditMode) {
+        workspace?.markCreatedAccount(division: division, area: area);
+      }
       workspace?.returnToManagement(source: 'submit_success');
     } catch (error, stackTrace) {
       await trace.fail(
@@ -1168,11 +1199,27 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
 
     return Row(
       children: [
-        Text(
-          label,
-          style: textTheme.labelSmall?.copyWith(
-            color: tokens.textSecondary,
-            fontWeight: FontWeight.w700,
+        AnimatedSwitcher(
+          duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
+          switchInCurve: CommonUiMotion.enter,
+          switchOutCurve: CommonUiMotion.exit,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, .12),
+                end: Offset.zero,
+              ).animate(animation),
+              child: child,
+            ),
+          ),
+          child: Text(
+            label,
+            key: ValueKey<String>('account_section_status_$label'),
+            style: textTheme.labelSmall?.copyWith(
+              color: tokens.textSecondary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         const Spacer(),

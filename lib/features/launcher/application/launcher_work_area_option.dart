@@ -7,6 +7,8 @@ class LauncherWorkAreaOption {
     required this.areaName,
     required this.isHeadquarter,
     required this.supportedModes,
+    this.isAllowed = true,
+    this.deniedReason = '',
     this.requiresServerHeadquarterVerification = false,
     this.requiresServerAreaResolution = false,
     this.verifiedAreaRecord,
@@ -17,6 +19,8 @@ class LauncherWorkAreaOption {
   final String areaName;
   final bool isHeadquarter;
   final List<AppModeDefinition> supportedModes;
+  final bool isAllowed;
+  final String deniedReason;
   final bool requiresServerHeadquarterVerification;
   final bool requiresServerAreaResolution;
   final AreaRecord? verifiedAreaRecord;

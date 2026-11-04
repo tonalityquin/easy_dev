@@ -13,6 +13,7 @@ import '../../../features/launcher/application/launcher_actions.dart';
 import '../../../features/launcher/application/dev_bootstrap_service.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
 import '../../../features/launcher/application/mode_launcher_controller.dart';
+import '../../models/account_role_diagnostics.dart';
 import '../../../features/launcher/application/terminal_auth_coordinator.dart';
 import '../../auth/gmail_sender_auth.dart';
 import '../../config/email_config.dart';
@@ -30,6 +31,7 @@ import '../../tutorial/tutorial/app_start_setup_specs.dart';
 import '../application/parkinworkin_terminal_diagnostics.dart';
 import '../application/terminal_output_pacing.dart';
 import '../application/terminal_output_playback_controller.dart';
+import '../../../shared/page/widget/picker_sheet/area_denied_bubble.dart';
 
 const Color _terminalBackground = Color(0xFF300A24);
 const Color _terminalHeader = Color(0xFF24101F);
@@ -1449,6 +1451,8 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         title: 'WORK AREA',
         description: '근무 지역을 선택하세요.',
         options: labels,
+        allowedOptions: areas.map((area) => area.isAllowed).toList(growable: false),
+        deniedReasons: areas.map((area) => area.deniedReason).toList(growable: false),
         confirmLabel: '확인',
         reduceMotion: _reduceMotion,
         onStatus: _showDeveloperStatus,
@@ -6650,6 +6654,8 @@ class _LauncherSelectionDialog extends StatefulWidget {
     required this.title,
     required this.description,
     required this.options,
+    this.allowedOptions,
+    this.deniedReasons,
     required this.confirmLabel,
     required this.reduceMotion,
     required this.onStatus,
@@ -6661,6 +6667,8 @@ class _LauncherSelectionDialog extends StatefulWidget {
   final String title;
   final String description;
   final List<String> options;
+  final List<bool>? allowedOptions;
+  final List<String>? deniedReasons;
   final String confirmLabel;
   final bool reduceMotion;
   final VoidCallback onStatus;
@@ -6680,9 +6688,30 @@ class _LauncherSelectionDialogState extends State<_LauncherSelectionDialog> {
   bool _busy = false;
   String? _error;
 
+  bool _isAllowed(int index) =>
+      widget.allowedOptions == null ||
+      (index >= 0 &&
+          index < widget.allowedOptions!.length &&
+          widget.allowedOptions![index]);
+
+  void _choose(int index) {
+    if (_busy) return;
+    if (!_isAllowed(index)) {
+      AccountRoleDiagnostics.record('launcher_area_locked_tap index=$index');
+      HapticFeedback.mediumImpact();
+      setState(() => _error = null);
+      return;
+    }
+    setState(() {
+      _selectedIndex = index;
+      _error = null;
+    });
+    HapticFeedback.selectionClick();
+  }
+
   Future<void> _confirm() async {
     final selected = _selectedIndex;
-    if (_busy || selected == null) return;
+    if (_busy || selected == null || !_isAllowed(selected)) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -6732,19 +6761,33 @@ class _LauncherSelectionDialogState extends State<_LauncherSelectionDialog> {
             ),
             const SizedBox(height: 12),
             for (var index = 0; index < widget.options.length; index++) ...[
-              _TerminalSelectionRow(
-                index: index,
-                label: widget.options[index],
-                selected: _selectedIndex == index,
-                enabled: !_busy,
-                reduceMotion: widget.reduceMotion,
-                onPressed: () {
-                  setState(() {
-                    _selectedIndex = index;
-                    _error = null;
-                  });
-                  HapticFeedback.selectionClick();
-                },
+              AreaDeniedBubble(
+                backgroundColor: _terminalHeader,
+                foregroundColor: _terminalWarning,
+                borderColor: _terminalWarning,
+                child: Builder(
+                  builder: (bubbleContext) => _TerminalSelectionRow(
+                    index: index,
+                    label: widget.options[index],
+                    selected: _selectedIndex == index,
+                    enabled: !_busy,
+                    restricted: !_isAllowed(index),
+                    reduceMotion: widget.reduceMotion,
+                    onPressed: () {
+                      if (!_isAllowed(index)) {
+                        final reason = widget.deniedReasons != null &&
+                                index < widget.deniedReasons!.length &&
+                                widget.deniedReasons![index].isNotEmpty
+                            ? widget.deniedReasons![index]
+                            : '현재 계정에 허용되지 않은 지역입니다.';
+                        AreaDeniedBubble.show(bubbleContext, reason);
+                      } else {
+                        AreaDeniedBubble.dismissAll();
+                      }
+                      _choose(index);
+                    },
+                  ),
+                ),
               ),
               if (index != widget.options.length - 1)
                 const SizedBox(height: 7),
@@ -6775,7 +6818,9 @@ class _LauncherSelectionDialogState extends State<_LauncherSelectionDialog> {
               child: _TerminalDialogActionButton(
                 label: widget.confirmLabel,
                 busy: _busy,
-                enabled: !_busy && _selectedIndex != null,
+                enabled: !_busy &&
+                    _selectedIndex != null &&
+                    _isAllowed(_selectedIndex!),
                 reduceMotion: widget.reduceMotion,
                 onPressed: _confirm,
               ),
@@ -6966,6 +7011,7 @@ class _TerminalSelectionRow extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.enabled,
+    this.restricted = false,
     required this.reduceMotion,
     required this.onPressed,
   });
@@ -6974,6 +7020,7 @@ class _TerminalSelectionRow extends StatelessWidget {
   final String label;
   final bool selected;
   final bool enabled;
+  final bool restricted;
   final bool reduceMotion;
   final VoidCallback onPressed;
 
@@ -6982,7 +7029,10 @@ class _TerminalSelectionRow extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      child: Material(
+      child: AnimatedOpacity(
+        opacity: restricted ? 0.44 : 1,
+        duration: reduceMotion ? Duration.zero : const Duration(milliseconds: 180),
+        child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: enabled ? onPressed : null,
@@ -7055,9 +7105,13 @@ class _TerminalSelectionRow extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (restricted)
+                  const Icon(Icons.lock_outline_rounded,
+                      color: _terminalWarning, size: 17),
               ],
             ),
           ),
+        ),
         ),
       ),
     );

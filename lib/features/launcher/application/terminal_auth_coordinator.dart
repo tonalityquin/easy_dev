@@ -6,6 +6,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/auth/google_auth_session.dart';
+import '../../../app/models/account_role.dart';
+import '../../../app/models/account_area_access.dart';
+import '../../../app/models/account_role_diagnostics.dart';
 import '../../../app/init/app_start_user_purpose.dart';
 import '../../../app/init/work_schedule_prefs.dart';
 import '../../account/applications/user_state.dart';
@@ -293,6 +296,13 @@ class TerminalAuthCoordinator {
         case TerminalAccountKind.user:
           final existing = userState.session;
           if (existing is UserSessionAccount) {
+            if (RoleType.fromName(existing.role) == null) {
+              AccountRoleDiagnostics.record('session_restore_denied reason=unknown_role');
+              return const TerminalAccountAuthenticationResult(
+                success: false,
+                message: '계정 권한을 확인할 수 없습니다. 다시 로그인하세요.',
+              );
+            }
             final modes = _userSupportedModes(existing.modes);
             await persistAccountKind(kind);
             return TerminalAccountAuthenticationResult(
@@ -334,6 +344,13 @@ class TerminalAuthCoordinator {
             return const TerminalAccountAuthenticationResult(
               success: false,
               message: '수동 로그인이 필요합니다.',
+            );
+          }
+          if (RoleType.fromName(restored.role) == null) {
+            AccountRoleDiagnostics.record('session_restore_denied reason=unknown_role');
+            return const TerminalAccountAuthenticationResult(
+              success: false,
+              message: '계정 권한을 확인할 수 없습니다. 다시 로그인하세요.',
             );
           }
           final modes = _userSupportedModes(restored.modes);
@@ -646,6 +663,24 @@ class TerminalAuthCoordinator {
               failureReason: TerminalAuthFailureReason.nameMismatch,
             );
           }
+          final role = RoleType.fromName(user.role);
+          if (role == null) {
+            LauncherDiagnostics.record(
+              'auth_account_identity_denied',
+              scope: 'auth',
+              meta: <String, Object?>{
+                'accountKind': accountKindId(kind),
+                'reason': 'unknown_role',
+              },
+            );
+            AccountRoleDiagnostics.record('login_denied invalid_role=${user.role}');
+            return const TerminalAccountIdentityResolutionResult(
+              success: false,
+              message: '계정 권한을 확인할 수 없습니다. 관리자에게 문의하세요.',
+              failureReason: TerminalAuthFailureReason.other,
+            );
+          }
+          AccountRoleDiagnostics.record('login_role_accepted role=${role.name}');
           final modes = _userSupportedModes(user.modes);
           final account = TerminalAuthenticatedAccount(
             kind: kind,
@@ -1017,7 +1052,13 @@ class TerminalAuthCoordinator {
     final areaToSet = targetArea.trim();
     final divisionToSet = user.divisions.firstOrNull ?? '';
     if (areaToSet.isEmpty ||
-        !user.areas.any((value) => value.trim() == areaToSet)) {
+        !AccountAreaAccess.canUseHeadquarter(
+          role: user.role,
+          division: divisionToSet,
+          divisions: user.divisions,
+          areas: user.areas,
+          area: areaToSet,
+        )) {
       return const TerminalModeActivationResult(
         success: false,
         message: '선택한 본사 지역을 사용할 수 없습니다.',
@@ -1266,13 +1307,16 @@ class TerminalAuthCoordinator {
             ? requestedArea
             : user.areas.firstOrNull ?? '';
         final divisionToSet = user.divisions.firstOrNull ?? '';
-        if (areaToSet.isEmpty ||
-            !user.areas.any((value) => value.trim() == areaToSet)) {
+        final assigned = AccountAreaAccess.isAssigned(user.areas, areaToSet);
+        if (areaToSet.isEmpty || !assigned) {
           return const TerminalModeActivationResult(
             success: false,
             message: '선택한 업무 지역을 사용할 수 없습니다.',
           );
         }
+        AccountRoleDiagnostics.record(
+          'mode_area_access role=${user.role} assigned=$assigned allowed=$assigned',
+        );
         final updatedUser = !account.activated &&
                 persistence == TerminalSessionPersistence.persistent
             ? user.copyWith(

@@ -1,10 +1,11 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../design_system/common_ui/common_ui_overlays.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import '../../../../features/headquarter/application/area/area_master_cache.dart';
+import '../../../../app/models/account_role_diagnostics.dart';
+import 'area_denied_bubble.dart';
 
 Future<void> showCommonAreaPickerSheet({
   required BuildContext context,
@@ -88,7 +89,7 @@ class _CommonAreaPickerBody extends StatelessWidget {
           );
         }
 
-        if (data.selectableAreas.isEmpty) {
+        if (data.visibleAreas.isEmpty) {
           return _CommonAreaPickerState(
             icon: Icons.location_off_rounded,
             title: '선택 가능한 지역이 없습니다.',
@@ -105,7 +106,7 @@ class _CommonAreaPickerBody extends StatelessWidget {
 
         final initial = data.selectableAreas.contains(currentArea.trim())
             ? currentArea.trim()
-            : data.selectableAreas.first;
+            : data.selectableAreas.isEmpty ? '' : data.selectableAreas.first;
 
         return _CommonAreaPickerSelection(
           data: data,
@@ -233,7 +234,7 @@ class _CommonAreaPickerSelectionState
   }
 
   Future<void> _confirm() async {
-    if (_submitting) return;
+    if (_submitting || !widget.data.selectableAreas.contains(_selected)) return;
     setState(() => _submitting = true);
     try {
       await widget.onConfirm(_selected, widget.data);
@@ -246,130 +247,114 @@ class _CommonAreaPickerSelectionState
   Widget build(BuildContext context) {
     final tokens = CommonUiTheme.of(context);
     final text = Theme.of(context).textTheme;
-    final initialIndex = widget.data.selectableAreas.indexOf(_selected);
-    final headquarter = widget.data.isHeadquarterByName[_selected] == true;
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-
+    final duration = reduceMotion ? Duration.zero : CommonUiMotion.selection;
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
       child: Column(
         children: [
-          CommonAnimatedReveal(
-            child: AnimatedContainer(
-              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-              curve: CommonUiMotion.standard,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: tokens.surfaceOverlay,
-                borderRadius: BorderRadius.circular(CommonUiShapes.control),
-                border: Border.all(color: tokens.borderSubtle),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    headquarter
-                        ? Icons.apartment_rounded
-                        : Icons.location_city_rounded,
-                    color: tokens.accent,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: AnimatedSwitcher(
-                      duration:
-                          reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                      child: Text(
-                        _selected,
-                        key: ValueKey<String>(_selected),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: text.titleSmall?.copyWith(
-                          color: tokens.textPrimary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: headquarter
-                          ? tokens.infoContainer
-                          : tokens.accentContainer,
-                      borderRadius: BorderRadius.circular(CommonUiShapes.pill),
-                    ),
+          AnimatedContainer(
+            duration: duration,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: tokens.surfaceOverlay,
+              borderRadius: BorderRadius.circular(CommonUiShapes.control),
+              border: Border.all(color: tokens.borderSubtle),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.location_city_rounded, color: tokens.accent),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: duration,
                     child: Text(
-                      headquarter ? '본사' : '지사',
-                      style: text.labelSmall?.copyWith(
-                        color: headquarter
-                            ? tokens.onInfoContainer
-                            : tokens.onAccentContainer,
+                      _selected.isEmpty ? '업무 지역' : _selected,
+                      key: ValueKey<String>(_selected),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleSmall?.copyWith(
+                        color: tokens.textPrimary,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: tokens.surface,
-                borderRadius: BorderRadius.circular(CommonUiShapes.card),
-                border: Border.all(color: tokens.borderSubtle),
-              ),
-              child: CupertinoTheme(
-                data: CupertinoThemeData(
-                  primaryColor: tokens.accent,
-                  brightness: tokens.brightness,
-                  textTheme: CupertinoTextThemeData(
-                    pickerTextStyle: text.titleMedium?.copyWith(
-                      color: tokens.textPrimary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                child: CupertinoPicker(
-                  scrollController: FixedExtentScrollController(
-                    initialItem: initialIndex < 0 ? 0 : initialIndex,
-                  ),
-                  itemExtent: 50,
-                  magnification: 1.06,
-                  useMagnifier: true,
-                  squeeze: 1.08,
-                  selectionOverlay: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: tokens.surfaceSelected,
-                      borderRadius:
-                          BorderRadius.circular(CommonUiShapes.control),
-                      border: Border.all(color: tokens.accent),
-                    ),
-                  ),
-                  onSelectedItemChanged: (index) {
-                    setState(() {
-                      _selected = widget.data.selectableAreas[index];
-                    });
-                  },
-                  children: widget.data.selectableAreas
-                      .map(
-                        (area) => Center(
-                          child: Text(
-                            area,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: text.titleMedium?.copyWith(
-                              color: tokens.textPrimary,
-                              fontWeight: FontWeight.w700,
-                            ),
+            child: ListView.separated(
+              itemCount: widget.data.visibleAreas.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final area = widget.data.visibleAreas[index];
+                final allowed = widget.data.selectableAreas.contains(area);
+                final selected = _selected == area && allowed;
+                return AreaDeniedBubble(
+                  child: Builder(
+                    builder: (bubbleContext) => Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      if (!allowed) {
+                        final reason = widget.data.rejectionReason(area);
+                        AccountRoleDiagnostics.record(
+                          'picker_area_denied modeSupported=${widget.data.modeSupportedAreas.contains(area)}',
+                        );
+                        AreaDeniedBubble.show(bubbleContext, reason);
+                        return;
+                      }
+                      AreaDeniedBubble.dismissAll();
+                      AccountRoleDiagnostics.record('picker_area_allowed');
+                      setState(() {
+                        _selected = area;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                    child: AnimatedOpacity(
+                      duration: duration,
+                      opacity: allowed ? 1 : 0.44,
+                      child: AnimatedContainer(
+                        duration: duration,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: selected ? tokens.surfaceSelected : tokens.surface,
+                          borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                          border: Border.all(
+                            color: selected ? tokens.accent : tokens.borderSubtle,
                           ),
                         ),
-                      )
-                      .toList(growable: false),
-                ),
-              ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              allowed ? Icons.location_on_rounded : Icons.lock_outline_rounded,
+                              color: allowed ? tokens.accent : tokens.textSecondary,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                area,
+                                style: text.bodyMedium?.copyWith(
+                                  color: tokens.textPrimary,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            if (selected)
+                              Icon(Icons.check_circle_rounded, color: tokens.accent)
+                            else if (!allowed)
+                              Icon(Icons.lock_rounded, color: tokens.textSecondary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 14),
@@ -379,7 +364,10 @@ class _CommonAreaPickerSelectionState
             expand: true,
             loading: _submitting,
             haptic: CommonHaptic.selection,
-            onPressed: _submitting ? null : _confirm,
+            onPressed: _submitting ||
+                    !widget.data.selectableAreas.contains(_selected)
+                ? null
+                : _confirm,
           ),
         ],
       ),

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../design_system/common_ui/common_ui_overlays.dart';
+import '../models/account_role_diagnostics.dart';
 import '../../features/selector/application/dev_auth.dart';
 import 'status_dialog.dart';
 
@@ -38,9 +39,11 @@ class DeveloperOperationTrace extends ChangeNotifier {
   List<String> get lines => List<String>.unmodifiable(_lines);
 
   String get debugPrintCode {
-    return _lines
-        .map((line) => 'debugPrint(${jsonEncode(line)});')
-        .join('\n');
+    return <String>[
+      ..._lines.map((line) => 'debugPrint(${jsonEncode(line)});'),
+      if (AccountRoleDiagnostics.debugPrintCode.isNotEmpty)
+        AccountRoleDiagnostics.debugPrintCode,
+    ].join('\n');
   }
 
   static Future<DeveloperOperationTrace> start({
@@ -321,6 +324,8 @@ class _DeveloperOperationStatusDialogState
   }
 
   Future<void> _copyDebugPrintCode() async {
+    if (!DevAuth.devModeEnabled.value ||
+        !await DevAuth.isDevModeEnabled()) return;
     await Clipboard.setData(
       ClipboardData(text: widget.trace.debugPrintCode),
     );
@@ -567,11 +572,29 @@ class _DeveloperOperationStatusDialogState
                           ),
                         ),
                         const Spacer(),
-                        Text(
-                          '${logs.length}개',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w700,
+                        AnimatedSwitcher(
+                          duration: fastMotion,
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder: (child, animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, 0.18),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            );
+                          },
+                          child: Text(
+                            '${logs.length}개',
+                            key: ValueKey<int>(logs.length),
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ],

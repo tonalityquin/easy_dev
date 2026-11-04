@@ -724,7 +724,7 @@ class FirebaseActivityWriteBatch {
     _writes++;
   }
 
-  void update(DocumentReference<Object?> document, Map<String, dynamic> data) {
+  void update(DocumentReference<Object?> document, Map<Object, Object?> data) {
     _delegate.update(document, data);
     _writes++;
   }

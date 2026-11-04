@@ -1,4 +1,5 @@
 import '../../account/domain/models/user/user_model.dart';
+import '../../../app/models/account_area_access.dart';
 import '../../headquarter/application/area/area_master_cache.dart';
 import 'app_mode_definition.dart';
 import 'app_mode_registry.dart';
@@ -63,18 +64,34 @@ class LauncherWorkAreaResolver {
     final areas = <LauncherWorkAreaOption>[];
 
     for (final item in snapshot.items) {
-      if (!allowedAreaNames.contains(item.name.trim())) continue;
+      final areaName = item.name.trim();
+      if (areaName.isEmpty) continue;
       final modes = AppModeRegistry.supportedModes(
         item.modes,
         allowedIds: accountModeIds,
       );
-      if (!item.isHeadquarter && modes.isEmpty) continue;
+      final assigned = allowedAreaNames.contains(areaName);
+      final allowed = AccountAreaAccess.canUseArea(
+        role: user.role,
+        division: division,
+        divisions: user.divisions,
+        areas: user.areas,
+        area: areaName,
+        isHeadquarter: item.isHeadquarter,
+      ) && (item.isHeadquarter || modes.isNotEmpty);
       areas.add(
         LauncherWorkAreaOption(
           division: division,
-          areaName: item.name.trim(),
+          areaName: areaName,
           isHeadquarter: item.isHeadquarter,
           supportedModes: List<AppModeDefinition>.unmodifiable(modes),
+          isAllowed: allowed,
+          deniedReason: AccountAreaAccess.deniedReason(
+            isAssigned: assigned,
+            isHeadquarter: item.isHeadquarter,
+            isHeadOffice: AccountAreaAccess.isHeadOfficeRole(user.role),
+            modeAvailable: modes.isNotEmpty,
+          ),
           dataSource: 'sqlite',
         ),
       );
@@ -93,6 +110,7 @@ class LauncherWorkAreaResolver {
         'division': division,
         'areaCount': areas.length,
         'headquarterCount': areas.where((area) => area.isHeadquarter).length,
+        'allowedAreaCount': areas.where((area) => area.isAllowed).length,
         'areas': areas
             .map(
               (area) =>

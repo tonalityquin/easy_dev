@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/models/capability.dart';
+import '../../../app/models/account_role_diagnostics.dart';
 import '../../../features/selector/application/dev_auth.dart';
 import 'secondary_info.dart';
 
 class SecondaryState with ChangeNotifier {
   bool _isLoading = false;
-  RoleType _role = RoleType.userCommon;
+  RoleType? _role;
   CapSet _areaCaps = const <Capability>{};
   bool _devLoggedIn = false;
   bool _hasLoadedDevLogin = false;
@@ -15,10 +16,15 @@ class SecondaryState with ChangeNotifier {
 
   bool get isLoading => _isLoading;
   bool get devLoggedIn => _devLoggedIn;
-  RoleType get role => _role;
+  RoleType? get role => _role;
   CapSet get areaCaps => Set<Capability>.unmodifiable(_areaCaps);
 
   bool roleAllows(Section section) {
+    if (section == Section.local ||
+        section == Section.backend ||
+        section == Section.area) {
+      return DevAuth.devModeEnabled.value;
+    }
     return (kRolePolicy[_role] ?? const <Section>{}).contains(section);
   }
 
@@ -58,7 +64,7 @@ class SecondaryState with ChangeNotifier {
 
   String accessDebugReason(Section section) {
     if (!roleAllows(section)) {
-      return 'role_denied role=${_role.name} section=${section.name}';
+      return 'role_denied role=${_role?.name ?? 'unknown'} section=${section.name}';
     }
     if (section == Section.backend && !_devLoggedIn) {
       return 'developer_login_required section=${section.name}';
@@ -75,7 +81,7 @@ class SecondaryState with ChangeNotifier {
   }
 
   void updateAccess({
-    required RoleType role,
+    required RoleType? role,
     required CapSet areaCaps,
   }) {
     final roleChanged = _role != role;
@@ -90,7 +96,10 @@ class SecondaryState with ChangeNotifier {
 
     if (roleChanged || capsChanged) {
       debugPrint(
-        '[SecondaryState] access_updated role=${_role.name} caps=${_areaCaps.map((capability) => capability.name).join(',')}',
+        '[SecondaryState] access_updated role=${_role?.name ?? 'unknown'} caps=${_areaCaps.map((capability) => capability.name).join(',')}',
+      );
+      AccountRoleDiagnostics.record(
+        'role=${_role?.name ?? 'unknown'} caps=${_areaCaps.map((capability) => capability.name).join(',')}',
       );
       notifyListeners();
     }

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/utils/status_dialog.dart';
+import '../../../app/models/account_role_diagnostics.dart';
 import '../../../design_system/common_ui/common_ui_components.dart';
 import '../../../design_system/common_ui/common_ui_side_dock.dart';
 import '../../../design_system/common_ui/common_ui_side_rail.dart';
@@ -165,6 +166,8 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
   };
 
   final _SecondaryDockDebugLog _debugLog = _SecondaryDockDebugLog();
+  String _rootEditCacheKey = '';
+  Future<UserModel?>? _rootEditFuture;
   late final SecondaryAccountWorkspaceState _accountWorkspace;
   late final SecondaryTabletWorkspaceState _tabletWorkspace;
   late final SecondaryBillWorkspaceState _billWorkspace;
@@ -266,7 +269,7 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
       );
     }
     _debugLog.log(
-      'access_snapshot role=${state.role.name} devMode=$_devModeEnabled devLoggedIn=${state.devLoggedIn} entryMode=${widget.entryMode.name} railScope=$_railScope ${access.join('|')}',
+      'access_snapshot role=${state.role?.name ?? 'unknown'} devMode=$_devModeEnabled devLoggedIn=${state.devLoggedIn} entryMode=${widget.entryMode.name} railScope=$_railScope ${access.join('|')}',
     );
   }
 
@@ -711,6 +714,29 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
     return null;
   }
 
+  Future<UserModel?> _loadRootUserForEdit(
+    UserState state,
+    SecondaryAccountWorkspaceState workspace,
+    String id,
+  ) {
+    final key = '$id:${workspace.editSessionToken}';
+    if (_rootEditFuture != null && _rootEditCacheKey == key) {
+      return _rootEditFuture!;
+    }
+    _rootEditCacheKey = key;
+    AccountRoleDiagnostics.record('user_edit_root_load_start view=summary');
+    _rootEditFuture = state.getUserDetailFromServer(id).then((user) {
+      AccountRoleDiagnostics.record(
+        'user_edit_root_load_complete found=${user != null}',
+      );
+      return user;
+    }).catchError((Object error) {
+      AccountRoleDiagnostics.record('user_edit_root_load_failed type=${error.runtimeType}');
+      throw error;
+    });
+    return _rootEditFuture!;
+  }
+
   TabletModel? _editingTablet(UserState state) {
     final id = _tabletWorkspace.editingTabletId;
     if (id == null || id.isEmpty) return null;
@@ -1102,13 +1128,60 @@ class _SecondarySideDockState extends State<SecondarySideDock> {
           key: const ValueKey<String>('secondary-account-settings'),
           embedded: true,
           child: _SecondaryOperationsWorkspaceMotion(
-            child: initialUser == null && accountWorkspace.isEditingSettings
-                ? const OpsEmptyState(
-                    icon: Icons.person_off_rounded,
-                    title: '수정할 계정을 찾을 수 없습니다',
-                    message: '계정 목록으로 돌아가 다시 선택해 주세요.',
-                  )
-                : UserSettingWorkspace(initialUser: initialUser),
+            child: !accountWorkspace.isEditingSettings
+                ? const UserSettingWorkspace(initialUser: null)
+                : initialUser == null
+                    ? const OpsEmptyState(
+                        icon: Icons.person_off_rounded,
+                        title: '수정할 계정을 찾을 수 없습니다',
+                        message: '계정 목록으로 돌아가 다시 선택해 주세요.',
+                      )
+                    : FutureBuilder<UserModel?>(
+                        key: ValueKey<String>(
+                          '${initialUser.id}:${accountWorkspace.editSessionToken}',
+                        ),
+                        future: _loadRootUserForEdit(
+                          userState, accountWorkspace, initialUser.id,
+                        ),
+                        builder: (context, snapshot) {
+                          final reduceMotion =
+                              MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+                          final waiting = snapshot.connectionState != ConnectionState.done;
+                          return AnimatedSwitcher(
+                            duration: reduceMotion
+                                ? Duration.zero
+                                : const Duration(milliseconds: 220),
+                            transitionBuilder: (child, animation) => FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, .045),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            ),
+                            child: waiting
+                                ? const Center(
+                                    key: ValueKey<String>('root_edit_loading'),
+                                    child: CircularProgressIndicator(),
+                                  )
+                                : snapshot.hasError || snapshot.data == null
+                                    ? const OpsEmptyState(
+                                        key: ValueKey<String>('root_edit_unavailable'),
+                                        icon: Icons.error_outline_rounded,
+                                        title: '원본 계정을 불러오지 못했습니다',
+                                        message: '네트워크 연결을 확인한 뒤 다시 선택하세요.',
+                                      )
+                                    : UserSettingWorkspace(
+                                        key: ValueKey<String>(
+                                          'root_edit_${initialUser.id}_${accountWorkspace.editSessionToken}',
+                                        ),
+                                        initialUser: snapshot.data,
+                                      ),
+                          );
+                        },
+                      ),
           ),
         );
       }
@@ -5302,9 +5375,11 @@ class _SecondaryDockDebugLog {
     debugPrint(line);
   }
 
-  String get debugPrintCode => _lines
-      .map((line) => 'debugPrint(${jsonEncode(line)});')
-      .join('\n');
+  String get debugPrintCode => <String>[
+        ..._lines.map((line) => 'debugPrint(${jsonEncode(line)});'),
+        if (AccountRoleDiagnostics.debugPrintCode.isNotEmpty)
+          AccountRoleDiagnostics.debugPrintCode,
+      ].join('\n');
 
   Future<void> showStatus(BuildContext context) async {
     final visible = _lines.length > 40
@@ -5316,6 +5391,7 @@ class _SecondaryDockDebugLog {
       description: visible.join('\n'),
       copyText: debugPrintCode,
       copyButtonLabel: 'debugPrint 코드 복사',
+      requireDeveloperModeForCopy: true,
       visibleDuration: Duration.zero,
       useCommonUi: true,
       awaitManualClose: true,

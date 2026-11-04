@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
+import '../../../../../app/models/account_role.dart';
 import '../../../../dev/application/area_state.dart';
 import '../../../../../shared/auth/account_code_number.dart';
 
@@ -555,7 +556,7 @@ class _UserInfoCard extends StatelessWidget {
                         _InfoPill(
                           icon: Icons.admin_panel_settings_rounded,
                           label: '권한',
-                          value: _safeText(role),
+                          value: _safeText(RoleType.fromName(role)?.label ?? '유효하지 않은 권한'),
                         ),
                       ],
                     ),

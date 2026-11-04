@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../../../../app/models/account_role.dart';
+import '../../../../app/models/account_area_access.dart';
+import '../../../../app/models/account_role_diagnostics.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
@@ -16,6 +19,7 @@ import '../../../launcher/application/app_mode_registry.dart';
 import '../../../launcher/application/launcher_diagnostics.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../../headquarter/application/snapshot/headquarter_snapshot_repository.dart';
+import '../../../../shared/page/widget/picker_sheet/area_denied_bubble.dart';
 
 class HeadquarterWorkAreaDockResult {
   const HeadquarterWorkAreaDockResult.navigate({
@@ -153,6 +157,9 @@ class _HeadquarterWorkAreaSideDockState
           .map((value) => value.trim())
           .where((value) => value.isNotEmpty)
           .toSet();
+      final companyWide = !session.isTablet &&
+          (RoleType.fromName(session.role)?.isHeadOffice ?? false) &&
+          session.divisions.any((value) => value.trim() == division);
       final accountModes = AppModeRegistry.supportedModes(
         session.modes,
         allowedIds: const <String>{'single', 'double', 'triple', 'minor'},
@@ -161,17 +168,32 @@ class _HeadquarterWorkAreaSideDockState
       final areas = <_WorkAreaViewData>[];
       for (final area in snapshot.areas) {
         final areaName = area.name.trim();
-        if (areaName.isEmpty || !allowedAreas.contains(areaName)) continue;
+        if (areaName.isEmpty) continue;
         final modes = AppModeRegistry.supportedModes(
           area.modes,
           allowedIds: accountModeIds,
         );
-        if (!area.isHeadquarter && modes.isEmpty) continue;
+        final assigned = allowedAreas.contains(areaName);
+        final allowed = AccountAreaAccess.canUseArea(
+          role: session.role,
+          division: division,
+          divisions: session.divisions,
+          areas: session.areas,
+          area: areaName,
+          isHeadquarter: area.isHeadquarter,
+        ) && (area.isHeadquarter || modes.isNotEmpty);
         areas.add(
           _WorkAreaViewData(
             areaName: areaName,
             isHeadquarter: area.isHeadquarter,
             modes: List<AppModeDefinition>.unmodifiable(modes),
+            isAllowed: allowed,
+            deniedReason: AccountAreaAccess.deniedReason(
+              isAssigned: assigned,
+              isHeadquarter: area.isHeadquarter,
+              isHeadOffice: companyWide,
+              modeAvailable: modes.isNotEmpty,
+            ),
           ),
         );
       }
@@ -190,7 +212,7 @@ class _HeadquarterWorkAreaSideDockState
         _error = null;
       });
       _log(
-        'snapshot_read_complete division=$division areas=${areas.length} downloadedAt=${snapshot.downloadedAtIso} userAreas=${allowedAreas.length} userModes=${accountModeIds.join(',')} firebaseRead=0 firebaseWrite=0',
+        'snapshot_read_complete division=$division areas=${areas.length} downloadedAt=${snapshot.downloadedAtIso} userAreas=${allowedAreas.length} companyWide=$companyWide userModes=${accountModeIds.join(',')} firebaseRead=0 firebaseWrite=0',
       );
       for (final area in areas) {
         _log(
@@ -211,7 +233,10 @@ class _HeadquarterWorkAreaSideDockState
   }
 
   Future<void> _showStatus() async {
-    if (!_developerMode || !mounted) return;
+    if (!_developerMode ||
+        !DevAuth.devModeEnabled.value ||
+        !await DevAuth.isDevModeEnabled() ||
+        !mounted) return;
     HapticFeedback.mediumImpact();
     final actionSurfaceStage = _selectedArea == null ? 'area' : 'mode';
     final actionSurfaceItems = <String>[
@@ -226,11 +251,14 @@ class _HeadquarterWorkAreaSideDockState
       ...LauncherDiagnostics.lines,
       ...PlateTtsSessionDiagnostics.lines,
       ..._debugLines,
+      ...AccountRoleDiagnostics.debugPrintCode.split('\n').where((line) => line.isNotEmpty),
     ];
     final code = lines.isEmpty
         ? 'debugPrint(${jsonEncode('[HQ-WORK-AREA-DOCK] 기록된 로그가 없습니다.')});'
         : lines
-            .map((line) => 'debugPrint(${jsonEncode(line)});')
+            .map((line) => line.startsWith('debugPrint(')
+                ? line
+                : 'debugPrint(${jsonEncode(line)});')
             .join('\n');
     await StatusDialog.showSuccess(
       context,
@@ -246,6 +274,12 @@ class _HeadquarterWorkAreaSideDockState
   }
 
   void _selectArea(_WorkAreaViewData area) {
+    if (!area.isAllowed) {
+      _log('area_selection_denied assigned=false reason=${area.deniedReason}');
+      AccountRoleDiagnostics.record('hq_area_denied headquarter=${area.isHeadquarter}');
+      return;
+    }
+    AccountRoleDiagnostics.record('hq_area_allowed headquarter=${area.isHeadquarter}');
     _log(
       'area_selected area=${area.areaName} isHeadquarter=${area.isHeadquarter} modes=${area.modes.map((mode) => mode.id).join(',')}',
     );
@@ -593,68 +627,85 @@ class _WorkAreaCardState extends State<_WorkAreaCard> {
     final tokens = CommonUiTheme.of(context);
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final duration = reduceMotion ? Duration.zero : CommonUiMotion.press;
-    final active = widget.currentArea.trim() == widget.area.areaName;
-    return Semantics(
+    final active = widget.area.isAllowed &&
+        widget.currentArea.trim() == widget.area.areaName;
+    return AreaDeniedBubble(
+      child: Builder(
+        builder: (bubbleContext) => Semantics(
       button: true,
-      label: widget.area.isHeadquarter
-          ? '본사 선택'
-          : '${widget.area.areaName} 업무 지역 선택',
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTapUp: (_) {
-          setState(() => _pressed = false);
-          HapticFeedback.selectionClick();
-          widget.onPressed();
-        },
-        child: AnimatedScale(
-          scale: _pressed ? 0.985 : 1,
-          duration: duration,
-          curve: CommonUiMotion.standard,
-          child: AnimatedContainer(
-            duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
-            curve: CommonUiMotion.standard,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: active ? tokens.accentContainer : tokens.surfaceRaised,
-              borderRadius: BorderRadius.circular(CommonUiShapes.card),
-              border: Border.all(
-                color: active ? tokens.accent : tokens.borderSubtle,
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  alignment: Alignment.center,
+      label: widget.area.isAllowed
+          ? '${widget.area.areaName} 업무 지역 선택'
+          : '${widget.area.areaName} 접근 제한',
+      child: Column(
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (_) => setState(() => _pressed = true),
+            onTapCancel: () => setState(() => _pressed = false),
+            onTapUp: (_) {
+              setState(() => _pressed = false);
+              if (!widget.area.isAllowed) {
+                AreaDeniedBubble.show(
+                  bubbleContext,
+                  widget.area.deniedReason.isNotEmpty
+                      ? widget.area.deniedReason
+                      : AccountAreaAccess.notAssigned,
+                );
+              } else {
+                AreaDeniedBubble.dismissAll();
+              }
+              HapticFeedback.selectionClick();
+              widget.onPressed();
+            },
+            child: AnimatedScale(
+              scale: _pressed ? 0.985 : 1,
+              duration: duration,
+              curve: CommonUiMotion.standard,
+              child: AnimatedOpacity(
+                opacity: widget.area.isAllowed ? 1 : 0.45,
+                duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+                child: AnimatedContainer(
+                  duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+                  curve: CommonUiMotion.standard,
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: widget.area.isHeadquarter
-                        ? tokens.accentContainer
-                        : tokens.surface,
-                    borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                    color: active ? tokens.accentContainer : tokens.surfaceRaised,
+                    borderRadius: BorderRadius.circular(CommonUiShapes.card),
+                    border: Border.all(
+                      color: active ? tokens.accent : tokens.borderSubtle,
+                    ),
                   ),
-                  child: Icon(
-                    widget.area.isHeadquarter
-                        ? Icons.corporate_fare_rounded
-                        : Icons.location_on_outlined,
-                    color: widget.area.isHeadquarter
-                        ? tokens.accent
-                        : tokens.textSecondary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
+                      Container(
+                        width: 42,
+                        height: 42,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: widget.area.isHeadquarter
+                              ? tokens.accentContainer
+                              : tokens.surface,
+                          borderRadius: BorderRadius.circular(CommonUiShapes.control),
+                        ),
+                        child: Icon(
+                          widget.area.isAllowed
+                              ? (widget.area.isHeadquarter
+                                  ? Icons.corporate_fare_rounded
+                                  : Icons.location_on_outlined)
+                              : Icons.lock_outline_rounded,
+                          color: widget.area.isHeadquarter
+                              ? tokens.accent
+                              : tokens.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
                               widget.area.isHeadquarter
-                                  ? '본사'
+                                  ? '본사 · ${widget.area.areaName}'
                                   : widget.area.areaName,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -662,58 +713,52 @@ class _WorkAreaCardState extends State<_WorkAreaCard> {
                                     fontWeight: FontWeight.w900,
                                   ),
                             ),
-                          ),
-                          if (widget.area.isHeadquarter) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              widget.area.areaName,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: tokens.textSecondary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 7),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: [
-                          for (final mode in widget.area.modes)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: tokens.surface,
-                                borderRadius:
-                                    BorderRadius.circular(CommonUiShapes.pill),
-                                border: Border.all(color: tokens.borderSubtle),
-                              ),
-                              child: Text(
-                                mode.koreanName,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(
-                                      color: tokens.textSecondary,
-                                      fontWeight: FontWeight.w800,
+                            if (widget.area.modes.isNotEmpty) ...[
+                              const SizedBox(height: 7),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: [
+                                  for (final mode in widget.area.modes)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: tokens.surface,
+                                        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
+                                        border: Border.all(color: tokens.borderSubtle),
+                                      ),
+                                      child: Text(
+                                        mode.koreanName,
+                                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                              color: tokens.textSecondary,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
                                     ),
+                                ],
                               ),
-                            ),
-                        ],
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        widget.area.isAllowed
+                            ? Icons.chevron_right_rounded
+                            : Icons.lock_rounded,
+                        color: tokens.textSecondary,
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Icon(Icons.chevron_right_rounded, color: tokens.textSecondary),
-              ],
+              ),
             ),
           ),
+        ],
+      ),
         ),
       ),
     );
@@ -725,9 +770,13 @@ class _WorkAreaViewData {
     required this.areaName,
     required this.isHeadquarter,
     required this.modes,
+    required this.isAllowed,
+    required this.deniedReason,
   });
 
   final String areaName;
   final bool isHeadquarter;
   final List<AppModeDefinition> modes;
+  final bool isAllowed;
+  final String deniedReason;
 }
