@@ -70,7 +70,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
   String _codeNumber = '';
   String _area = '';
   String _division = '';
-  String _permissionSummary = '';
+  String _role = '';
   String _position = '';
 
   @override
@@ -162,9 +162,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
       _codeNumber = prefsCodeNumber.isNotEmpty ? prefsCodeNumber : codeNumberFromCached;
       _area = effectiveArea;
       _division = (prefs.getString('division') ?? '').trim();
-      _permissionSummary = (cached['permissionKeys'] is List)
-          ? (cached['permissionKeys'] as List).map((value) => value.toString()).join(' · ')
-          : '';
+      _role = (prefs.getString('role') ?? '').trim();
       _position = (prefs.getString('position') ?? '').trim();
       _loading = false;
     });
@@ -238,7 +236,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
           _UserInfoCard(
             name: _name,
             position: _position,
-            permissionSummary: _permissionSummary,
+            role: _role,
             codeNumber: _codeNumber,
             area: _area,
             division: _division,
@@ -485,7 +483,7 @@ class _UserInfoCard extends StatelessWidget {
   const _UserInfoCard({
     required this.name,
     required this.position,
-    required this.permissionSummary,
+    required this.role,
     required this.codeNumber,
     required this.area,
     required this.division,
@@ -493,7 +491,7 @@ class _UserInfoCard extends StatelessWidget {
 
   final String name;
   final String position;
-  final String permissionSummary;
+  final String role;
   final String codeNumber;
   final String area;
   final String division;
@@ -557,7 +555,7 @@ class _UserInfoCard extends StatelessWidget {
                         _InfoPill(
                           icon: Icons.admin_panel_settings_rounded,
                           label: '권한',
-                          value: _safeText(permissionSummary),
+                          value: _safeText(role),
                         ),
                       ],
                     ),

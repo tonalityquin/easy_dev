@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../shared/operational_cache/domain/location_cache_scope.dart';
 import 'package:provider/provider.dart';
 
 import '../../../app/utils/developer_operation_status_dialog.dart';
@@ -130,7 +129,7 @@ class SensorOperationalDataSyncWorkflow {
         trace.log('기존 locations SQLite 데이터를 삭제합니다: area=$area', progress: 0.12);
         await locationState.clearAreaCache(area);
         trace.log(
-          'locations 삭제 검증 완료: area=$area remaining=${await localRepository.countLocations(area, cacheKey: LocationCacheScope.requireKey(areaState.currentDivision, area))}',
+          'locations 삭제 검증 완료: area=$area remaining=${await localRepository.countLocations(area)}',
           progress: 0.20,
         );
 
@@ -154,7 +153,7 @@ class SensorOperationalDataSyncWorkflow {
 
         trace.log('Firestore locations 데이터를 내려받습니다: area=$area', progress: 0.50);
         await locationState.manualLocationRefreshStrictForArea(area);
-        final locationCount = await localRepository.countLocations(area, cacheKey: LocationCacheScope.requireKey(areaState.currentDivision, area));
+        final locationCount = await localRepository.countLocations(area);
         trace.log(
           'locations 저장 완료: area=$area count=$locationCount',
           progress: 0.66,

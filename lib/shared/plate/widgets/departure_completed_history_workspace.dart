@@ -1,9 +1,10 @@
+import '../../../app/diagnostics/firebase_activity_http.dart';
+import '../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:googleapis/storage/v1.dart' as gcs;
-import 'package:http/http.dart' as http;
 
 import '../../../app/auth/google_auth_v7.dart';
 import '../../../app/config/auth_config.dart';
@@ -169,7 +170,7 @@ class _DepartureCompletedHistoryWorkspaceState
           AuthConfig.gcsBucketName,
           prefix: prefix,
           pageToken: pageToken,
-        );
+        ).trackStorage('STORAGE_LIST', 'shared/plate/widgets/departure_completed_history_workspace.dart');
         for (final item in response.items ?? const <gcs.Object>[]) {
           final name = item.name?.trim() ?? '';
           if (name.isNotEmpty) result.add(name);
@@ -186,7 +187,7 @@ class _DepartureCompletedHistoryWorkspaceState
     final uri = Uri.parse(
       'https://storage.googleapis.com/${AuthConfig.gcsBucketName}/$objectName',
     );
-    final response = await http.get(uri);
+    final response = await FirebaseActivityHttp.get(uri, source: 'shared/plate/widgets/departure_completed_history_workspace.dart');
     if (response.statusCode != 200) {
       throw StateError('GCS GET ${response.statusCode}');
     }

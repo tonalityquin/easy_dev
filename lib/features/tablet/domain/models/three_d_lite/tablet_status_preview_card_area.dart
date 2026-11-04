@@ -1,6 +1,4 @@
 import 'dart:async';
-import '../../../../dev/application/area_state.dart';
-import '../../../../../shared/operational_cache/domain/location_cache_scope.dart';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -199,7 +197,6 @@ class _ParkingStatusPreviewCardAreaState
           .watchViewRows(
             collection: collection,
             area: area,
-            companyId: context.read<AreaState>().currentDivision,
             primaryAtField: _primaryAtFieldForCollection(collection),
           )
           .listen(
@@ -245,9 +242,7 @@ class _ParkingStatusPreviewCardAreaState
   Future<List<LocationModel>> _loadLocationsFromLocal(String area) async {
     final resolvedArea = area.trim();
     if (resolvedArea.isEmpty) return const <LocationModel>[];
-    final scopeKey = LocationCacheScope.maybeKey(context.read<AreaState>().currentDivision, resolvedArea);
-    if (scopeKey == null) return const <LocationModel>[];
-    return context.read<OperationalLocalRepository>().readLocations(resolvedArea, cacheKey: scopeKey);
+    return context.read<OperationalLocalRepository>().readLocations(resolvedArea);
   }
 
   List<_LiveViewRow> _rowsForCollection(String collection) {
@@ -321,7 +316,6 @@ class _ParkingStatusPreviewCardAreaState
   @override
   Widget build(BuildContext context) {
     final resolvedArea = widget.area.trim();
-    final companyScope = LocationCacheScope.maybeKey(context.watch<AreaState>().currentDivision, resolvedArea) ?? '';
     final overlay = _buildOverlay();
     final liveLocations = List<LocationModel>.of(
       context.watch<LocationState>().locations,
@@ -333,8 +327,8 @@ class _ParkingStatusPreviewCardAreaState
       );
     }
 
-    if (_localFuture == null || _localArea != companyScope) {
-      _localArea = companyScope;
+    if (_localFuture == null || _localArea != resolvedArea) {
+      _localArea = resolvedArea;
       _localFuture = _loadLocationsFromLocal(resolvedArea);
     }
 

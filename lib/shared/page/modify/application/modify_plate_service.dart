@@ -1,5 +1,4 @@
-import '../../../plate/domain/services/plate_document_paths.dart';
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -572,7 +571,7 @@ class ModifyPlateService {
         } else {
           debugPrint(startMessage);
         }
-        await FirebaseActivityMonitor.track(FirebaseActivityKind.delete, () => storage.objects.delete(bucketName, path), source: 'modify_plate_service.delete');
+        await storage.objects.delete(bucketName, path).trackStorage('STORAGE_DELETE', 'shared/page/modify/application/modify_plate_service.dart');
         final successMessage =
             '[ModifyPlateService] photo_cleanup=success path=$path';
         if (onDebug != null) {
@@ -813,7 +812,7 @@ class ModifyPlateService {
     );
 
     try {
-      final documentId = PlateDocumentPaths.vehicleId(originalPlate.plateNumber, originalPlate.area);
+      final documentId = '${originalPlate.plateNumber}_${originalPlate.area}';
       if (statusMutationAllowed) {
         final resolvedScope = statusScope;
         if (resolvedScope == null) {
@@ -852,7 +851,7 @@ class ModifyPlateService {
             : 'PlateRepository.updatePlate 실패',
         error: e,
         extra: <String, dynamic>{
-          'docId': PlateDocumentPaths.vehicleId(originalPlate.plateNumber, originalPlate.area),
+          'docId': '${originalPlate.plateNumber}_${originalPlate.area}',
           'area': areaState.currentArea,
           'division': areaState.currentDivision,
           'performedByLen': userState.name.trim().length,
@@ -1001,7 +1000,7 @@ class ModifyPlateService {
           prefix: prefix,
           delimiter: directChildrenOnly ? '/' : null,
           pageToken: pageToken,
-        );
+        ).trackStorage('STORAGE_LIST', 'shared/page/modify/application/modify_plate_service.dart');
         queryPages++;
         pageCount++;
         final items = res.items ?? const <gcs.Object>[];

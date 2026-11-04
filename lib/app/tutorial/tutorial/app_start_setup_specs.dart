@@ -97,23 +97,23 @@ const List<AppStartGoogleServiceSpec> appStartGoogleServiceSpecs =
     <AppStartGoogleServiceSpec>[
   AppStartGoogleServiceSpec(
     keyName: 'calendar',
-    title: 'Google Calendar',
+    title: '일정',
     description: '업무 일정 조회, 등록, 수정 및 삭제에 사용합니다.',
-    detail: 'Calendar · Calendar Events',
+    detail: '일정 조회 및 관리',
     icon: Icons.calendar_month_rounded,
   ),
   AppStartGoogleServiceSpec(
     keyName: 'gmail',
-    title: 'Gmail',
+    title: '메일',
     description: '업무 시작·종료 보고와 첨부파일 메일 전송에 사용합니다.',
-    detail: 'Gmail Send',
+    detail: '메일 발송',
     icon: Icons.mail_rounded,
   ),
   AppStartGoogleServiceSpec(
     keyName: 'cloud_storage',
-    title: 'Google Cloud Storage',
+    title: '파일 저장',
     description: '업무 파일과 이미지의 저장 및 조회에 사용합니다.',
-    detail: 'Cloud Storage Full Control',
+    detail: '업무 파일 저장 및 조회',
     icon: Icons.cloud_rounded,
   ),
 ];

@@ -1,3 +1,4 @@
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -387,7 +388,7 @@ class StatisticsDeepLogService {
       bucketName,
       objectName,
       downloadOptions: gcs.DownloadOptions.fullMedia,
-    );
+    ).trackStorage('DOWNLOAD', 'features/headquarter/widgets/mgmt/statistics_deep_log_service.dart');
 
     if (res is! gcs.Media) {
       throw StateError('통계 데이터 응답 형식이 올바르지 않습니다.');

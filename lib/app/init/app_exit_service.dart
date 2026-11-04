@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../design_system/common_ui/common_ui_theme.dart';
+import '../diagnostics/firebase_activity_meter.dart';
 import '../../features/community/application/game/game_quick_actions.dart';
 import '../../features/dashboard/widgets/utils/productivity_tools.dart';
 import 'app_exit_flag.dart';
@@ -22,10 +23,15 @@ class AppExitService {
     bool useCommonUi = false,
   }) async {
     AppExitFlag.beginExit();
+    final meter = FirebaseActivityMeter.instance;
+    meter.record(service: 'lifecycle', operation: 'SESSION_EXIT_REQUESTED', source: 'app_exit_service');
     try {
       await _prepareForAppStop(source: 'app_exit_service');
+      meter.record(service: 'lifecycle', operation: 'SESSION_EXIT_PREPARED', source: 'app_exit_service');
+      await meter.flushJournal();
       await _closeApplication();
     } catch (e) {
+      meter.record(service: 'lifecycle', operation: 'SESSION_EXIT_FAILED', source: 'app_exit_service', result: 'error', detail: e.runtimeType.toString());
       AppExitFlag.reset();
       await WorkStatusNotificationController.resumeAfterFailedAppExit(
         source: 'app_exit_service_failure',
@@ -43,16 +49,21 @@ class AppExitService {
     bool useCommonUi = false,
   }) async {
     AppExitFlag.beginExit();
+    final meter = FirebaseActivityMeter.instance;
+    meter.record(service: 'lifecycle', operation: 'SESSION_RESTART_REQUESTED', source: 'app_restart_service');
     try {
       if (!Platform.isAndroid) {
         throw UnsupportedError('Android 앱 자동 재시작만 지원합니다.');
       }
       await _prepareForAppStop(source: 'app_restart_service');
+      meter.record(service: 'lifecycle', operation: 'SESSION_RESTART_PREPARED', source: 'app_restart_service');
+      await meter.flushJournal();
       debugPrint('[AppExitService] restart_native_requested');
       await _androidExitChannel.invokeMethod<void>('restartApp');
       debugPrint('[AppExitService] restart_native_accepted');
       return true;
     } catch (error) {
+      meter.record(service: 'lifecycle', operation: 'SESSION_RESTART_FAILED', source: 'app_restart_service', result: 'error', detail: error.runtimeType.toString());
       debugPrint(
         '[AppExitService] restart_native_failed errorType=${error.runtimeType}',
       );

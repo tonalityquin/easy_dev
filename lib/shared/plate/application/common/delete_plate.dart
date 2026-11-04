@@ -1,4 +1,3 @@
-import '../../domain/services/plate_document_paths.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -12,8 +11,7 @@ class DeletePlate {
 
   DeletePlate(this._repository, this._data);
 
-  String _docId(String plateNumber, String area) =>
-      PlateDocumentPaths.vehicleId(plateNumber, area);
+  String _docId(String plateNumber, String area) => '${plateNumber}_$area';
 
   void _debugDeleteCost({
     required PlateType type,

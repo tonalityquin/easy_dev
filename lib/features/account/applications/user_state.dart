@@ -1,11 +1,7 @@
-import '../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../domain/models/account_permission_policy.dart';
-import '../data/services/company_grade_policy_selection_cache.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../../../app/auth/google_auth_session.dart';
@@ -59,76 +55,6 @@ class UserState extends ChangeNotifier {
   final AreaState _areaState;
 
   SessionAccount? _session;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _gradeSubscription;
-  String _observedGradeKey = '';
-  Set<String>? _gradePermissions;
-  (bool, String, String, String)? _gradeSelectionCacheOwner;
-
-  void _watchGradePolicy() {
-    final session = _session;
-    final (bool, String, String, String)? nextOwner = session == null
-        ? null
-        : (
-            session.isTablet,
-            session.companyId.trim(),
-            session.id.trim(),
-            session.email.trim().toLowerCase(),
-          );
-    if (_gradeSelectionCacheOwner != nextOwner) {
-      final previous = _gradeSelectionCacheOwner;
-      CompanyGradePolicySelectionCache.instance.clear();
-      _gradeSelectionCacheOwner = nextOwner;
-      LauncherDiagnostics.record(
-        'grade_selection_cache_cleared',
-        scope: 'auth',
-        meta: <String, Object?>{
-          'reason': 'session_identity_changed',
-          'previousSession': previous == null
-              ? 'none'
-              : previous.$1 ? 'tablet' : 'user',
-          'nextSession': nextOwner == null
-              ? 'none'
-              : nextOwner.$1 ? 'tablet' : 'user',
-          'companyChanged': previous?.$2 != nextOwner?.$2,
-          'accountChanged': previous?.$3 != nextOwner?.$3,
-          'emailChanged': previous?.$4 != nextOwner?.$4,
-        },
-      );
-    }
-    final key = session == null || session.isInitialAdmin || session.isTablet ||
-            session.companyId.isEmpty || session.accountGradeId.isEmpty
-        ? ''
-        : '${session.companyId}/${session.accountGradeId}';
-    if (_observedGradeKey == key) return;
-    _gradeSubscription?.cancel();
-    _gradeSubscription = null;
-    _observedGradeKey = key;
-    _gradePermissions = null;
-    if (key.isEmpty) return;
-    _gradeSubscription = FirebaseActivityMonitor.observe(
-      FirebaseFirestore.instance
-        .collection('company_grade_policies')
-        .doc(session!.companyId)
-        .collection('grades')
-        .doc(session.accountGradeId)
-        .snapshots(),
-      origin: 'account.grade.snapshots',
-    ).listen((snapshot) {
-      if (_observedGradeKey != key) return;
-      final data = snapshot.data();
-      _gradePermissions = data != null && data['enabled'] == true
-          ? AccountPermissionPolicy.sanitize(
-              List<String>.from(data['permissionKeys'] ?? const <String>[]))
-          : <String>{};
-      notifyListeners();
-    }, onError: (Object error, StackTrace stackTrace) {
-      debugPrint('Account grade policy stream failed: $error\n$stackTrace');
-      if (_observedGradeKey == key) {
-        _gradePermissions = <String>{};
-        notifyListeners();
-      }
-    });
-  }
   UserModel? _user;
   TabletModel? _tablet;
 
@@ -147,7 +73,6 @@ class UserState extends ChangeNotifier {
 
   String _prevAreaUsers = '';
   String _prevAreaTablets = '';
-
   static const String _prefsKeyCachedUser = 'cachedUserJson';
 
   static const Set<String> _userSensitiveKeys = <String>{
@@ -156,6 +81,7 @@ class UserState extends ChangeNotifier {
     'handle',
     'tabletPhone',
     'tabletCodeNumber',
+    'role',
     'division',
     'position',
     'fixedHolidays',
@@ -188,29 +114,11 @@ class UserState extends ChangeNotifier {
 
   bool get hasClockInToday => _hasClockInToday;
 
-  List<String> get assignedAreas => List<String>.unmodifiable(
-    _session?.areas ?? const <String>[],
-  );
-
-  List<String> get assignedDivisions => List<String>.unmodifiable(
-    _session?.divisions ?? const <String>[],
-  );
+  String get role => _session?.role ?? '';
 
   String get position => _user?.position ?? _tablet?.position ?? '';
 
   String get name => _session?.displayName ?? '';
-
-  String _divisionForAccountArea(UserModel user, String areaName) {
-    final area = areaName.trim();
-    final allowedIds = user.areaIds.map((value) => value.trim()).toSet();
-    if (area.isNotEmpty && allowedIds.isNotEmpty) {
-      final matches = user.divisions.map((value) => value.trim())
-          .where((division) =>
-              allowedIds.contains('$division-$area')).toList(growable: false);
-      if (matches.length == 1) return matches.single;
-    }
-    return user.companyId.trim();
-  }
 
   String get codeNumber => _user?.codeNumber ?? _tablet?.codeNumber ?? '';
 
@@ -221,17 +129,7 @@ class UserState extends ChangeNotifier {
       _user?.areas.firstOrNull ?? _tablet?.areas.firstOrNull ?? '';
 
   String get division =>
-      _session?.companyId.isNotEmpty == true
-          ? _session!.companyId
-          : (_user?.companyId ?? _tablet?.companyId ?? '');
-
-  Set<String> get permissionKeys => Set<String>.unmodifiable(
-    _session?.isInitialAdmin == true
-        ? AccountPermissionPolicy.keys
-        : _gradePermissions ?? _session?.permissionKeys ?? const <String>[],
-  );
-
-  bool hasPermission(String permission) => permissionKeys.contains(permission);
+      _user?.divisions.firstOrNull ?? _tablet?.divisions.firstOrNull ?? '';
 
   String get selectedArea => _session?.selectedArea ?? '';
 
@@ -319,9 +217,7 @@ class UserState extends ChangeNotifier {
 
   Future<void> refreshUsersBySelectedAreaAndCache() async {
     final selectedArea = _areaState.currentArea.trim();
-    final currentDivision = _areaState.currentDivision.trim().isNotEmpty
-        ? _areaState.currentDivision.trim()
-        : (_session?.companyId ?? '').trim();
+    final currentDivision = _areaState.currentDivision.trim();
 
     _clearSelectionSilently();
 
@@ -332,14 +228,11 @@ class UserState extends ChangeNotifier {
       final data = currentDivision.isNotEmpty
           ? await _repository.refreshUsersByDivisionAreaFromShow(
               currentDivision, selectedArea)
-          : await _repository.refreshUsersBySelectedArea(
-              selectedArea,
-              companyId: currentDivision,
-            );
+          : await _repository.refreshUsersBySelectedArea(selectedArea);
 
       _userList = List<UserModel>.of(data, growable: false);
       _clearSelectionSilently();
-      _prevAreaUsers = '${_areaState.currentDivision.trim()}/$selectedArea';
+      _prevAreaUsers = selectedArea;
     } catch (e) {
       _clearSelectionSilently();
       debugPrint('🔥 Error refreshing users: $e');
@@ -366,16 +259,10 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final verifiedCompany = _areaState.currentDivision.trim().isNotEmpty
-          ? _areaState.currentDivision.trim()
-          : (_session?.companyId ?? '').trim();
-      final data = await _repository.refreshTabletsBySelectedArea(
-        selectedArea,
-        companyId: verifiedCompany,
-      );
+      final data = await _repository.refreshTabletsBySelectedArea(selectedArea);
       _tabletList = List<TabletModel>.of(data, growable: false);
       _clearSelectionSilently();
-      _prevAreaTablets = '${_areaState.currentDivision.trim()}/$selectedArea';
+      _prevAreaTablets = selectedArea;
     } catch (e, st) {
       _clearSelectionSilently();
       debugPrint('🔥 Error refreshing tablets: $e\n$st');
@@ -417,7 +304,6 @@ class UserState extends ChangeNotifier {
       );
       _tablet = _tablet!.copyWith(isWorking: isWorking);
       _session = TabletSessionAccount(_tablet!);
-    _watchGradePolicy();
       notifyListeners();
       LauncherDiagnostics.record(
         'working_state_applied',
@@ -433,12 +319,12 @@ class UserState extends ChangeNotifier {
 
     if (_user == null || _user!.isWorking == isWorking) return;
     await _repository.updateWorkingUserStatus(
-      _user!.id,
+      _user!.codeNumber,
+      _user!.areas.firstOrNull ?? '',
       isWorking: isWorking,
     );
     _user = _user!.copyWith(isWorking: isWorking);
     _session = UserSessionAccount(_user!);
-    _watchGradePolicy();
     notifyListeners();
     LauncherDiagnostics.record(
       'working_state_applied',
@@ -473,7 +359,6 @@ class UserState extends ChangeNotifier {
   Future<void> setSelectedUserActiveStatus(
     bool isActive, {
     void Function(String)? onError,
-    void Function(String)? onDiagnostic,
   }) async {
     final selectedId = _selectedUserId;
     if (selectedId == null) {
@@ -482,22 +367,14 @@ class UserState extends ChangeNotifier {
     }
 
     try {
-      await _repository.setUserActiveStatus(
-        selectedId,
-        isActive: isActive,
-        onDiagnostic: onDiagnostic,
-      );
+      await _repository.setUserActiveStatus(selectedId, isActive: isActive);
 
       final area = _areaState.currentArea.trim();
       final idx = _userList.indexWhere((u) => u.id == selectedId);
       if (idx >= 0) {
         final updated = _userList[idx].copyWith(isActive: isActive);
         _userList = _replaceItem(_userList, updated);
-        await _repository.updateUsersCache(
-          area,
-          _userList,
-          companyId: _areaState.currentDivision.trim(),
-        );
+        await _repository.updateUsersCache(area, _userList);
       }
 
       notifyListeners();
@@ -696,7 +573,6 @@ class UserState extends ChangeNotifier {
     _user = updatedUser;
     _tablet = null;
     _session = UserSessionAccount(updatedUser);
-    _watchGradePolicy();
     notifyListeners();
 
     final startedAt = DateTime.now();
@@ -711,7 +587,7 @@ class UserState extends ChangeNotifier {
     );
 
     try {
-      await _repository.updateLoginSession(
+      final wrote = await _repository.updateLoginSession(
         userId: updatedUser.id,
         isSaved: updatedUser.isSaved,
         currentArea: updatedUser.currentArea,
@@ -719,45 +595,62 @@ class UserState extends ChangeNotifier {
       );
       final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
       final successLine =
-          '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser remote session update success userId=${updatedUser.id} elapsedMs=$elapsedMs firebaseRead=0 firebaseWrite=1 userAccountsShowRead=0 userAccountsShowWrite=0';
+          '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser remote session update success userId=${updatedUser.id} elapsedMs=$elapsedMs firebaseRead=0 firebaseWrite=${wrote ? 1 : 0} userAccountsShowRead=0 userAccountsShowWrite=0';
       debugPrint(successLine);
-      LauncherDiagnostics.record(
-        'login_session_sync_completed',
-        scope: 'user_state',
-        meta: <String, Object?>{
-          'operation': 'user.login.updateLoginSession',
-          'firebaseWrite': 1,
-          'elapsedMs': elapsedMs,
-          'success': true,
-        },
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'user.login.updateLoginSession',
+          details: <String, Object?>{
+            'source': 'UserState.updateLoginUser',
+            'userId': updatedUser.id,
+            'currentArea': updatedUser.currentArea,
+            'selectedArea': updatedUser.selectedArea,
+            'isSaved': updatedUser.isSaved,
+            'firebaseRead': 0,
+            'firebaseWrite': wrote ? 1 : 0,
+            'userAccountsShowRead': 0,
+            'userAccountsShowWrite': 0,
+            'elapsedMs': elapsedMs,
+          },
+          title: '로그인 세션 동기화 완료',
+          success: true,
+          copyAsDebugPrintCode: true,
+          devModeOnly: true,
+        ),
       );
     } catch (error, stackTrace) {
       final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
       debugPrint(
         '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser remote session update failed userId=${updatedUser.id} elapsedMs=$elapsedMs error=$error\n$stackTrace',
       );
-      LauncherDiagnostics.record(
-        'login_session_sync_failed',
-        scope: 'user_state',
-        meta: <String, Object?>{
-          'operation': 'user.login.updateLoginSession',
-          'firebaseWriteAttempted': 1,
-          'elapsedMs': elapsedMs,
-          'errorType': error.runtimeType.toString(),
-          'firebaseCode': error is FirebaseException ? error.code : '',
-          'stack': stackTrace.toString(),
-        },
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'user.login.updateLoginSession',
+          error: error,
+          stackTrace: stackTrace,
+          details: <String, Object?>{
+            'source': 'UserState.updateLoginUser',
+            'userId': updatedUser.id,
+            'currentArea': updatedUser.currentArea,
+            'selectedArea': updatedUser.selectedArea,
+            'isSaved': updatedUser.isSaved,
+            'firebaseRead': 0,
+            'firebaseWriteAttempted': 1,
+            'userAccountsShowRead': 0,
+            'userAccountsShowWrite': 0,
+            'elapsedMs': elapsedMs,
+          },
+          title: '로그인 세션 동기화 실패',
+          copyAsDebugPrintCode: true,
+          devModeOnly: true,
+        ),
       );
       rethrow;
     }
 
     final area = _areaState.currentArea.trim();
     _userList = _replaceItem(_userList, updatedUser);
-    await _repository.updateUsersCache(
-          area,
-          _userList,
-          companyId: _areaState.currentDivision.trim(),
-        );
+    await _repository.updateUsersCache(area, _userList);
 
     await saveCardToUserCodeNumber(updatedUser);
     debugPrint(
@@ -770,7 +663,6 @@ class UserState extends ChangeNotifier {
     _user = updatedUser;
     _tablet = null;
     _session = UserSessionAccount(updatedUser);
-    _watchGradePolicy();
 
     _hasClockInToday = false;
     _hasClockInTodayForDate = null;
@@ -791,7 +683,6 @@ class UserState extends ChangeNotifier {
     _user = updatedUser;
     _tablet = null;
     _session = UserSessionAccount(updatedUser);
-    _watchGradePolicy();
     _hasClockInToday = false;
     _hasClockInTodayForDate = null;
     _userList = _replaceItem(_userList, updatedUser);
@@ -808,7 +699,6 @@ class UserState extends ChangeNotifier {
     _user = updatedUser;
     _tablet = null;
     _session = UserSessionAccount(updatedUser);
-    _watchGradePolicy();
     _userList = _replaceItem(_userList, updatedUser);
     notifyListeners();
 
@@ -881,13 +771,6 @@ class UserState extends ChangeNotifier {
     final current = _user!;
     final updatedUser = UserModel(
       id: current.id,
-      companyId: current.companyId,
-      isInitialAdmin: current.isInitialAdmin,
-      permissionKeys: current.permissionKeys,
-      permissionSchemaVersion: current.permissionSchemaVersion,
-      areaIds: current.areaIds,
-      passwordHash: current.passwordHash,
-      passwordSalt: current.passwordSalt,
       areas: current.areas,
       currentArea: current.currentArea,
       divisions: current.divisions,
@@ -901,6 +784,7 @@ class UserState extends ChangeNotifier {
       name: current.name,
       codeNumber: current.codeNumber,
       position: current.position,
+      role: current.role,
       selectedArea: current.selectedArea,
       startTimeByWeekday: normalizedStart,
       endTimeByWeekday: normalizedEnd,
@@ -1033,7 +917,6 @@ class UserState extends ChangeNotifier {
     _user = null;
     _tablet = updatedTablet;
     _session = TabletSessionAccount(updatedTablet);
-    _watchGradePolicy();
     notifyListeners();
 
     final firebaseOk = await FirebaseGoogleAuthBridge.instance
@@ -1057,11 +940,7 @@ class UserState extends ChangeNotifier {
 
     final area = _areaState.currentArea.trim();
     _tabletList = _replaceTabletItem(_tabletList, updatedTablet);
-    await _repository.updateTabletsCache(
-          area,
-          _tabletList,
-          companyId: _areaState.currentDivision.trim(),
-        );
+    await _repository.updateTabletsCache(area, _tabletList);
 
     await _saveTabletPrefs(updatedTablet);
   }
@@ -1072,7 +951,6 @@ class UserState extends ChangeNotifier {
     _user = null;
     _tablet = updatedTablet;
     _session = TabletSessionAccount(updatedTablet);
-    _watchGradePolicy();
     _hasClockInToday = false;
     _hasClockInTodayForDate = null;
     _tabletList = _replaceTabletItem(_tabletList, updatedTablet);
@@ -1100,11 +978,7 @@ class UserState extends ChangeNotifier {
       } else {
         _userList = _replaceItem(_userList, updatedUser);
       }
-      await _repository.updateUsersCache(
-          area,
-          _userList,
-          companyId: _areaState.currentDivision.trim(),
-        );
+      await _repository.updateUsersCache(area, _userList);
 
       notifyListeners();
       return true;
@@ -1145,11 +1019,7 @@ class UserState extends ChangeNotifier {
             .toList(growable: false);
       }
       _tabletList = _replaceTabletItem(_tabletList, updatedTablet);
-      await _repository.updateTabletsCache(
-          area,
-          _tabletList,
-          companyId: _areaState.currentDivision.trim(),
-        );
+      await _repository.updateTabletsCache(area, _tabletList);
 
       notifyListeners();
       return true;
@@ -1178,7 +1048,6 @@ class UserState extends ChangeNotifier {
     _user = null;
     _tablet = null;
     _session = null;
-    _watchGradePolicy();
     _isTablet = false;
     notifyListeners();
 
@@ -1216,7 +1085,8 @@ class UserState extends ChangeNotifier {
           );
         } else {
           await _repository.updateLogOutUserStatus(
-            _user!.id,
+            _user!.codeNumber,
+            _user!.areas.firstOrNull ?? '',
             isWorking: false,
             isSaved: false,
           );
@@ -1292,7 +1162,6 @@ class UserState extends ChangeNotifier {
     _user = null;
     _tablet = null;
     _session = null;
-    _watchGradePolicy();
     _isTablet = false;
     notifyListeners();
 
@@ -1331,11 +1200,7 @@ class UserState extends ChangeNotifier {
 
       final area = _areaState.currentArea.trim();
       _userList = _insertOrReplace(_userList, user);
-      await _repository.updateUsersCache(
-          area,
-          _userList,
-          companyId: _areaState.currentDivision.trim(),
-        );
+      await _repository.updateUsersCache(area, _userList);
 
       notifyListeners();
     } catch (e) {
@@ -1362,11 +1227,7 @@ class UserState extends ChangeNotifier {
 
       final area = _areaState.currentArea.trim();
       _tabletList = _insertOrReplaceTablet(_tabletList, tablet);
-      await _repository.updateTabletsCache(
-          area,
-          _tabletList,
-          companyId: _areaState.currentDivision.trim(),
-        );
+      await _repository.updateTabletsCache(area, _tabletList);
 
       notifyListeners();
     } catch (e, st) {
@@ -1378,19 +1239,14 @@ class UserState extends ChangeNotifier {
   Future<void> deleteUserCard(
     List<String> ids, {
     void Function(String)? onError,
-    void Function(String)? onDiagnostic,
   }) async {
     try {
-      await _repository.deleteUsers(ids, onDiagnostic: onDiagnostic);
+      await _repository.deleteUsers(ids);
 
       final area = _areaState.currentArea.trim();
       _userList =
           _userList.where((u) => !ids.contains(u.id)).toList(growable: false);
-      await _repository.updateUsersCache(
-          area,
-          _userList,
-          companyId: _areaState.currentDivision.trim(),
-        );
+      await _repository.updateUsersCache(area, _userList);
 
       _clearSelectionSilently();
 
@@ -1410,11 +1266,7 @@ class UserState extends ChangeNotifier {
       final area = _areaState.currentArea.trim();
       _tabletList =
           _tabletList.where((u) => !ids.contains(u.id)).toList(growable: false);
-      await _repository.updateTabletsCache(
-          area,
-          _tabletList,
-          companyId: _areaState.currentDivision.trim(),
-        );
+      await _repository.updateTabletsCache(area, _tabletList);
 
       _clearSelectionSilently();
 
@@ -1434,8 +1286,8 @@ class UserState extends ChangeNotifier {
     await prefs.setString('codeNumber', user.codeNumber);
     await prefs.remove('phone');
     await prefs.setString('selectedArea', user.selectedArea ?? '');
-    await prefs.setString('division', user.companyId);
-    await prefs.remove('role');
+    await prefs.setString('division', user.divisions.firstOrNull ?? '');
+    await prefs.setString('role', user.role);
     await prefs.setString('position', user.position ?? '');
     await WorkSchedulePrefs.saveUserSchedule(prefs: prefs, user: user);
 
@@ -1472,8 +1324,8 @@ class UserState extends ChangeNotifier {
     await prefs.setString('selectedArea', areaName);
     await prefs.setString(
         'englishSelectedAreaName', tablet.englishSelectedAreaName ?? areaName);
-    await prefs.setString('division', tablet.companyId);
-    await prefs.remove('role');
+    await prefs.setString('division', tablet.divisions.firstOrNull ?? '');
+    await prefs.setString('role', tablet.role);
     await prefs.setString('position', tablet.position ?? '');
   }
 
@@ -1549,7 +1401,7 @@ class UserState extends ChangeNotifier {
         prefs: prefs,
       );
 
-      final cachedDivision = userData.companyId.trim();
+      final cachedDivision = userData.divisions.firstOrNull?.trim() ?? '';
       final effectiveDivision = storedDivision != null && storedDivision.isNotEmpty
           ? storedDivision
           : cachedDivision;
@@ -1560,11 +1412,9 @@ class UserState extends ChangeNotifier {
         breakDays: effectiveBreakDays,
         startTimeByWeekday: effectiveStartByWeekday,
         endTimeByWeekday: effectiveEndByWeekday,
-        divisions: userData.divisions.isNotEmpty
-            ? userData.divisions
-            : (effectiveDivision.isNotEmpty
-                ? <String>[effectiveDivision]
-                : const <String>[]),
+        divisions: effectiveDivision.isNotEmpty
+            ? <String>[effectiveDivision]
+            : userData.divisions,
         isSaved: true,
         isWorking: localIsWorking,
       );
@@ -1573,7 +1423,7 @@ class UserState extends ChangeNotifier {
         scope: 'auth',
         meta: <String, Object?>{
           'source': 'cached_user',
-          'permissionsPresent': userData.permissionKeys.isNotEmpty,
+          'rolePresent': userData.role.trim().isNotEmpty,
           'preferenceOverrideApplied': false,
         },
       );
@@ -1595,7 +1445,6 @@ class UserState extends ChangeNotifier {
       _user = userData;
       _tablet = null;
       _session = UserSessionAccount(userData);
-    _watchGradePolicy();
       LauncherDiagnostics.record(
         'auth_user_restore_session_created',
         scope: 'auth',
@@ -1620,6 +1469,7 @@ class UserState extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final codeNumber = (prefs.getString('codeNumber') ?? prefs.getString('phone'))?.trim();
       final selectedArea = prefs.getString('selectedArea')?.trim();
+      final division = prefs.getString('division')?.trim();
       final hadStoredSchedule = WorkSchedulePrefs.hasStoredSchedulePrefs(prefs);
       await WorkSchedulePrefs.migrateLegacySchedulePrefs(prefs);
       final startTimeByWeekday = WorkSchedulePrefs.readDayTimeMapFromPrefs(
@@ -1700,7 +1550,7 @@ class UserState extends ChangeNotifier {
         breakDays: effectiveBreakDays,
         startTimeByWeekday: effectiveStartByWeekday,
         endTimeByWeekday: effectiveEndByWeekday,
-        divisions: userData.divisions,
+        divisions: division != null ? [division] : userData.divisions,
         isSaved: true,
         isWorking: localIsWorking,
       );
@@ -1709,7 +1559,7 @@ class UserState extends ChangeNotifier {
         scope: 'auth',
         meta: <String, Object?>{
           'source': 'server',
-          'permissionsPresent': userData.permissionKeys.isNotEmpty,
+          'rolePresent': userData.role.trim().isNotEmpty,
         },
       );
       LauncherDiagnostics.record(
@@ -1722,7 +1572,7 @@ class UserState extends ChangeNotifier {
           'effective': userData.isWorking,
         },
       );
-      final loginDivision = _divisionForAccountArea(userData, trimmedArea);
+      final loginDivision = userData.divisions.firstOrNull ?? '';
       await _areaState.refreshAreaForLogin(
         area: trimmedArea,
         division: loginDivision,
@@ -1740,7 +1590,6 @@ class UserState extends ChangeNotifier {
       _user = userData;
       _tablet = null;
       _session = UserSessionAccount(userData);
-    _watchGradePolicy();
       LauncherDiagnostics.record(
         'auth_user_restore_session_created',
         scope: 'auth',
@@ -1762,6 +1611,7 @@ class UserState extends ChangeNotifier {
         prefs.getString('tabletCodeNumber') ?? '',
       );
       final selectedArea = prefs.getString('selectedArea')?.trim();
+      final division = prefs.getString('division')?.trim();
       final position = prefs.getString('position');
       final englishSelectedAreaName =
           prefs.getString('englishSelectedAreaName')?.trim();
@@ -1844,7 +1694,7 @@ class UserState extends ChangeNotifier {
         currentArea: selectedArea,
         selectedArea: selectedArea,
         position: position ?? tablet.position,
-        divisions: tablet.divisions,
+        divisions: division != null ? <String>[division] : tablet.divisions,
         englishSelectedAreaName: (englishSelectedAreaName?.isNotEmpty ?? false)
             ? englishSelectedAreaName
             : tablet.englishSelectedAreaName,
@@ -1856,7 +1706,7 @@ class UserState extends ChangeNotifier {
         scope: 'auth',
         meta: <String, Object?>{
           'source': 'server',
-          'permissionsPresent': tabletData.permissionKeys.isNotEmpty,
+          'rolePresent': tabletData.role.trim().isNotEmpty,
         },
       );
       LauncherDiagnostics.record(
@@ -1893,7 +1743,7 @@ class UserState extends ChangeNotifier {
         );
       }
 
-      final loginDivision = tabletData.companyId;
+      final loginDivision = tabletData.divisions.firstOrNull ?? '';
       await _areaState.refreshAreaForLogin(
         area: selectedArea,
         division: loginDivision,
@@ -1908,7 +1758,6 @@ class UserState extends ChangeNotifier {
       _user = null;
       _tablet = tabletData;
       _session = TabletSessionAccount(tabletData);
-    _watchGradePolicy();
       LauncherDiagnostics.record(
         'auth_tablet_restore_session_created',
         scope: 'auth',
@@ -1960,7 +1809,6 @@ class UserState extends ChangeNotifier {
       if (_tablet == null) return;
       _tablet = _tablet!.copyWith(currentArea: normalizedArea);
       _session = TabletSessionAccount(_tablet!);
-    _watchGradePolicy();
       notifyListeners();
       AreaContextDebugTrace.record(
         'UserState',
@@ -1982,7 +1830,6 @@ class UserState extends ChangeNotifier {
     if (_user == null) return;
     _user = _user!.copyWith(currentArea: normalizedArea);
     _session = UserSessionAccount(_user!);
-    _watchGradePolicy();
     notifyListeners();
     AreaContextDebugTrace.record(
       'UserState',
@@ -2020,7 +1867,6 @@ class UserState extends ChangeNotifier {
       if (_tablet == null) return;
       _tablet = _tablet!.copyWith(currentArea: normalizedArea);
       _session = TabletSessionAccount(_tablet!);
-    _watchGradePolicy();
       notifyListeners();
       AreaContextDebugTrace.record(
         'UserState',
@@ -2035,13 +1881,14 @@ class UserState extends ChangeNotifier {
       );
 
       try {
-        await _repository.areaPickerCurrentAreaTablet(
+        final wrote = await _repository.areaPickerCurrentAreaTablet(
           _tablet!.id,
           normalizedArea,
         );
+        final skipped = !wrote;
         AreaContextDebugTrace.record(
           'UserState',
-          'area_picker_remote_applied',
+          skipped ? 'area_picker_remote_skipped' : 'area_picker_remote_applied',
           fields: <String, Object?>{
             'tablet': true,
             'currentArea': normalizedArea,
@@ -2077,7 +1924,6 @@ class UserState extends ChangeNotifier {
 
     _user = _user!.copyWith(currentArea: normalizedArea);
     _session = UserSessionAccount(_user!);
-    _watchGradePolicy();
     notifyListeners();
     AreaContextDebugTrace.record(
       'UserState',
@@ -2092,16 +1938,19 @@ class UserState extends ChangeNotifier {
     );
 
     try {
-      await _repository.areaPickerCurrentArea(
-        _user!.codeNumber.trim(),
-        selectedArea.trim().isNotEmpty
-            ? selectedArea.trim()
-            : (_user!.areas.firstOrNull ?? ''),
+      final currentCode = _user!.codeNumber.trim();
+      final documentArea = selectedArea.trim().isNotEmpty
+          ? selectedArea.trim()
+          : (_user!.areas.firstOrNull ?? '');
+      final wrote = await _repository.areaPickerCurrentArea(
+        currentCode,
+        documentArea,
         normalizedArea,
       );
+      final skipped = !wrote;
       AreaContextDebugTrace.record(
         'UserState',
-        'area_picker_remote_applied',
+        skipped ? 'area_picker_remote_skipped' : 'area_picker_remote_applied',
         fields: <String, Object?>{
           'tablet': false,
           'currentArea': normalizedArea,
@@ -2135,10 +1984,9 @@ class UserState extends ChangeNotifier {
   Future<void> _fetchUsersByAreaWithCache({bool force = false}) async {
     final selectedArea = _areaState.currentArea.trim();
     if (selectedArea.isEmpty) return;
-    final areaKey = '${_areaState.currentDivision.trim()}/$selectedArea';
-    if (!force && _prevAreaUsers == areaKey) return;
+    if (!force && _prevAreaUsers == selectedArea) return;
 
-    _prevAreaUsers = areaKey;
+    _prevAreaUsers = selectedArea;
 
     _clearSelectionSilently();
 
@@ -2146,10 +1994,7 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data = await _repository.getUsersByAreaOnceWithCache(
-        selectedArea,
-        companyId: _areaState.currentDivision.trim(),
-      );
+      final data = await _repository.getUsersByAreaOnceWithCache(selectedArea);
       _userList = List<UserModel>.of(data, growable: false);
       _clearSelectionSilently();
     } catch (e) {
@@ -2164,10 +2009,9 @@ class UserState extends ChangeNotifier {
   Future<void> _fetchTabletsByAreaWithCache({bool force = false}) async {
     final selectedArea = _areaState.currentArea.trim();
     if (selectedArea.isEmpty) return;
-    final areaKey = '${_areaState.currentDivision.trim()}/$selectedArea';
-    if (!force && _prevAreaTablets == areaKey) return;
+    if (!force && _prevAreaTablets == selectedArea) return;
 
-    _prevAreaTablets = areaKey;
+    _prevAreaTablets = selectedArea;
 
     _clearSelectionSilently();
 
@@ -2176,10 +2020,7 @@ class UserState extends ChangeNotifier {
 
     try {
       final data =
-          await _repository.getTabletsByAreaOnceWithCache(
-            selectedArea,
-            companyId: _areaState.currentDivision.trim(),
-          );
+          await _repository.getTabletsByAreaOnceWithCache(selectedArea);
       _tabletList = List<TabletModel>.of(data, growable: false);
       _clearSelectionSilently();
     } catch (e) {
@@ -2246,7 +2087,6 @@ class UserState extends ChangeNotifier {
   @override
   void dispose() {
     _subscription?.cancel();
-    _gradeSubscription?.cancel();
     _areaState.removeListener(_fetchUsersByAreaWithCache);
     super.dispose();
   }

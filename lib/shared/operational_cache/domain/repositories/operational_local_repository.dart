@@ -7,20 +7,19 @@ import '../models/bill_local_snapshot.dart';
 import '../models/operational_area_meta.dart';
 
 abstract interface class OperationalLocalRepository {
-  Future<List<LocationModel>> readLocations(String area, {String? cacheKey});
+  Future<List<LocationModel>> readLocations(String area);
 
   Future<void> replaceLocations({
     required String area,
     required List<LocationModel> locations,
     required int totalCapacity,
-    String? cacheKey,
   });
 
-  Future<void> clearLocations(String area, {String? cacheKey});
+  Future<void> clearLocations(String area);
 
-  Future<bool> hasLocationsSnapshot(String area, {String? cacheKey});
+  Future<bool> hasLocationsSnapshot(String area);
 
-  Future<int> countLocations(String area, {String? cacheKey});
+  Future<int> countLocations(String area);
 
   Future<BillLocalSnapshot> readBills(String area);
 
@@ -73,11 +72,6 @@ abstract interface class OperationalLocalRepository {
   });
 
   Future<OperationalAreaMeta?> readAreaMeta(String area);
-
-  Future<OperationalAreaMeta?> readLocationMeta({
-    required String division,
-    required String area,
-  });
 
   Future<void> clearOperationalMetadata(String area);
 

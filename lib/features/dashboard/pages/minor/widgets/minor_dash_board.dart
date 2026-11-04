@@ -67,11 +67,12 @@ class MinorDashBoard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  IgnorePointer(
+                  AbsorbPointer(
+                    absorbing: false,
                     child: Align(
                       alignment: Alignment.topRight,
                       child: Padding(
-                        padding: EdgeInsets.only(right: 12, top: 8, bottom: 8),
+                        padding: EdgeInsets.only(right: 12, top: 4, bottom: 4),
                         child: SizedBox(
                           height: kToolbarHeight - 8,
                           child: ConstrainedBox(

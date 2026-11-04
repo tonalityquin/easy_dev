@@ -69,7 +69,10 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
   _OpsDashboardView _view = _OpsDashboardView.dashboard;
 
   bool _isFieldCommon(UserState userState) {
-    return !userState.hasPermission('monthly.manage');
+    final dynamic rawRole = userState.session?.role;
+    final role =
+        rawRole is String ? rawRole.trim() : (rawRole?.toString().trim() ?? '');
+    return role == 'fieldCommon';
   }
 
   String _normalizeSearch(String value) {
@@ -908,7 +911,7 @@ class _OpsDashboardSideDockState extends State<OpsDashboardSideDock> {
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final hasMonthlyCapability =
         areaState.capabilitiesOfCurrentArea.contains(Capability.monthly);
-    final isFieldCommon = !userState.hasPermission('monthly.manage');
+    final isFieldCommon = userState.role.trim() == 'fieldCommon';
     final canUseMonthly = hasMonthlyCapability && !isFieldCommon;
     _logBusinessVisibility(
       canUseMonthly: canUseMonthly,

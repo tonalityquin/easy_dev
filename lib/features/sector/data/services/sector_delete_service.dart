@@ -1,4 +1,4 @@
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -29,7 +29,7 @@ class SectorDeleteService {
         .doc(normalizedId);
 
     try {
-      final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => reference.get(), source: 'sector_delete_service.get');
+      final snapshot = await reference.get().trackFirestore('GET', 'features/sector/data/services/sector_delete_service.dart');
       if (!snapshot.exists || snapshot.data() == null) {
         throw const SectorNotFoundException();
       }
@@ -39,7 +39,7 @@ class SectorDeleteService {
         throw const SectorAreaMismatchException();
       }
 
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.delete, () => reference.delete(), source: 'sector_delete_service.delete');
+      await reference.delete().trackFirestore('DELETE', 'features/sector/data/services/sector_delete_service.dart');
       debugPrint(
         '[SectorDeleteService] 삭제 완료: id=$normalizedId, area=$normalizedArea',
       );

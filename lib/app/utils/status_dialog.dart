@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -8,7 +7,6 @@ import 'package:flutter/services.dart';
 import '../../design_system/common_ui/common_ui_components.dart';
 import '../../design_system/common_ui/common_ui_theme.dart';
 import '../../features/selector/application/dev_auth.dart';
-import 'access_gate_diagnostics.dart';
 
 enum StatusDialogTone {
   success,
@@ -19,34 +17,12 @@ class StatusDialog {
   const StatusDialog._();
 
   static final List<String> _debugLines = <String>[];
-  static String _indexCreationUrl = '';
-
-  static String get indexCreationUrl => _indexCreationUrl;
-
-  static void recordFirestoreIndexError(Object error) {
-    if (!DevAuth.devModeEnabled.value || error is! FirebaseException ||
-        error.code != 'failed-precondition') return;
-    final raw = error.message ?? error.toString();
-    final match = RegExp(r'https://console\.firebase\.google\.com/[^\s<>"\]]+')
-        .firstMatch(raw);
-    if (match == null) return;
-    final url = (match.group(0) ?? '')
-        .replaceFirst(RegExp(r'[.,;\)]+$'), '');
-    if (url.isEmpty) return;
-    _indexCreationUrl = url;
-    recordDebugOperation(
-      'firestore.index', 'missing_composite_index',
-      details: <String, Object?>{'indexUrl': url},
-    );
-  }
-
 
   static List<String> get debugLines => List<String>.unmodifiable(_debugLines);
 
-  static String get debugPrintCode => <String>[
-        ...AccessGateDiagnostics.lines,
-        ..._debugLines,
-      ].map((line) => 'debugPrint(${jsonEncode(line)});').join('\n');
+  static String get debugPrintCode => _debugLines
+      .map((line) => 'debugPrint(${jsonEncode(line)});')
+      .join('\n');
 
   static void _record(
     String event, {
@@ -66,26 +42,6 @@ class StatusDialog {
       'title=${jsonEncode(title)}',
       if (trimmed.isNotEmpty) 'description=${jsonEncode(trimmed)}',
     ].join(' ');
-    debugPrint(line);
-    _debugLines.add(line);
-    if (_debugLines.length > 200) {
-      _debugLines.removeRange(0, _debugLines.length - 200);
-    }
-  }
-
-  static void recordDebugOperation(
-    String source,
-    String event, {
-    Map<String, Object?> details = const <String, Object?>{},
-  }) {
-    if (!DevAuth.devModeEnabled.value) return;
-    final message = jsonEncode(<String, Object?>{
-      'timestamp': DateTime.now().toIso8601String(),
-      'source': source,
-      'event': event,
-      ...details,
-    }, toEncodable: (Object? value) => value.toString());
-    final line = '[FIREBASE_OPT] $message';
     debugPrint(line);
     _debugLines.add(line);
     if (_debugLines.length > 200) {
@@ -134,9 +90,10 @@ class StatusDialog {
     String? description,
     String? copyText,
     String copyButtonLabel = '전문 복사',
+    Future<String> Function()? copyTextProvider,
+    bool requireDeveloperModeForCopy = false,
     bool useCommonUi = false,
     bool awaitManualClose = false,
-    bool isolateCopyText = false,
   }) async {
     if (!context.mounted) return;
 
@@ -153,28 +110,12 @@ class StatusDialog {
         description: trimmedDescription,
       );
     }
-    final currentDebugCode = developerMode && !isolateCopyText
-        ? debugPrintCode : '';
-    final explicitDebugCode = trimmedCopyText.isNotEmpty &&
-        (copyButtonLabel == 'debugPrint 코드 복사' ||
-            trimmedCopyText.split('\n').every((line) {
-              final value = line.trim();
-              return value.startsWith('debugPrint(') &&
-                  value.endsWith(');');
-            }));
-    final effectiveCopyText = explicitDebugCode && currentDebugCode.isNotEmpty
-        ? <String>{
-            ...trimmedCopyText.split('\n'),
-            ...currentDebugCode.split('\n'),
-          }.where((line) => line.trim().isNotEmpty).join('\n')
-        : trimmedCopyText.isEmpty
-            ? currentDebugCode
-            : trimmedCopyText;
-    final debugCopyText = developerMode &&
-            !explicitDebugCode &&
-            trimmedCopyText.isNotEmpty &&
-            currentDebugCode.isNotEmpty &&
-            trimmedCopyText != currentDebugCode
+    final currentDebugCode = developerMode ? debugPrintCode : '';
+    final effectiveCopyText = trimmedCopyText.isEmpty
+        ? currentDebugCode
+        : trimmedCopyText;
+    final debugCopyText = developerMode && trimmedCopyText.isNotEmpty &&
+            !trimmedCopyText.contains('debugPrint(')
         ? currentDebugCode
         : '';
     final reduceMotion =
@@ -200,6 +141,8 @@ class StatusDialog {
           tone: tone,
           description: trimmedDescription,
           copyText: effectiveCopyText,
+          copyTextProvider: copyTextProvider,
+          requireDeveloperModeForCopy: requireDeveloperModeForCopy,
           copyButtonLabel: trimmedCopyText.isEmpty && currentDebugCode.isNotEmpty
               ? 'debugPrint 코드 복사'
               : copyButtonLabel,
@@ -279,10 +222,11 @@ class StatusDialog {
     String? description,
     String? copyText,
     String copyButtonLabel = '전문 복사',
+    Future<String> Function()? copyTextProvider,
+    bool requireDeveloperModeForCopy = false,
     Duration? visibleDuration,
     bool useCommonUi = false,
     bool awaitManualClose = false,
-    bool isolateCopyText = false,
   }) {
     final hasCopyText = copyText != null && copyText.trim().isNotEmpty;
 
@@ -293,6 +237,8 @@ class StatusDialog {
       closeCurrentPageAfter: closeCurrentPageAfter,
       description: description,
       copyText: copyText,
+      copyTextProvider: copyTextProvider,
+      requireDeveloperModeForCopy: requireDeveloperModeForCopy,
       copyButtonLabel: copyButtonLabel,
       visibleDuration: visibleDuration ??
           (hasCopyText
@@ -302,7 +248,6 @@ class StatusDialog {
                   : const Duration(milliseconds: 2600)),
       useCommonUi: useCommonUi,
       awaitManualClose: awaitManualClose,
-      isolateCopyText: isolateCopyText,
     );
   }
 
@@ -313,10 +258,11 @@ class StatusDialog {
     String? description,
     String? copyText,
     String copyButtonLabel = '전문 복사',
+    Future<String> Function()? copyTextProvider,
+    bool requireDeveloperModeForCopy = false,
     Duration? visibleDuration,
     bool useCommonUi = false,
     bool awaitManualClose = false,
-    bool isolateCopyText = false,
   }) {
     final hasCopyText = copyText != null && copyText.trim().isNotEmpty;
 
@@ -327,6 +273,8 @@ class StatusDialog {
       closeCurrentPageAfter: closeCurrentPageAfter,
       description: description,
       copyText: copyText,
+      copyTextProvider: copyTextProvider,
+      requireDeveloperModeForCopy: requireDeveloperModeForCopy,
       copyButtonLabel: copyButtonLabel,
       visibleDuration: visibleDuration ??
           (hasCopyText
@@ -336,7 +284,6 @@ class StatusDialog {
                   : const Duration(milliseconds: 3200)),
       useCommonUi: useCommonUi,
       awaitManualClose: awaitManualClose,
-      isolateCopyText: isolateCopyText,
     );
   }
 
@@ -356,6 +303,8 @@ class _StatusDialogSurface extends StatefulWidget {
     required this.tone,
     required this.description,
     required this.copyText,
+    required this.copyTextProvider,
+    required this.requireDeveloperModeForCopy,
     required this.copyButtonLabel,
     required this.debugCopyText,
     required this.useCommonUi,
@@ -366,6 +315,8 @@ class _StatusDialogSurface extends StatefulWidget {
   final StatusDialogTone tone;
   final String description;
   final String copyText;
+  final Future<String> Function()? copyTextProvider;
+  final bool requireDeveloperModeForCopy;
   final String copyButtonLabel;
   final String debugCopyText;
   final bool useCommonUi;
@@ -380,9 +331,16 @@ class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
   bool _debugCopied = false;
 
   Future<void> _copy() async {
-    if (widget.copyText.isEmpty) return;
+    if (widget.copyText.isEmpty && widget.copyTextProvider == null) return;
     try {
-      await Clipboard.setData(ClipboardData(text: widget.copyText));
+      if (widget.requireDeveloperModeForCopy &&
+          (!DevAuth.devModeEnabled.value ||
+              !await DevAuth.isDevModeEnabled())) return;
+      final text = await widget.copyTextProvider?.call() ?? widget.copyText;
+      if (widget.requireDeveloperModeForCopy &&
+          (!DevAuth.devModeEnabled.value ||
+              !await DevAuth.isDevModeEnabled())) return;
+      await Clipboard.setData(ClipboardData(text: text));
       if (!mounted) return;
       setState(() => _copied = true);
       StatusDialog._record('copy', title: widget.title, tone: widget.tone);
@@ -394,6 +352,9 @@ class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
   Future<void> _copyDebug() async {
     if (widget.debugCopyText.isEmpty) return;
     try {
+      if (widget.requireDeveloperModeForCopy &&
+          (!DevAuth.devModeEnabled.value ||
+              !await DevAuth.isDevModeEnabled())) return;
       await Clipboard.setData(ClipboardData(text: widget.debugCopyText));
       if (!mounted) return;
       setState(() => _debugCopied = true);
@@ -602,24 +563,12 @@ class _StatusDialogContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        TweenAnimationBuilder<double>(
-          tween: Tween<double>(begin: 0, end: 1),
-          duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
-          curve: CommonUiMotion.enter,
-          builder: (context, value, child) => Opacity(
-            opacity: value,
-            child: Transform.translate(
-              offset: Offset(0, 10 * (1 - value)),
-              child: child,
-            ),
-          ),
-          child: Text(
-            title,
-            textAlign: TextAlign.center,
-            style: textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: titleColor,
-            ),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: titleColor,
           ),
         ),
         if (hasDescription) ...[
@@ -683,35 +632,20 @@ class _StatusDialogContent extends StatelessWidget {
                   ),
                 ),
                 if (hasDebugCopyText)
-                  AnimatedScale(
-                    scale: debugCopied ? 1.025 : 1,
+                  AnimatedSwitcher(
                     duration: reduceMotion
                         ? Duration.zero
                         : CommonUiMotion.selection,
-                    curve: CommonUiMotion.enter,
-                    child: AnimatedSwitcher(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : CommonUiMotion.selection,
-                      switchInCurve: CommonUiMotion.enter,
-                      switchOutCurve: CommonUiMotion.exit,
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: ScaleTransition(
-                          scale: Tween<double>(begin: 0.96, end: 1)
-                              .animate(animation),
-                          child: child,
-                        ),
-                      ),
-                      child: CommonButton(
-                        key: ValueKey<bool>(debugCopied),
-                        label: debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
-                        icon: debugCopied
-                            ? Icons.check_rounded
-                            : Icons.code_rounded,
-                        onPressed: onDebugCopy,
-                        haptic: CommonHaptic.selection,
-                      ),
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(scale: animation, child: child),
+                    ),
+                    child: CommonButton(
+                      key: ValueKey<bool>(debugCopied),
+                      label: debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
+                      icon: debugCopied ? Icons.check_rounded : Icons.code_rounded,
+                      onPressed: onDebugCopy,
+                      haptic: CommonHaptic.selection,
                     ),
                   ),
                 CommonButton(
@@ -753,38 +687,19 @@ class _StatusDialogContent extends StatelessWidget {
                   ),
                 ),
                 if (hasDebugCopyText)
-                  AnimatedScale(
-                    scale: debugCopied ? 1.025 : 1,
+                  AnimatedSwitcher(
                     duration: reduceMotion
                         ? Duration.zero
                         : const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    child: AnimatedSwitcher(
-                      duration: reduceMotion
-                          ? Duration.zero
-                          : const Duration(milliseconds: 180),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: ScaleTransition(
-                          scale: Tween<double>(begin: 0.96, end: 1)
-                              .animate(animation),
-                          child: child,
-                        ),
+                    child: OutlinedButton.icon(
+                      key: ValueKey<bool>(debugCopied),
+                      onPressed: onDebugCopy,
+                      icon: Icon(
+                        debugCopied ? Icons.check_rounded : Icons.code_rounded,
+                        size: 18,
                       ),
-                      child: OutlinedButton.icon(
-                        key: ValueKey<bool>(debugCopied),
-                        onPressed: onDebugCopy,
-                        icon: Icon(
-                          debugCopied
-                              ? Icons.check_rounded
-                              : Icons.code_rounded,
-                          size: 18,
-                        ),
-                        label: Text(
-                          debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
-                        ),
+                      label: Text(
+                        debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
                       ),
                     ),
                   ),

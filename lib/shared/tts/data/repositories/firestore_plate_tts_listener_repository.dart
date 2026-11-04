@@ -1,5 +1,3 @@
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
-import '../../../../app/utils/status_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../plate/domain/enums/plate_type.dart';
@@ -23,26 +21,22 @@ class FirestorePlateTtsListenerRepository implements PlateTtsListenerRepository 
 
   @override
   Future<PlateTtsBaselineCursor> fetchBaseline({
-    required String companyId,
     required String area,
     required List<PlateType> types,
   }) async {
     final safeArea = area.trim();
-    final safeCompany = companyId.trim();
-    if (safeArea.isEmpty || safeCompany.isEmpty || types.isEmpty) {
+    if (safeArea.isEmpty || types.isEmpty) {
       return const PlateTtsBaselineCursor(updatedAt: null, docId: null);
     }
 
-    StatusDialog.recordDebugOperation('tts.plates', 'baseline_query', details: {'companyId': safeCompany, 'area': safeArea});
-    final qs = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
+    final qs = await _firestore
         .collection('plates')
-        .where('companyId', isEqualTo: safeCompany)
         .where('area', isEqualTo: safeArea)
         .where('type', whereIn: types.map((e) => e.firestoreValue).toList(growable: false))
         .orderBy('updatedAt', descending: true)
         .orderBy(FieldPath.documentId, descending: true)
         .limit(1)
-        .get(), source: 'firestore_plate_tts_listener_repository.get');
+        .get();
 
     if (qs.docs.isEmpty) {
       return const PlateTtsBaselineCursor(updatedAt: null, docId: null);
@@ -60,22 +54,18 @@ class FirestorePlateTtsListenerRepository implements PlateTtsListenerRepository 
 
   @override
   Stream<PlateTtsChangeBatch> watchChanges({
-    required String companyId,
     required String area,
     required List<PlateType> types,
     DateTime? startAfterUpdatedAt,
     String? startAfterDocumentId,
   }) {
     final safeArea = area.trim();
-    final safeCompany = companyId.trim();
-    if (safeArea.isEmpty || safeCompany.isEmpty || types.isEmpty) {
+    if (safeArea.isEmpty || types.isEmpty) {
       return const Stream<PlateTtsChangeBatch>.empty();
     }
 
-    StatusDialog.recordDebugOperation('tts.plates', 'listen_start', details: {'companyId': safeCompany, 'area': safeArea});
     Query<Map<String, dynamic>> query = _firestore
         .collection('plates')
-        .where('companyId', isEqualTo: safeCompany)
         .where('area', isEqualTo: safeArea)
         .where('type', whereIn: types.map((e) => e.firestoreValue).toList(growable: false))
         .orderBy('updatedAt')
@@ -89,10 +79,7 @@ class FirestorePlateTtsListenerRepository implements PlateTtsListenerRepository 
       ]);
     }
 
-    return FirebaseActivityMonitor.observe(
-      query.snapshots(includeMetadataChanges: true),
-      origin: 'plates.tts.snapshots',
-    ).map((snapshot) {
+    return query.snapshots(includeMetadataChanges: true).map((snapshot) {
       final changes = snapshot.docChanges
           .map((change) => PlateTtsDocChange(
                 type: _mapType(change.type),

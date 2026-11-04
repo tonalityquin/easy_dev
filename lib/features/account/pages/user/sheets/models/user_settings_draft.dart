@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../../shared/auth/account_code_number.dart';
+import '../widgets/user_role_type_section.dart';
 
 class UserSettingsDraft {
   UserSettingsDraft({
@@ -9,15 +10,12 @@ class UserSettingsDraft {
     required this.codeEntryMode,
     required this.emailLocal,
     required this.position,
-    String accountGradeId = 'custom_6',
-    Set<String> permissionKeys = const <String>{},
+    required this.role,
     required Set<String> modes,
     required Map<String, TimeOfDay?> startByDay,
     required Map<String, TimeOfDay?> endByDay,
     required Set<String> breakDays,
-  })  : accountGradeId = accountGradeId,
-        permissionKeys = Set<String>.unmodifiable(permissionKeys),
-        modes = Set<String>.unmodifiable(modes),
+  })  : modes = Set<String>.unmodifiable(modes),
         startByDay = Map<String, TimeOfDay?>.unmodifiable(startByDay),
         endByDay = Map<String, TimeOfDay?>.unmodifiable(endByDay),
         breakDays = Set<String>.unmodifiable(breakDays);
@@ -27,8 +25,7 @@ class UserSettingsDraft {
   final UserCodeEntryMode codeEntryMode;
   final String emailLocal;
   final String position;
-  final String accountGradeId;
-  final Set<String> permissionKeys;
+  final RoleType role;
   final Set<String> modes;
   final Map<String, TimeOfDay?> startByDay;
   final Map<String, TimeOfDay?> endByDay;
@@ -40,8 +37,7 @@ class UserSettingsDraft {
     UserCodeEntryMode? codeEntryMode,
     String? emailLocal,
     String? position,
-    String? accountGradeId,
-    Set<String>? permissionKeys,
+    RoleType? role,
     Set<String>? modes,
     Map<String, TimeOfDay?>? startByDay,
     Map<String, TimeOfDay?>? endByDay,
@@ -53,8 +49,7 @@ class UserSettingsDraft {
       codeEntryMode: codeEntryMode ?? this.codeEntryMode,
       emailLocal: emailLocal ?? this.emailLocal,
       position: position ?? this.position,
-      accountGradeId: accountGradeId ?? this.accountGradeId,
-      permissionKeys: permissionKeys ?? this.permissionKeys,
+      role: role ?? this.role,
       modes: modes ?? this.modes,
       startByDay: startByDay ?? this.startByDay,
       endByDay: endByDay ?? this.endByDay,
@@ -69,8 +64,7 @@ class UserSettingsDraft {
       codeEntryMode: codeEntryMode,
       emailLocal: emailLocal,
       position: position,
-      accountGradeId: accountGradeId,
-      permissionKeys: permissionKeys,
+      role: role,
       modes: modes,
       startByDay: startByDay,
       endByDay: endByDay,

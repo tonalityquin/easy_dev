@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 
 import '../../design_system/common_ui/common_ui_overlays.dart';
@@ -39,7 +38,9 @@ class DeveloperOperationTrace extends ChangeNotifier {
   List<String> get lines => List<String>.unmodifiable(_lines);
 
   String get debugPrintCode {
-    return _lines.map((line) => 'debugPrint(${jsonEncode(line)});').join('\n');
+    return _lines
+        .map((line) => 'debugPrint(${jsonEncode(line)});')
+        .join('\n');
   }
 
   static Future<DeveloperOperationTrace> start({
@@ -107,12 +108,10 @@ class DeveloperOperationTrace extends ChangeNotifier {
     StackTrace? stackTrace,
   }) async {
     if (error != null) {
-      final code = error is FirebaseException
-          ? 'FIREBASE_${error.code.toUpperCase().replaceAll('-', '_')}'
-          : error is StateError
-              ? error.message.toString().split(':').first
-              : error.runtimeType.toString();
-      log('오류 코드: $code');
+      log('오류: $error');
+    }
+    if (stackTrace != null) {
+      log('스택 추적:\n$stackTrace');
     }
     log(message, progress: 1);
     _state = DeveloperOperationState.failure;
@@ -145,7 +144,6 @@ class DeveloperOperationTrace extends ChangeNotifier {
         description: description,
         copyText: copyText,
         copyButtonLabel: 'debugPrint 코드 복사',
-        isolateCopyText: true,
         visibleDuration: Duration.zero,
         useCommonUi: useCommonUi,
         awaitManualClose: true,
@@ -158,7 +156,6 @@ class DeveloperOperationTrace extends ChangeNotifier {
       description: description,
       copyText: copyText,
       copyButtonLabel: 'debugPrint 코드 복사',
-        isolateCopyText: true,
       visibleDuration: Duration.zero,
       useCommonUi: useCommonUi,
       awaitManualClose: true,
@@ -570,27 +567,11 @@ class _DeveloperOperationStatusDialogState
                           ),
                         ),
                         const Spacer(),
-                        AnimatedSwitcher(
-                          duration: fastMotion,
-                          transitionBuilder: (child, animation) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: ScaleTransition(
-                                scale: Tween<double>(
-                                  begin: 0.9,
-                                  end: 1,
-                                ).animate(animation),
-                                child: child,
-                              ),
-                            );
-                          },
-                          child: Text(
-                            '${logs.length}개',
-                            key: ValueKey<int>(logs.length),
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        Text(
+                          '${logs.length}개',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
@@ -649,16 +630,11 @@ class _DeveloperOperationStatusDialogState
             actions: [
               OutlinedButton.icon(
                 onPressed: _copyDebugPrintCode,
-                icon: AnimatedScale(
-                  scale: _copied ? 1.12 : 1,
+                icon: AnimatedSwitcher(
                   duration: fastMotion,
-                  curve: Curves.easeOutBack,
-                  child: AnimatedSwitcher(
-                    duration: fastMotion,
-                    child: Icon(
-                      _copied ? Icons.check_rounded : Icons.copy_all_rounded,
-                      key: ValueKey<bool>(_copied),
-                    ),
+                  child: Icon(
+                    _copied ? Icons.check_rounded : Icons.copy_all_rounded,
+                    key: ValueKey<bool>(_copied),
                   ),
                 ),
                 label: AnimatedSwitcher(

@@ -1,5 +1,4 @@
-import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -900,7 +899,7 @@ class HeadMemo {
   static Future<List<HeadMemoRemoteBookSummary>> fetchRemoteBookIndex() async {
     await _ensureInited();
     try {
-      final metaSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _remoteMetaRef.get(), source: 'head_memo.get');
+      final metaSnapshot = await _remoteMetaRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
       final metaData = metaSnapshot.data();
       final rawIndex = metaData?['bookIndex'];
       final summaries = <HeadMemoRemoteBookSummary>[];
@@ -916,7 +915,7 @@ class HeadMemo {
         }
       }
       if (summaries.isEmpty) {
-        final bookSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _remoteBooksRef.get(), source: 'head_memo.get');
+        final bookSnapshot = await _remoteBooksRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
         for (var i = 0; i < bookSnapshot.docs.length; i += 1) {
           final doc = bookSnapshot.docs[i];
           final data = Map<String, dynamic>.from(doc.data());
@@ -950,9 +949,9 @@ class HeadMemo {
     final selectedBookId = remoteBookId.trim();
     if (selectedBookId.isEmpty) throw StateError('remote_book_id_empty');
     try {
-      final metaSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _remoteMetaRef.get(), source: 'head_memo.get');
+      final metaSnapshot = await _remoteMetaRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
       final metaData = metaSnapshot.data();
-      final selectedBookSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _remoteBookRef(selectedBookId).get(), source: 'head_memo.get');
+      final selectedBookSnapshot = await _remoteBookRef(selectedBookId).get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
       if (!selectedBookSnapshot.exists) {
         throw StateError('remote_head_memo_book_not_found');
       }
@@ -962,7 +961,7 @@ class HeadMemo {
       final pageIds = rawPageIds is List
           ? rawPageIds.whereType<String>().where((id) => id.trim().isNotEmpty).toList()
           : <String>[];
-      final pageSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _remotePagesRef(selectedBookId).orderBy('order').get(), source: 'head_memo.get');
+      final pageSnapshot = await _remotePagesRef(selectedBookId).orderBy('order').get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
       final entries = <MapEntry<HeadMemoPage, int>>[];
       for (var i = 0; i < pageSnapshot.docs.length; i += 1) {
         final doc = pageSnapshot.docs[i];
@@ -1056,14 +1055,14 @@ class HeadMemo {
     final now = DateTime.now();
     final uid = user?.uid;
     final email = user?.email ?? googleUser?.email;
-    var batch = FirebaseFirestore.instance.batch();
+    var batch = FirebaseFirestore.instance.trackedActivityBatch('features/headquarter/page/sheets/head_memo.dart');
     var writeCount = 0;
 
     Future<void> commitBatchIfNeeded({bool force = false}) async {
       if (writeCount == 0) return;
       if (!force && writeCount < 450) return;
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'head_memo.commit');
-      batch = FirebaseFirestore.instance.batch();
+      await batch.commit().trackFirestore('BATCH', 'features/headquarter/page/sheets/head_memo.dart');
+      batch = FirebaseFirestore.instance.trackedActivityBatch('features/headquarter/page/sheets/head_memo.dart');
       writeCount = 0;
     }
 
@@ -1071,14 +1070,8 @@ class HeadMemo {
       DocumentReference<Map<String, dynamic>> ref,
       Map<String, dynamic> payload,
     ) {
-      FirebaseActivityWriteScope.batchCommand(
-        batch,
-        FirebaseActivityDocumentCommand.set,
-        () => batch.set(ref, payload, SetOptions(merge: true)),
-        documentData: payload,
-        documentPath: ref.path,
-        partialWrite: true,
-      );
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/headquarter/page/sheets/head_memo.dart', result: 'staged');
+      batch.set(ref, payload, SetOptions(merge: true));
       writeCount += 1;
     }
 
@@ -1166,8 +1159,6 @@ class HeadMemo {
         tags: const <String>[_tMemo, _tMemoFirestore],
       );
       rethrow;
-    } finally {
-      FirebaseActivityWriteScope.cancelBatch(batch);
     }
   }
 
@@ -1176,7 +1167,7 @@ class HeadMemo {
 
     try {
       final localBookId = (activeBookId.value ?? book.value.id).trim();
-      final metaSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _remoteMetaRef.get(), source: 'head_memo.get');
+      final metaSnapshot = await _remoteMetaRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
       final metaData = metaSnapshot.data();
       final metaActiveBookId = (metaData?['activeBookId'] as String?)?.trim();
       final preferredBookIds = <String>[
@@ -1188,7 +1179,7 @@ class HeadMemo {
       DocumentSnapshot<Map<String, dynamic>>? selectedBookSnapshot;
       var selectedBookId = '';
       for (final candidate in preferredBookIds) {
-        final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _remoteBookRef(candidate).get(), source: 'head_memo.get');
+        final snapshot = await _remoteBookRef(candidate).get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
         if (snapshot.exists) {
           selectedBookSnapshot = snapshot;
           selectedBookId = candidate;
@@ -1197,7 +1188,7 @@ class HeadMemo {
       }
 
       if (selectedBookSnapshot == null || !selectedBookSnapshot.exists) {
-        final legacySnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _remoteRootRef.get(), source: 'head_memo.get');
+        final legacySnapshot = await _remoteRootRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
         final legacyData = legacySnapshot.data();
         if (legacyData != null && legacyData['books'] is List) {
           return await _pullLegacyLibraryFromFirestore(legacyData);
@@ -1213,7 +1204,7 @@ class HeadMemo {
       final pageIds = rawPageIds is List
           ? rawPageIds.whereType<String>().where((id) => id.trim().isNotEmpty).toList()
           : <String>[];
-      final pageSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _remotePagesRef(selectedBookId).orderBy('order').get(), source: 'head_memo.get');
+      final pageSnapshot = await _remotePagesRef(selectedBookId).orderBy('order').get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
       final entries = <MapEntry<HeadMemoPage, int>>[];
       for (var i = 0; i < pageSnapshot.docs.length; i += 1) {
         final doc = pageSnapshot.docs[i];

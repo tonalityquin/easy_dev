@@ -1,5 +1,4 @@
-import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../shared/plate/domain/services/plate_billing_count_service.dart';
@@ -15,7 +14,7 @@ class PlateBillingCountRepository {
       _firestore.collection(PlateBillingCountService.collectionName);
 
   Future<List<PlateBillingCountModel>> fetchByMonth(String month) async {
-    final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _collection.where('month', isEqualTo: month).get(), source: 'plate_billing_count_repository.get');
+    final snapshot = await _collection.where('month', isEqualTo: month).get().trackFirestore('GET', 'features/dev/data/repositories/plate_billing_count_repository.dart');
     final rows = snapshot.docs
         .where((doc) => doc.data()['aggregationAxis'] == 'division_area')
         .map(PlateBillingCountModel.fromDoc)
@@ -32,40 +31,22 @@ class PlateBillingCountRepository {
   }
 
   Future<void> deleteDocument(String id) async {
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.delete, () => _collection.doc(id).delete(), source: 'plate_billing_count_repository.delete');
+    await _collection.doc(id).delete().trackFirestore('DELETE', 'features/dev/data/repositories/plate_billing_count_repository.dart');
   }
 
-  Future<int> deleteMonth(
-    String month, {
-    void Function(int completed, int total)? onProgress,
-  }) async {
-    final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _collection.where('month', isEqualTo: month).get(), source: 'plate_billing_count_repository.get');
+  Future<int> deleteMonth(String month) async {
+    final snapshot = await _collection.where('month', isEqualTo: month).get().trackFirestore('GET', 'features/dev/data/repositories/plate_billing_count_repository.dart');
     if (snapshot.docs.isEmpty) return 0;
     var deleted = 0;
     for (var i = 0; i < snapshot.docs.length; i += 450) {
-      final batch = _firestore.batch();
-      final int end = i + 450 > snapshot.docs.length
-          ? snapshot.docs.length
-          : i + 450;
-      try {
-        for (final doc in snapshot.docs.sublist(i, end)) {
-          FirebaseActivityWriteScope.batchCommand(
-            batch,
-            FirebaseActivityDocumentCommand.delete,
-            () => batch.delete(doc.reference),
-          );
-        }
-        await FirebaseActivityMonitor.track(
-          FirebaseActivityKind.batch,
-          () => batch.commit(),
-          batch: batch,
-          source: 'plate_billing_count_repository.commit',
-        );
-      } finally {
-        FirebaseActivityWriteScope.cancelBatch(batch);
+      final batch = _firestore.trackedActivityBatch('features/dev/data/repositories/plate_billing_count_repository.dart');
+      final end = i + 450 > snapshot.docs.length ? snapshot.docs.length : i + 450;
+      for (final doc in snapshot.docs.sublist(i, end)) {
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'features/dev/data/repositories/plate_billing_count_repository.dart', result: 'staged');
+        batch.delete(doc.reference);
       }
+      await batch.commit().trackFirestore('BATCH', 'features/dev/data/repositories/plate_billing_count_repository.dart');
       deleted += end - i;
-      onProgress?.call(deleted, snapshot.docs.length);
     }
     return deleted;
   }

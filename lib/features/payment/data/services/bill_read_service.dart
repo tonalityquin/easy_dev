@@ -1,10 +1,6 @@
-import '../../../../shared/area_remote_settings/application/area_snapshot_scope.dart';
-import '../../../location/data/services/location_company_scope.dart';
-import '../../../../app/utils/status_dialog.dart';
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 
@@ -22,20 +18,10 @@ class BillReadService {
     QuerySnapshot<Map<String, dynamic>> snapshot;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final cachedCompany = (prefs.getString('division') ?? '').trim();
-      final company = AreaSnapshotScope.isBound && AreaSnapshotScope.area == area.trim()
-          ? AreaSnapshotScope.division.trim()
-          : (await LocationCompanyScope.resolve(_firestore) ?? '').trim();
-      if (company.isEmpty || (cachedCompany.isNotEmpty && cachedCompany != company)) {
-        throw StateError('BILL_COMPANY_SESSION_MISMATCH');
-      }
-      StatusDialog.recordDebugOperation('bill.read', 'company_scoped', details: {'companyId': company, 'area': area});
-      snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
+      snapshot = await _firestore
           .collection('bill')
-          .where('companyId', isEqualTo: company)
           .where('area', isEqualTo: area)
-          .get(), source: 'bill_read_service.get');
+          .get().trackFirestore('GET', 'features/payment/data/services/bill_read_service.dart');
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint('❌ Firestore bill.read 실패(area=$area): $e');
@@ -48,12 +34,11 @@ class BillReadService {
         details: <String, Object?>{
           'collection': 'bill',
           'area': area,
-          'companyId': (await SharedPreferences.getInstance()).getString('division') ?? '',
-          'query': 'where(companyId == division).where(area == $area)',
-          'filters': 'companyId == division AND area == $area',
+          'query': 'where(area == $area)',
+          'filters': 'area == $area',
           'orderBy': 'none',
-          'queryShape': 'two-field-equality',
-          'compositeIndex': 'check-firestore-index-status',
+          'queryShape': 'single-field-equality',
+          'compositeIndex': 'not-required-for-this-shape-unless-console-error-requires-it',
         },
       );
       rethrow;

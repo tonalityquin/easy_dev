@@ -1,4 +1,4 @@
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -140,7 +140,7 @@ class PersonalLoginController {
       accountId = _accountDocId(codeNumber: codeNumber, area: selectedArea);
       if (accountId.isEmpty) return false;
 
-      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _personalAccountsRef.doc(accountId).get(), source: 'personal_login_controller.get');
+      final snap = await _personalAccountsRef.doc(accountId).get().trackFirestore('GET', 'features/login/controllers/personal/personal_login_controller.dart');
       final data = snap.data();
       final active = (data?['isActive'] as bool?) ?? true;
       if (!snap.exists || data == null || !active) return false;
@@ -287,14 +287,10 @@ class PersonalLoginController {
     );
     final snapshots = await Future.wait(
       fields.map(
-        (field) => FirebaseActivityMonitor.track(
-            FirebaseActivityKind.read,
-            () => _personalAccountsRef
-                .where(field, isEqualTo: normalized)
-                .limit(20)
-                .get(),
-            source: 'personal.login.lookup',
-          ),
+        (field) => _personalAccountsRef
+            .where(field, isEqualTo: normalized)
+            .limit(20)
+            .get().trackFirestore('GET', 'features/login/controllers/personal/personal_login_controller.dart'),
       ),
     );
     final byId =
@@ -462,7 +458,7 @@ class PersonalLoginController {
       'gmail': _normalizeGmail(email),
       'mode': 'personal',
       'modes': const <String>['personal'],
-      'accountKind': 'personal',
+      'role': 'personal',
       'areas': <String>[normalizedArea],
       'divisions': <String>[normalizedDivision],
       'currentArea': normalizedArea,
@@ -521,10 +517,10 @@ class PersonalLoginController {
     try {
       var attempts = 0;
       while (attempts < 8) {
-        final duplicate = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _personalAccountsRef
+        final duplicate = await _personalAccountsRef
             .where('codeNumber', isEqualTo: normalizedCodeNumber)
             .limit(1)
-            .get(), source: 'personal_login_controller.get');
+            .get().trackFirestore('GET', 'features/login/controllers/personal/personal_login_controller.dart');
         if (duplicate.docs.isEmpty) break;
         attempts += 1;
         normalizedCodeNumber = AccountCodeNumber.generate();
@@ -537,10 +533,10 @@ class PersonalLoginController {
         );
       }
 
-      final duplicate = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _personalAccountsRef
+      final duplicate = await _personalAccountsRef
           .where('codeNumber', isEqualTo: normalizedCodeNumber)
           .limit(1)
-          .get(), source: 'personal_login_controller.get');
+          .get().trackFirestore('GET', 'features/login/controllers/personal/personal_login_controller.dart');
       if (duplicate.docs.isNotEmpty) {
         throw StateError('CODE_NUMBER_GENERATION_FAILED');
       }
@@ -553,12 +549,12 @@ class PersonalLoginController {
         throw StateError('INVALID_PERSONAL_DOCUMENT_ID');
       }
       final docRef = _personalAccountsRef.doc(docId);
-      final existingDoc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => docRef.get(), source: 'personal_login_controller.get');
+      final existingDoc = await docRef.get().trackFirestore('GET', 'features/login/controllers/personal/personal_login_controller.dart');
       if (existingDoc.exists) {
         throw StateError('PERSONAL_DOCUMENT_ID_CONFLICT');
       }
 
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => docRef.set(
+      await docRef.set(
         _newPersonalAccountMap(
           name: name,
           codeNumber: normalizedCodeNumber,
@@ -566,7 +562,7 @@ class PersonalLoginController {
           area: normalizedArea,
           division: division,
         ),
-      ), source: 'personal_login_controller.set');
+      ).trackFirestore('SET', 'features/login/controllers/personal/personal_login_controller.dart');
       PersonalAccountDiagnostics.record(
         'create_success',
         meta: <String, Object?>{
@@ -815,8 +811,8 @@ class PersonalLoginController {
       await prefs.setString('selectedArea', account.selectedArea);
       await prefs.setString('division', account.division);
       await prefs.setString(
-        'accountKind',
-        'personal',
+        'role',
+        (account.data['role'] ?? 'personal').toString(),
       );
       await prefs.setString(
         'position',
@@ -829,14 +825,14 @@ class PersonalLoginController {
       await prefs.remove('personalPhone');
 
       if (persistSession) {
-        await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _personalAccountsRef.doc(account.documentId).set(
+        await _personalAccountsRef.doc(account.documentId).set(
           <String, dynamic>{
             'isSaved': true,
             'lastLoginAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true),
-        ), source: 'personal_login_controller.set');
+        ).trackFirestore('SET', 'features/login/controllers/personal/personal_login_controller.dart');
       }
       debugPrint(
         '[LOGIN-PERSONAL][${_ts()}] session activated persistence=${persistSession ? 'persistent' : 'ephemeral'} accountId=${account.documentId} area=${account.selectedArea}',

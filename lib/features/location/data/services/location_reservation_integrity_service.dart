@@ -1,10 +1,9 @@
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../domain/models/location_model.dart';
-import 'location_company_scope.dart';
 
 enum LocationReservationIntegrityIssueType {
   orphan,
@@ -176,15 +175,10 @@ class LocationReservationIntegrityService {
     onProgress?.call('현재 지역 확인: area=$cleanArea', 0.08);
     onProgress?.call('locations 서버 조회를 시작합니다.', 0.14);
 
-    final company = await LocationCompanyScope.resolve(_firestore);
-    Query<Map<String, dynamic>> locationQuery = _firestore
-        .collection('locations').where('area', isEqualTo: cleanArea);
-    if (company == null || company.isEmpty) throw StateError('LOCATION_COMPANY_REQUIRED');
-    if (company.isNotEmpty) {
-      locationQuery = locationQuery.where('companyId', isEqualTo: company);
-    }
-    final locationSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => locationQuery
-        .get(const GetOptions(source: Source.server)), source: 'location_reservation_integrity_service.get');
+    final locationSnapshot = await _firestore
+        .collection('locations')
+        .where('area', isEqualTo: cleanArea)
+        .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/location/data/services/location_reservation_integrity_service.dart');
 
     final locations = <LocationModel>[];
     for (final document in locationSnapshot.docs) {
@@ -327,11 +321,9 @@ class LocationReservationIntegrityService {
     final reservationCollection =
         _firestore.collection('locationSlotReservations');
 
-    Query<Map<String, dynamic>> areaReservationQuery = reservationCollection
-        .where('area', isEqualTo: cleanArea);
-    areaReservationQuery = areaReservationQuery.where('companyId', isEqualTo: company);
-    final areaReservationSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => areaReservationQuery
-        .get(const GetOptions(source: Source.server)), source: 'location_reservation_integrity_service.get');
+    final areaReservationSnapshot = await reservationCollection
+        .where('area', isEqualTo: cleanArea)
+        .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/location/data/services/location_reservation_integrity_service.dart');
     for (final document in areaReservationSnapshot.docs) {
       reservationDocuments[document.id] = _ReservationDocument(
         id: document.id,
@@ -341,13 +333,9 @@ class LocationReservationIntegrityService {
 
     var parentScopedReadCount = 0;
     for (final parent in parents) {
-      Query<Map<String, dynamic>> parentReservationQuery = reservationCollection
-          .where('area', isEqualTo: cleanArea)
-          .where('parentId', isEqualTo: parent.id);
-      parentReservationQuery = parentReservationQuery
-          .where('companyId', isEqualTo: company);
-      final parentReservationSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => parentReservationQuery
-          .get(const GetOptions(source: Source.server)), source: 'location_reservation_integrity_service.get');
+      final parentReservationSnapshot = await reservationCollection
+          .where('parentId', isEqualTo: parent.id)
+          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/location/data/services/location_reservation_integrity_service.dart');
       parentScopedReadCount += parentReservationSnapshot.docs.length;
       for (final document in parentReservationSnapshot.docs) {
         reservationDocuments[document.id] = _ReservationDocument(
@@ -369,10 +357,10 @@ class LocationReservationIntegrityService {
 
     var resolvedForeignParentCount = 0;
     for (final parentId in unresolvedParentIds) {
-      final parentSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
+      final parentSnapshot = await _firestore
           .collection('locations')
           .doc(parentId)
-          .get(const GetOptions(source: Source.server)), source: 'location_reservation_integrity_service.get');
+          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/location/data/services/location_reservation_integrity_service.dart');
       if (!parentSnapshot.exists) continue;
       final data = parentSnapshot.data();
       if (data == null) continue;

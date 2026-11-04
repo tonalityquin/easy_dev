@@ -1,13 +1,9 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import '../../../../../shared/secondary/application/account_primary_assignment.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../../app/utils/snackbar_helper.dart';
 import '../../../../../app/utils/status_dialog.dart';
@@ -18,19 +14,15 @@ import '../../../../../shared/auth/account_code_number.dart';
 import '../../../../../shared/secondary/application/secondary_account_workspace_state.dart';
 import '../../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../../dev/application/area_state.dart';
-import '../../../../dev/application/account_group_authorization.dart';
-import '../../../../selector/application/dev_auth.dart';
+import '../../../../dev/application/developer_account_authorization.dart';
 import '../../../../launcher/application/app_mode_registry.dart';
-import '../../../../launcher/application/launcher_diagnostics.dart';
+import '../../../../selector/application/dev_auth.dart';
 import '../../../applications/user_state.dart';
-import '../../../data/services/company_bootstrap_service.dart';
-import '../../../data/services/company_grade_policy_service.dart';
-import '../../../data/services/company_grade_policy_selection_cache.dart';
 import '../../../domain/models/user/user_model.dart';
-import '../../../domain/models/account_permission_policy.dart';
 import '../../../domain/repositories/user_repository.dart';
 import 'models/user_settings_draft.dart';
 import 'user_setting_section_editor_dialog.dart';
+import 'widgets/user_role_type_section.dart';
 
 class UserSettingWorkspace extends StatefulWidget {
   const UserSettingWorkspace({
@@ -64,8 +56,8 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       <UserSettingsSection, GlobalKey>{
     for (final section in UserSettingsSection.values) section: GlobalKey(),
   };
-  final Set<String> _selectedPermissionKeys = <String>{};
-  String _accountGradeId = 'custom_6';
+
+  RoleType _selectedRole = RoleType.fieldCommon;
   UserCodeEntryMode _codeEntryMode = UserCodeEntryMode.generated;
   final Set<String> _selectedModes = <String>{};
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
@@ -73,13 +65,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   Set<String> _breakDays = <String>{};
   String? _saveError;
   bool _saving = false;
-  bool _groupAuthorized = false;
-  UserState? _authorizationUserState;
-  (String, bool, String, String, String)? _entryAuthorizationOwner;
-  Future<bool>? _entryAuthorizationFuture;
-  AccountAuthorizationOutcome? _entryAuthorizationOutcome;
-  bool _entryAuthorizationRetryRunning = false;
-  int _entryAuthorizationRevision = 0;
   bool _validationSubmitted = false;
   bool _reduceMotion = false;
   int _handledNavigationRequestId = -1;
@@ -88,232 +73,41 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   bool _visibleSectionScheduled = false;
   SecondaryAccountWorkspaceState? _workspace;
 
-  Future<Map<String, CompanyGradePolicy>> _loadGradePoliciesForEditor(
-    String companyId, {
-    bool forceRefresh = false,
-    DeveloperOperationTrace? trace,
-  }) async {
-    final company = companyId.trim();
-    try {
-      final policies = await CompanyGradePolicySelectionCache.instance.load(
-        company,
-        forceRefresh: forceRefresh,
-        onEvent: (event) => trace?.log(
-          '[GRADE_POLICY_CACHE] scope=user_setting company=$company event=$event',
-        ),
-      );
-      trace?.log(
-        '[GRADE_POLICY_CACHE] scope=user_setting company=$company event=ready count=${policies.length}',
-      );
-      return policies;
-    } catch (error, stackTrace) {
-      trace?.log(
-        '[GRADE_POLICY_CACHE] scope=user_setting company=$company event=failed error=$error stack=$stackTrace',
-      );
-      rethrow;
-    }
-  }
-
   bool get isEditMode => widget.initialUser != null;
 
-  bool get _manualCodeAllowedNow => !isEditMode && _groupAuthorized;
-
-  (String, bool, String, String, String)? _currentAuthorizationOwner() {
-    final session = _authorizationUserState?.session;
-    if (session == null) return null;
-    return (
-      FirebaseAuth.instance.currentUser?.uid ?? '',
-      session.isTablet,
-      session.companyId.trim(),
-      session.id.trim(),
-      session.email.trim().toLowerCase(),
-    );
-  }
-
-  Future<bool> _ensureEntryAuthorization({required String source}) {
-    final owner = _currentAuthorizationOwner();
-    final existing = _entryAuthorizationFuture;
-    if (existing != null && _entryAuthorizationOwner == owner) {
-      return existing;
-    }
-    final revision = ++_entryAuthorizationRevision;
-    _entryAuthorizationOwner = owner;
-    _entryAuthorizationOutcome = null;
-    _groupAuthorized = false;
-    LauncherDiagnostics.record(
-      'account_entry_authorization_started',
-      scope: 'account_settings',
-      meta: <String, Object?>{
-        'mode': isEditMode ? 'edit' : 'create',
-        'source': source,
-      },
-    );
-    final future = _verifyEntryAuthorization(
-      owner: owner,
-      revision: revision,
-      source: source,
-    );
-    _entryAuthorizationFuture = future;
-    return future;
-  }
-
-  Future<bool> _verifyEntryAuthorization({
-    required (String, bool, String, String, String)? owner,
-    required int revision,
-    required String source,
-  }) async {
-    AccountAuthorizationOutcome outcome;
-    try {
-      outcome = await AccountGroupAuthorization.verifyDetailed(source: source);
-    } catch (error) {
-      outcome = AccountAuthorizationOutcome.denied;
-      LauncherDiagnostics.record(
-        'account_entry_authorization_error',
-        scope: 'account_settings',
-        meta: <String, Object?>{
-          'errorType': error.runtimeType.toString(),
-        },
-      );
-    }
-    final valid = mounted &&
-        revision == _entryAuthorizationRevision &&
-        owner == _currentAuthorizationOwner();
-    final approved = outcome == AccountAuthorizationOutcome.approved;
-    LauncherDiagnostics.record(
-      valid
-          ? 'account_entry_authorization_completed'
-          : 'account_entry_authorization_stale_ignored',
-      scope: 'account_settings',
-      meta: <String, Object?>{
-        'mode': isEditMode ? 'edit' : 'create',
-        'outcome': outcome.name,
-        'approved': valid && approved,
-      },
-    );
-    if (!valid) return false;
-    setState(() {
-      _entryAuthorizationOutcome = outcome;
-      _groupAuthorized = approved;
-    });
-    return approved;
-  }
-
-  void _resetEntryAuthorization({required String source}) {
-    ++_entryAuthorizationRevision;
-    _entryAuthorizationFuture = null;
-    _entryAuthorizationOwner = null;
-    _entryAuthorizationOutcome = null;
-    _entryAuthorizationRetryRunning = false;
-    _groupAuthorized = false;
-    LauncherDiagnostics.record(
-      'account_entry_authorization_invalidated',
-      scope: 'account_settings',
-      meta: <String, Object?>{'reason': source},
-    );
-    _ensureEntryAuthorization(source: 'user_setting_init');
-  }
-
-  void _onAuthorizationSessionChanged() {
-    if (_entryAuthorizationOwner == _currentAuthorizationOwner()) return;
-    _resetEntryAuthorization(source: 'session_identity_changed');
-  }
-
-  Future<bool> _refreshGroupAuthorization({
-    required String source,
-    bool showStatus = false,
-  }) async {
-    final owner = _currentAuthorizationOwner();
-    final outcome = showStatus
-        ? await AccountGroupAuthorization.verifyWithStatusDetailed(
-            context,
-            source: source,
-          )
-        : await AccountGroupAuthorization.verifyDetailed(source: source);
-    final approved = outcome == AccountAuthorizationOutcome.approved;
-    if (!mounted || owner != _currentAuthorizationOwner()) {
-      LauncherDiagnostics.record(
-        'account_authorization_stale_ignored',
-        scope: 'account_settings',
-        meta: <String, Object?>{'source': source},
-      );
-      return false;
-    }
-    setState(() {
-      _groupAuthorized = approved;
-      if (_entryAuthorizationOwner == owner) {
-        ++_entryAuthorizationRevision;
-        _entryAuthorizationOutcome = outcome;
-        _entryAuthorizationFuture = Future<bool>.value(approved);
-      }
-    });
-    LauncherDiagnostics.record(
-      'account_authorization_refreshed',
-      scope: 'account_settings',
-      meta: <String, Object?>{
-        'source': source,
-        'outcome': outcome.name,
-      },
-    );
-    return approved;
-  }
-
-  Future<void> _retryEntryAuthorization() async {
-    if (!mounted ||
-        _saving ||
-        _entryAuthorizationRetryRunning ||
-        _entryAuthorizationOutcome != AccountAuthorizationOutcome.temporaryFailure) {
-      return;
-    }
-    final owner = _currentAuthorizationOwner();
-    setState(() {
-      _entryAuthorizationRetryRunning = true;
-      _entryAuthorizationFuture = null;
-      _entryAuthorizationOutcome = null;
-      ++_entryAuthorizationRevision;
-    });
-    LauncherDiagnostics.record(
-      'account_entry_authorization_retry_started',
-      scope: 'account_settings',
-    );
-    try {
-      final approved = await _ensureEntryAuthorization(
-        source: 'user_setting_retry',
-      );
-      if (!mounted || owner != _currentAuthorizationOwner()) return;
-      LauncherDiagnostics.record(
-        'account_entry_authorization_retry_completed',
-        scope: 'account_settings',
-        meta: <String, Object?>{
-          'approved': approved,
-          'outcome': _entryAuthorizationOutcome?.name ?? 'stale',
-        },
-      );
-    } finally {
-      if (mounted && owner == _currentAuthorizationOwner()) {
-        setState(() => _entryAuthorizationRetryRunning = false);
-      }
-    }
-  }
-
-  Future<void> _showAuthorizationDeveloperStatus() async {
-    await LauncherDiagnostics.showStatus(
-      context,
-      title: '계정 권한 STATUS',
-      description: '계정 권한 확인 및 재시도 기록',
-      scope: 'account_settings',
-      failure: _entryAuthorizationOutcome ==
-          AccountAuthorizationOutcome.temporaryFailure,
-    );
-  }
+  bool get _manualCodeAllowedNow =>
+      !isEditMode &&
+      DevAuth.devModeEnabled.value &&
+      DeveloperAccountAuthorization.isAuthorized;
 
   Future<bool> _isManualCodeAuthorized({bool interactive = false}) async {
     if (isEditMode) return false;
-    return _refreshGroupAuthorization(
-      source: interactive
-          ? 'user_account_manual_code_interactive'
-          : 'user_account_manual_code',
-      showStatus: interactive,
-    );
+    final enabled = await DevAuth.isDevModeEnabled();
+    if (!enabled) return false;
+    if (interactive) {
+      return DeveloperAccountAuthorization.authorizeInteractive(
+        source: 'user_account_manual_code_entry',
+      );
+    }
+    return DeveloperAccountAuthorization.isAuthorized;
+  }
+
+  void _handleDevModeChanged() {
+    if (!mounted || isEditMode) return;
+    if (DevAuth.devModeEnabled.value ||
+        _codeEntryMode != UserCodeEntryMode.developerManual) {
+      setState(() {});
+      return;
+    }
+    setState(() {
+      _codeEntryMode = UserCodeEntryMode.generated;
+      _codeNumberController.text = AccountCodeNumber.format(
+        AccountCodeNumber.generate(),
+      );
+      _saveError = null;
+    });
+    _syncSectionStates(source: 'developer_mode_disabled');
+    _workspace?.log('manual_code_entry_disabled reason=developer_mode_off');
   }
 
   @override
@@ -325,6 +119,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     _endByDay = <String, TimeOfDay?>{
       for (final day in _days) day: null,
     };
+    DevAuth.devModeEnabled.addListener(_handleDevModeChanged);
     _populateInitialValues();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -337,22 +132,12 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     super.didChangeDependencies();
     _reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     _workspace ??= context.read<SecondaryAccountWorkspaceState>();
-    final userState = context.read<UserState>();
-    if (!identical(_authorizationUserState, userState)) {
-      _authorizationUserState?.removeListener(_onAuthorizationSessionChanged);
-      _authorizationUserState = userState;
-      userState.addListener(_onAuthorizationSessionChanged);
-      _resetEntryAuthorization(source: 'user_state_instance_changed');
-    } else if (_entryAuthorizationFuture == null) {
-      _ensureEntryAuthorization(source: 'user_setting_init');
-    }
   }
 
   @override
   void didUpdateWidget(covariant UserSettingWorkspace oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialUser?.id == widget.initialUser?.id) return;
-    _resetEntryAuthorization(source: 'editing_target_changed');
     _populateInitialValues();
     _validationSubmitted = false;
     _saveError = null;
@@ -364,13 +149,12 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
 
   @override
   void dispose() {
-    _authorizationUserState?.removeListener(_onAuthorizationSessionChanged);
-    ++_entryAuthorizationRevision;
     _nameController.dispose();
     _codeNumberController.dispose();
     _emailController.dispose();
     _positionController.dispose();
     _scrollController.dispose();
+    DevAuth.devModeEnabled.removeListener(_handleDevModeChanged);
     super.dispose();
   }
 
@@ -382,10 +166,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       _codeNumberController.text = AccountCodeNumber.format(AccountCodeNumber.generate());
       _emailController.clear();
       _positionController.clear();
-      _accountGradeId = 'custom_6';
-      _selectedPermissionKeys
-        ..clear()
-        ..addAll(AccountPermissionPolicy.presetPermissions('custom_6'));
+      _selectedRole = RoleType.fieldCommon;
       _selectedModes
         ..clear()
         ..add('single');
@@ -408,10 +189,10 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     );
     _emailController.text = user.email.split('@').first;
     _positionController.text = user.position ?? '';
-    _accountGradeId = user.accountGradeId;
-    _selectedPermissionKeys
-      ..clear()
-      ..addAll(AccountPermissionPolicy.sanitize(user.permissionKeys));
+    _selectedRole = RoleType.values.firstWhere(
+      (role) => role.name == user.role,
+      orElse: () => RoleType.fieldCommon,
+    );
     _selectedModes
       ..clear()
       ..addAll(_normalizeAndFilterModes(user.modes));
@@ -566,8 +347,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       codeEntryMode: _codeEntryMode,
       emailLocal: _emailController.text.trim(),
       position: _positionController.text.trim(),
-      accountGradeId: _accountGradeId,
-      permissionKeys: Set<String>.of(_selectedPermissionKeys),
+      role: _selectedRole,
       modes: Set<String>.of(_selectedModes),
       startByDay: Map<String, TimeOfDay?>.of(_startByDay),
       endByDay: Map<String, TimeOfDay?>.of(_endByDay),
@@ -592,10 +372,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
           _emailController.text = draft.emailLocal;
           break;
         case UserSettingsSection.permission:
-          _accountGradeId = draft.accountGradeId;
-          _selectedPermissionKeys
-            ..clear()
-            ..addAll(AccountPermissionPolicy.sanitize(draft.permissionKeys));
+          _selectedRole = draft.role;
           _selectedModes
             ..clear()
             ..addAll(_normalizeAndFilterModes(draft.modes));
@@ -689,35 +466,9 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       trace.log(
         '원본 row bounds 확보: width=${sourceRect.width.toStringAsFixed(1)}, height=${sourceRect.height.toStringAsFixed(1)}',
       );
-      final entryOwner = _currentAuthorizationOwner();
-      final entryReused = _entryAuthorizationFuture != null &&
-          _entryAuthorizationOwner == entryOwner;
-      final entryApproved = await _ensureEntryAuthorization(
-        source: 'user_setting_init',
-      );
-      if (!mounted || entryOwner != _currentAuthorizationOwner()) {
-        trace.log(
-          '[ACCOUNT_AUTH] event=section_open_cancelled reason=session_changed section=${section.name}',
-        );
-        return;
-      }
-      final manualCodeAllowed = !isEditMode &&
-          section == UserSettingsSection.identity &&
-          entryApproved;
-      trace.log(
-        '[ACCOUNT_AUTH] event=entry_reused section=${section.name} mode=${isEditMode ? 'edit' : 'create'} reused=$entryReused approved=$entryApproved additionalGateRead=${entryReused ? 0 : 1}',
-      );
-      LauncherDiagnostics.record(
-        'account_section_entry_gate_reused',
-        scope: 'account_settings',
-        meta: <String, Object?>{
-          'section': section.name,
-          'reused': entryReused,
-          'approved': entryApproved,
-        },
-      );
-      if (section == UserSettingsSection.identity &&
-          !manualCodeAllowed &&
+      final manualCodeAllowed = await _isManualCodeAuthorized();
+      if (!mounted) return;
+      if (!manualCodeAllowed &&
           _codeEntryMode == UserCodeEntryMode.developerManual) {
         setState(() {
           _codeEntryMode = UserCodeEntryMode.generated;
@@ -735,8 +486,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         barrierLabel: '${_sectionTitle(section)} 편집',
         builder: (dialogContext) {
           return UserSettingSectionEditorDialog(
-            companyId: widget.initialUser?.companyId ??
-                context.read<AreaState>().currentDivision,
             section: section,
             initialDraft: _currentDraft().detached(),
             isEditMode: isEditMode,
@@ -744,12 +493,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
             onRequestManualCodeEntry: () =>
                 _isManualCodeAuthorized(interactive: true),
             trace: trace,
-            onLoadGradePolicies: (companyId, {required bool forceRefresh}) =>
-                _loadGradePoliciesForEditor(
-                  companyId,
-                  forceRefresh: forceRefresh,
-                  trace: trace,
-                ),
             onApply: (draft) => _applyEditorDraft(section, draft),
           );
         },
@@ -855,24 +598,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     return AccountCodeNumber.mask(value);
   }
 
-  String _primaryAreaValidationMessage(Object error) {
-    if (error is FirebaseException) {
-      switch (error.code) {
-        case 'permission-denied':
-          return '선택한 지역의 조회 권한을 확인할 수 없습니다. 관리자에게 문의해 주세요.';
-        case 'unavailable':
-          return '지역 정보 서버에 연결할 수 없습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.';
-        case 'deadline-exceeded':
-          return '지역 정보 확인 요청 시간이 초과됐습니다. 다시 시도해 주세요.';
-      }
-    }
-    if (error is StateError &&
-        error.message.toString().contains('PRIMARY_AREA_NOT_IN_DIVISION')) {
-      return '선택한 지역이 없거나 회사와 일치하지 않습니다. 회사와 지역 설정을 확인해 주세요.';
-    }
-    return '지역 정보를 확인하지 못했습니다. 다시 시도해 주세요.';
-  }
-
   String _friendlySaveError(String message) {
     final limit = RegExp(r'최대\s*(\d+)').firstMatch(message)?.group(1);
     if (message.contains('활성화 제한')) {
@@ -880,9 +605,8 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
           ? '선택한 지역의 활성 계정 한도에 도달했습니다.'
           : '선택한 지역의 활성 계정은 최대 $limit개까지 사용할 수 있습니다.';
     }
-    if (message.contains('MANUAL_CODE_NOT_AUTHORIZED') ||
-        message.contains('GROUP_ACCESS_DENIED')) {
-      return '현재 계정의 서버 접근 승인을 확인하세요.';
+    if (message.contains('MANUAL_CODE_NOT_AUTHORIZED')) {
+      return '개발자 모드와 개발자 계정 인증을 다시 확인하세요.';
     }
     if (message.contains('MANUAL_CODE_INVALID')) {
       return '직접 입력 코드번호는 숫자 11자리여야 합니다.';
@@ -927,28 +651,12 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
     final repository = context.read<UserRepository>();
-    final initialUser = widget.initialUser;
-    final previousDivision = initialUser?.companyId.trim() ?? '';
-    final previousArea = initialUser == null
-        ? ''
-        : <String?>[
-            initialUser.currentArea,
-            initialUser.selectedArea,
-            initialUser.areas.firstOrNull,
-          ].whereType<String>().map((value) => value.trim()).firstWhere(
-            (value) => value.isNotEmpty,
-            orElse: () => '',
-          );
-    final area = initialUser == null || previousArea.isEmpty
-        ? areaState.currentArea.trim()
-        : previousArea;
-    final division = initialUser == null || previousDivision.isEmpty
-        ? areaState.currentDivision.trim()
-        : previousDivision;
+    final area = areaState.currentArea.trim();
+    final division = areaState.currentDivision.trim();
     final selectedArea = area;
     final normalizedModes = _normalizeAndFilterModes(_selectedModes);
+    final initialUser = widget.initialUser;
     final operationTitle = isEditMode ? '계정 수정' : '계정 생성';
-    String? primaryAreaValidationMessage;
 
     setState(() => _saving = true);
     workspace?.setSettingsSaving(true, source: 'submit_started');
@@ -970,20 +678,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     trace.log('passwordPolicy=manual_firestore_only appPasswordWrite=false');
 
     try {
-      final approved = await _refreshGroupAuthorization(
-        source: 'user_setting_save',
-      );
-      trace.log('server_access_gate approved=$approved');
-      if (!approved) throw StateError('GROUP_ACCESS_DENIED');
-      final actorForWrite = context.read<UserState>();
-      final permission = isEditMode ? 'accounts.update' : 'accounts.create';
-      if (!actorForWrite.hasPermission(permission)) {
-        await CompanyBootstrapService.requireDeveloper(
-          source: 'user_account_write',
-          forceAccountSelection: false,
-        );
-      }
-      trace.log('server_account_write_gate_approved');
       if (_codeEntryMode == UserCodeEntryMode.developerManual) {
         final authorized = await _isManualCodeAuthorized();
         if (!authorized) {
@@ -1010,27 +704,21 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
       final requiresCodeAllocation = !isEditMode ||
           !AccountCodeNumber.isValid(initialUser?.codeNumber ?? '');
       if (requiresCodeAllocation) {
-        Future<bool> codeReserved(String code) async {
-          try {
-            return await repository.getUserByAccountCode(code) != null;
-          } on FirebaseException catch (error) {
-            if (error.code == 'permission-denied') return true;
-            rethrow;
-          }
-        }
         var normalizedCode = AccountCodeNumber.normalize(
           _codeNumberController.text,
         );
-        var occupied = await codeReserved(normalizedCode);
+        var existing = await repository.getUserByAccountCode(normalizedCode);
         if (_codeEntryMode == UserCodeEntryMode.developerManual) {
-          if (occupied) throw StateError('CODE_NUMBER_ALREADY_EXISTS');
+          if (existing != null) {
+            throw StateError('CODE_NUMBER_ALREADY_EXISTS');
+          }
           trace.log(
             '개발자 직접 입력 코드번호 중복 검사 완료: code=${AccountCodeNumber.mask(normalizedCode)}',
             progress: 0.34,
           );
         } else {
           var attempts = 0;
-          while (occupied && attempts < 8) {
+          while (existing != null && attempts < 8) {
             attempts += 1;
             normalizedCode = AccountCodeNumber.generate();
             _codeNumberController.text = AccountCodeNumber.format(normalizedCode);
@@ -1038,9 +726,11 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
               '코드번호 중복 감지 후 재발급: attempt=$attempts code=${AccountCodeNumber.mask(normalizedCode)}',
               progress: 0.34,
             );
-            occupied = await codeReserved(normalizedCode);
+            existing = await repository.getUserByAccountCode(normalizedCode);
           }
-          if (occupied) throw StateError('CODE_NUMBER_GENERATION_FAILED');
+          if (existing != null) {
+            throw StateError('CODE_NUMBER_GENERATION_FAILED');
+          }
         }
       }
 
@@ -1051,124 +741,6 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         progress: 0.42,
       );
 
-      final previousDivisions = initialUser?.divisions ?? const <String>[];
-      final previousAreas = initialUser?.areas ?? const <String>[];
-      final nextDivisions = initialUser != null && previousDivisions.isNotEmpty
-          ? AccountPrimaryAssignment.normalize(previousDivisions)
-          : AccountPrimaryAssignment.replacePrimary(
-              existing: previousDivisions,
-              previousPrimary: previousDivision,
-              nextPrimary: division,
-            );
-      final nextAreas = initialUser != null && previousAreas.isNotEmpty
-          ? AccountPrimaryAssignment.normalize(previousAreas)
-          : AccountPrimaryAssignment.replacePrimary(
-              existing: previousAreas,
-              previousPrimary: previousArea,
-              nextPrimary: area,
-            );
-      final hasAssignmentChange = !AccountPermissionPolicy.normalizedAssignments(nextDivisions)
-              .containsAll(AccountPermissionPolicy.normalizedAssignments(previousDivisions)) ||
-          !AccountPermissionPolicy.normalizedAssignments(previousDivisions)
-              .containsAll(AccountPermissionPolicy.normalizedAssignments(nextDivisions)) ||
-          !AccountPermissionPolicy.normalizedAssignments(nextAreas)
-              .containsAll(AccountPermissionPolicy.normalizedAssignments(previousAreas)) ||
-          !AccountPermissionPolicy.normalizedAssignments(previousAreas)
-              .containsAll(AccountPermissionPolicy.normalizedAssignments(nextAreas));
-      final changedPrimary = initialUser != null &&
-          AccountPrimaryAssignment.primaryChanged(
-            oldDivision: previousDivision,
-            oldArea: previousArea,
-            newDivision: division,
-            newArea: area,
-          );
-      final requiresPrimaryValidation =
-          hasAssignmentChange || changedPrimary || initialUser == null;
-      if (requiresPrimaryValidation) {
-        if (division.isEmpty || area.isEmpty) {
-          primaryAreaValidationMessage =
-              '선택한 지역이 없거나 회사와 일치하지 않습니다. 회사와 지역 설정을 확인해 주세요.';
-          trace.log(
-            '[ACCOUNT_ASSIGNMENT] source=user_setting strategy=exact '
-            'event=rejected reason=empty_assignment read=0 write=0 '
-            'sqliteWrite=0 division=$division area=$area',
-            progress: 0.46,
-          );
-          throw StateError('PRIMARY_AREA_NOT_IN_DIVISION');
-        }
-        final areaDocumentPath = 'areas/$division-$area';
-        trace.log(
-          '[ACCOUNT_ASSIGNMENT] source=user_setting strategy=exact '
-          'event=started expectedRead=1 write=0 sqliteWrite=0 '
-          'path=$areaDocumentPath',
-          progress: 0.46,
-        );
-        try {
-          final areaSnapshot = await FirebaseActivityMonitor.track(
-            FirebaseActivityKind.read,
-            () => FirebaseFirestore.instance
-                .collection('areas')
-                .doc('$division-$area')
-                .get(const GetOptions(source: Source.server)),
-            source: 'user_setting.primary_area_validation',
-          );
-          final areaData = areaSnapshot.data();
-          final storedArea = (areaData?['name'] ?? '').toString().trim();
-          final storedDivision =
-              (areaData?['division'] ?? 'default').toString().trim();
-          if (!areaSnapshot.exists ||
-              areaData == null ||
-              storedArea != area ||
-              storedDivision != division) {
-            throw StateError('PRIMARY_AREA_NOT_IN_DIVISION');
-          }
-          trace.log(
-            '[ACCOUNT_ASSIGNMENT] source=user_setting strategy=exact '
-            'event=validated read=1 write=0 sqliteWrite=0 '
-            'path=$areaDocumentPath division=$storedDivision area=$storedArea',
-            progress: 0.49,
-          );
-        } catch (error) {
-          primaryAreaValidationMessage = _primaryAreaValidationMessage(error);
-          final failureCode = error is FirebaseException
-              ? error.code
-              : error is StateError
-                  ? error.message.toString()
-                  : error.runtimeType.toString();
-          trace.log(
-            '[ACCOUNT_ASSIGNMENT] source=user_setting strategy=exact '
-            'event=${error is StateError ? 'rejected' : 'failed'} '
-            'reason=$failureCode expectedRead=1 write=0 sqliteWrite=0 '
-            'path=$areaDocumentPath',
-            progress: 0.46,
-          );
-          rethrow;
-        }
-      } else {
-        trace.log(
-          '[ACCOUNT_ASSIGNMENT] source=user_setting strategy=unchanged_skip '
-          'event=skipped read=0 write=0 sqliteWrite=0 '
-          'division=$division area=$area',
-          progress: 0.49,
-        );
-      }
-      final assignmentDenied = AccountPermissionPolicy.validateAssignments(
-        actorPermissions: userState.permissionKeys,
-        actorDivisions: userState.assignedDivisions,
-        actorAreas: userState.assignedAreas,
-        newDivisions: nextDivisions,
-        newAreas: nextAreas,
-      );
-      trace.log('primary_assignment_check old=$previousDivision/$previousArea new=$division/$area moved=$changedPrimary divisions=${nextDivisions.length} areas=${nextAreas.length}');
-      trace.log('assignment_list_check allowed=${assignmentDenied == null} reason=${assignmentDenied ?? 'ok'} divisions=${nextDivisions.length} areas=${nextAreas.length}');
-      if (assignmentDenied != null) throw StateError(assignmentDenied);
-
-      final currentPolicy = initialUser?.isInitialAdmin == true
-          ? null
-          : await CompanyGradePolicyService().load(division, _accountGradeId);
-      final currentPermissions = currentPolicy?.permissionKeys ??
-          Set<String>.of(_selectedPermissionKeys);
-      trace.log('현재 등급 정책: company=$division grade=$_accountGradeId version=${currentPolicy?.version} count=${currentPermissions.length}');
       final user = UserModel(
         id: AccountCodeNumber.documentId(
           codeNumber: _codeNumberController.text,
@@ -1177,16 +749,11 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         name: _nameController.text.trim(),
         codeNumber: AccountCodeNumber.normalize(_codeNumberController.text),
         email: '${_emailController.text.trim()}@gmail.com',
-        companyId: initialUser?.companyId.isNotEmpty == true
-            ? initialUser!.companyId : division,
-        isInitialAdmin: initialUser?.isInitialAdmin ?? false,
-        areaIds: initialUser?.areaIds ?? const <String>[],
-        accountGradeId: _accountGradeId,
-        permissionKeys: currentPermissions.toList(growable: false),
+        role: _selectedRole.name,
         modes: normalizedModes,
         position: _positionController.text.trim(),
-        areas: nextAreas,
-        divisions: nextDivisions,
+        areas: <String>[area],
+        divisions: <String>[division],
         currentArea: area,
         selectedArea: selectedArea,
         englishSelectedAreaName: englishName ?? area,
@@ -1199,25 +766,11 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         isActive: initialUser?.isActive ?? true,
       );
 
-      final reason = AccountPermissionPolicy.validateChange(
-        actorPermissions: userState.permissionKeys,
-        previousPermissions: initialUser?.permissionKeys ?? const <String>[],
-        nextPermissions: user.permissionKeys,
-        isCreating: initialUser == null,
-        changesPermissions: initialUser == null ||
-            initialUser.accountGradeId != _accountGradeId,
-      );
-      trace.log('permission_policy_final_check allowed=${reason == null} reason=${reason ?? 'ok'}');
-      if (reason != null) throw StateError(reason);
-
       trace.log(
         '전역 코드 인덱스 정책 적용: user_account_codes reservation과 일반 User 저장을 동일 transaction으로 요청합니다.',
         progress: 0.54,
       );
       trace.log('계정 모델 구성 완료: Firestore 저장을 요청합니다.', progress: 0.58);
-      trace.log(
-        'permissions_saved count=${user.permissionKeys.length}',
-      );
       String? saveError;
       bool saved = true;
       if (isEditMode && initialUser != null) {
@@ -1277,18 +830,14 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         stackTrace: stackTrace,
       );
       if (!mounted) return;
-      final failureMessage = primaryAreaValidationMessage ??
-          '$operationTitle 중 문제가 발생했습니다.';
-      final message = '$failureMessage 입력 내용은 유지됩니다.';
+      final message = '$operationTitle 중 문제가 발생했습니다. 입력 내용은 유지됩니다.';
       setState(() => _saveError = message);
       workspace?.log('settings_submit_exception error=$error');
       if (!trace.developerMode) {
         await StatusDialog.showFailure(
           context,
           title: '$operationTitle 불가',
-          description: primaryAreaValidationMessage == null
-              ? '$message\n네트워크 상태를 확인한 뒤 다시 시도하세요.'
-              : message,
+          description: '$message\n네트워크 상태를 확인한 뒤 다시 시도하세요.',
           visibleDuration: const Duration(seconds: 5),
           useCommonUi: true,
         );
@@ -1440,10 +989,8 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
     final modes = _normalizeAndFilterModes(_selectedModes)
         .map(_modeLabel)
         .toList(growable: false);
-    final permissions = _selectedPermissionKeys.length;
-    final profile = AccountPermissionPolicy.gradeLabel(_accountGradeId);
-    if (modes.isEmpty) return '$profile · 권한 $permissions개 · 허용 모드 입력 필요';
-    return '$profile · 권한 $permissions개 · ${modes.join(' · ')}';
+    if (modes.isEmpty) return '${_selectedRole.label} · 허용 모드 입력 필요';
+    return '${_selectedRole.label} · ${modes.join(' · ')}';
   }
 
   String _positionSummary() {
@@ -1621,84 +1168,14 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
 
     return Row(
       children: [
-        AnimatedSwitcher(
-          duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
-          switchInCurve: CommonUiMotion.enter,
-          switchOutCurve: CommonUiMotion.exit,
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, .08),
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
-            ),
-          ),
-          child: Text(
-            label,
-            key: ValueKey<String>('settings_status_$label'),
-            style: textTheme.labelSmall?.copyWith(
-              color: tokens.textSecondary,
-              fontWeight: FontWeight.w700,
-            ),
+        Text(
+          label,
+          style: textTheme.labelSmall?.copyWith(
+            color: tokens.textSecondary,
+            fontWeight: FontWeight.w700,
           ),
         ),
         const Spacer(),
-        AnimatedSwitcher(
-          duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
-          switchInCurve: CommonUiMotion.enter,
-          switchOutCurve: CommonUiMotion.exit,
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: .94, end: 1).animate(animation),
-              child: child,
-            ),
-          ),
-          child: (_entryAuthorizationOutcome ==
-                          AccountAuthorizationOutcome.temporaryFailure ||
-                      _entryAuthorizationRetryRunning) &&
-                  !isEditMode
-              ? TextButton.icon(
-                  key: const ValueKey<String>('authorization_retry'),
-                  onPressed: _entryAuthorizationRetryRunning || _saving
-                      ? null
-                      : _retryEntryAuthorization,
-                  icon: _entryAuthorizationRetryRunning
-                      ? const SizedBox(
-                          width: 15,
-                          height: 15,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.refresh_rounded, size: 18),
-                  label: const Text('다시 확인'),
-                )
-              : const SizedBox.shrink(
-                  key: ValueKey<String>('authorization_retry_hidden'),
-                ),
-        ),
-        ValueListenableBuilder<bool>(
-          valueListenable: DevAuth.devModeEnabled,
-          builder: (context, enabled, child) => AnimatedSwitcher(
-            duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
-            child: enabled
-                ? IconButton(
-                    key: const ValueKey<String>('authorization_debug_status'),
-                    onPressed: _showAuthorizationDeveloperStatus,
-                    icon: const Icon(Icons.bug_report_outlined, size: 18),
-                    constraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 36,
-                    ),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                  )
-                : const SizedBox.shrink(
-                    key: ValueKey<String>('authorization_debug_hidden'),
-                  ),
-          ),
-        ),
         AnimatedSwitcher(
           duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
           switchInCurve: CommonUiMotion.enter,
@@ -1765,8 +1242,13 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
   }
 
   Widget _buildFooter(BuildContext context) {
+    final footerKey = _saving
+        ? 'settings_footer_saving'
+        : isEditMode
+            ? 'settings_footer_edit'
+            : 'settings_footer_create';
     return OpsDockContextFooter(
-      key: const ValueKey<String>('settings_footer'),
+      key: ValueKey<String>(footerKey),
       children: [
         Expanded(
           child: CommonButton(
@@ -1781,30 +1263,15 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         ),
         const SizedBox(width: 6),
         Expanded(
-          child: AnimatedSwitcher(
-            duration: _reduceMotion ? Duration.zero : CommonUiMotion.selection,
-            switchInCurve: CommonUiMotion.enter,
-            switchOutCurve: CommonUiMotion.exit,
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: ScaleTransition(
-                scale: Tween<double>(begin: .97, end: 1).animate(animation),
-                child: child,
-              ),
-            ),
-            child: CommonButton(
-              key: ValueKey<String>(
-                _saving ? 'settings_submit_in_progress' : 'settings_submit_ready',
-              ),
-              label: isEditMode ? '수정 완료' : '생성 완료',
-              icon: isEditMode ? Icons.save_rounded : Icons.person_add_alt_1_rounded,
-              onPressed: _saving ? null : _handleSave,
-              variant: CommonButtonVariant.primary,
-              loading: _saving,
-              haptic: CommonHaptic.selection,
-              minHeight: 42,
-              expand: true,
-            ),
+          child: CommonButton(
+            label: isEditMode ? '수정 완료' : '생성 완료',
+            icon: isEditMode ? Icons.save_rounded : Icons.person_add_alt_1_rounded,
+            onPressed: _saving ? null : _handleSave,
+            variant: CommonButtonVariant.primary,
+            loading: _saving,
+            haptic: CommonHaptic.selection,
+            minHeight: 42,
+            expand: true,
           ),
         ),
       ],

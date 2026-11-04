@@ -1,3 +1,4 @@
+import '../diagnostics/firebase_activity_meter.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -106,7 +107,7 @@ class GcsImageUploader {
           bucketName,
           uploadMedia: media,
           predefinedAcl: 'publicRead',
-        );
+        ).trackStorage('UPLOAD', 'app/auth/gcs_image_uploader.dart', bytes: fileSize);
 
         objectUrl = 'https://storage.googleapis.com/$bucketName/${object.name}';
 

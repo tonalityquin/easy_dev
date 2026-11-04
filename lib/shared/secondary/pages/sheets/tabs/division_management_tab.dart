@@ -49,9 +49,9 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
     if (_adding || _deletingDivisionName != null) return;
     final ok = await showOpsConfirmDialog(
       context: context,
-      title: '회사 폐쇄',
-      message: '"$division" 회사를 폐쇄하고 초기 관리자 로그인을 비활성화합니다. 기존 기록은 보존하고 다른 관리자들의 접근 목록을 재동기화합니다. 다른 소속 계정이 남아 있으면 폐쇄하지 않습니다.',
-      confirmLabel: '폐쇄',
+      title: '회사 삭제',
+      message: '"$division" 회사와 소속 지역, 비어 있는 계정 메타 문서를 삭제합니다. 계정이나 운영 데이터가 남아 있으면 먼저 정리해야 합니다.',
+      confirmLabel: '삭제',
       icon: Icons.delete_forever_rounded,
       destructive: true,
     );
@@ -98,7 +98,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '회사를 먼저 등록합니다. 본사와 계정은 최초 계정 생성 시 추가됩니다.',
+                    '회사와 본사 지역, 계정 메타를 함께 생성합니다.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: tokens.textSecondary,
                           height: 1.3,
@@ -212,7 +212,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '최초 계정 생성 시 본사 자동 생성 · 기본 한도 5/10',
+                              '본사 지역 포함 · 상세 설정은 지역 탭에서 관리',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -223,20 +223,15 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      AnimatedScale(
-                        scale: deleting ? .9 : 1,
-                        duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                        curve: Curves.easeOutCubic,
-                        child: CommonIconButton(
-                          icon: Icons.business_outlined,
-                          tooltip: '회사 폐쇄',
-                          destructive: true,
-                          loading: deleting,
-                          onPressed: _adding || _deletingDivisionName != null
-                              ? null
-                              : () => _handleDeleteDivision(division),
-                          haptic: CommonHaptic.medium,
-                        ),
+                      CommonIconButton(
+                        icon: Icons.delete_outline_rounded,
+                        tooltip: '회사 삭제',
+                        destructive: true,
+                        loading: deleting,
+                        onPressed: _adding || _deletingDivisionName != null
+                            ? null
+                            : () => _handleDeleteDivision(division),
+                        haptic: CommonHaptic.medium,
                       ),
                     ],
                   ),
@@ -284,8 +279,8 @@ class _DivisionCreateDialog extends StatefulWidget {
 class _DivisionCreateDialogState extends State<_DivisionCreateDialog> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _englishController = TextEditingController();
-  final TextEditingController _activeLimitController = TextEditingController(text: '5');
-  final TextEditingController _totalLimitController = TextEditingController(text: '10');
+  final TextEditingController _activeLimitController = TextEditingController();
+  final TextEditingController _totalLimitController = TextEditingController();
 
   Set<Capability> _capabilities = <Capability>{};
   String? _errorText;
@@ -401,7 +396,6 @@ class _DivisionCreateDialogState extends State<_DivisionCreateDialog> {
                         selectedModes: DevAreaModePolicy.headquarterModes,
                         selectedCapabilities: _capabilities,
                         showModeSelector: false,
-                        lockLimits: true,
                         onModesChanged: (_) {},
                         onCapabilitiesChanged: (value) => setState(() {
                           _errorText = null;

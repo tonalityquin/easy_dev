@@ -1,12 +1,10 @@
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
-import '../../../../app/utils/status_dialog.dart';
 import '../../applications/tablet_account_diagnostics.dart';
 import '../../../../shared/auth/account_code_number.dart';
 import '../../domain/models/tablet/tablet_model.dart';
@@ -33,16 +31,7 @@ class UserReadService {
 
   String _normalizeHandle(String h) => h.trim().toLowerCase();
 
-  String? get _authenticatedCacheScope {
-    final uid = FirebaseAuth.instance.currentUser?.uid.trim() ?? '';
-    return uid.isEmpty ? null : uid;
-  }
-
-  String _userCacheKey(String selectedArea, {String? companyId}) =>
-      'users_v3_${_authenticatedCacheScope ?? 'unauthenticated'}_${companyId ?? ''}_$selectedArea';
-
-  String _tabletCacheKey(String selectedArea, {String? companyId}) =>
-      'tablets_v3_${_authenticatedCacheScope ?? 'unauthenticated'}_${companyId ?? ''}_$selectedArea';
+  String _userCacheKey(String selectedArea) => 'users_v2_$selectedArea';
 
   String _showDocId(String division, String area) {
     final d = division
@@ -61,10 +50,10 @@ class UserReadService {
   }
 
   Future<void> _writeRootActiveState(String id, bool active) async {
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _getUserCollectionRef().doc(id).set(
+    await _getUserCollectionRef().doc(id).set(
       <String, dynamic>{'isActive': active},
       SetOptions(merge: true),
-    ), source: 'user_read_service.set');
+    ).trackFirestore('SET', 'features/account/data/services/user_read_service.dart');
   }
 
   Future<UserModel> _userFromRootWithActiveState(
@@ -75,7 +64,7 @@ class UserReadService {
     final user = UserModel.fromMap(id, source);
     if (source['isActive'] is bool) return user;
 
-    final division = user.companyId.trim();
+    final division = user.divisions.isNotEmpty ? user.divisions.first.trim() : '';
     final area = (user.currentArea ?? '').trim().isNotEmpty
         ? user.currentArea!.trim()
         : (user.selectedArea ?? '').trim().isNotEmpty
@@ -106,8 +95,8 @@ class UserReadService {
           .collection('users')
           .doc(id);
       final showSnap = viewOptions == null
-          ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => showRef.get(), source: 'user_read_service.get')
-          : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => showRef.get(viewOptions), source: 'user_read_service.get');
+          ? await showRef.get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart')
+          : await showRef.get(viewOptions).trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
       final active = showSnap.data()?['isActive'];
       if (active is! bool) {
         debugPrint(
@@ -152,7 +141,7 @@ class UserReadService {
   Future<UserModel?> getUserById(String userId) async {
     debugPrint('getUserById 호출 → ID: $userId');
     try {
-      final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef().doc(userId).get(), source: 'user_read_service.get');
+      final doc = await _getUserCollectionRef().doc(userId).get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
 
       if (!doc.exists) {
         debugPrint('DB 문서 없음 → userId=$userId');
@@ -165,18 +154,11 @@ class UserReadService {
   }
 
   Future<UserModel?> getUserByIdFromServer(String userId) async {
-    final document = _getUserCollectionRef().doc(userId);
-    final auth = FirebaseAuth.instance.currentUser;
-    debugPrint(
-      '[USER-READ] server_account_get_start document=${document.path} firebaseAuthenticated=${auth != null} googleProvider=${auth?.providerData.any((provider) => provider.providerId == 'google.com') ?? false}',
-    );
     try {
-      final doc = await FirebaseActivityMonitor.track(
-        FirebaseActivityKind.read,
-        () => document.get(const GetOptions(source: Source.server)),
-        source: 'user_read_service.get',
-      );
-      debugPrint('[USER-READ] server_account_get_complete document=${document.path} exists=${doc.exists}');
+      final doc = await _getUserCollectionRef()
+          .doc(userId)
+          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+
       if (!doc.exists) {
         return null;
       }
@@ -185,8 +167,7 @@ class UserReadService {
         doc.data()!,
         viewOptions: const GetOptions(source: Source.server),
       );
-    } on FirebaseException catch (error, stackTrace) {
-      debugPrint('[USER-READ] server_account_get_failed document=${document.path} code=${error.code}\n$stackTrace');
+    } on FirebaseException {
       rethrow;
     }
   }
@@ -194,19 +175,43 @@ class UserReadService {
   Future<UserModel?> getUserByAccountCode(String accountCode) async {
     final normalized = AccountCodeNumber.normalize(accountCode);
     if (!AccountCodeNumber.isValid(normalized)) return null;
+
     debugPrint(
-      'getUserByAccountCode, 조회 시작 - accountCode: ${AccountCodeNumber.mask(normalized)} source=code_index',
+      'getUserByAccountCode, 조회 시작 - accountCode: ${AccountCodeNumber.mask(normalized)} source=root_query',
     );
     try {
-      final index = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('user_account_codes')
-          .doc(normalized).get(const GetOptions(source: Source.server)), source: 'user_read_service.get');
-      final accountId = (index.data()?['userId'] ?? '').toString().trim();
-      if (accountId.isEmpty || index.data()?['codeNumber'] != normalized) {
+      final codeSnapshot = await _getUserCollectionRef()
+          .where('codeNumber', isEqualTo: normalized)
+          .limit(2)
+          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+      if (codeSnapshot.docs.length > 1) {
+        debugPrint(
+          'getUserByAccountCode, 중복 코드번호 감지 - accountCode: ${AccountCodeNumber.mask(normalized)} source=codeNumber',
+        );
         return null;
       }
-      final user = await getUserByIdFromServer(accountId);
-      if (user == null || user.codeNumber != normalized) return null;
-      return user;
+      if (codeSnapshot.docs.length == 1) {
+        final doc = codeSnapshot.docs.single;
+        return await _userFromRootWithActiveState(doc.id, doc.data());
+      }
+
+      for (final field in <String>['phone', 'handle']) {
+        final legacySnapshot = await _getUserCollectionRef()
+            .where(field, isEqualTo: normalized)
+            .limit(2)
+            .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+        if (legacySnapshot.docs.length > 1) {
+          debugPrint(
+            'getUserByAccountCode, 중복 legacy 식별자 감지 - accountCode: ${AccountCodeNumber.mask(normalized)} source=$field',
+          );
+          return null;
+        }
+        if (legacySnapshot.docs.length == 1) {
+          final doc = legacySnapshot.docs.single;
+          return await _userFromRootWithActiveState(doc.id, doc.data());
+        }
+      }
+      return null;
     } on FirebaseException catch (error, stackTrace) {
       debugPrint(
         'getUserByAccountCode, Firebase 조회 실패 - accountCode: ${AccountCodeNumber.mask(normalized)} code=${error.code} message=${error.message}',
@@ -230,10 +235,10 @@ class UserReadService {
       'searchUsersByCodeNumber, 조회 시작 - codeNumber: ${AccountCodeNumber.mask(normalized)}',
     );
     try {
-      final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
+      final snapshot = await _getUserCollectionRef()
           .where('codeNumber', isEqualTo: normalized)
           .limit(10)
-          .get(), source: 'user_read_service.get');
+          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
       final users = await Future.wait(
         snapshot.docs.map(
           (doc) => _userFromRootWithActiveState(doc.id, doc.data()),
@@ -256,10 +261,10 @@ class UserReadService {
       'searchUsersByName, 조회 시작 - nameLength: ${normalized.length}',
     );
     try {
-      final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
+      final snapshot = await _getUserCollectionRef()
           .where('name', isEqualTo: normalized)
           .limit(20)
-          .get(), source: 'user_read_service.get');
+          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
       final users = await Future.wait(
         snapshot.docs.map(
           (doc) => _userFromRootWithActiveState(doc.id, doc.data()),
@@ -283,21 +288,21 @@ class UserReadService {
     final h = _normalizeHandle(handle);
     debugPrint('getUserByHandle, 조회 시작 - handle: $h');
     try {
-      var qs = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
+      var qs = await _getUserCollectionRef()
           .where('handle', isEqualTo: h)
           .limit(1)
-          .get(), source: 'user_read_service.get');
+          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
       if (qs.docs.isEmpty) {
-        qs = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
+        qs = await _getUserCollectionRef()
             .where('codeNumber', isEqualTo: h)
             .limit(1)
-            .get(), source: 'user_read_service.get');
+            .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
       }
       if (qs.docs.isEmpty) {
-        qs = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
+        qs = await _getUserCollectionRef()
             .where('phone', isEqualTo: h)
             .limit(1)
-            .get(), source: 'user_read_service.get');
+            .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
       }
 
       if (qs.docs.isNotEmpty) {
@@ -350,14 +355,10 @@ class UserReadService {
     try {
       final snapshots = await Future.wait(
         fields.map(
-          (field) => FirebaseActivityMonitor.track(
-              FirebaseActivityKind.read,
-              () => _getTabletCollectionRef()
-                  .where(field, isEqualTo: normalized)
-                  .limit(50)
-                  .get(),
-              source: 'tablet.account.read',
-            ),
+          (field) => _getTabletCollectionRef()
+              .where(field, isEqualTo: normalized)
+              .limit(50)
+              .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart'),
         ),
       );
       final byId =
@@ -453,7 +454,7 @@ class UserReadService {
     );
 
     try {
-      final direct = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getTabletCollectionRef().doc(documentId).get(), source: 'user_read_service.get');
+      final direct = await _getTabletCollectionRef().doc(documentId).get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
       if (direct.exists && direct.data() != null) {
         TabletAccountDiagnostics.record(
           'code_number_area_lookup_direct_hit',
@@ -555,11 +556,8 @@ class UserReadService {
   }
 
   Future<List<UserModel>> getUsersByAreaOnceWithCache(
-      String selectedArea, {String? companyId}) async {
-    if ((companyId ?? '').trim().isEmpty) return <UserModel>[];
-    final scope = _authenticatedCacheScope;
-    if (scope == null) return <UserModel>[];
-    final cacheKey = _userCacheKey(selectedArea, companyId: companyId);
+      String selectedArea) async {
+    final cacheKey = _userCacheKey(selectedArea);
     final prefs = await SharedPreferences.getInstance();
     final cachedJson = prefs.getString(cacheKey);
 
@@ -569,18 +567,15 @@ class UserReadService {
         return decoded.map((e) => UserModel.fromMap(e['id'], e)).toList();
       } catch (e) {
         debugPrint('⚠️ users 캐시 디코딩 실패: $e → 캐시 비움');
-        await clearUserCache(selectedArea, companyId: companyId);
+        await clearUserCache(selectedArea);
       }
     }
     return [];
   }
 
   Future<List<TabletModel>> getTabletsByAreaOnceWithCache(
-      String selectedArea, {String? companyId}) async {
-    if ((companyId ?? '').trim().isEmpty) return <TabletModel>[];
-    final scope = _authenticatedCacheScope;
-    if (scope == null) return <TabletModel>[];
-    final cacheKey = _tabletCacheKey(selectedArea, companyId: companyId);
+      String selectedArea) async {
+    final cacheKey = 'tablets_$selectedArea';
     final prefs = await SharedPreferences.getInstance();
     final cachedJson = prefs.getString(cacheKey);
 
@@ -590,25 +585,20 @@ class UserReadService {
         return decoded.map((e) => TabletModel.fromMap(e['id'], e)).toList();
       } catch (e) {
         debugPrint('⚠️ tablets 캐시 디코딩 실패: $e → 캐시 비움');
-        await clearTabletCache(selectedArea, companyId: companyId);
+        await clearTabletCache(selectedArea);
       }
     }
     return [];
   }
 
   Future<List<UserModel>> refreshUsersBySelectedArea(
-      String selectedArea, {required String companyId}) async {
-    final verifiedCompany = companyId.trim();
-    if (verifiedCompany.isEmpty) {
-      throw StateError('USER_COMPANY_SCOPE_REQUIRED');
-    }
+      String selectedArea) async {
     debugPrint('🔥 Firestore 호출 시작 (users) → $selectedArea');
 
     try {
-      final querySnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getUserCollectionRef()
-          .where('companyId', isEqualTo: verifiedCompany)
+      final querySnapshot = await _getUserCollectionRef()
           .where('areas', arrayContains: selectedArea)
-          .get(), source: 'user_read_service.get');
+          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
 
       final users = await Future.wait(
         querySnapshot.docs.map(
@@ -616,12 +606,7 @@ class UserReadService {
         ),
       );
 
-      await updateCacheWithUsers(selectedArea, users, companyId: verifiedCompany);
-      StatusDialog.recordDebugOperation(
-        'user_accounts',
-        'area_refresh_completed',
-        details: <String, Object?>{'resultCount': users.length},
-      );
+      await updateCacheWithUsers(selectedArea, users);
       return users;
     } on FirebaseException {
       rethrow;
@@ -637,18 +622,13 @@ class UserReadService {
     try {
       final usersRef =
       _getUserShowCollectionRef().doc(docId).collection('users');
-      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => usersRef.get(), source: 'user_read_service.get');
+      final snap = await usersRef.get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
 
       final users = snap.docs
           .map((doc) => _userFromShowData(doc.id, doc.data()))
           .toList(growable: false);
 
-      await updateCacheWithUsers(area.trim(), users, companyId: division.trim());
-      StatusDialog.recordDebugOperation(
-        'user_accounts_show',
-        'division_area_refresh_completed',
-        details: <String, Object?>{'resultCount': users.length},
-      );
+      await updateCacheWithUsers(area.trim(), users);
       return users;
     } on FirebaseException {
       rethrow;
@@ -670,9 +650,9 @@ class UserReadService {
     try {
       final usersRef =
           _getUserShowCollectionRef().doc(docId).collection('users');
-      final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => usersRef
+      final snap = await usersRef
           .where('isActive', isEqualTo: true)
-          .get(), source: 'user_read_service.get');
+          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
 
       final users = snap.docs
           .map((doc) => _userFromShowData(doc.id, doc.data()))
@@ -693,33 +673,20 @@ class UserReadService {
   }
 
   Future<List<TabletModel>> refreshTabletsBySelectedArea(
-      String selectedArea, {String? companyId}) async {
-    final verifiedCompany = (companyId ?? '').trim();
-    if (verifiedCompany.isEmpty) {
-      throw StateError('TABLET_COMPANY_SCOPE_REQUIRED');
-    }
+      String selectedArea) async {
     debugPrint('🔥 Firestore 호출 시작 (tablet) → $selectedArea');
 
     try {
-      final querySnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getTabletCollectionRef()
-          .where('companyId', isEqualTo: verifiedCompany)
+      final querySnapshot = await _getTabletCollectionRef()
           .where('areas', arrayContains: selectedArea)
-          .get(), source: 'user_read_service.get');
+          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
 
       final tablets = querySnapshot.docs
           .map((doc) => TabletModel.fromMap(doc.id, doc.data()))
           .toList(growable: false);
 
 
-      await updateCacheWithTablets(selectedArea, tablets, companyId: verifiedCompany);
-      StatusDialog.recordDebugOperation(
-        'tablet_accounts',
-        'area_refresh_completed',
-        details: <String, Object?>{
-          'resultCount': tablets.length,
-          'companyScoped': true,
-        },
-      );
+      await updateCacheWithTablets(selectedArea, tablets);
       return tablets;
     } on FirebaseException {
       rethrow;
@@ -741,9 +708,9 @@ class UserReadService {
     }
 
     try {
-      final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _getAreasCollectionRef()
+      final doc = await _getAreasCollectionRef()
           .doc('${division.trim()}-${area.trim()}')
-          .get(), source: 'user_read_service.get');
+          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
       String? name;
       if (doc.exists) {
         name = doc.data()?['englishName'] as String?;
@@ -762,56 +729,43 @@ class UserReadService {
     }
   }
 
-  Future<void> clearUserCache(String selectedArea, {String? companyId}) async {
-    if ((companyId ?? '').trim().isEmpty) return;
+  Future<void> clearUserCache(String selectedArea) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_userCacheKey(selectedArea, companyId: companyId));
+    await prefs.remove(_userCacheKey(selectedArea));
     await prefs.remove('users_$selectedArea');
     await prefs.remove('users_${selectedArea}_ts');
-    await prefs.remove('users_v3_${_authenticatedCacheScope ?? 'unauthenticated'}_${companyId ?? ''}_${selectedArea}_ts');
     debugPrint('🧹 사용자 캐시 초기화 → $selectedArea');
   }
 
-  Future<void> clearTabletCache(String selectedArea, {String? companyId}) async {
-    if ((companyId ?? '').trim().isEmpty) return;
+  Future<void> clearTabletCache(String selectedArea) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tabletCacheKey(selectedArea, companyId: companyId));
     await prefs.remove('tablets_$selectedArea');
     await prefs.remove('tablets_${selectedArea}_ts');
-    await prefs.remove('tablets_v3_${_authenticatedCacheScope ?? 'unauthenticated'}_${companyId ?? ''}_${selectedArea}_ts');
     debugPrint('🧹 태블릿 캐시 초기화 → $selectedArea');
   }
 
   Future<void> updateCacheWithUsers(String selectedArea,
-      List<UserModel> users, {String? companyId}) async {
-    if ((companyId ?? '').trim().isEmpty) return;
+      List<UserModel> users) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonData = json.encode(users.map((u) => u.toMapWithId()).toList());
-    if (_authenticatedCacheScope == null) return;
-    await prefs.setString(_userCacheKey(selectedArea, companyId: companyId), jsonData);
+    await prefs.setString(_userCacheKey(selectedArea), jsonData);
     await prefs.setInt(
-        'users_v3_${_authenticatedCacheScope}_${companyId ?? ''}_${selectedArea}_ts', DateTime
+        'users_${selectedArea}_ts', DateTime
         .now()
         .millisecondsSinceEpoch);
-    StatusDialog.recordDebugOperation('user_accounts', 'cache_updated',
-        details: <String, Object?>{'count': users.length, 'companyScoped': true});
     debugPrint('✅ users 캐시 갱신 → $selectedArea (${users.length})');
   }
 
   Future<void> updateCacheWithTablets(String selectedArea,
-      List<TabletModel> tablets, {String? companyId}) async {
-    if ((companyId ?? '').trim().isEmpty) return;
+      List<TabletModel> tablets) async {
     final prefs = await SharedPreferences.getInstance();
     final jsonData =
     json.encode(tablets.map((t) => t.toMapWithId()).toList());
-    if (_authenticatedCacheScope == null) return;
-    await prefs.setString(_tabletCacheKey(selectedArea, companyId: companyId), jsonData);
+    await prefs.setString('tablets_$selectedArea', jsonData);
     await prefs.setInt(
-        'tablets_v3_${_authenticatedCacheScope}_${companyId ?? ''}_${selectedArea}_ts', DateTime
+        'tablets_${selectedArea}_ts', DateTime
         .now()
         .millisecondsSinceEpoch);
-    StatusDialog.recordDebugOperation('tablet_accounts', 'cache_updated',
-        details: <String, Object?>{'count': tablets.length, 'companyScoped': true});
     debugPrint('✅ tablets 캐시 갱신 → $selectedArea (${tablets.length})');
   }
 }

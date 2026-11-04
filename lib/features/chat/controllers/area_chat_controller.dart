@@ -49,7 +49,7 @@ class AreaChatController extends ChangeNotifier {
     if (session == null) return '';
     final position = session.position?.trim() ?? '';
     if (position.isNotEmpty) return position;
-    return (session.position ?? session.displayName).trim();
+    return session.role.trim();
   }
 
   bool get isHeadquarterChannel => _isHeadquarterChannel;

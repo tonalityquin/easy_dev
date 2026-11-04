@@ -259,7 +259,7 @@ class TabletLoginController {
           'persistSession': persistSession,
         },
       );
-      final divisionToSet = sessionTablet.companyId;
+      final divisionToSet = sessionTablet.divisions.firstOrNull ?? '';
       await AreaLoginSessionRefresher.refresh(
         context: context,
         areaState: areaState,

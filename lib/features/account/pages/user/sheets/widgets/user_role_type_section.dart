@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../../shared/secondary/application/staff_access_policy.dart';
-
 enum RoleType {
   dev,
   adminBillMonthly,
@@ -13,11 +11,7 @@ enum RoleType {
   userLocationMonthly,
   userMonthly,
   userCommon,
-  fieldCommon,
-  specialist,
-  areaManager,
-  divisionManager,
-  superAdmin;
+  fieldCommon;
 
   
   String get label {
@@ -44,11 +38,6 @@ enum RoleType {
         return '공통 유저(태블릿 X)';
       case RoleType.fieldCommon:
         return '공통 필드(태블릿 X)';
-      case RoleType.specialist:
-      case RoleType.areaManager:
-      case RoleType.divisionManager:
-      case RoleType.superAdmin:
-        return StaffAccessPolicy.roleLabels[name] ?? name;
     }
   }
 
@@ -89,9 +78,6 @@ enum RoleType {
       case RoleType.adminBillTablet:
       case RoleType.adminCommon:
       case RoleType.adminCommonTablet:
-      case RoleType.areaManager:
-      case RoleType.divisionManager:
-      case RoleType.superAdmin:
         return true;
       default:
         return false;
@@ -104,9 +90,6 @@ enum RoleType {
       case RoleType.adminBillMonthlyTablet:
       case RoleType.userLocationMonthly:
       case RoleType.userMonthly:
-      case RoleType.specialist:
-      case RoleType.divisionManager:
-      case RoleType.superAdmin:
         return true;
       default:
         return false;
@@ -119,8 +102,6 @@ enum RoleType {
       case RoleType.adminBillMonthlyTablet:
       case RoleType.adminBillTablet:
       case RoleType.adminCommonTablet:
-      case RoleType.divisionManager:
-      case RoleType.superAdmin:
         return true;
       default:
         return false;

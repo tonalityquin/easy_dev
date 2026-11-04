@@ -1,5 +1,4 @@
 import 'dart:async';
-import '../../../shared/operational_cache/domain/location_cache_scope.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -37,11 +36,6 @@ class LocationState extends ChangeNotifier {
   List<LocationModel> _locations = [];
   String? _selectedLocationId;
   String _previousArea = '';
-
-  String _locationCacheKey(String area) {
-    return LocationCacheScope.requireKey(_areaState.currentDivision, area);
-  }
-
   bool _isLoading = true;
 
   Map<String, int> _plateCountsByDisplayName = <String, int>{};
@@ -170,40 +164,33 @@ class LocationState extends ChangeNotifier {
   bool _shouldDropCacheResult({
     required int seq,
     required String requestedArea,
-    required String requestedScope,
   }) {
     if (_disposed) return true;
     if (seq != _cacheLoadSeq) return true;
     final nowArea = _areaState.currentArea.trim();
     if (nowArea != requestedArea) return true;
-    if (LocationCacheScope.maybeKey(_areaState.currentDivision, requestedArea) != requestedScope) return true;
     return false;
   }
 
   bool _shouldDropRepoResult({
     required int seq,
     required String requestedArea,
-    required String requestedScope,
   }) {
     if (_disposed) return true;
     if (seq != _repoSyncSeq) return true;
     final nowArea = _areaState.currentArea.trim();
     if (nowArea != requestedArea) return true;
-    if (LocationCacheScope.maybeKey(_areaState.currentDivision, requestedArea) != requestedScope) return true;
     return false;
   }
 
   void _handleAreaChange() {
     final currentArea = _areaState.currentArea.trim();
-    final currentScope = LocationCacheScope.maybeKey(_areaState.currentDivision, currentArea) ?? '';
-    if (currentScope == _previousArea) return;
+    if (currentArea == _previousArea) return;
 
-    ++_cacheLoadSeq;
-    ++_repoSyncSeq;
-    _previousArea = currentScope;
+    _previousArea = currentArea;
     _locations = [];
     _selectedLocationId = null;
-    _isLoading = currentScope.isNotEmpty;
+    _isLoading = currentArea.isNotEmpty;
     _safeNotify();
 
     if (_cacheLoadScheduled) return;
@@ -297,19 +284,18 @@ class LocationState extends ChangeNotifier {
       return Future.value(const <LocationModel>[]);
     }
 
-    final scopeKey = _locationCacheKey(trimmedArea);
-    final existing = _areaSnapshotInFlightByArea[scopeKey];
+    final existing = _areaSnapshotInFlightByArea[trimmedArea];
     if (existing != null) return existing;
 
     final future = _repository
         .getLocationsOnce(trimmedArea)
         .then((data) => List<LocationModel>.of(data));
 
-    _areaSnapshotInFlightByArea[scopeKey] = future;
+    _areaSnapshotInFlightByArea[trimmedArea] = future;
 
     return future.whenComplete(() {
-      if (identical(_areaSnapshotInFlightByArea[scopeKey], future)) {
-        _areaSnapshotInFlightByArea.remove(scopeKey);
+      if (identical(_areaSnapshotInFlightByArea[trimmedArea], future)) {
+        _areaSnapshotInFlightByArea.remove(trimmedArea);
       }
     });
   }
@@ -324,26 +310,17 @@ class LocationState extends ChangeNotifier {
   Future<void> _writeCache({
     required String area,
     required List<LocationModel> data,
-    required String scopeKey,
   }) async {
     final trimmedArea = area.trim();
-    if (LocationCacheScope.maybeKey(_areaState.currentDivision, trimmedArea) != scopeKey) {
-      throw StateError('LOCATION_CACHE_SCOPE_CHANGED');
-    }
-    if (data.any((item) => item.companyId.trim().isNotEmpty &&
-        item.companyId.trim() != _areaState.currentDivision.trim())) {
-      throw StateError('LOCATION_CACHE_COMPANY_MISMATCH');
-    }
     final totalCapacity = _totalCapacityForCache(data);
     await _localRepository.replaceLocations(
       area: trimmedArea,
       locations: data,
       totalCapacity: totalCapacity,
-      cacheKey: scopeKey,
     );
-    final storedCount = await _localRepository.countLocations(trimmedArea, cacheKey: scopeKey);
+    final storedCount = await _localRepository.countLocations(trimmedArea);
     if (storedCount != data.length ||
-        !await _localRepository.hasLocationsSnapshot(trimmedArea, cacheKey: scopeKey)) {
+        !await _localRepository.hasLocationsSnapshot(trimmedArea)) {
       throw StateError('주차 구역 SQLite 저장 검증 실패');
     }
     debugPrint(
@@ -363,14 +340,7 @@ class LocationState extends ChangeNotifier {
       return Future.value();
     }
 
-    final scopeKey = LocationCacheScope.maybeKey(_areaState.currentDivision, trimmedArea);
-    if (scopeKey == null) {
-      if (rethrowErrors) {
-        return Future.error(StateError('LOCATION_CACHE_COMPANY_AREA_REQUIRED'));
-      }
-      return Future.value();
-    }
-    final existing = _repoSyncInFlightByArea[scopeKey];
+    final existing = _repoSyncInFlightByArea[trimmedArea];
     if (existing != null) {
       if (setLoading && !_isLoading) {
         _isLoading = true;
@@ -384,14 +354,13 @@ class LocationState extends ChangeNotifier {
       setLoading: setLoading,
       reason: reason,
       rethrowErrors: rethrowErrors,
-      requestedScope: scopeKey,
     );
 
-    _repoSyncInFlightByArea[scopeKey] = future;
+    _repoSyncInFlightByArea[trimmedArea] = future;
 
     return future.whenComplete(() {
-      if (identical(_repoSyncInFlightByArea[scopeKey], future)) {
-        _repoSyncInFlightByArea.remove(scopeKey);
+      if (identical(_repoSyncInFlightByArea[trimmedArea], future)) {
+        _repoSyncInFlightByArea.remove(trimmedArea);
       }
     });
   }
@@ -401,7 +370,6 @@ class LocationState extends ChangeNotifier {
     required bool setLoading,
     required String reason,
     required bool rethrowErrors,
-    required String requestedScope,
   }) async {
     final trimmedArea = area.trim();
     final int seq = ++_repoSyncSeq;
@@ -411,19 +379,16 @@ class LocationState extends ChangeNotifier {
       _safeNotify();
     }
 
-    final scopeKey = requestedScope;
     try {
       final data = await _repository.getLocationsOnce(trimmedArea);
 
-      if (_shouldDropRepoResult(seq: seq, requestedArea: trimmedArea, requestedScope: scopeKey) ||
-          scopeKey != LocationCacheScope.maybeKey(_areaState.currentDivision, trimmedArea)) return;
+      if (_shouldDropRepoResult(seq: seq, requestedArea: trimmedArea)) return;
 
-      await _writeCache(area: trimmedArea, data: data, scopeKey: scopeKey);
-      if (_shouldDropRepoResult(seq: seq, requestedArea: trimmedArea, requestedScope: scopeKey) ||
-          scopeKey != LocationCacheScope.maybeKey(_areaState.currentDivision, trimmedArea)) return;
       _locations = data;
       _selectedLocationId = null;
-      _previousArea = scopeKey;
+      _previousArea = trimmedArea;
+
+      await _writeCache(area: trimmedArea, data: data);
     } catch (e, stackTrace) {
       LocationDebugStatus.report(
         title: '구역 동기화 실패',
@@ -437,7 +402,7 @@ class LocationState extends ChangeNotifier {
       );
       if (rethrowErrors) rethrow;
     } finally {
-      if (_shouldDropRepoResult(seq: seq, requestedArea: trimmedArea, requestedScope: scopeKey)) return;
+      if (_shouldDropRepoResult(seq: seq, requestedArea: trimmedArea)) return;
       _isLoading = false;
       _safeNotify();
     }
@@ -459,35 +424,21 @@ class LocationState extends ChangeNotifier {
       return Future.value();
     }
 
-    final scopeKey = LocationCacheScope.maybeKey(_areaState.currentDivision, requestedArea);
-    if (scopeKey == null) {
-      ++_cacheLoadSeq;
-      _locations = <LocationModel>[];
-      _selectedLocationId = null;
-      _previousArea = '';
-      _isLoading = false;
-      _safeNotify();
-      return Future.value();
-    }
-    final existing = _cacheLoadInFlightByArea[scopeKey];
+    final existing = _cacheLoadInFlightByArea[requestedArea];
     if (existing != null) return existing;
 
-    final future = _loadFromLocationCacheInternal(
-      requestedArea: requestedArea,
-      requestedScope: scopeKey,
-    );
-    _cacheLoadInFlightByArea[scopeKey] = future;
+    final future = _loadFromLocationCacheInternal(requestedArea: requestedArea);
+    _cacheLoadInFlightByArea[requestedArea] = future;
 
     return future.whenComplete(() {
-      if (identical(_cacheLoadInFlightByArea[scopeKey], future)) {
-        _cacheLoadInFlightByArea.remove(scopeKey);
+      if (identical(_cacheLoadInFlightByArea[requestedArea], future)) {
+        _cacheLoadInFlightByArea.remove(requestedArea);
       }
     });
   }
 
   Future<void> _loadFromLocationCacheInternal({
     required String requestedArea,
-    required String requestedScope,
   }) async {
     final int seq = ++_cacheLoadSeq;
 
@@ -496,14 +447,9 @@ class LocationState extends ChangeNotifier {
       _safeNotify();
     }
 
-    final scopeKey = requestedScope;
     try {
-      final stored = await _localRepository.readLocations(
-        requestedArea,
-        cacheKey: scopeKey,
-      );
-      if (scopeKey != LocationCacheScope.maybeKey(_areaState.currentDivision, requestedArea)) return;
-      if (_shouldDropCacheResult(seq: seq, requestedArea: requestedArea, requestedScope: scopeKey)) {
+      final stored = await _localRepository.readLocations(requestedArea);
+      if (_shouldDropCacheResult(seq: seq, requestedArea: requestedArea)) {
         return;
       }
       _locations = stored;
@@ -518,15 +464,15 @@ class LocationState extends ChangeNotifier {
         stackTrace: stackTrace,
         details: <String, Object?>{'area': requestedArea},
       );
-      if (_shouldDropCacheResult(seq: seq, requestedArea: requestedArea, requestedScope: scopeKey))
+      if (_shouldDropCacheResult(seq: seq, requestedArea: requestedArea))
         return;
       _locations = [];
     }
 
-    if (_shouldDropCacheResult(seq: seq, requestedArea: requestedArea, requestedScope: scopeKey)) return;
+    if (_shouldDropCacheResult(seq: seq, requestedArea: requestedArea)) return;
 
     _selectedLocationId = null;
-    _previousArea = scopeKey;
+    _previousArea = requestedArea;
     _isLoading = false;
     _safeNotify();
   }
@@ -557,25 +503,20 @@ class LocationState extends ChangeNotifier {
       ++_cacheLoadSeq;
       ++_repoSyncSeq;
     }
-    final scopeKey = _locationCacheKey(normalizedArea);
-    _cacheLoadInFlightByArea.remove(scopeKey);
-    _repoSyncInFlightByArea.remove(scopeKey);
+    _cacheLoadInFlightByArea.remove(normalizedArea);
+    _repoSyncInFlightByArea.remove(normalizedArea);
 
-    await _localRepository.clearLocations(normalizedArea, cacheKey: scopeKey);
-    if (await _localRepository.countLocations(normalizedArea, cacheKey: scopeKey) != 0 ||
-        await _localRepository.hasLocationsSnapshot(normalizedArea, cacheKey: scopeKey)) {
+    await _localRepository.clearLocations(normalizedArea);
+    if (await _localRepository.countLocations(normalizedArea) != 0 ||
+        await _localRepository.hasLocationsSnapshot(normalizedArea)) {
       throw StateError('기존 주차 구역 SQLite 데이터 삭제 검증 실패');
     }
 
     if (affectsCurrentArea &&
-        _areaState.currentArea.trim() == normalizedArea &&
-        LocationCacheScope.maybeKey(
-          _areaState.currentDivision,
-          normalizedArea,
-        ) == scopeKey) {
+        _areaState.currentArea.trim() == normalizedArea) {
       _locations = [];
       _selectedLocationId = null;
-      _previousArea = scopeKey;
+      _previousArea = normalizedArea;
       _isLoading = false;
       _safeNotify();
     }
@@ -595,32 +536,27 @@ class LocationState extends ChangeNotifier {
       throw StateError('주차 구역 동기화 시작 전에 현재 지역이 변경되었습니다.');
     }
 
-    final requestedScope = _locationCacheKey(normalizedArea);
     _isLoading = true;
     _safeNotify();
     try {
       final data = await _repository.getLocationsOnce(normalizedArea);
-      if (_areaState.currentArea.trim() != normalizedArea ||
-          LocationCacheScope.maybeKey(_areaState.currentDivision, normalizedArea) != requestedScope) {
-        throw StateError('주차 구역 동기화 중 회사 또는 지역이 변경되었습니다.');
+      if (_areaState.currentArea.trim() != normalizedArea) {
+        throw StateError('주차 구역 동기화 중 현재 지역이 변경되었습니다.');
       }
 
-      await _writeCache(area: normalizedArea, data: data, scopeKey: requestedScope);
-      if (_areaState.currentArea.trim() != normalizedArea ||
-          LocationCacheScope.maybeKey(_areaState.currentDivision, normalizedArea) != requestedScope) {
-        throw StateError('주차 구역 저장 중 회사 또는 지역이 변경되었습니다.');
+      await _writeCache(area: normalizedArea, data: data);
+      if (_areaState.currentArea.trim() != normalizedArea) {
+        throw StateError('주차 구역 저장 중 현재 지역이 변경되었습니다.');
       }
 
       _locations = List<LocationModel>.of(data);
       _selectedLocationId = null;
-      _previousArea = requestedScope;
+      _previousArea = normalizedArea;
 
-      if (!await _localRepository.hasLocationsSnapshot(
-          normalizedArea, cacheKey: requestedScope)) {
+      if (!await _localRepository.hasLocationsSnapshot(normalizedArea)) {
         throw StateError('주차 구역 SQLite 저장 결과가 없습니다.');
       }
-      final storedCount = await _localRepository.countLocations(
-          normalizedArea, cacheKey: requestedScope);
+      final storedCount = await _localRepository.countLocations(normalizedArea);
       if (storedCount != data.length) {
         throw StateError(
           '주차 구역 SQLite 저장 개수가 일치하지 않습니다: firestore=${data.length}, sqlite=$storedCount',
@@ -636,8 +572,7 @@ class LocationState extends ChangeNotifier {
       debugPrint('[LocationState] stackTrace=$stackTrace');
       Error.throwWithStackTrace(error, stackTrace);
     } finally {
-      if (_areaState.currentArea.trim() == normalizedArea &&
-          LocationCacheScope.maybeKey(_areaState.currentDivision, normalizedArea) == requestedScope) {
+      if (_areaState.currentArea.trim() == normalizedArea) {
         _isLoading = false;
         _safeNotify();
       }
@@ -900,7 +835,6 @@ class LocationState extends ChangeNotifier {
         id: _parentDocId(parent: cleanParent, area: cleanArea),
         locationName: cleanParent,
         area: cleanArea,
-        companyId: _areaState.currentDivision.trim(),
         parent: null,
         type: 'composite_parent',
         capacity: 0,
@@ -1525,7 +1459,6 @@ class LocationState extends ChangeNotifier {
         ),
         locationName: cleanChild,
         area: cleanArea,
-        companyId: _areaState.currentDivision.trim(),
         parentId: parentDoc.id,
         parent: cleanParent,
         type: 'composite_child',
@@ -1788,7 +1721,6 @@ class LocationState extends ChangeNotifier {
         id: _plainDocId(name: cleanName, area: cleanArea),
         locationName: cleanName,
         area: cleanArea,
-        companyId: _areaState.currentDivision.trim(),
         parent: null,
         type: 'single',
         capacity: capacity,

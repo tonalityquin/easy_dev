@@ -11,8 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'app/auth/google_auth_session.dart';
-import 'app/firebase_activity/firebase_activity_monitor.dart';
-import 'app/firebase_activity/firebase_activity_overlay.dart';
+import 'app/diagnostics/firebase_activity_meter.dart';
 import 'app/utils/secure_auth_diagnostics.dart';
 import 'app/config/auth_config.dart';
 import 'app/di/providers.dart';
@@ -47,10 +46,11 @@ Future<void> _diagnoseAppCheckTokenOnce() async {
   );
 
   try {
-    final token = await FirebaseActivityMonitor.track(
-      FirebaseActivityKind.authentication,
-      () => FirebaseAppCheck.instance.getToken(true),
-      source: 'app_check.get_token',
+    final token = await FirebaseActivityMeter.instance.trackFuture<String?>(
+      FirebaseAppCheck.instance.getToken(true),
+      service: 'app_check',
+      operation: 'TOKEN_FORCE_REFRESH',
+      source: 'main.app_check_diagnostic',
     );
     final succeeded = token != null && token.isNotEmpty;
 
@@ -66,7 +66,9 @@ Future<void> _diagnoseAppCheckTokenOnce() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  FirebaseActivityMonitor.instance.start();
+  final firebaseActivity = FirebaseActivityMeter.instance;
+  firebaseActivity.startSession();
+  unawaited(firebaseActivity.initializeJournal());
   await initializeDateFormatting('ko_KR', null);
 
   final deviceLocale = WidgetsBinding.instance.platformDispatcher.locale;
@@ -155,8 +157,7 @@ class AppBootstrapper extends StatefulWidget {
 }
 
 class _AppBootstrapperState extends State<AppBootstrapper> {
-  late final Future<void> _initFuture =
-      FirebaseActivityMonitor.runAction<void>('앱 실행', _initializeApp);
+  late final Future<void> _initFuture = _initializeApp();
 
   @override
   Widget build(BuildContext context) {
@@ -184,12 +185,7 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
                   : const Duration(milliseconds: 220),
               themeAnimationCurve: Curves.easeOutCubic,
               home: const Scaffold(
-                body: Stack(
-                  children: [
-                    Center(child: CircularProgressIndicator()),
-                    FirebaseActivityOverlay(),
-                  ],
-                ),
+                body: Center(child: CircularProgressIndicator()),
               ),
             );
           },
@@ -203,10 +199,11 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     await AppModeMigration.migrateLegacyMode();
 
     SecureAuthDiagnostics.record('[MAIN][${_ts()}] Firebase.initializeApp');
-    await FirebaseActivityMonitor.track(
-      FirebaseActivityKind.initialization,
-      () => Firebase.initializeApp(),
-      source: 'firebase.initialize_app',
+    await FirebaseActivityMeter.instance.trackFuture<FirebaseApp>(
+      Firebase.initializeApp(),
+      service: 'firebase_core',
+      operation: 'INITIALIZE_APP',
+      source: 'main.bootstrap',
     );
 
     final appCheckProvider =
@@ -215,12 +212,11 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
       '[APP_CHECK][${_ts()}] activation_started provider=${kDebugMode ? 'debug' : 'play_integrity'}',
     );
     try {
-      await FirebaseActivityMonitor.track(
-        FirebaseActivityKind.authentication,
-        () => FirebaseAppCheck.instance.activate(
-          androidProvider: appCheckProvider,
-        ),
-        source: 'firebase.app_check.activate',
+      await FirebaseActivityMeter.instance.trackFuture<void>(
+        FirebaseAppCheck.instance.activate(androidProvider: appCheckProvider),
+        service: 'app_check',
+        operation: 'ACTIVATE',
+        source: 'main.bootstrap',
       );
       SecureAuthDiagnostics.record(
         '[APP_CHECK][${_ts()}] activation_completed',
@@ -231,10 +227,6 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
         unawaited(_diagnoseAppCheckTokenOnce());
       }
     } catch (error) {
-      FirebaseActivityMonitor.noteCurrentActionOutcome(
-        FirebaseActionOutcome.completedWithWarnings,
-        code: 'APP_CHECK_ACTIVATION_FAILED',
-      );
       SecureAuthDiagnostics.record(
         '[APP_CHECK][${_ts()}] activation_failed type=${error.runtimeType}',
       );
@@ -242,19 +234,16 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
     SecureAuthDiagnostics.record('[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime');
     try {
-      await FirebaseActivityMonitor.track(
-        FirebaseActivityKind.authentication,
-        () => FirebaseGoogleAuthBridge.instance.configureRuntime(),
-        source: 'firebase.auth.configure',
+      await FirebaseActivityMeter.instance.trackFuture<void>(
+        FirebaseGoogleAuthBridge.instance.configureRuntime(),
+        service: 'auth',
+        operation: 'CONFIGURE_RUNTIME',
+        source: 'main.bootstrap',
       );
       SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime done uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}',
       );
     } catch (e, st) {
-      FirebaseActivityMonitor.noteCurrentActionOutcome(
-        FirebaseActionOutcome.completedWithWarnings,
-        code: 'FIREBASE_AUTH_CONFIGURE_FAILED',
-      );
       SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime failed: $e\n$st',
       );
@@ -262,15 +251,14 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
     SecureAuthDiagnostics.record('[MAIN][${_ts()}] GoogleAuthSession.init (one-time OAuth)');
     try {
-      await GoogleAuthSession.instance.init(
-        serverClientId: AuthConfig.webClientId,
+      await FirebaseActivityMeter.instance.trackFuture<void>(
+        GoogleAuthSession.instance.init(serverClientId: AuthConfig.webClientId),
+        service: 'google_auth',
+        operation: 'INITIALIZE_SESSION',
+        source: 'main.bootstrap',
       );
       SecureAuthDiagnostics.record('[MAIN][${_ts()}] GoogleAuthSession.init done');
     } catch (e, st) {
-      FirebaseActivityMonitor.noteCurrentActionOutcome(
-        FirebaseActionOutcome.completedWithWarnings,
-        code: 'GOOGLE_SESSION_INIT_FAILED',
-      );
       SecureAuthDiagnostics.record('[MAIN][${_ts()}] GoogleAuthSession.init failed: $e\n$st');
     }
 
@@ -282,20 +270,17 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
       SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] existing Google user email=${existingGoogleUser?.email}',
       );
-      final ok = await FirebaseActivityMonitor.track(
-        FirebaseActivityKind.authentication,
-        () => FirebaseGoogleAuthBridge.instance
+      final ok = await FirebaseActivityMeter.instance.trackFuture<bool>(
+        FirebaseGoogleAuthBridge.instance
             .bootstrapWithExistingGoogleUser(existingGoogleUser),
-        source: 'firebase.auth.bootstrap',
+        service: 'auth',
+        operation: 'BOOTSTRAP_EXISTING_USER',
+        source: 'main.bootstrap',
       );
       SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser done ok=$ok uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}',
       );
     } catch (e, st) {
-      FirebaseActivityMonitor.noteCurrentActionOutcome(
-        FirebaseActionOutcome.completedWithWarnings,
-        code: 'GOOGLE_BOOTSTRAP_FAILED',
-      );
       SecureAuthDiagnostics.record(
         '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser failed: $e\n$st',
       );
@@ -422,7 +407,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   const Positioned.fill(
                     child: DebugSessionVisualOverlay(),
                   ),
-                  const FirebaseActivityOverlay(),
                 ],
               );
             },
@@ -444,17 +428,12 @@ class ErrorApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         appBar: AppBar(title: const Text('오류 발생')),
-        body: Stack(
-          children: [
-            Center(
-              child: Text(
-                message,
-                style: const TextStyle(color: Colors.red, fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const FirebaseActivityOverlay(),
-          ],
+        body: Center(
+          child: Text(
+            message,
+            style: const TextStyle(color: Colors.red, fontSize: 16),
+            textAlign: TextAlign.center,
+          ),
         ),
       ),
     );

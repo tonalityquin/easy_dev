@@ -42,6 +42,7 @@ import '../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../shared/plate/domain/services/plate_write_service.dart';
 import '../../shared/operational_cache/application/operational_snapshot_revision_state.dart';
 import '../../shared/operational_cache/domain/repositories/operational_local_repository.dart';
+import '../../shared/secondary/application/secondary_info.dart';
 import '../../shared/secondary/application/secondary_state.dart';
 
 final List<SingleChildWidget> stateProviders = [
@@ -157,12 +158,10 @@ final List<SingleChildWidget> stateProviders = [
     create: (_) => SecondaryState(),
     update: (ctx, userState, areaState, secondaryState) {
       final state = secondaryState ?? SecondaryState();
+      final role = RoleType.fromName(userState.role);
       final caps = areaState.capabilitiesOfCurrentArea;
 
-      state.updateAccess(
-        areaCaps: caps,
-        permissionKeys: userState.permissionKeys,
-      );
+      state.updateAccess(role: role, areaCaps: caps);
       return state;
     },
   ),

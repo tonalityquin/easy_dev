@@ -1,3 +1,5 @@
+import '../../../../app/diagnostics/firebase_activity_http.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:convert';
 import 'dart:ui' show FontFeature;
 
@@ -6,10 +8,10 @@ import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:googleapis/storage/v1.dart' as gcs;
 import 'package:http/http.dart' as http;
 
-import '../../../../../app/auth/google_auth_v7.dart';
-import '../../../../../app/config/auth_config.dart';
-import '../../../../../app/utils/status_dialog.dart';
-import '../../../../../features/dev/debug/debug_api_logger.dart';
+import '../../../../app/auth/google_auth_v7.dart';
+import '../../../../app/config/auth_config.dart';
+import '../../../../app/utils/status_dialog.dart';
+import '../../../../features/dev/debug/debug_api_logger.dart';
 import 'triple_departure_completed_plate_image_dialog.dart';
 
 const String kBucketName = AuthConfig.gcsBucketName;
@@ -93,7 +95,7 @@ class _GcsHelper {
             kBucketName,
             prefix: prefix,
             pageToken: pageToken,
-          );
+          ).trackStorage('STORAGE_LIST', 'features/mode_triple/departure_completed_package/widgets/triple_departure_completed_page_merge_log.dart');
           final items = res.items ?? const <gcs.Object>[];
           for (final o in items) {
             final name = o.name;
@@ -129,7 +131,7 @@ class _GcsHelper {
 
     http.Response resp;
     try {
-      resp = await http.get(url);
+      resp = await FirebaseActivityHttp.get(url, source: 'features/mode_triple/departure_completed_package/widgets/triple_departure_completed_page_merge_log.dart');
     } catch (e) {
       await _logApiError(
         tag: '_GcsHelper.loadCsvRowsByObjectName',

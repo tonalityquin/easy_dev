@@ -49,7 +49,6 @@ abstract class PlateRepository {
   });
 
   Future<List<PlateOutLogSearchResult>> searchPlateOutLogsByFourDigit({
-    required String companyId,
     required String plateFourDigit,
     required String area,
   });
@@ -86,7 +85,6 @@ abstract class PlateRepository {
   Future<void> upsertViewItem({
     required String collection,
     required String area,
-    String? companyId,
     required String plateDocId,
     required String plateNumber,
     required String location,
@@ -97,7 +95,6 @@ abstract class PlateRepository {
   Future<void> removeViewItem({
     required String collection,
     required String area,
-    String? companyId,
     required String plateDocId,
   });
 
@@ -115,7 +112,6 @@ abstract class PlateRepository {
   Stream<List<ViewRowData>> watchViewRows({
     required String collection,
     required String area,
-    String? companyId,
     required String primaryAtField,
   });
 

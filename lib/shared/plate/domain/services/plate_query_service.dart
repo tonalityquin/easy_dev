@@ -1,5 +1,4 @@
-import 'plate_document_paths.dart';
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,10 +10,10 @@ class PlateQueryService {
 
   Future<PlateModel?> getPlate(String documentId) async {
     try {
-      final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore
+      final doc = await _firestore
           .collection('plates')
           .doc(documentId)
-          .get(), source: 'plate_query_service.get')
+          .get().trackFirestore('GET', 'shared/plate/domain/services/plate_query_service.dart')
           .timeout(const Duration(seconds: 10));
 
       if (!doc.exists) {
@@ -32,7 +31,6 @@ class PlateQueryService {
   }) async {
     final query = _firestore
         .collection('plates')
-        .where('companyId', isEqualTo: PlateDocumentPaths.companyFor(area))
         .where('plate_four_digit', isEqualTo: plateFourDigit)
         .where('area', isEqualTo: area);
 
@@ -50,7 +48,6 @@ class PlateQueryService {
   }) async {
     final query = _firestore
         .collection('plates')
-        .where('companyId', isEqualTo: PlateDocumentPaths.companyFor(area))
         .where('plate_four_digit', isEqualTo: plateFourDigit)
         .where('area', isEqualTo: area)
         .where('type', isEqualTo: PlateType.parkingCompleted.firestoreValue);
@@ -75,7 +72,6 @@ class PlateQueryService {
 
     final query = _firestore
         .collection('plates')
-        .where('companyId', isEqualTo: PlateDocumentPaths.companyFor(area))
         .where('plate_four_digit', isEqualTo: plateFourDigit)
         .where('area', isEqualTo: area)
         .where('type', isEqualTo: type);
@@ -98,7 +94,6 @@ class PlateQueryService {
   }) async {
     final query = _firestore
         .collection('plates')
-        .where('companyId', isEqualTo: PlateDocumentPaths.companyFor(area))
         .where('plate_four_digit', isEqualTo: plateFourDigit)
         .where('area', isEqualTo: area)
         .where('type', isEqualTo: PlateType.departureCompleted.firestoreValue);
@@ -122,7 +117,7 @@ class PlateQueryService {
     List<String> tags = const ['plates', 'query'],
   }) async {
     try {
-      final querySnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(), source: 'plate_query_service.get');
+      final querySnapshot = await query.get().trackFirestore('GET', 'shared/plate/domain/services/plate_query_service.dart');
       final results = querySnapshot.docs
           .map((doc) => PlateModel.fromDocument(doc))
           .toList();

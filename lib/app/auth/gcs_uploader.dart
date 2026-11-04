@@ -1,3 +1,4 @@
+import '../diagnostics/firebase_activity_meter.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -314,7 +315,7 @@ Future<gcs.Object> _uploadCsvToGcs({
         kBucketName,
         uploadMedia: media,
         predefinedAcl: makePublicRead ? 'publicRead' : null,
-      );
+      ).trackStorage('UPLOAD', 'app/auth/gcs_uploader.dart', bytes: length);
 
       debugPrint(
         '✅ [$purpose] CSV 업로드 성공: '
@@ -449,7 +450,7 @@ Future<GcsCsvUploadReceipt> uploadEndLogCsvWithReceipt({
   final verifiedResponse = await storage.objects.get(
     kBucketName,
     objectName,
-  );
+  ).trackStorage('METADATA', 'app/auth/gcs_uploader.dart');
   if (verifiedResponse is! gcs.Object) {
     throw StateError('GCS 객체 메타데이터 응답 형식이 올바르지 않습니다.');
   }

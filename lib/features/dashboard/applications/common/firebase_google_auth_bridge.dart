@@ -1,8 +1,8 @@
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../../../app/utils/secure_auth_diagnostics.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 
 String _firebaseBridgeTs() => DateTime.now().toIso8601String();
 
@@ -186,18 +186,20 @@ class FirebaseGoogleAuthBridge {
         SecureAuthDiagnostics.record(
           '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] 익명 Firebase 세션 정리 후 Google credential 로그인 진행',
         );
-        await FirebaseActivityMonitor.track(
-      FirebaseActivityKind.authentication,
-      () => _auth.signOut(),
-      source: 'firebase.auth.sign_out',
-    );
+        await FirebaseActivityMeter.instance.trackFuture<void>(
+        _auth.signOut(),
+        service: 'auth',
+        operation: 'SIGN_OUT',
+        source: 'firebase_google_auth_bridge',
+      );
       }
 
       final credential = GoogleAuthProvider.credential(idToken: idToken);
-      final result = await FirebaseActivityMonitor.track(
-        FirebaseActivityKind.authentication,
-        () => _auth.signInWithCredential(credential),
-        source: 'firebase.auth.credential',
+      final result = await FirebaseActivityMeter.instance.trackFuture(
+        _auth.signInWithCredential(credential),
+        service: 'auth',
+        operation: 'SIGN_IN_GOOGLE',
+        source: 'firebase_google_auth_bridge',
       );
       final user = result.user;
 
@@ -224,10 +226,11 @@ class FirebaseGoogleAuthBridge {
     }
 
     try {
-      final result = await FirebaseActivityMonitor.track(
-        FirebaseActivityKind.authentication,
-        () => _auth.signInAnonymously(),
-        source: 'firebase.auth.anonymous',
+      final result = await FirebaseActivityMeter.instance.trackFuture(
+        _auth.signInAnonymously(),
+        service: 'auth',
+        operation: 'SIGN_IN_ANONYMOUS',
+        source: 'firebase_google_auth_bridge',
       );
       SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug 익명 Firebase 로그인 성공 uid=${result.user?.uid}',
@@ -264,11 +267,12 @@ class FirebaseGoogleAuthBridge {
       SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 비익명 세션 종료 uid=${current.uid} email=${current.email}',
       );
-      await FirebaseActivityMonitor.track(
-      FirebaseActivityKind.authentication,
-      () => _auth.signOut(),
-      source: 'firebase.auth.sign_out',
-    );
+      await FirebaseActivityMeter.instance.trackFuture<void>(
+        _auth.signOut(),
+        service: 'auth',
+        operation: 'SIGN_OUT',
+        source: 'firebase_google_auth_bridge',
+      );
     }
 
     SecureAuthDiagnostics.record(
@@ -276,10 +280,11 @@ class FirebaseGoogleAuthBridge {
     );
 
     try {
-      final result = await FirebaseActivityMonitor.track(
-        FirebaseActivityKind.authentication,
-        () => _auth.signInAnonymously(),
-        source: 'firebase.auth.anonymous',
+      final result = await FirebaseActivityMeter.instance.trackFuture(
+        _auth.signInAnonymously(),
+        service: 'auth',
+        operation: 'SIGN_IN_ANONYMOUS',
+        source: 'firebase_google_auth_bridge',
       );
       final user = result.user;
       SecureAuthDiagnostics.record(
@@ -309,11 +314,12 @@ class FirebaseGoogleAuthBridge {
       '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Firebase 로그아웃 uid=${current.uid} email=${current.email} anonymous=${current.isAnonymous}',
     );
 
-    await FirebaseActivityMonitor.track(
-      FirebaseActivityKind.authentication,
-      () => _auth.signOut(),
-      source: 'firebase.auth.sign_out',
-    );
+    await FirebaseActivityMeter.instance.trackFuture<void>(
+        _auth.signOut(),
+        service: 'auth',
+        operation: 'SIGN_OUT',
+        source: 'firebase_google_auth_bridge',
+      );
 
     SecureAuthDiagnostics.record(
       '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Firebase 로그아웃 완료',

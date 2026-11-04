@@ -1,9 +1,6 @@
-import '../../../../../app/firebase_activity/firebase_activity_write_scope.dart';
-import '../../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../../../../features/account/data/services/company_bootstrap_service.dart';
-import '../../../../../features/account/data/services/account_initialization_guard.dart';
 
 import '../../../../../app/models/capability.dart';
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
@@ -56,10 +53,10 @@ class _AddAreaTabState extends State<AddAreaTab> {
   Future<List<DevAreaListItem>> _loadAreas() async {
     final division = widget.selectedDivision?.trim() ?? '';
     if (division.isEmpty) return const <DevAreaListItem>[];
-    final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => FirebaseFirestore.instance
+    final snapshot = await FirebaseFirestore.instance
         .collection('areas')
         .where('division', isEqualTo: division)
-        .get(const GetOptions(source: Source.serverAndCache)), source: 'add_area_tab.get');
+        .get(const GetOptions(source: Source.serverAndCache)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
     final items = snapshot.docs
         .map(DevAreaListItem.fromDocument)
         .where((item) => item.name.isNotEmpty)
@@ -114,85 +111,40 @@ class _AddAreaTabState extends State<AddAreaTab> {
       standardModeMessage: '개발자 모드 OFF: 지역 생성 로그를 콘솔에 기록합니다.',
     );
     try {
-      await CompanyBootstrapService.requireDeveloper(
-        source: 'area_structure_write',
-        forceAccountSelection: false,
-      );
       final firestore = FirebaseFirestore.instance;
-      final inspection = await AccountInitializationGuard.inspect(
-        firestore: firestore, companyId: division);
-      inspection.requireConsistent();
-      if (!inspection.isInitialized) {
-        throw StateError('INITIAL_SETUP_REQUIRED_BEFORE_AREA_CREATE');
-      }
       final areaRef = firestore.collection('areas').doc('$division-$areaName');
       final showRef = firestore.collection('user_accounts_show').doc('$division-$areaName');
       trace.log(
         '지역 스키마 확인: division=$division area=$areaName modes=${result.settings.modeKeys.join(',')} capabilities=${result.settings.capabilityKeys.join(',')} thirdPartyFields=excluded limits=${result.settings.activeLimit ?? 'unset'}/${result.settings.totalLimit ?? 'unset'}',
         progress: 0.16,
       );
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => firestore.runTransaction((transaction) async {
-        FirebaseActivityMonitor.beginTransactionAttempt();
-        final areaSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(areaRef), source: 'add_area_tab.get');
-        final showSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(showRef), source: 'add_area_tab.get');
+      await firestore.runTrackedActivityTransaction((transaction) async {
+        final areaSnap = await transaction.get(areaRef).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+        final showSnap = await transaction.get(showRef).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
         if (areaSnap.exists) throw StateError('AREA_ALREADY_EXISTS');
-        final initialized = await AccountInitializationGuard.inTransaction(
-          transaction: transaction, firestore: firestore, companyId: division);
         if (showSnap.exists) throw StateError('AREA_ACCOUNT_META_ALREADY_EXISTS');
-        trace.log('지역 생성 검증: initialized=$initialized', progress: 0.4);
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
+        trace.log('중복 문서 검사 완료: reads=2', progress: 0.4);
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', result: 'staged');
+        transaction.set(
           areaRef,
           result.settings.areaPayload(
             name: areaName,
             division: division,
             isHeadquarter: false,
           ),
-        ));
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => transaction.update(
-          firestore.collection('divisions').doc(division),
-          <String, dynamic>{
-            'areaConfigVersion': FieldValue.increment(1),
-          },
-        ));
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
-          firestore.doc('access_catalog/current'),
-          <String, dynamic>{
-            'version': FieldValue.increment(1),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        ));
-        if (initialized) {
-          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
-            showRef,
-            result.settings.accountMetaPayload(
-              division: division,
-              area: areaName,
-              activeCount: 0,
-              inactiveCount: 0,
-            ),
-          ));
-        }
-      }), source: 'add_area_tab.runTransaction');
-      trace.log('Firestore transaction commit 완료: writes=2', progress: 0.86);
-      try {
-        await const CompanyBootstrapService().synchronizeInitialAdmins(
-          onProgress: (message) => trace.log(message),
         );
-        trace.log('회사별 초기 관리자 담당 지역 동기화 완료', progress: 0.94);
-      } catch (syncError, syncStack) {
-        trace.log('지역은 생성됐지만 접근 목록이 일부 동기화되지 않았습니다: ${syncError.runtimeType}');
-        _refreshAreas();
-        await trace.fail(
-          '지역 생성은 완료됐지만 초기 관리자 접근 목록 동기화가 필요합니다.',
-          error: syncError,
-          stackTrace: syncStack,
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', result: 'staged');
+        transaction.set(
+          showRef,
+          result.settings.accountMetaPayload(
+            division: division,
+            area: areaName,
+            activeCount: 0,
+            inactiveCount: 0,
+          ),
         );
-        if (mounted && !trace.developerMode) {
-          showFailedSnackbar(context, '지역이 생성됐지만 초기 관리자 접근 목록은 재동기화가 필요합니다.', useCommonUi: true);
-        }
-        return;
-      }
+      }).trackFirestore('TRANSACTION', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+      trace.log('Firestore transaction commit 완료: writes=2', progress: 0.9);
       _refreshAreas();
       await trace.succeed('지역과 계정 메타 생성이 완료되었습니다.');
       if (!mounted) return;
@@ -228,14 +180,13 @@ class _AddAreaTabState extends State<AddAreaTab> {
     int? activeLimit;
     int? totalLimit;
     try {
-      final areaData = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => FirebaseFirestore.instance
-          .collection('areas').doc(item.documentId)
-          .get(const GetOptions(source: Source.server)), source: 'add_area_tab.get');
-      final areaValues = areaData.data() ?? <String, dynamic>{};
-      activeLimit = areaValues['activeLimit'] is int
-          ? areaValues['activeLimit'] as int : null;
-      totalLimit = areaValues['totalLimit'] is int
-          ? areaValues['totalLimit'] as int : null;
+      final meta = await FirebaseFirestore.instance
+          .collection('user_accounts_show')
+          .doc('${item.division}-${item.name}')
+          .get(const GetOptions(source: Source.serverAndCache)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+      final data = meta.data() ?? <String, dynamic>{};
+      activeLimit = data['activeLimit'] is int ? data['activeLimit'] as int : null;
+      totalLimit = data['totalLimit'] is int ? data['totalLimit'] as int : null;
     } catch (error, stackTrace) {
       if (mounted) setState(() => _editingAreaId = null);
       if (!mounted) return;
@@ -295,14 +246,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
       standardModeMessage: '개발자 모드 OFF: 지역 수정 로그를 콘솔에 기록합니다.',
     );
     try {
-      await CompanyBootstrapService.requireDeveloper(
-        source: 'area_structure_write',
-        forceAccountSelection: false,
-      );
       final firestore = FirebaseFirestore.instance;
-      final inspection = await AccountInitializationGuard.inspect(
-        firestore: firestore, companyId: item.division);
-      inspection.requireConsistent();
       final areaRef = firestore.collection('areas').doc(item.documentId);
       final showRef = firestore.collection('user_accounts_show').doc('${item.division}-${item.name}');
       trace.log(
@@ -315,32 +259,11 @@ class _AddAreaTabState extends State<AddAreaTab> {
           progress: 0.28,
         );
       }
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => firestore.runTransaction((transaction) async {
-        FirebaseActivityMonitor.beginTransactionAttempt();
-        final areaSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(areaRef), source: 'add_area_tab.get');
-        final metaSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(showRef), source: 'add_area_tab.get');
+      await firestore.runTrackedActivityTransaction((transaction) async {
+        final areaSnap = await transaction.get(areaRef).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
         if (!areaSnap.exists) throw StateError('AREA_NOT_FOUND');
-        final current = areaSnap.data() ?? <String, dynamic>{};
-        final initialized = await AccountInitializationGuard.inTransaction(
-          transaction: transaction, firestore: firestore, companyId: item.division);
-        final meta = metaSnap.data() ?? <String, dynamic>{};
-        if (initialized && !metaSnap.exists) {
-          throw StateError('ACCOUNT_META_MISSING_AFTER_INITIALIZATION');
-        }
-        if (!initialized && metaSnap.exists) {
-          throw StateError('ACCOUNT_META_EXISTS_BEFORE_INITIALIZATION');
-        }
-        for (final key in <String>['activeLimit', 'totalLimit']) {
-          if (current[key] != null && meta[key] != null &&
-              current[key] != meta[key]) {
-            throw StateError('AREA_POLICY_CONFLICT:${item.division}/${item.name}/$key');
-          }
-          if (current[key] != null &&
-              (key == 'activeLimit' ? settings.activeLimit : settings.totalLimit) == null) {
-            throw StateError('AREA_POLICY_RESET_REQUIRES_EXPLICIT_ACTION');
-          }
-        }
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => transaction.update(
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', result: 'staged');
+        transaction.update(
           areaRef,
           item.isHeadquarter
               ? settings.headquarterAreaPayload(
@@ -354,29 +277,22 @@ class _AddAreaTabState extends State<AddAreaTab> {
                   isHeadquarter: false,
                   includeCreatedAt: false,
                 ),
-        ));
-        if (initialized) {
-          final activeCount = meta['activeCount'];
-          final totalCount = meta['totalCount'];
-          if (activeCount is! int || totalCount is! int ||
-              settings.activeLimit == null || settings.totalLimit == null ||
-              settings.activeLimit! < activeCount ||
-              settings.totalLimit! < totalCount) {
-            throw StateError('AREA_LIMIT_BELOW_ACCOUNT_COUNT');
-          }
-          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => transaction.update(showRef, <String, dynamic>{
-            'activeLimit': settings.activeLimit,
-            'totalLimit': settings.totalLimit,
-            'updatedAt': FieldValue.serverTimestamp(),
-          }));
-        }
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => transaction.update(
-          firestore.collection('divisions').doc(item.division),
+        );
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', result: 'staged');
+        transaction.set(
+          showRef,
           <String, dynamic>{
-            'areaConfigVersion': FieldValue.increment(1),
+            'division': item.division,
+            'area': item.name,
+            if (settings.activeLimit != null) 'activeLimit': settings.activeLimit,
+            if (settings.totalLimit != null) 'totalLimit': settings.totalLimit,
+            if (settings.activeLimit == null) 'activeLimit': FieldValue.delete(),
+            if (settings.totalLimit == null) 'totalLimit': FieldValue.delete(),
+            'updatedAt': FieldValue.serverTimestamp(),
           },
-        ));
-      }), source: 'add_area_tab.runTransaction');
+          SetOptions(merge: true),
+        );
+      }).trackFirestore('TRANSACTION', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
       trace.log('Area 최신 필드와 계정 정책 저장 완료', progress: 0.9);
       _refreshAreas();
       await trace.succeed('지역 설정 수정이 완료되었습니다.');
@@ -426,31 +342,20 @@ class _AddAreaTabState extends State<AddAreaTab> {
       standardModeMessage: '개발자 모드 OFF: 지역 삭제 로그를 콘솔에 기록합니다.',
     );
     try {
-      await CompanyBootstrapService.requireDeveloper(
-        source: 'area_structure_write',
-        forceAccountSelection: false,
-      );
       final firestore = FirebaseFirestore.instance;
-      final inspection = await AccountInitializationGuard.inspect(
-        firestore: firestore, companyId: item.division);
-      inspection.requireConsistent();
-      if (item.isHeadquarter) {
-        throw StateError('HEADQUARTER_DELETE_NOT_ALLOWED');
-      }
       final showRef = firestore.collection('user_accounts_show').doc('${item.division}-${item.name}');
-      final projectionSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => showRef
+      final projectionSnap = await showRef
           .collection('users')
           .limit(1)
-          .get(const GetOptions(source: Source.server)), source: 'add_area_tab.get');
+          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
       if (projectionSnap.docs.isNotEmpty) {
         throw StateError('RELATED_USER_PROJECTION_EXISTS');
       }
-      final accountCandidates = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => firestore
+      final accountCandidates = await firestore
           .collection('user_accounts')
           .where('areas', arrayContains: item.name)
-          .get(const GetOptions(source: Source.server)), source: 'add_area_tab.get');
+          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
       final accountExists = accountCandidates.docs.any((doc) {
-        if (doc.data()['isInitialAdmin'] == true) return false;
         final divisions = List<dynamic>.from(doc.data()['divisions'] ?? const <dynamic>[])
             .map((value) => value.toString().trim())
             .toSet();
@@ -461,77 +366,13 @@ class _AddAreaTabState extends State<AddAreaTab> {
         progress: 0.42,
       );
       if (accountExists) throw StateError('RELATED_USER_ACCOUNT_EXISTS');
-      final areaRef = firestore.collection('areas').doc(item.documentId);
-      final divisionRef = firestore.collection('divisions').doc(item.division);
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => firestore.runTransaction((transaction) async {
-        FirebaseActivityMonitor.beginTransactionAttempt();
-        final areaSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(areaRef), source: 'add_area_tab.get');
-        final metaSnap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(showRef), source: 'add_area_tab.get');
-        final initialized = await AccountInitializationGuard.inTransaction(
-          transaction: transaction,
-          firestore: firestore,
-          companyId: item.division,
-        );
-        if (!areaSnap.exists) {
-          throw StateError('AREA_NOT_FOUND');
-        }
-        final areaData = areaSnap.data() ?? <String, dynamic>{};
-        if (areaData['division'] != item.division ||
-            areaData['name'] != item.name ||
-            areaData['isHeadquarter'] == true ||
-            item.name == item.division) {
-          throw StateError('AREA_SCOPE_MISMATCH');
-        }
-        if (initialized != inspection.isInitialized) {
-          throw StateError('INITIALIZATION_STATE_CHANGED');
-        }
-        if (initialized) {
-          final metaData = metaSnap.data();
-          if (metaData == null ||
-              metaData['division'] != item.division ||
-              metaData['area'] != item.name ||
-              !AccountInitializationGuard.validCounts(metaData) ||
-              metaData['totalCount'] != 0 ||
-              metaData['activeLimit'] != areaData['activeLimit'] ||
-              metaData['totalLimit'] != areaData['totalLimit']) {
-            throw StateError('AREA_ACCOUNT_META_NOT_EMPTY_OR_INCONSISTENT');
-          }
-        } else if (metaSnap.exists) {
-          throw StateError('ACCOUNT_META_EXISTS_BEFORE_INITIALIZATION');
-        }
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(areaRef));
-        if (initialized) FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(showRef));
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => transaction.update(divisionRef, <String, dynamic>{
-          'areaConfigVersion': FieldValue.increment(1),
-        }));
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
-          firestore.doc('access_catalog/current'),
-          <String, dynamic>{
-            'version': FieldValue.increment(1),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        ));
-      }), source: 'add_area_tab.runTransaction');
-      trace.log('지역·메타 정합성 확인 후 삭제 transaction commit 완료', progress: 0.86);
-      try {
-        await const CompanyBootstrapService().synchronizeInitialAdmins(
-          onProgress: (message) => trace.log(message),
-        );
-        trace.log('회사별 초기 관리자 담당 지역 동기화 완료', progress: 0.94);
-      } catch (syncError, syncStack) {
-        trace.log('지역은 삭제됐지만 접근 목록이 일부 동기화되지 않았습니다: ${syncError.runtimeType}');
-        _refreshAreas();
-        await trace.fail(
-          '지역 삭제는 완료됐지만 초기 관리자 접근 목록 동기화가 필요합니다.',
-          error: syncError,
-          stackTrace: syncStack,
-        );
-        if (mounted && !trace.developerMode) {
-          showFailedSnackbar(context, '지역이 삭제됐지만 초기 관리자 접근 목록은 재동기화가 필요합니다.', useCommonUi: true);
-        }
-        return;
-      }
+      final batch = firestore.trackedActivityBatch('shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', result: 'staged');
+      batch.delete(firestore.collection('areas').doc(item.documentId));
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', result: 'staged');
+      batch.delete(showRef);
+      await batch.commit().trackFirestore('BATCH', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+      trace.log('Area 및 계정 메타 삭제 commit 완료: writes=2', progress: 0.9);
       _refreshAreas();
       await trace.succeed('지역 삭제가 완료되었습니다.');
       if (!mounted) return;
@@ -550,12 +391,9 @@ class _AddAreaTabState extends State<AddAreaTab> {
       );
       if (!mounted || trace.developerMode) return;
       final raw = error.toString();
-      final message = raw.contains('RELATED_USER') ||
-              raw.contains('AREA_ACCOUNT_META_NOT_EMPTY_OR_INCONSISTENT')
-          ? '소속 계정 또는 지역 집계 정보가 남아 있어 삭제할 수 없습니다.'
-          : raw.contains('INITIALIZATION_STATE_CHANGED')
-              ? '지역 관리 상태가 변경됐습니다. 새로고침 후 다시 확인해 주세요.'
-              : '지역 삭제 실패: $error';
+      final message = raw.contains('RELATED_USER')
+          ? '소속 계정이 남아 있어 지역을 삭제할 수 없습니다.'
+          : '지역 삭제 실패: $error';
       showFailedSnackbar(context, message, useCommonUi: true);
     } finally {
       if (mounted) setState(() => _deletingAreaName = null);
@@ -756,20 +594,15 @@ class _AddAreaTabState extends State<AddAreaTab> {
                 ),
               ),
               const SizedBox(width: 8),
-              AnimatedScale(
-                scale: deleting ? .94 : 1,
-                duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-                curve: Curves.easeInOutCubic,
-                child: CommonIconButton(
-                  icon: Icons.delete_outline_rounded,
-                  tooltip: item.isHeadquarter ? '본사는 회사 관리에서 삭제' : '지역 삭제',
-                  destructive: true,
-                  loading: deleting,
-                  onPressed: item.isHeadquarter || _mutating || _deletingAreaName != null
-                      ? null
-                      : () => _deleteArea(item),
-                  haptic: CommonHaptic.medium,
-                ),
+              CommonIconButton(
+                icon: Icons.delete_outline_rounded,
+                tooltip: item.isHeadquarter ? '본사는 회사 관리에서 삭제' : '지역 삭제',
+                destructive: true,
+                loading: deleting,
+                onPressed: item.isHeadquarter || _mutating || _deletingAreaName != null
+                    ? null
+                    : () => _deleteArea(item),
+                haptic: CommonHaptic.medium,
               ),
             ],
           ),

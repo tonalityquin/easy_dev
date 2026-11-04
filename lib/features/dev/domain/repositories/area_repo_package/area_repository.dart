@@ -1,7 +1,6 @@
 import '../../../../../app/models/capability.dart';
 
 class AreaRecord {
-  final String id;
   final String name;
   final String division;
   final String email;
@@ -14,7 +13,6 @@ class AreaRecord {
   final String rawJson;
 
   const AreaRecord({
-    this.id = '',
     required this.name,
     required this.division,
     required this.email,

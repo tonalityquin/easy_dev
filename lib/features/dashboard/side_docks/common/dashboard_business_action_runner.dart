@@ -29,8 +29,13 @@ class DashboardBusinessActionRunner {
     final userState = context.read<UserState>();
     final hasMonthlyCapability =
         areaState.capabilitiesOfCurrentArea.contains(Capability.monthly);
-    final roleAllowsMonthly = userState.hasPermission('monthly.manage');
-    final canUseMonthly = hasMonthlyCapability && roleAllowsMonthly;
+    final roleName = userState.role.trim();
+    final roleType = RoleType.fromName(roleName);
+    final roleAllowsMonthly =
+        (kRolePolicy[roleType] ?? const <Section>{}).contains(Section.monthly);
+    final isFieldCommon = roleName == 'fieldCommon';
+    final canUseMonthly =
+        hasMonthlyCapability && roleAllowsMonthly && !isFieldCommon;
     final actionLabel = request == DashboardDockRequest.monthlyParking
         ? '정기 주차'
         : '출차 완료';
@@ -45,7 +50,7 @@ class DashboardBusinessActionRunner {
       showDialogImmediately: false,
     );
     trace.log(
-      'request=${request.name} screen=$screen area=${areaState.currentArea.trim()} monthlyPermission=monthly.manage monthlyCapability=$hasMonthlyCapability monthlyRoleAllowed=$roleAllowsMonthly monthlyVisible=$canUseMonthly',
+      'request=${request.name} screen=$screen area=${areaState.currentArea.trim()} role=$roleName monthlyCapability=$hasMonthlyCapability monthlyRoleAllowed=$roleAllowsMonthly monthlyVisible=$canUseMonthly',
       progress: 0.12,
     );
 
@@ -56,7 +61,7 @@ class DashboardBusinessActionRunner {
       if (request == DashboardDockRequest.monthlyParking) {
         if (!canUseMonthly) {
           trace.log(
-            'monthly_action_blocked capability=$hasMonthlyCapability roleAllowed=$roleAllowsMonthly',
+            'monthly_action_blocked capability=$hasMonthlyCapability roleAllowed=$roleAllowsMonthly fieldCommon=$isFieldCommon',
             progress: 0.4,
           );
           await trace.fail('정기 주차 표시 조건을 충족하지 않아 실행하지 않았습니다.');

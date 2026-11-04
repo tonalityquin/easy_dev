@@ -1,5 +1,4 @@
-import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -34,19 +33,19 @@ class SectorWriteService {
       );
 
       final reference = _collection.doc(documentId);
-      final existing = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => reference.get(), source: 'sector_write_service.get');
+      final existing = await reference.get().trackFirestore('GET', 'features/sector/data/services/sector_write_service.dart');
       if (existing.exists) {
         throw SectorDuplicateNameException(sectorName);
       }
 
       final now = DateTime.now();
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => reference.set(<String, dynamic>{
+      await reference.set(<String, dynamic>{
         'area': normalizedArea,
         'name': sectorName,
         'normalizedName': normalizedName,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      }), source: 'sector_write_service.set');
+      }).trackFirestore('SET', 'features/sector/data/services/sector_write_service.dart');
 
       debugPrint(
         '[SectorWriteService] 등록 완료: id=$documentId, area=$normalizedArea, name=$sectorName',
@@ -87,7 +86,7 @@ class SectorWriteService {
 
     try {
       final sourceReference = _collection.doc(normalizedId);
-      final sourceSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => sourceReference.get(), source: 'sector_write_service.get');
+      final sourceSnapshot = await sourceReference.get().trackFirestore('GET', 'features/sector/data/services/sector_write_service.dart');
       if (!sourceSnapshot.exists || sourceSnapshot.data() == null) {
         throw const SectorNotFoundException();
       }
@@ -106,32 +105,30 @@ class SectorWriteService {
 
       final now = DateTime.now();
       if (targetId == normalizedId) {
-        await FirebaseActivityMonitor.track(FirebaseActivityKind.update, () => sourceReference.update(<String, dynamic>{
+        await sourceReference.update(<String, dynamic>{
           'name': sectorName,
           'normalizedName': normalizedName,
           'updatedAt': FieldValue.serverTimestamp(),
-        }), source: 'sector_write_service.update');
+        }).trackFirestore('UPDATE', 'features/sector/data/services/sector_write_service.dart');
       } else {
         final targetReference = _collection.doc(targetId);
-        final targetSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => targetReference.get(), source: 'sector_write_service.get');
+        final targetSnapshot = await targetReference.get().trackFirestore('GET', 'features/sector/data/services/sector_write_service.dart');
         if (targetSnapshot.exists) {
           throw SectorDuplicateNameException(sectorName);
         }
 
-        final batch = _firestore.batch();
-        try {
-        FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(targetReference, <String, dynamic>{
+        final batch = _firestore.trackedActivityBatch('features/sector/data/services/sector_write_service.dart');
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/sector/data/services/sector_write_service.dart', result: 'staged');
+        batch.set(targetReference, <String, dynamic>{
           'area': normalizedArea,
           'name': sectorName,
           'normalizedName': normalizedName,
           'createdAt': sourceData['createdAt'] ?? FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
-        }));
-        FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.delete, () => batch.delete(sourceReference));
-        await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'sector_write_service.commit');
-        } finally {
-          FirebaseActivityWriteScope.cancelBatch(batch);
-        }
+        });
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'features/sector/data/services/sector_write_service.dart', result: 'staged');
+        batch.delete(sourceReference);
+        await batch.commit().trackFirestore('BATCH', 'features/sector/data/services/sector_write_service.dart');
       }
 
       debugPrint(
@@ -157,7 +154,7 @@ class SectorWriteService {
     required String normalizedName,
     String? excludedId,
   }) async {
-    final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _collection.where('area', isEqualTo: area).get(), source: 'sector_write_service.get');
+    final snapshot = await _collection.where('area', isEqualTo: area).get().trackFirestore('GET', 'features/sector/data/services/sector_write_service.dart');
     for (final document in snapshot.docs) {
       if (document.id == excludedId) continue;
       final data = document.data();

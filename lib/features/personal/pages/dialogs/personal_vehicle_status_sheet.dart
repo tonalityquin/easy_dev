@@ -1,4 +1,3 @@
-import '../../../dev/application/area_state.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -73,14 +72,9 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
       _error = null;
     });
     try {
-      final areaState = context.read<AreaState>();
-      final companyId = areaState.currentArea.trim() == widget.area.trim()
-          ? areaState.currentDivision.trim()
-          : '';
       final plate = await _service.fetchCurrentVehiclePlate(
         plateNumber: widget.vehicle.plateNumber,
         area: widget.area,
-        companyId: companyId,
       );
       if (!mounted) return;
       setState(() {

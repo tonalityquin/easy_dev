@@ -165,7 +165,8 @@ class ParkingCompletedPageShell extends StatelessWidget {
                           ),
                         ),
                         if (showDbStatusOnAppBar)
-                          IgnorePointer(
+                          AbsorbPointer(
+                            absorbing: false,
                             child: Align(
                               alignment: Alignment.topRight,
                               child: Padding(

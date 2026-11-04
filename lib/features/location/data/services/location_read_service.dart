@@ -1,6 +1,5 @@
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'location_company_scope.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../../app/utils/dev_firebase_debug_dialog.dart';
@@ -16,12 +15,10 @@ class LocationReadService {
     QuerySnapshot<Map<String, dynamic>> snapshot;
 
     try {
-      final companyId = await LocationCompanyScope.resolve(_firestore);
-      Query<Map<String, dynamic>> query = _firestore
-          .collection('locations').where('area', isEqualTo: cleanArea);
-      if (companyId == null || companyId.isEmpty) throw StateError('LOCATION_COMPANY_REQUIRED');
-      query = query.where('companyId', isEqualTo: companyId);
-      snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(), source: 'location_read_service.get');
+      snapshot = await _firestore
+          .collection('locations')
+          .where('area', isEqualTo: cleanArea)
+          .get().trackFirestore('GET', 'features/location/data/services/location_read_service.dart');
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint('❌ locations.read 실패(area=$cleanArea): $e');
@@ -34,8 +31,8 @@ class LocationReadService {
         details: <String, Object?>{
           'collection': 'locations',
           'area': cleanArea,
-          'query': 'where(companyId == currentCompany).where(area == $cleanArea)',
-          'filters': 'companyId == currentCompany AND area == $cleanArea',
+          'query': 'where(area == $cleanArea)',
+          'filters': 'area == $cleanArea',
           'orderBy': 'none',
           'queryShape': 'single-field-equality',
           'compositeIndex': 'not-required-for-this-shape-unless-console-error-requires-it',

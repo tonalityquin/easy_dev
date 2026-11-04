@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../../diagnostics/firebase_activity_meter.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -16,7 +18,6 @@ import '../../init/startup_tasks.dart';
 import '../../init/work_status_notification.dart';
 import '../../theme/theme_debug_trace.dart';
 import '../../utils/status_dialog.dart';
-import '../../utils/access_gate_diagnostics.dart';
 import '../../utils/secure_auth_diagnostics.dart';
 
 class ParkinWorkinTerminalDiagnostics {
@@ -63,14 +64,42 @@ class ParkinWorkinTerminalDiagnostics {
       ...MotionTimingDiagnostics.lines,
       ...BuildOptimizationDiagnostics.lines,
       ...StatusDialog.debugLines,
-      ...AccessGateDiagnostics.lines,
+      ...FirebaseActivityMeter.instance.events.reversed.map((event) => event.line),
       ..._lines,
     ];
     if (merged.isEmpty) {
       return 'debugPrint(${jsonEncode('[PARKINWORKIN_TERMINAL] 기록된 로그가 없습니다.')});';
     }
     return merged
-        .map((line) => 'debugPrint(${jsonEncode(line)});')
+        .map((line) =>
+            'debugPrint(${jsonEncode(SecureAuthDiagnostics.redact(line))});')
+        .join('\n');
+  }
+
+  static Future<String> debugPrintCodeWithJournal() async {
+    final merged = <String>[
+      ...StartupTasks.debugLines,
+      ...WorkStatusNotificationController.debugLines,
+      ...AppStartDebugTrace.lines,
+      ...LauncherDiagnostics.lines,
+      ...SecureAuthDiagnostics.lines,
+      ...TabletAccountDiagnostics.lines,
+      ...AppCommandDiagnostics.lines,
+      ...GmailSenderDiagnostics.lines,
+      ...AreaSnapshotPersistence.debugLines,
+      ...ThemeDebugTrace.lines,
+      ...MotionTimingDiagnostics.lines,
+      ...BuildOptimizationDiagnostics.lines,
+      ...StatusDialog.debugLines,
+      ..._lines,
+    ];
+    final ordinary = merged
+        .map((line) =>
+            'debugPrint(${jsonEncode(SecureAuthDiagnostics.redact(line))});')
+        .join('\n');
+    final activity = await FirebaseActivityMeter.instance.exportJournalCode();
+    return <String>[ordinary, activity]
+        .where((part) => part.isNotEmpty)
         .join('\n');
   }
 
@@ -101,7 +130,6 @@ class ParkinWorkinTerminalDiagnostics {
         'motionTimingLines': MotionTimingDiagnostics.lines.length,
         'buildOptimizationLines': BuildOptimizationDiagnostics.lines.length,
         'statusDialogLines': StatusDialog.debugLines.length,
-        'accessGateLines': AccessGateDiagnostics.lines.length,
       },
     );
     await StatusDialog.showSuccess(
@@ -109,6 +137,8 @@ class ParkinWorkinTerminalDiagnostics {
       title: 'ParkinWorkin Terminal Status',
       description: description,
       copyText: debugPrintCode,
+      copyTextProvider: debugPrintCodeWithJournal,
+      requireDeveloperModeForCopy: true,
       copyButtonLabel: 'debugPrint 코드 복사',
       visibleDuration: Duration.zero,
       useCommonUi: true,

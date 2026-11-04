@@ -10,7 +10,6 @@ import '../../../app/init/app_start_debug_trace.dart';
 import '../../../app/init/startup_tasks.dart';
 import '../../../app/init/work_status_notification.dart';
 import '../../../app/utils/status_dialog.dart';
-import '../../../app/utils/access_gate_diagnostics.dart';
 import '../../../app/utils/secure_auth_diagnostics.dart';
 import '../../attendance/application/attendance_diagnostics.dart';
 import '../../selector/application/dev_auth.dart';
@@ -36,7 +35,6 @@ class LauncherDiagnostics {
       ...MotionTimingDiagnostics.lines,
       ...BuildOptimizationDiagnostics.lines,
       ...SecureAuthDiagnostics.lines,
-      ...AccessGateDiagnostics.lines,
       ..._lines,
     ];
     if (merged.isEmpty) {
@@ -90,7 +88,6 @@ class LauncherDiagnostics {
       meta: <String, Object?>{
         'launcherLines': _lines.length,
         'authLines': SecureAuthDiagnostics.lines.length,
-        'accessGateLines': AccessGateDiagnostics.lines.length,
         'startupLines': StartupTasks.debugLines.length,
         'workStatusNotificationLines':
             WorkStatusNotificationController.debugLines.length,

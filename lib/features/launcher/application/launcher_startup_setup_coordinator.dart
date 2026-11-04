@@ -134,7 +134,7 @@ class LauncherStartupSetupCoordinator extends ChangeNotifier {
       AppStartSetupPhase.accountDeletion =>
         currentPolicySpec?.actionLabel ?? '계속',
       AppStartSetupPhase.googleServices =>
-        _googleConnected ? '연결 완료' : 'Google 계정 연결',
+        _googleConnected ? '연결 완료' : '계정 연결',
       _ => '',
     };
   }
@@ -658,7 +658,7 @@ class LauncherStartupSetupCoordinator extends ChangeNotifier {
       );
       await _resolveAndPrepare();
     } catch (error, stackTrace) {
-      _googleErrorText = 'Google 서비스 연결을 완료하지 못했습니다.';
+      _googleErrorText = '서비스 계정 연결을 완료하지 못했습니다.';
       notifyListeners();
       AppStartDebugTrace.log(
         'launcher_startup_setup',

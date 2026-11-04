@@ -67,14 +67,15 @@ class SingleDashBoard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  IgnorePointer(
+                  AbsorbPointer(
+                    absorbing: false,
                     child: Align(
                       alignment: Alignment.topRight,
                       child: Padding(
                         padding: const EdgeInsets.only(
                           right: 12,
-                          top: 8,
-                          bottom: 8,
+                          top: 4,
+                          bottom: 4,
                         ),
                         child: SizedBox(
                           height: kToolbarHeight - 8,

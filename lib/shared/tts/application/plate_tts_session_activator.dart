@@ -31,7 +31,6 @@ class PlateTtsSessionActivator {
   const PlateTtsSessionActivator._();
 
   static Future<PlateTtsSessionActivationResult> activate({
-    required String companyId,
     required String area,
     required String mode,
     TtsUserFilters? filters,
@@ -39,7 +38,6 @@ class PlateTtsSessionActivator {
   }) async {
     PlateTtsSessionDiagnostics.ensureStarted();
 
-    final normalizedCompany = companyId.trim();
     final normalizedArea = area.trim();
     final normalizedMode = mode.trim();
     final resolvedFilters = filters ?? await TtsUserFilters.load();
@@ -101,7 +99,6 @@ class PlateTtsSessionActivator {
     }
 
     await PlateTtsSessionRecoveryStore.save(
-      companyId: normalizedCompany,
       area: normalizedArea,
       mode: normalizedMode,
       filters: resolvedFilters,
@@ -126,7 +123,6 @@ class PlateTtsSessionActivator {
       if (foregroundRunning) {
         FlutterForegroundTask.sendDataToTask(<String, dynamic>{
           'kind': PlateTtsSessionProtocol.commandKind,
-          'companyId': normalizedCompany,
           'area': normalizedArea,
           'mode': '',
           'clearMode': true,
@@ -180,7 +176,6 @@ class PlateTtsSessionActivator {
       } else {
         FlutterForegroundTask.sendDataToTask(<String, dynamic>{
           'kind': PlateTtsSessionProtocol.commandKind,
-          'companyId': normalizedCompany,
           'area': normalizedArea,
           'mode': normalizedMode,
           'ttsFilters': resolvedFilters.toMap(),
@@ -221,7 +216,6 @@ class PlateTtsSessionActivator {
     } else {
       appListening = await PlateTtsListenerService.start(
         normalizedArea,
-        companyId: normalizedCompany,
         force: true,
         mode: normalizedMode,
         filters: resolvedFilters,
@@ -251,7 +245,6 @@ class PlateTtsSessionActivator {
   }
 
   static Future<PlateTtsSessionActivationResult> sync({
-    required String companyId,
     required String area,
     required TtsUserFilters filters,
     String source = 'settings',
@@ -260,7 +253,6 @@ class PlateTtsSessionActivator {
     await prefs.reload();
     final mode = (prefs.getString('mode') ?? '').trim();
     return activate(
-      companyId: companyId,
       area: area,
       mode: mode,
       filters: filters,

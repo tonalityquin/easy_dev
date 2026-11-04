@@ -13,7 +13,6 @@ import '../../../../shared/secondary/application/secondary_account_workspace_sta
 import '../../../../shared/secondary/widgets/ops_console_dialogs.dart';
 import '../../../../shared/secondary/widgets/ops_console_widgets.dart';
 import '../../../dev/application/area_state.dart';
-import '../../../dev/application/account_group_authorization.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../applications/user_state.dart';
 import '../../data/services/user_active_state_backfill_service.dart';
@@ -426,7 +425,6 @@ class _UserManagementState extends State<UserManagement> {
 
       await userState.setSelectedUserActiveStatus(
         toActive,
-        onDiagnostic: (message) => trace.log(message),
         onError: (message) {
           statusError = message;
         },
@@ -507,22 +505,6 @@ class _UserManagementState extends State<UserManagement> {
 
     String? deleteError;
     try {
-      final approved = await AccountGroupAuthorization.verify(
-        source: 'user_management_delete',
-      );
-      trace.log('server_access_gate approved=$approved', progress: 0.08);
-      if (!approved) {
-        await trace.fail('서버 접근 승인이 확인되지 않았습니다.');
-        if (!trace.developerMode && context.mounted) {
-          await StatusDialog.showFailure(
-            context,
-            title: '계정 삭제 불가',
-            description: '현재 계정의 서버 접근 승인이 확인되지 않았습니다.',
-            useCommonUi: true,
-          );
-        }
-        return;
-      }
       trace.log(
         '삭제 대상 확인: 사용자 ${_maskName(selectedUser.name)}, 코드번호 ${_maskCodeNumber(selectedUser.codeNumber)}',
         progress: 0.2,
@@ -530,7 +512,6 @@ class _UserManagementState extends State<UserManagement> {
       trace.log('계정 삭제와 사용자 캐시 갱신을 요청합니다.', progress: 0.5);
       await userState.deleteUserCard(
         [selectedId],
-        onDiagnostic: (message) => trace.log('삭제 상세: $message'),
         onError: (message) {
           deleteError = message;
         },
@@ -581,7 +562,7 @@ class _UserManagementState extends State<UserManagement> {
       user.name,
       user.codeNumber,
       user.email,
-      user.permissionKeys.join(' · '),
+      user.role,
       user.position ?? '',
       user.modes.join(' '),
       user.areas.join(' '),
@@ -883,7 +864,7 @@ class _UserManagementState extends State<UserManagement> {
               name: _maskName(user.name),
               codeNumber: _maskCodeNumber(user.codeNumber),
               email: _maskEmail(user.email),
-              permissionSummary: user.permissionKeys.join(' · '),
+              role: user.role,
               position: user.position ?? '',
               modes: user.modes,
               active: user.isActive,
@@ -1105,7 +1086,7 @@ class _UserDockRow extends StatelessWidget {
     required this.name,
     required this.codeNumber,
     required this.email,
-    required this.permissionSummary,
+    required this.role,
     required this.position,
     required this.modes,
     required this.active,
@@ -1117,7 +1098,7 @@ class _UserDockRow extends StatelessWidget {
   final String name;
   final String codeNumber;
   final String email;
-  final String permissionSummary;
+  final String role;
   final String position;
   final List<String> modes;
   final bool active;
@@ -1135,7 +1116,7 @@ class _UserDockRow extends StatelessWidget {
     final selectedContainer =
         deleteMode ? tokens.dangerContainer : tokens.accentContainer;
     final rolePosition = [
-      if (permissionSummary.trim().isNotEmpty) permissionSummary.trim(),
+      if (role.trim().isNotEmpty) role.trim(),
       if (position.trim().isNotEmpty) position.trim(),
     ].join(' · ');
     final modeText = modes.isEmpty ? '모드 없음' : modes.join(' · ');

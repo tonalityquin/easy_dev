@@ -1,3 +1,4 @@
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -434,7 +435,7 @@ class InputPlateService {
     for (final path in normalizedPaths) {
       try {
         _emitDebug(onDebug, 'photo_cleanup=start path=$path');
-        await storage.objects.delete(bucketName, path);
+        await storage.objects.delete(bucketName, path).trackStorage('STORAGE_DELETE', 'shared/page/input/application/input_plate_service.dart');
         _emitDebug(onDebug, 'photo_cleanup=success path=$path');
       } catch (error) {
         failedPaths.add(path);
@@ -676,7 +677,7 @@ class InputPlateService {
           prefix: prefix,
           delimiter: directChildrenOnly ? '/' : null,
           pageToken: pageToken,
-        );
+        ).trackStorage('STORAGE_LIST', 'shared/page/input/application/input_plate_service.dart');
         queryPages++;
         pageCount++;
         final items = res.items ?? const <gcs.Object>[];

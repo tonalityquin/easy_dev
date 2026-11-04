@@ -1,14 +1,16 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../utils/motion_timing_diagnostics.dart';
-import '../../firebase_activity/firebase_activity_monitor.dart';
-import '../../../features/account/presentation/initial_account_setup_dialog.dart';
+import '../../auth/google_auth_session.dart';
+import '../../../features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../../features/launcher/application/launcher_actions.dart';
+import '../../../features/launcher/application/dev_bootstrap_service.dart';
 import '../../../features/launcher/application/launcher_diagnostics.dart';
 import '../../../features/launcher/application/mode_launcher_controller.dart';
 import '../../../features/launcher/application/terminal_auth_coordinator.dart';
@@ -16,7 +18,6 @@ import '../../auth/gmail_sender_auth.dart';
 import '../../config/email_config.dart';
 import '../../../features/selector/application/dev_auth.dart';
 import '../../../features/dev/application/developer_account_authorization.dart';
-import '../../../features/dev/application/developer_login_gate_service.dart';
 import '../../../shared/auth/account_code_number.dart';
 import '../../../features/dev/presentation/debug_caution_surface.dart';
 import '../../command/application/app_command_registry.dart';
@@ -1076,38 +1077,27 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         context: _contextLabel,
       );
       _commandInputFocusNode.unfocus();
-      var skipRequested = false;
+      var skipped = false;
       await _showLauncherDialog(
         builder: (dialogContext) => _LauncherRestartNoticeDialog(
           reduceMotion: _reduceMotion,
           onStatus: _showDeveloperStatus,
           onOpened: _handleLauncherDialogOpened,
           onClosing: _handleLauncherDialogClosing,
-          onSkip: () {
-            skipRequested = true;
-            Navigator.of(dialogContext, rootNavigator: true).pop();
-          },
+          onSkip: () => skipped = true,
         ),
       );
-      if (skipRequested) {
-        if (mounted) {
-          _setLauncherDialogPhase(
-            _LauncherDialogPhase.closed,
-            source: 'manual_google_login_restart_skipped',
-          );
-        }
+      if (skipped) {
         LauncherDiagnostics.record(
-          'manual_google_login_restart_navigation_resumed',
+          'manual_google_login_restart_skipped',
           scope: 'auth',
-          meta: const <String, Object?>{'restartSkipped': true},
         );
         ParkinWorkinTerminalDiagnostics.record(
-          'manual_google_login_restart_navigation_resumed',
+          'manual_google_login_restart_skipped',
           context: _contextLabel,
         );
-        return false;
       }
-      return true;
+      return !skipped;
     } catch (error) {
       LauncherDiagnostics.record(
         'manual_google_login_restart_notice_failed',
@@ -1151,7 +1141,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       context: _contextLabel,
       meta: <String, Object?>{'stage': stage.name},
     );
-    var dialogInteractionFailed = false;
     try {
       await _playbackController.waitUntilIdle();
       if (!mounted || _interactionLocked || _launcherController!.busy) return;
@@ -1178,18 +1167,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         case TerminalLoginStage.activatingMode:
           break;
       }
-    } catch (error, stackTrace) {
-      dialogInteractionFailed = true;
-      ParkinWorkinTerminalDiagnostics.record(
-        'launcher_dialog_interaction_failed',
-        context: _contextLabel,
-        meta: <String, Object?>{
-          'error': error.toString(),
-          'stack': stackTrace.toString(),
-          'stage': _launcherController?.loginStage.name ?? '',
-        },
-      );
-      debugPrint('[LAUNCHER_DIALOG] interaction_failed error=$error\n$stackTrace');
     } finally {
       if (mounted) {
         _setLauncherDialogPhase(
@@ -1202,19 +1179,10 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     final deferred = _deferredLauncherResult;
     _deferredLauncherResult = null;
     if (deferred != null) {
-      ParkinWorkinTerminalDiagnostics.record(
-        'launcher_deferred_result_consumed',
-        context: _contextLabel,
-        meta: <String, Object?>{
-          'targetRoute': deferred.targetRoute ?? '',
-        },
-      );
       await _handleLauncherResult(deferred);
       if (!mounted || _interactionLocked) return;
     }
-    if (!dialogInteractionFailed) {
-      await _syncLauncherInteractionSurface();
-    }
+    await _syncLauncherInteractionSurface();
   }
 
   Future<void> _showLauncherDialog({
@@ -1223,11 +1191,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     _setLauncherDialogPhase(
       _LauncherDialogPhase.opening,
       source: 'dialog_route_start',
-    );
-    ParkinWorkinTerminalDiagnostics.record(
-      'launcher_dialog_route_open_requested',
-      context: _contextLabel,
-      meta: <String, Object?>{'stage': _launcherController?.loginStage.name ?? ''},
     );
     await showGeneralDialog<void>(
       context: context,
@@ -1267,28 +1230,11 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
           curve: Curves.easeOutCubic,
           reverseCurve: Curves.easeInCubic,
         );
-        if (_reduceMotion) {
-          return FadeTransition(opacity: curved, child: child);
-        }
         return FadeTransition(
           opacity: curved,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.025),
-              end: Offset.zero,
-            ).animate(curved),
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.985, end: 1).animate(curved),
-              child: child,
-            ),
-          ),
+          child: child,
         );
       },
-    );
-    ParkinWorkinTerminalDiagnostics.record(
-      'launcher_dialog_route_closed',
-      context: _contextLabel,
-      meta: <String, Object?>{'stage': _launcherController?.loginStage.name ?? ''},
     );
   }
 
@@ -1352,7 +1298,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       },
     );
     var openDeveloperPassword = false;
-    var openInitialAccountSetup = false;
     await _showLauncherDialog(
       builder: (dialogContext) => _LauncherAccountDialog(
         accountKind: _launcherController!.selectedAccountKindLabel,
@@ -1363,9 +1308,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         onStatus: _showDeveloperStatus,
         onOpened: _handleLauncherDialogOpened,
         onClosing: _handleLauncherDialogClosing,
-        onOpenInitialAccountSetup: () {
-          openInitialAccountSetup = true;
-        },
         onResolveIdentity: (name, accountIdentifier, developerPasswordMode) async {
           final result = await _resolveLauncherAccount(
             name,
@@ -1383,37 +1325,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       ),
     );
     if (!mounted) return;
-    if (openInitialAccountSetup) {
-      LauncherDiagnostics.record(
-        'developer_initial_account_setup_open',
-        scope: 'launcher_terminal_manual_auth',
-      );
-      try {
-        await InitialAccountSetupDialog.open(context);
-        LauncherDiagnostics.record(
-          'developer_initial_account_setup_closed',
-          scope: 'launcher_terminal_manual_auth',
-        );
-      } catch (error) {
-        LauncherDiagnostics.record(
-          'developer_initial_account_setup_failed',
-          scope: 'launcher_terminal_manual_auth',
-          meta: <String, Object?>{
-            'errorType': error.runtimeType.toString(),
-          },
-        );
-        if (mounted) {
-          await LauncherDiagnostics.showStatus(
-            context,
-            title: '최초 계정 설정 열기 실패',
-            description: '최초 계정 설정 화면을 열지 못했습니다.',
-            scope: 'launcher_terminal_manual_auth',
-            failure: true,
-          );
-        }
-      }
-      return;
-    }
     if (openDeveloperPassword) {
       await _showLauncherPasswordDialog();
     }
@@ -1774,32 +1685,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     Navigator.of(context).pop();
   }
 
-  Future<void> _showLauncherHelp() async {
-    if (!_isLauncher || _interactionLocked) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('런처 도움말'),
-        content: const Text('로그인 도움말과 최초 계정 설정을 이용할 수 있습니다.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('닫기'),
-          ),
-          FilledButton.icon(
-            onPressed: () async {
-              Navigator.of(dialogContext).pop();
-              if (!mounted) return;
-              await InitialAccountSetupDialog.open(context);
-            },
-            icon: const Icon(Icons.admin_panel_settings_outlined),
-            label: const Text('최초 계정 설정'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _showDeveloperStatus() async {
     if (_interactionLocked) return;
     _commandInputFocusNode.unfocus();
@@ -2046,7 +1931,6 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
             reduceMotion: _reduceMotion,
             onCloseTerminal: () => _submitHeaderCommand('out'),
             onAbout: _isLauncher ? null : () => _submitHeaderCommand('about'),
-            onLauncherHelp: _isLauncher ? _showLauncherHelp : null,
             onAppExit: _isLauncher ? () => _submitHeaderCommand('exit') : null,
             onSetting: () => _submitHeaderCommand('setting'),
             appExiting: _exitInProgress,
@@ -2218,7 +2102,6 @@ class _TerminalHeader extends StatelessWidget {
     required this.reduceMotion,
     required this.onCloseTerminal,
     required this.onAbout,
-    required this.onLauncherHelp,
     required this.onAppExit,
     required this.onSetting,
     required this.appExiting,
@@ -2231,7 +2114,6 @@ class _TerminalHeader extends StatelessWidget {
   final bool reduceMotion;
   final VoidCallback onCloseTerminal;
   final VoidCallback? onAbout;
-  final VoidCallback? onLauncherHelp;
   final VoidCallback? onAppExit;
   final VoidCallback onSetting;
   final bool appExiting;
@@ -2310,19 +2192,6 @@ class _TerminalHeader extends StatelessWidget {
               ),
             ),
           ),
-          if (onLauncherHelp != null) ...[
-            const SizedBox(width: 2),
-            _TerminalHeaderAction(
-              semanticLabel: '도움말 및 최초 계정 설정',
-              onPressed: busy ? null : onLauncherHelp,
-              reduceMotion: reduceMotion,
-              child: const Icon(
-                Icons.help_outline_rounded,
-                size: 17,
-                color: _terminalAccent,
-              ),
-            ),
-          ],
           const SizedBox(width: 2),
           AnimatedSwitcher(
             duration:
@@ -2981,14 +2850,14 @@ class _TerminalGoogleSetupView extends StatelessWidget {
             child: const Padding(
               padding: EdgeInsets.symmetric(vertical: 2),
               child: Text(
-                'Google 서비스 연결',
+                '서비스 계정 연결',
                 style: _terminalSectionTitleStyle,
               ),
             ),
           ),
           const SizedBox(height: 4),
           const Text(
-            '업무에 필요한 Google 서비스를 한 번의 승인 과정으로 연결합니다.',
+            '업무에 필요한 일정, 메일, 파일 서비스를 연결합니다.',
             style: _terminalSectionBodyStyle,
           ),
           const SizedBox(height: 9),
@@ -4978,20 +4847,18 @@ class _MiniTerminalFrame extends StatefulWidget {
     required this.title,
     required this.reduceMotion,
     required this.onStatus,
-    this.onHelp,
-    this.onTitleTap,
-    this.titleTapCount = 0,
     required this.onOpenCompleted,
+    this.onTitleTap,
+    this.headerAction,
     required this.child,
   });
 
   final String title;
   final bool reduceMotion;
   final VoidCallback onStatus;
-  final VoidCallback? onHelp;
-  final VoidCallback? onTitleTap;
-  final int titleTapCount;
   final VoidCallback onOpenCompleted;
+  final VoidCallback? onTitleTap;
+  final Widget? headerAction;
   final Widget child;
 
   @override
@@ -5003,51 +4870,6 @@ class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
   late final AnimationController _controller;
   bool _openReported = false;
   bool _closing = false;
-
-  Widget _buildTitle() {
-    final title = Text(
-      widget.title,
-      key: widget.onTitleTap == null
-          ? null
-          : ValueKey<int>(widget.titleTapCount),
-      overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
-        color: _terminalText,
-        fontFamily: 'monospace',
-        fontSize: 11.5,
-        fontWeight: FontWeight.w800,
-        letterSpacing: .55,
-      ),
-    );
-    if (widget.onTitleTap == null) return title;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: widget.onTitleTap,
-      child: AnimatedSwitcher(
-        duration: widget.reduceMotion
-            ? Duration.zero
-            : const Duration(milliseconds: 180),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        layoutBuilder: (currentChild, previousChildren) => Stack(
-          alignment: Alignment.centerLeft,
-          children: <Widget>[
-            ...previousChildren,
-            if (currentChild != null) currentChild,
-          ],
-        ),
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            alignment: Alignment.centerLeft,
-            scale: Tween<double>(begin: .92, end: 1).animate(animation),
-            child: child,
-          ),
-        ),
-        child: title,
-      ),
-    );
-  }
 
   @override
   void initState() {
@@ -5214,51 +5036,28 @@ class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Expanded(child: _buildTitle()),
-                                AnimatedSwitcher(
-                                  duration: widget.reduceMotion
-                                      ? Duration.zero
-                                      : const Duration(milliseconds: 220),
-                                  switchInCurve: Curves.easeOutCubic,
-                                  switchOutCurve: Curves.easeInCubic,
-                                  transitionBuilder: (child, animation) =>
-                                      FadeTransition(
-                                    opacity: animation,
-                                    child: ScaleTransition(
-                                      scale: Tween<double>(
-                                        begin: .82,
-                                        end: 1,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
-                                  ),
-                                  child: widget.onHelp == null
-                                      ? const SizedBox.shrink(
-                                          key: ValueKey<String>(
-                                            'initial_account_help_hidden',
-                                          ),
-                                        )
-                                      : Padding(
-                                          key: const ValueKey<String>(
-                                            'initial_account_help_visible',
-                                          ),
-                                          padding:
-                                              const EdgeInsets.only(right: 8),
-                                          child: IconButton(
-                                            tooltip: '최초 계정 설정',
-                                            onPressed: widget.onHelp,
-                                            icon: const Icon(
-                                              Icons.help_outline_rounded,
-                                              color: _terminalAccent,
-                                              size: 19,
-                                            ),
-                                            padding: EdgeInsets.zero,
-                                            constraints: const BoxConstraints(
-                                              minWidth: 32,
-                                              minHeight: 32,
-                                            ),
+                                Expanded(
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: widget.onTitleTap,
+                                    child: Semantics(
+                                      button: widget.onTitleTap != null,
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          widget.title,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: _terminalText,
+                                            fontFamily: 'monospace',
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: .55,
                                           ),
                                         ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                                 ValueListenableBuilder<bool>(
                                   valueListenable: DevAuth.devModeEnabled,
@@ -5291,15 +5090,35 @@ class _MiniTerminalFrameState extends State<_MiniTerminalFrame>
                                     );
                                   },
                                 ),
-                                const SizedBox(
-                                  width: 7,
-                                  height: 7,
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: _terminalAccent,
-                                      shape: BoxShape.circle,
+                                AnimatedSwitcher(
+                                  duration: widget.reduceMotion
+                                      ? Duration.zero
+                                      : const Duration(milliseconds: 210),
+                                  switchInCurve: Curves.easeOutBack,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  transitionBuilder: (child, animation) =>
+                                      FadeTransition(
+                                    opacity: animation,
+                                    child: ScaleTransition(
+                                      scale: Tween<double>(begin: .75, end: 1)
+                                          .animate(animation),
+                                      child: child,
                                     ),
                                   ),
+                                  child: widget.headerAction ??
+                                      const SizedBox(
+                                        key: ValueKey<String>(
+                                          'mini_terminal_idle_indicator',
+                                        ),
+                                        width: 7,
+                                        height: 7,
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            color: _terminalAccent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
                                 ),
                               ],
                             ),
@@ -5374,8 +5193,9 @@ class _LauncherRestartNoticeDialogState
   bool _opened = false;
   bool _typingCompleted = false;
   bool _restarting = false;
-  bool _skipRequested = false;
+  bool _skipping = false;
   int _titleTapCount = 0;
+  DateTime? _lastTitleTap;
 
   void _handleOpened() {
     if (!mounted) return;
@@ -5384,70 +5204,51 @@ class _LauncherRestartNoticeDialogState
   }
 
   void _handleTitleTap() {
-    if (!_opened || _restarting || _skipRequested) return;
-    setState(() => _titleTapCount += 1);
-    LauncherDiagnostics.record(
-      'manual_google_login_restart_title_tapped',
-      scope: 'auth',
-      meta: <String, Object?>{
-        'tapCount': _titleTapCount,
-        'requiredTaps': 5,
-      },
-    );
-    ParkinWorkinTerminalDiagnostics.record(
-      'manual_google_login_restart_title_tapped',
-      context: 'launcher',
-      meta: <String, Object?>{'tapCount': _titleTapCount},
-    );
-    if (_titleTapCount == 5) {
-      _skipRequested = true;
-      unawaited(_skipWithAnimation());
-    } else {
-      unawaited(HapticFeedback.selectionClick());
+    if (!_opened || _restarting || _skipping) return;
+    final now = DateTime.now();
+    if (_lastTitleTap == null ||
+        now.difference(_lastTitleTap!) > const Duration(seconds: 2)) {
+      _titleTapCount = 0;
     }
+    _lastTitleTap = now;
+    _titleTapCount += 1;
+    if (_titleTapCount < 5) return;
+    _titleTapCount = 0;
+    unawaited(_skipRestart());
   }
 
-  Future<void> _skipWithAnimation() async {
+  Future<void> _skipRestart() async {
+    if (!mounted || !_opened || _restarting || _skipping) return;
+    setState(() => _skipping = true);
     LauncherDiagnostics.record(
-      'manual_google_login_restart_skipped',
+      'manual_google_login_restart_skip_requested',
       scope: 'auth',
-      meta: const <String, Object?>{
-        'tapCount': 5,
-        'restartSkipped': true,
-      },
     );
     ParkinWorkinTerminalDiagnostics.record(
-      'manual_google_login_restart_skipped',
+      'manual_google_login_restart_skip_requested',
       context: 'launcher',
-      meta: const <String, Object?>{'tapCount': 5},
     );
     try {
-      await HapticFeedback.lightImpact();
-      if (!mounted) return;
-      if (!widget.reduceMotion) {
-        await Future<void>.delayed(const Duration(milliseconds: 180));
-      }
+      await HapticFeedback.mediumImpact();
       if (!mounted) return;
       widget.onClosing();
+      await WidgetsBinding.instance.endOfFrame;
       await _frameKey.currentState?.close();
+      if (!mounted) return;
+      widget.onSkip();
+      Navigator.of(context).pop();
     } catch (error) {
       LauncherDiagnostics.record(
-        'manual_google_login_restart_skip_animation_failed',
+        'manual_google_login_restart_skip_failed',
         scope: 'auth',
         meta: <String, Object?>{'errorType': error.runtimeType.toString()},
       );
-      ParkinWorkinTerminalDiagnostics.record(
-        'manual_google_login_restart_skip_animation_failed',
-        context: 'launcher',
-        meta: <String, Object?>{'errorType': error.runtimeType.toString()},
-      );
+      if (mounted) setState(() => _skipping = false);
     }
-    if (!mounted) return;
-    widget.onSkip();
   }
 
   Future<void> _restart() async {
-    if (_restarting || _skipRequested || !_typingCompleted) return;
+    if (_restarting || _skipping || !_typingCompleted) return;
     setState(() => _restarting = true);
     try {
       await HapticFeedback.mediumImpact();
@@ -5479,9 +5280,8 @@ class _LauncherRestartNoticeDialogState
         title: 'APP RESTART',
         reduceMotion: widget.reduceMotion,
         onStatus: widget.onStatus,
-        onTitleTap: _handleTitleTap,
-        titleTapCount: _titleTapCount,
         onOpenCompleted: _handleOpened,
+        onTitleTap: _handleTitleTap,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -5525,8 +5325,8 @@ class _LauncherRestartNoticeDialogState
               alignment: Alignment.centerRight,
               child: _TerminalDialogActionButton(
                 label: '재시작',
-                busy: _restarting,
-                enabled: _typingCompleted && !_restarting && !_skipRequested,
+                busy: _restarting || _skipping,
+                enabled: _typingCompleted && !_restarting && !_skipping,
                 reduceMotion: widget.reduceMotion,
                 onPressed: _restart,
               ),
@@ -5554,7 +5354,6 @@ class _LauncherAccountDialog extends StatefulWidget {
     required this.onStatus,
     required this.onOpened,
     required this.onClosing,
-    required this.onOpenInitialAccountSetup,
     required this.onResolveIdentity,
   });
 
@@ -5566,7 +5365,6 @@ class _LauncherAccountDialog extends StatefulWidget {
   final VoidCallback onStatus;
   final VoidCallback onOpened;
   final VoidCallback onClosing;
-  final VoidCallback onOpenInitialAccountSetup;
   final Future<LauncherCredentialSubmitResult> Function(
     String name,
     String accountIdentifier,
@@ -5585,11 +5383,21 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
   final GlobalKey<_MiniTerminalFrameState> _frameKey =
       GlobalKey<_MiniTerminalFrameState>();
   bool _busy = false;
+  bool _connecting = false;
   bool _developerPasswordMode = false;
+  bool _devBootstrapBusy = false;
+  bool _devBootstrapFailed = false;
+  String? _devBootstrapNotice;
   int _emptySubmitCount = 0;
+  int _titleTapCount = 0;
+  DateTime? _lastTitleTap;
+  StreamSubscription<GoogleAuthIdentity?>? _identitySubscription;
+  StreamSubscription<User?>? _firebaseSubscription;
   String? _nameError;
   String? _accountIdentifierError;
   String? _submitError;
+  String? _connectionError;
+  String? _copyNotice;
 
   @override
   void initState() {
@@ -5599,6 +5407,213 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
         TextEditingController(text: widget.initialAccountIdentifier);
     _nameController.addListener(_handleInputChanged);
     _accountIdentifierController.addListener(_handleInputChanged);
+    _identitySubscription = GoogleAuthSession.instance.identityChanges.listen(
+      (_) => _refreshConnectedAccount(),
+    );
+    _firebaseSubscription = FirebaseAuth.instance.authStateChanges().listen(
+      (_) => _refreshConnectedAccount(),
+    );
+  }
+
+  String? get _connectedEmail {
+    final identity = GoogleAuthSession.instance.currentIdentity;
+    final user = FirebaseGoogleAuthBridge.instance.currentUser;
+    if (identity == null || user == null || user.isAnonymous) return null;
+    if (identity.normalizedEmail != user.email?.trim().toLowerCase()) {
+      return null;
+    }
+    return identity.email;
+  }
+
+  void _refreshConnectedAccount() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  Future<void> _connectAccount() async {
+    if (_busy || _connecting || _devBootstrapBusy) return;
+    final changing = _connectedEmail != null;
+    setState(() {
+      _connecting = true;
+      _connectionError = null;
+      _copyNotice = null;
+    });
+    LauncherDiagnostics.record(
+      changing ? 'connected_account_change_start' : 'connected_account_link_start',
+      scope: 'launcher_terminal_account_connection',
+    );
+    ParkinWorkinTerminalDiagnostics.record(
+      changing ? 'account_change_start' : 'account_link_start',
+      context: 'launcher',
+    );
+    try {
+      await GoogleAuthSession.instance.connectOrChangeFirebaseIdentity();
+      if (!mounted) return;
+      if (_connectedEmail == null) {
+        throw StateError('connected_identity_not_verified');
+      }
+      setState(() {
+        _connectionError = null;
+        _submitError = null;
+      });
+      LauncherDiagnostics.record(
+        changing ? 'connected_account_change_success' : 'connected_account_link_success',
+        scope: 'launcher_terminal_account_connection',
+      );
+      ParkinWorkinTerminalDiagnostics.record(
+        changing ? 'account_change_success' : 'account_link_success',
+        context: 'launcher',
+      );
+      await HapticFeedback.selectionClick();
+    } catch (error) {
+      LauncherDiagnostics.record(
+        'connected_account_action_failed',
+        scope: 'launcher_terminal_account_connection',
+        meta: <String, Object?>{
+          'change': changing,
+          'errorType': error.runtimeType.toString(),
+        },
+      );
+      ParkinWorkinTerminalDiagnostics.record(
+        'account_connection_failed',
+        context: 'launcher',
+        meta: <String, Object?>{'change': changing},
+      );
+      if (_connectedEmail == null &&
+          (GoogleAuthSession.instance.currentIdentity != null ||
+              FirebaseGoogleAuthBridge.instance.currentUser != null)) {
+        try {
+          await GoogleAuthSession.instance.signOut();
+        } catch (cleanupError) {
+          LauncherDiagnostics.record(
+            'connected_account_cleanup_failed',
+            scope: 'launcher_terminal_account_connection',
+            meta: <String, Object?>{
+              'errorType': cleanupError.runtimeType.toString(),
+            },
+          );
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _connectionError = '계정을 연결하지 못했습니다. 다시 시도하세요.';
+      });
+      await HapticFeedback.mediumImpact();
+    } finally {
+      if (mounted) setState(() => _connecting = false);
+    }
+  }
+
+  Future<void> _bootstrapDevWorkspace() async {
+    if (widget.accountKindType != TerminalAccountKind.user ||
+        !_developerPasswordMode ||
+        _busy ||
+        _connecting ||
+        _devBootstrapBusy) {
+      return;
+    }
+    if (!DeveloperAccountAuthorization.isAuthorized) {
+      setState(() {
+        _devBootstrapFailed = true;
+        _devBootstrapNotice = '개발자 인증을 다시 확인하세요.';
+      });
+      return;
+    }
+    setState(() {
+      _devBootstrapBusy = true;
+      _devBootstrapFailed = false;
+      _devBootstrapNotice = '개발 환경을 준비하고 있습니다.';
+      _submitError = null;
+    });
+    ParkinWorkinTerminalDiagnostics.record(
+      'dev_bootstrap_help_pressed',
+      context: 'launcher',
+    );
+    try {
+      if (_connectedEmail == null) {
+        ParkinWorkinTerminalDiagnostics.record(
+          'dev_bootstrap_account_connection_requested',
+          context: 'launcher',
+        );
+        await GoogleAuthSession.instance.connectOrChangeFirebaseIdentity();
+      }
+      if (!mounted) return;
+      final email = _connectedEmail;
+      if (email == null) {
+        throw const DevBootstrapException('계정을 연결한 다음 다시 시도하세요.');
+      }
+      final result = await DevBootstrapService().ensure(email: email);
+      if (!mounted) return;
+      _setControllerText(_nameController, 'dev');
+      _setControllerText(
+        _accountIdentifierController,
+        AccountCodeNumber.format(result.codeNumber),
+      );
+      setState(() {
+        _devBootstrapNotice = result.unchanged
+            ? '개발 환경이 이미 준비되어 있습니다. 계정 정보를 입력란에 적용했습니다.'
+            : '개발 환경 준비 완료 · 문서 쓰기 ${result.writeOperations}회 · 계정 정보를 입력란에 적용했습니다.';
+        _devBootstrapFailed = false;
+        _nameError = null;
+        _accountIdentifierError = null;
+      });
+      await HapticFeedback.heavyImpact();
+    } catch (error) {
+      LauncherDiagnostics.record(
+        'dev_bootstrap_help_failed',
+        scope: 'launcher_terminal_dev_bootstrap',
+        meta: <String, Object?>{'errorType': error.runtimeType.toString()},
+      );
+      ParkinWorkinTerminalDiagnostics.record(
+        'dev_bootstrap_help_failed',
+        context: 'launcher',
+        meta: <String, Object?>{'errorType': error.runtimeType.toString()},
+      );
+      if (!mounted) return;
+      setState(() {
+        _devBootstrapFailed = true;
+        _devBootstrapNotice = error is DevBootstrapException
+            ? error.message
+            : '개발 환경을 준비하지 못했습니다. 진단 기록을 확인하세요.';
+      });
+      await HapticFeedback.mediumImpact();
+    } finally {
+      if (mounted) setState(() => _devBootstrapBusy = false);
+    }
+  }
+
+  Future<void> _handleAccountTitleTap() async {
+    final now = DateTime.now();
+    if (_lastTitleTap == null ||
+        now.difference(_lastTitleTap!) > const Duration(seconds: 2)) {
+      _titleTapCount = 0;
+    }
+    _lastTitleTap = now;
+    _titleTapCount += 1;
+    if (_titleTapCount < 5) return;
+    _titleTapCount = 0;
+    ParkinWorkinTerminalDiagnostics.record(
+      'account_verification_debug_copy_requested',
+      context: 'launcher',
+    );
+    try {
+      await Clipboard.setData(
+        ClipboardData(text: ParkinWorkinTerminalDiagnostics.debugPrintCode),
+      );
+      if (!mounted) return;
+      setState(() => _copyNotice = '진단 로그를 복사했습니다.');
+      await HapticFeedback.lightImpact();
+      debugPrint('[PARKINWORKIN_TERMINAL] account_verification_debug_copied');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _copyNotice = '진단 로그를 복사하지 못했습니다.');
+      LauncherDiagnostics.record(
+        'account_verification_debug_copy_failed',
+        scope: 'launcher_terminal_account_connection',
+        meta: <String, Object?>{'errorType': error.runtimeType.toString()},
+      );
+      await HapticFeedback.mediumImpact();
+    }
   }
 
   void _handleOpened() {
@@ -5669,9 +5684,11 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
   }
 
   Future<void> _pasteFromClipboard(_LauncherPasteField field) async {
-    if (_busy || field == _LauncherPasteField.password) return;
+    if (_busy || _devBootstrapBusy || field == _LauncherPasteField.password) {
+      return;
+    }
     final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
-    if (!mounted || _busy) return;
+    if (!mounted || _busy || _devBootstrapBusy) return;
     final raw = clipboardData?.text ?? '';
     final trimmed = raw.trim();
     if (trimmed.isEmpty) {
@@ -5763,10 +5780,11 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
     );
   }
 
-  int get _requiredDeveloperTapCount => 5;
+  int get _requiredDeveloperTapCount =>
+      widget.accountKindType == TerminalAccountKind.tablet ? 3 : 5;
 
   Future<void> _registerEmptyDeveloperTap() async {
-    if (_busy || _developerPasswordMode) return;
+    if (_busy || _devBootstrapBusy || _developerPasswordMode) return;
     final requiredTapCount = _requiredDeveloperTapCount;
     final next = _emptySubmitCount + 1;
     LauncherDiagnostics.record(
@@ -5815,41 +5833,9 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       },
     );
 
-    final authorized = await FirebaseActivityMonitor.runAction<bool>(
-      '개발자 로그인',
-      () async {
-        final gmailAuthorized =
-            await DeveloperAccountAuthorization.authorizeInteractive(
-          source: 'launcher_terminal_manual_auth',
-        );
-        if (!mounted) {
-          FirebaseActivityMonitor.noteCurrentActionOutcome(
-            FirebaseActionOutcome.cancelled,
-            code: 'DEVELOPER_LOGIN_VIEW_DISPOSED',
-          );
-          return false;
-        }
-        if (!gmailAuthorized) return false;
-        final gateApproved = await DeveloperLoginGateService.verify(
-          source: 'launcher_terminal_manual_auth',
-        );
-        if (!mounted) {
-          FirebaseActivityMonitor.noteCurrentActionOutcome(
-            FirebaseActionOutcome.cancelled,
-            code: 'DEVELOPER_LOGIN_VIEW_DISPOSED',
-          );
-          return false;
-        }
-        if (!gateApproved) return false;
-        setState(() {
-          _busy = false;
-          _developerPasswordMode = true;
-          _nameError = null;
-          _accountIdentifierError = null;
-          _submitError = null;
-        });
-        return true;
-      },
+    final authorized =
+        await DeveloperAccountAuthorization.authorizeInteractive(
+      source: 'launcher_terminal_manual_auth',
     );
     if (!mounted) return;
 
@@ -5878,13 +5864,20 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
       await LauncherDiagnostics.showStatus(
         context,
         title: '개발자 계정 인증 실패',
-        description: '개발자 계정 인증 상태와 오류 내용을 확인할 수 있습니다.',
+        description: '개발자 계정 인증 로그를 확인할 수 있습니다.',
         scope: 'launcher_terminal_manual_auth',
         failure: true,
       );
       return;
     }
 
+    setState(() {
+      _busy = false;
+      _developerPasswordMode = true;
+      _nameError = null;
+      _accountIdentifierError = null;
+      _submitError = null;
+    });
     await HapticFeedback.heavyImpact();
     LauncherDiagnostics.record(
       'developer_password_mode_enabled',
@@ -5914,7 +5907,7 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
   }
 
   Future<void> _submit() async {
-    if (_busy) return;
+    if (_busy || _connecting || _devBootstrapBusy) return;
     final name = _nameController.text.trim();
     final accountIdentifier =
         AccountCodeNumber.normalize(_accountIdentifierController.text);
@@ -5984,25 +5977,6 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
     }
   }
 
-  Future<void> _openInitialAccountSetup() async {
-    if (_busy || !_developerPasswordMode) return;
-    setState(() => _busy = true);
-    FocusManager.instance.primaryFocus?.unfocus();
-    LauncherDiagnostics.record(
-      'developer_initial_account_setup_help_tapped',
-      scope: 'launcher_terminal_manual_auth',
-      meta: <String, Object?>{
-        'accountKind': widget.accountKind,
-      },
-    );
-    widget.onClosing();
-    await WidgetsBinding.instance.endOfFrame;
-    await _frameKey.currentState?.close();
-    if (!mounted) return;
-    widget.onOpenInitialAccountSetup();
-    Navigator.of(context).pop();
-  }
-
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -6011,8 +5985,34 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
         key: _frameKey,
         title: 'ACCOUNT VERIFICATION',
         reduceMotion: widget.reduceMotion,
+        headerAction: _developerPasswordMode &&
+                widget.accountKindType == TerminalAccountKind.user
+            ? IconButton(
+                key: const ValueKey<String>('dev_bootstrap_help'),
+                tooltip: '개발 환경 준비',
+                iconSize: 18,
+                padding: const EdgeInsets.all(6),
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                onPressed: _devBootstrapBusy || _busy || _connecting
+                    ? null
+                    : () => unawaited(_bootstrapDevWorkspace()),
+                icon: _devBootstrapBusy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.7,
+                          color: _terminalAccent,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.help_outline_rounded,
+                        color: _terminalAccent,
+                      ),
+              )
+            : null,
         onStatus: widget.onStatus,
-        onHelp: _developerPasswordMode ? _openInitialAccountSetup : null,
+        onTitleTap: () => unawaited(_handleAccountTitleTap()),
         onOpenCompleted: _handleOpened,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -6047,26 +6047,20 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
               ),
               const SizedBox(height: 14),
             ],
-            AnimatedSize(
+            AnimatedSwitcher(
               duration: widget.reduceMotion
                   ? Duration.zero
-                  : const Duration(milliseconds: 220),
-              curve: Curves.easeInOutCubic,
-              alignment: Alignment.topCenter,
-              child: AnimatedSwitcher(
-                duration: widget.reduceMotion
-                    ? Duration.zero
-                    : const Duration(milliseconds: 180),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(
-                    scale: Tween<double>(begin: .96, end: 1).animate(animation),
-                    child: child,
-                  ),
+                  : const Duration(milliseconds: 180),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: .96, end: 1).animate(animation),
+                  child: child,
                 ),
-                child: _developerPasswordMode
+              ),
+              child: _developerPasswordMode
                   ? AnimatedContainer(
                       key: const ValueKey<String>('developer_password_enabled'),
                       duration: widget.reduceMotion
@@ -6111,13 +6105,12 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
                   : const SizedBox.shrink(
                       key: ValueKey<String>('developer_password_disabled'),
                     ),
-              ),
             ),
             _TerminalDialogField(
               label: ModeLauncherController.nameDisplayLabel,
               controller: _nameController,
               focusNode: _nameFocus,
-              enabled: !_busy,
+              enabled: !_busy && !_devBootstrapBusy,
               errorText: _nameError,
               textInputAction: TextInputAction.next,
               reduceMotion: widget.reduceMotion,
@@ -6129,7 +6122,7 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
               label: ModeLauncherController.codeNumberDisplayLabel,
               controller: _accountIdentifierController,
               focusNode: _accountIdentifierFocus,
-              enabled: !_busy,
+              enabled: !_busy && !_devBootstrapBusy,
               errorText: _accountIdentifierError,
               keyboardType: TextInputType.text,
               textInputAction: TextInputAction.done,
@@ -6140,6 +6133,41 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
               onPaste: () =>
                   _pasteFromClipboard(_LauncherPasteField.codeNumber),
               onSubmitted: (_) => _submit(),
+            ),
+            const SizedBox(height: 14),
+            Align(
+              alignment: Alignment.center,
+              child: _TerminalDialogActionButton(
+                label: _connectedEmail == null ? '계정 연결' : '연결 계정 변경',
+                busy: _connecting,
+                enabled: !_busy && !_connecting && !_devBootstrapBusy,
+                reduceMotion: widget.reduceMotion,
+                onPressed: () => unawaited(_connectAccount()),
+              ),
+            ),
+            AnimatedSwitcher(
+              duration: widget.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              child: _connectionError == null
+                  ? const SizedBox.shrink(
+                      key: ValueKey<String>('account_connection_error_clear'),
+                    )
+                  : Padding(
+                      key: ValueKey<String>(_connectionError!),
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        _connectionError!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: _terminalError,
+                          fontFamily: 'monospace',
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ),
             ),
             AnimatedSwitcher(
               duration: widget.reduceMotion
@@ -6200,10 +6228,8 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
                         Expanded(
                           child: Text(
                             _developerPasswordMode
-                                ? (kDebugMode
-                                    ? '개발자 로그인 확인 중'
-                                    : '개발자 계정 정보 확인 중')
-                                : '계정 인증 및 정보 확인 중',
+                                ? '계정 정보 확인 중...'
+                                : '로그인 확인 중...',
                             style: const TextStyle(
                               color: _terminalMuted,
                               fontFamily: 'monospace',
@@ -6220,15 +6246,127 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
                     ),
             ),
             const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: _TerminalDialogActionButton(
-                label: _developerPasswordMode ? '계정 확인' : '로그인',
-                busy: _busy,
-                enabled: !_busy,
-                reduceMotion: widget.reduceMotion,
-                onPressed: _submit,
+            Row(
+              children: [
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: widget.reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 190),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: Column(
+                      key: ValueKey<String>(_connectedEmail ?? 'unlinked'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          '현재 연결된 계정',
+                          style: TextStyle(
+                            color: _terminalMuted,
+                            fontFamily: 'monospace',
+                            fontSize: 9.5,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          _connectedEmail ?? '연결된 계정 없음',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _terminalText,
+                            fontFamily: 'monospace',
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _TerminalDialogActionButton(
+                  label: _developerPasswordMode ? '계정 확인' : '로그인',
+                  busy: _busy,
+                  enabled: !_busy && !_connecting && !_devBootstrapBusy,
+                  reduceMotion: widget.reduceMotion,
+                  onPressed: _submit,
+                ),
+              ],
+            ),
+            AnimatedSwitcher(
+              duration: widget.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 210),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SizeTransition(
+                  sizeFactor: animation,
+                  axisAlignment: -1,
+                  child: child,
+                ),
               ),
+              child: _devBootstrapNotice == null
+                  ? const SizedBox.shrink(
+                      key: ValueKey<String>('dev_bootstrap_notice_hidden'),
+                    )
+                  : Padding(
+                      key: ValueKey<String>(_devBootstrapNotice!),
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            _devBootstrapFailed
+                                ? Icons.error_outline_rounded
+                                : _devBootstrapBusy
+                                    ? Icons.hourglass_top_rounded
+                                    : Icons.check_circle_outline_rounded,
+                            size: 16,
+                            color: _devBootstrapFailed
+                                ? _terminalError
+                                : _terminalAccent,
+                          ),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              _devBootstrapNotice!,
+                              style: TextStyle(
+                                color: _devBootstrapFailed
+                                    ? _terminalError
+                                    : _terminalAccent,
+                                fontFamily: 'monospace',
+                                fontSize: 10.5,
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+            ),
+            AnimatedSwitcher(
+              duration: widget.reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+              child: _copyNotice == null
+                  ? const SizedBox.shrink(
+                      key: ValueKey<String>('account_debug_copy_idle'),
+                    )
+                  : Padding(
+                      key: ValueKey<String>(_copyNotice!),
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        _copyNotice!,
+                        style: const TextStyle(
+                          color: _terminalAccent,
+                          fontFamily: 'monospace',
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
             ),
           ],
         ),
@@ -6238,6 +6376,8 @@ class _LauncherAccountDialogState extends State<_LauncherAccountDialog> {
 
   @override
   void dispose() {
+    _identitySubscription?.cancel();
+    _firebaseSubscription?.cancel();
     _nameController.removeListener(_handleInputChanged);
     _accountIdentifierController.removeListener(_handleInputChanged);
     _nameController.dispose();
@@ -6375,7 +6515,6 @@ class _LauncherPasswordDialogState extends State<_LauncherPasswordDialog> {
     }
     setState(() => _busy = true);
     await HapticFeedback.selectionClick();
-    final passwordRoute = ModalRoute.of(context);
     final result = await widget.onAuthenticate(password);
     if (!mounted) return;
     if (result.accepted) {
@@ -6385,33 +6524,7 @@ class _LauncherPasswordDialogState extends State<_LauncherPasswordDialog> {
       await WidgetsBinding.instance.endOfFrame;
       await _frameKey.currentState?.close();
       if (!mounted) return;
-      final navigator = passwordRoute?.navigator;
-      ParkinWorkinTerminalDiagnostics.record(
-        'launcher_password_route_close_requested',
-        context: 'launcher',
-        meta: <String, Object?>{
-          'routeActive': passwordRoute?.isActive ?? false,
-          'routeCurrent': passwordRoute?.isCurrent ?? false,
-        },
-      );
-      if (passwordRoute != null &&
-          passwordRoute.isActive &&
-          navigator != null) {
-        if (passwordRoute.isCurrent) {
-          navigator.pop();
-        } else {
-          navigator.removeRoute(passwordRoute);
-        }
-        ParkinWorkinTerminalDiagnostics.record(
-          'launcher_password_route_close_dispatched',
-          context: 'launcher',
-        );
-      } else {
-        ParkinWorkinTerminalDiagnostics.record(
-          'launcher_password_route_close_unavailable',
-          context: 'launcher',
-        );
-      }
+      Navigator.of(context).pop();
       return;
     }
     await HapticFeedback.mediumImpact();

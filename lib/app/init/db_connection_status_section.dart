@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import '../diagnostics/firebase_activity_meter.dart';
+import '../diagnostics/firebase_activity_center_dialog.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -100,24 +103,203 @@ class DbConnectionStatusAppBarSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return _DbConnectionStatusObserver(
       builder: (context, snapshot) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            _AppBarStatusChip(
-              label: liveLabel,
-              value: snapshot.liveDbOn,
-              useCommonUi: useCommonUi,
-            ),
-            SizedBox(height: spacing),
-            _AppBarStatusChip(
-              label: storageLabel,
-              value: snapshot.storageDbOn,
-              useCommonUi: useCommonUi,
-            ),
-          ],
+        return ValueListenableBuilder<FirebaseActivitySummary>(
+          valueListenable: FirebaseActivityMeter.instance.summary,
+          builder: (context, activity, _) {
+            final reduceMotion =
+                MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+            final tokens = Theme.of(context).colorScheme;
+            final duration = reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 220);
+            void openActivityCenter() {
+              unawaited(FirebaseActivityCenterDialog.open(context));
+            }
+
+            return Semantics(
+              button: true,
+              label: 'Firebase Activity Center, '
+                  'LIVE DB ${snapshot.liveDbOn ? 'ON' : 'OFF'}, '
+                  'STORAGE DB ${snapshot.storageDbOn ? 'ON' : 'OFF'}, '
+                  'READ ${activity.read}, WRITE ${activity.write}, '
+                  'DELETE ${activity.delete}, SNAP ${activity.snap}, '
+                  'LISTEN ${activity.activeListeners}, '
+                  'STORAGE ${activity.storage}',
+              onTap: openActivityCenter,
+              child: ExcludeSemantics(
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: openActivityCenter,
+                    child: AnimatedContainer(
+                      width: 116,
+                      height: 48,
+                      duration: duration,
+                      curve: Curves.easeOutCubic,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: tokens.surface.withOpacity(0.95),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: tokens.outlineVariant),
+                      ),
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: _ActivityConnectionLine(
+                              'LIVE DB',
+                              snapshot.liveDbOn,
+                              reduceMotion: reduceMotion,
+                              showChevron: true,
+                            ),
+                          ),
+                          Expanded(
+                            child: _ActivityConnectionLine(
+                              'STORAGE DB',
+                              snapshot.storageDbOn,
+                              reduceMotion: reduceMotion,
+                            ),
+                          ),
+                          Expanded(
+                            child: _ActivityCountsLine(
+                              'R ${_compactActivityCount(activity.read)}  ·  '
+                              'W ${_compactActivityCount(activity.write)}  ·  '
+                              'D ${_compactActivityCount(activity.delete)}',
+                              duration: duration,
+                            ),
+                          ),
+                          Expanded(
+                            child: _ActivityCountsLine(
+                              'SN ${_compactActivityCount(activity.snap)}  ·  '
+                              'L ${_compactActivityCount(activity.activeListeners)}  ·  '
+                              'ST ${_compactActivityCount(activity.storage)}',
+                              duration: duration,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
+    );
+  }
+}
+
+String _compactActivityCount(int value) {
+  if (value < 1000) return '$value';
+  if (value < 10000) return '${(value / 1000).toStringAsFixed(1)}K';
+  if (value < 1000000) return '${(value / 1000).round()}K';
+  if (value < 10000000) return '${(value / 1000000).toStringAsFixed(1)}M';
+  if (value < 1000000000) return '${(value / 1000000).round()}M';
+  return '${(value / 1000000000).toStringAsFixed(1)}B';
+}
+
+class _ActivityConnectionLine extends StatelessWidget {
+  const _ActivityConnectionLine(
+    this.label,
+    this.connected, {
+    required this.reduceMotion,
+    this.showChevron = false,
+  });
+
+  final String label;
+  final bool connected;
+  final bool reduceMotion;
+  final bool showChevron;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = connected ? const Color(0xFF1FAA59) : const Color(0xFFD64545);
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 200);
+    return Row(
+      children: [
+        AnimatedContainer(
+          duration: duration,
+          width: 5,
+          height: 5,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          textScaler: TextScaler.noScaling,
+          style: const TextStyle(
+            fontSize: 8.3,
+            fontWeight: FontWeight.w700,
+            height: 1,
+          ),
+        ),
+        const SizedBox(width: 4),
+        AnimatedSwitcher(
+          duration: duration,
+          child: Text(
+            connected ? 'ON' : 'OFF',
+            key: ValueKey<bool>(connected),
+            textScaler: TextScaler.noScaling,
+            style: TextStyle(
+              fontSize: 8.3,
+              fontWeight: FontWeight.w800,
+              height: 1,
+              color: color,
+            ),
+          ),
+        ),
+        if (showChevron) ...[
+          const Spacer(),
+          Icon(
+            Icons.chevron_right_rounded,
+            size: 11,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ActivityCountsLine extends StatelessWidget {
+  const _ActivityCountsLine(this.value, {required this.duration});
+
+  final String value;
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: AnimatedSwitcher(
+            duration: duration,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: child,
+            ),
+            child: Text(
+              value,
+              key: ValueKey<String>(value),
+              textAlign: TextAlign.right,
+              textScaler: TextScaler.noScaling,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 8.5,
+                fontWeight: FontWeight.w700,
+                height: 1,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -290,79 +472,6 @@ class _StatusChip extends StatelessWidget {
                 fontWeight: FontWeight.w800,
                 color: colors.accent,
                 letterSpacing: 0.2,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AppBarStatusChip extends StatelessWidget {
-  const _AppBarStatusChip({
-    required this.label,
-    required this.value,
-    required this.useCommonUi,
-  });
-
-  final String label;
-  final bool value;
-  final bool useCommonUi;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    final colors = _resolveStatusColors(
-      context,
-      value: value,
-      useCommonUi: useCommonUi,
-    );
-    final reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-
-    return AnimatedContainer(
-      duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-      curve: CommonUiMotion.standard,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: colors.background,
-        borderRadius: BorderRadius.circular(CommonUiShapes.pill),
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: colors.accent,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: (text.labelSmall ?? const TextStyle(fontSize: 11)).copyWith(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              height: 1,
-              color: colors.foreground,
-            ),
-          ),
-          const SizedBox(width: 5),
-          AnimatedSwitcher(
-            duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
-            child: Text(
-              value ? 'ON' : 'OFF',
-              key: ValueKey<bool>(value),
-              style:
-                  (text.labelSmall ?? const TextStyle(fontSize: 11)).copyWith(
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                height: 1,
-                color: colors.accent,
               ),
             ),
           ),

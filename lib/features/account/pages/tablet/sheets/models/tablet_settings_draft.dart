@@ -1,28 +1,29 @@
+import '../widgets/tablet_role_type.dart';
 
 class TabletSettingsDraft {
   const TabletSettingsDraft({
     required this.name,
     required this.codeNumber,
     required this.emailLocal,
-    this.permissionKeys = const <String>{},
+    required this.role,
   });
 
   final String name;
   final String codeNumber;
   final String emailLocal;
-  final Set<String> permissionKeys;
+  final TabletRoleType role;
 
   TabletSettingsDraft copyWith({
     String? name,
     String? codeNumber,
     String? emailLocal,
-    Set<String>? permissionKeys,
+    TabletRoleType? role,
   }) {
     return TabletSettingsDraft(
       name: name ?? this.name,
       codeNumber: codeNumber ?? this.codeNumber,
       emailLocal: emailLocal ?? this.emailLocal,
-      permissionKeys: permissionKeys ?? this.permissionKeys,
+      role: role ?? this.role,
     );
   }
 
@@ -31,7 +32,7 @@ class TabletSettingsDraft {
       name: name,
       codeNumber: codeNumber,
       emailLocal: emailLocal,
-      permissionKeys: permissionKeys,
+      role: role,
     );
   }
 }

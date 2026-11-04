@@ -5,10 +5,7 @@ import 'user/user_model.dart';
 sealed class SessionAccount {
   String get id;
   String get displayName;
-  String get companyId;
-  List<String> get permissionKeys;
-  String get accountGradeId;
-  bool get isInitialAdmin;
+  String get role;
   String get currentArea;
   String get selectedArea;
   List<String> get areas;
@@ -32,16 +29,7 @@ final class UserSessionAccount implements SessionAccount {
   String get displayName => user.name;
 
   @override
-  String get companyId => user.companyId;
-
-  @override
-  List<String> get permissionKeys => user.permissionKeys;
-
-  @override
-  String get accountGradeId => user.accountGradeId;
-
-  @override
-  bool get isInitialAdmin => user.isInitialAdmin;
+  String get role => user.role;
 
   @override
   String get currentArea => user.currentArea ?? selectedArea;
@@ -83,16 +71,7 @@ final class TabletSessionAccount implements SessionAccount {
   String get displayName => tablet.name;
 
   @override
-  String get companyId => tablet.companyId;
-
-  @override
-  List<String> get permissionKeys => tablet.permissionKeys;
-
-  @override
-  String get accountGradeId => '';
-
-  @override
-  bool get isInitialAdmin => false;
+  String get role => tablet.role;
 
   @override
   String get currentArea => tablet.currentArea ?? selectedArea;

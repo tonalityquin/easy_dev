@@ -1,4 +1,4 @@
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CommuteLogRepository {
@@ -9,6 +9,10 @@ class CommuteLogRepository {
   }) : _firestore = firestore ?? FirebaseFirestore.instance;
 
   static const String _collectionName = 'commute_user_logs';
+  static const String _source = 'features/commute/domain/repositories/commute_log_repository.dart';
+  static final Expando<Map<String, Future<Map<String, dynamic>>>>
+      _pendingMonthReadsByFirestore =
+      Expando<Map<String, Future<Map<String, dynamic>>>>();
 
   String _buildRootDocId({
     required String userId,
@@ -102,19 +106,31 @@ class CommuteLogRepository {
     required String userName,
     required String status,
     required String yearMonth,
-    required String division,
   }) async {
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _rootDocRef(userId: userId, status: status).set(
+    await _rootDocRef(userId: userId, status: status).set(
       <String, dynamic>{
         'userId': userId,
         'userName': userName,
         'status': status,
-        'companyId': division,
         'latestYearMonth': yearMonth,
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
-    ), source: 'commute_log_repository.set');
+    ).trackFirestore('SET', 'features/commute/domain/repositories/commute_log_repository.dart');
+  }
+
+  void _recordOptimization(
+    String operation,
+    String reason, {
+    required String method,
+  }) {
+    FirebaseActivityMeter.instance.record(
+      service: 'optimization',
+      operation: operation,
+      source: '$_source.$method',
+      result: 'skipped',
+      detail: 'reason=$reason',
+    );
   }
 
   Future<Map<String, dynamic>> _readMonthLogs({
@@ -122,20 +138,43 @@ class CommuteLogRepository {
     required String userId,
     required String yearMonth,
   }) async {
-    final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _monthDocRef(
+    final reads = _pendingMonthReadsByFirestore[_firestore] ??=
+        <String, Future<Map<String, dynamic>>>{};
+    final key = '${_buildRootDocId(userId: userId, status: status)}/$yearMonth';
+    final pending = reads[key];
+    if (pending != null) {
+      _recordOptimization(
+        'MONTH_GET_COALESCED',
+        'identical_inflight',
+        method: 'readMonthLogs',
+      );
+      return await pending;
+    }
+    final task = _readMonthLogsOnce(
+      status: status,
+      userId: userId,
+      yearMonth: yearMonth,
+    );
+    reads[key] = task;
+    try {
+      return await task;
+    } finally {
+      if (identical(reads[key], task)) {
+        reads.remove(key);
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> _readMonthLogsOnce({
+    required String status,
+    required String userId,
+    required String yearMonth,
+  }) async {
+    final snap = await _monthDocRef(
       userId: userId,
       status: status,
       yearMonth: yearMonth,
-    ).get(), source: 'commute_log_repository.get');
-    if (!snap.exists) return <String, dynamic>{};
-    return _extractLogsMap(snap.data());
-  }
-
-  Future<Map<String, dynamic>> _readLegacyRootLogs({
-    required String status,
-    required String userId,
-  }) async {
-    final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _rootDocRef(userId: userId, status: status).get(), source: 'commute_log_repository.get');
+    ).get().trackFirestore('GET', '$_source.readMonthLogs');
     if (!snap.exists) return <String, dynamic>{};
     return _extractLogsMap(snap.data());
   }
@@ -145,26 +184,19 @@ class CommuteLogRepository {
     required String userId,
     required String dateStr,
   }) async {
-    try {
-      final yearMonth = _toYearMonthFromDateStr(dateStr);
-
-      final monthLogs = await _readMonthLogs(
-        status: status,
-        userId: userId,
-        yearMonth: yearMonth,
-      );
-      if (monthLogs[dateStr] != null) {
-        return true;
-      }
-
-      final legacyLogs = await _readLegacyRootLogs(
-        status: status,
-        userId: userId,
-      );
-      return legacyLogs[dateStr] != null;
-    } catch (_) {
-      return false;
-    }
+    final yearMonth = _toYearMonthFromDateStr(dateStr);
+    final monthLogs = await _readMonthLogs(
+      status: status,
+      userId: userId,
+      yearMonth: yearMonth,
+    );
+    if (monthLogs[dateStr] != null) return true;
+    _recordOptimization(
+      'LEGACY_GET_SKIPPED',
+      'legacy_storage_not_used',
+      method: 'hasLogForDate',
+    );
+    return false;
   }
 
   Future<void> addLog({
@@ -197,39 +229,28 @@ class CommuteLogRepository {
   }) async {
     final yearMonth = _toYearMonth(year, month);
 
-    final monthLogsFuture = _readMonthLogs(
+    final monthLogs = await _readMonthLogs(
       status: status,
       userId: userId,
       yearMonth: yearMonth,
     );
-    final legacyLogsFuture = _readLegacyRootLogs(
-      status: status,
-      userId: userId,
+    _recordOptimization(
+      'LEGACY_GET_SKIPPED',
+      'legacy_storage_not_used',
+      method: 'getMonthlyTimes',
     );
 
-    final monthLogs = await monthLogsFuture;
-    final legacyLogs = await legacyLogsFuture;
-
     final result = <int, String>{};
-
-    void mergeLogs(Map<String, dynamic> logs) {
-      for (final entry in logs.entries) {
-        final dateStr = entry.key;
-        final dt = _parseYmd(dateStr);
-        if (dt == null) continue;
-        if (dt.year != year || dt.month != month) continue;
-
-        final logEntry = entry.value;
-        if (logEntry is! Map) continue;
-
-        final recordedTime = logEntry['recordedTime']?.toString().trim() ?? '';
-        if (recordedTime.isEmpty) continue;
-        result[dt.day] = recordedTime;
-      }
+    for (final entry in monthLogs.entries) {
+      final dateStr = entry.key;
+      final dt = _parseYmd(dateStr);
+      if (dt == null || dt.year != year || dt.month != month) continue;
+      final logEntry = entry.value;
+      if (logEntry is! Map) continue;
+      final recordedTime = logEntry['recordedTime']?.toString().trim() ?? '';
+      if (recordedTime.isEmpty) continue;
+      result[dt.day] = recordedTime;
     }
-
-    mergeLogs(legacyLogs);
-    mergeLogs(monthLogs);
 
     return result;
   }
@@ -279,10 +300,9 @@ class CommuteLogRepository {
         userName: userName,
         status: status,
         yearMonth: yearMonth,
-        division: division,
       );
 
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _monthDocRef(
+      await _monthDocRef(
         userId: userId,
         status: status,
         yearMonth: yearMonth,
@@ -291,14 +311,12 @@ class CommuteLogRepository {
           'userId': userId,
           'userName': userName,
           'status': status,
-          'companyId': division,
-          'area': area,
           'yearMonth': yearMonth,
           'updatedAt': FieldValue.serverTimestamp(),
           'logs': logsPayload,
         },
         SetOptions(merge: true),
-      ), source: 'commute_log_repository.set');
+      ).trackFirestore('SET', 'features/commute/domain/repositories/commute_log_repository.dart');
     }
   }
 
@@ -330,7 +348,7 @@ class CommuteLogRepository {
         logsPayload[dateStr] = FieldValue.delete();
       }
 
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _monthDocRef(
+      await _monthDocRef(
         userId: userId,
         status: status,
         yearMonth: yearMonth,
@@ -340,7 +358,7 @@ class CommuteLogRepository {
           'logs': logsPayload,
         },
         SetOptions(merge: true),
-      ), source: 'commute_log_repository.set');
+      ).trackFirestore('SET', 'features/commute/domain/repositories/commute_log_repository.dart');
 
       await _deleteMonthDocIfEmpty(
         status: status,
@@ -349,18 +367,11 @@ class CommuteLogRepository {
       );
     }
 
-    final legacyLogsPayload = <String, dynamic>{};
-    for (final dateStr in normalizedDates) {
-      legacyLogsPayload[dateStr] = FieldValue.delete();
-    }
-
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.set, () => _rootDocRef(userId: userId, status: status).set(
-      <String, dynamic>{
-        'updatedAt': FieldValue.serverTimestamp(),
-        'logs': legacyLogsPayload,
-      },
-      SetOptions(merge: true),
-    ), source: 'commute_log_repository.set');
+    _recordOptimization(
+      'LEGACY_WRITE_SKIPPED',
+      'legacy_storage_not_used',
+      method: 'deleteLogsForDates',
+    );
   }
 
   Future<void> _deleteMonthDocIfEmpty({
@@ -373,12 +384,12 @@ class CommuteLogRepository {
       status: status,
       yearMonth: yearMonth,
     );
-    final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => docRef.get(), source: 'commute_log_repository.get');
+    final snap = await docRef.get().trackFirestore('GET', 'features/commute/domain/repositories/commute_log_repository.dart');
     if (!snap.exists) return;
 
     final logs = _extractLogsMap(snap.data());
     if (logs.isEmpty) {
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.delete, () => docRef.delete(), source: 'commute_log_repository.delete');
+      await docRef.delete().trackFirestore('DELETE', 'features/commute/domain/repositories/commute_log_repository.dart');
     }
   }
 

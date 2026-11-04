@@ -1,5 +1,4 @@
 import 'dart:convert';
-import '../../domain/location_cache_scope.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
@@ -59,8 +58,8 @@ class SqliteOperationalLocalRepository implements OperationalLocalRepository {
   }
 
   @override
-  Future<List<LocationModel>> readLocations(String area, {String? cacheKey}) async {
-    final normalizedArea = _requireArea(cacheKey ?? area);
+  Future<List<LocationModel>> readLocations(String area) async {
+    final normalizedArea = _requireArea(area);
     final db = await _database.database;
     final rows = await db.query(
       'operational_locations',
@@ -85,10 +84,8 @@ class SqliteOperationalLocalRepository implements OperationalLocalRepository {
     required String area,
     required List<LocationModel> locations,
     required int totalCapacity,
-    String? cacheKey,
   }) async {
-    final normalizedArea = _requireArea(cacheKey ?? area);
-    final actualArea = _requireArea(area);
+    final normalizedArea = _requireArea(area);
     final db = await _database.database;
     await db.transaction((txn) async {
       await txn.delete(
@@ -98,7 +95,7 @@ class SqliteOperationalLocalRepository implements OperationalLocalRepository {
       );
       for (final location in locations) {
         if (location.area.trim().isNotEmpty &&
-            location.area.trim() != actualArea) {
+            location.area.trim() != normalizedArea) {
           throw StateError('주차 구역의 지역 값이 현재 지역과 다릅니다: ${location.id}');
         }
         await txn.insert(
@@ -134,8 +131,8 @@ class SqliteOperationalLocalRepository implements OperationalLocalRepository {
   }
 
   @override
-  Future<void> clearLocations(String area, {String? cacheKey}) async {
-    final normalizedArea = _requireArea(cacheKey ?? area);
+  Future<void> clearLocations(String area) async {
+    final normalizedArea = _requireArea(area);
     final db = await _database.database;
     await db.transaction((txn) async {
       await txn.delete(
@@ -162,14 +159,14 @@ class SqliteOperationalLocalRepository implements OperationalLocalRepository {
   }
 
   @override
-  Future<bool> hasLocationsSnapshot(String area, {String? cacheKey}) async {
-    final meta = await readAreaMeta(cacheKey ?? area);
+  Future<bool> hasLocationsSnapshot(String area) async {
+    final meta = await readAreaMeta(area);
     return meta?.locationsReady ?? false;
   }
 
   @override
-  Future<int> countLocations(String area, {String? cacheKey}) async {
-    final normalizedArea = _requireArea(cacheKey ?? area);
+  Future<int> countLocations(String area) async {
+    final normalizedArea = _requireArea(area);
     final db = await _database.database;
     return _count(db, 'operational_locations', normalizedArea);
   }
@@ -629,14 +626,6 @@ class SqliteOperationalLocalRepository implements OperationalLocalRepository {
           : (monthlyRaw as num).toInt() == 1,
       syncedAt: syncedRaw.trim().isEmpty ? null : DateTime.tryParse(syncedRaw),
     );
-  }
-
-  @override
-  Future<OperationalAreaMeta?> readLocationMeta({
-    required String division,
-    required String area,
-  }) {
-    return readAreaMeta(LocationCacheScope.requireKey(division, area));
   }
 
   @override

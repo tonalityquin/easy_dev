@@ -1,4 +1,4 @@
-import '../../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -63,7 +63,7 @@ class FirestoreAreaRepository implements AreaRepository {
     return jsonEncode(_normalizeRawValue(data));
   }
 
-  AreaRecord? _toAreaRecord(Map<String, dynamic>? data, {String id = ''}) {
+  AreaRecord? _toAreaRecord(Map<String, dynamic>? data) {
     if (data == null) return null;
 
     final name = (data['name'] ?? '').toString().trim();
@@ -97,7 +97,6 @@ class FirestoreAreaRepository implements AreaRepository {
         : const <String>[];
 
     return AreaRecord(
-      id: id,
       name: name,
       division: division.isEmpty ? 'default' : division,
       email: email,
@@ -129,9 +128,9 @@ class FirestoreAreaRepository implements AreaRepository {
     }
 
     final docId = '$trimmedDivision-$trimmedArea';
-    final doc = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _firestore.collection('areas').doc(docId).get(), source: 'firestore_area_repository.get');
+    final doc = await _firestore.collection('areas').doc(docId).get().trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart');
     if (!doc.exists) return false;
-    final record = _toAreaRecord(doc.data(), id: doc.id);
+    final record = _toAreaRecord(doc.data());
     if (record == null ||
         record.name != trimmedArea ||
         record.division != trimmedDivision) {
@@ -159,10 +158,10 @@ class FirestoreAreaRepository implements AreaRepository {
     if (trimmedDivision.isNotEmpty) {
       final docId = '$trimmedDivision-$trimmedArea';
       final ref = _firestore.collection('areas').doc(docId);
-      final doc = options == null ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => ref.get(), source: 'firestore_area_repository.get') : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => ref.get(options), source: 'firestore_area_repository.get');
+      final doc = options == null ? await ref.get().trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart') : await ref.get(options).trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart');
       if (!doc.exists) return null;
 
-      final record = _toAreaRecord(doc.data(), id: doc.id);
+      final record = _toAreaRecord(doc.data());
       if (record == null) return null;
       if (record.name != trimmedArea || record.division != trimmedDivision) {
         return null;
@@ -180,10 +179,10 @@ class FirestoreAreaRepository implements AreaRepository {
         .collection('areas')
         .where('name', isEqualTo: trimmedArea)
         .limit(1);
-    final qs = options == null ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(), source: 'firestore_area_repository.get') : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(options), source: 'firestore_area_repository.get');
+    final qs = options == null ? await query.get().trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart') : await query.get(options).trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart');
 
     if (qs.docs.isEmpty) return null;
-    final record = _toAreaRecord(qs.docs.first.data(), id: qs.docs.first.id);
+    final record = _toAreaRecord(qs.docs.first.data());
     if (record == null) return null;
     await AreaSnapshotPersistence.persistRecord(
       record,
@@ -209,10 +208,10 @@ class FirestoreAreaRepository implements AreaRepository {
         .collection('areas')
         .where('division', isEqualTo: trimmedDivision);
     final options = _getOptions(serverOnly);
-    final qs = options == null ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(), source: 'firestore_area_repository.get') : await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => query.get(options), source: 'firestore_area_repository.get');
+    final qs = options == null ? await query.get().trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart') : await query.get(options).trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart');
 
     final records = qs.docs
-        .map((doc) => _toAreaRecord(doc.data(), id: doc.id))
+        .map((doc) => _toAreaRecord(doc.data()))
         .whereType<AreaRecord>()
         .toList();
 

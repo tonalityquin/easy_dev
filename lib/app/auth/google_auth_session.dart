@@ -705,6 +705,30 @@ class GoogleAuthSession {
     return client;
   }
 
+  Future<GoogleAuthIdentity> connectOrChangeFirebaseIdentity() async {
+    await _ensureBlockFlagLoaded();
+    _throwIfBlocked('connectOrChangeFirebaseIdentity');
+    final replacingExisting =
+        currentIdentity != null || FirebaseGoogleAuthBridge.instance.currentUser != null;
+    if (replacingExisting) {
+      await signOut();
+    }
+    try {
+      return await ensureFirebaseAuthenticatedIdentity(
+        forceAccountSelection: replacingExisting,
+      );
+    } catch (error, stackTrace) {
+      try {
+        await signOut();
+      } catch (cleanupError) {
+        SecureAuthDiagnostics.record(
+          'auth_error event=connectOrChangeFirebaseIdentity.cleanup errorType=${cleanupError.runtimeType}',
+        );
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
   Future<GoogleAuthIdentity> ensureFirebaseAuthenticatedIdentity({
     bool forceAccountSelection = false,
   }) async {

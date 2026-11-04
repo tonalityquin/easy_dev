@@ -1,5 +1,4 @@
-import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../shared/auth/account_code_number.dart';
@@ -86,7 +85,7 @@ class LegacyAccountCodeNumberMigrationService {
   }) async {
     final collection = _firestore.collection(collectionName);
     onLog?.call('$collectionName 전체 계정 조회를 시작합니다.', 0.04);
-    final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => collection.get(), source: 'legacy_account_code_number_migration_service.get');
+    final snapshot = await collection.get().trackFirestore('GET', 'features/account/data/services/legacy_account_code_number_migration_service.dart');
     final usedCodes = <String>{};
     for (final doc in snapshot.docs) {
       final code = AccountCodeNumber.normalize(
@@ -222,7 +221,7 @@ class LegacyAccountCodeNumberMigrationService {
   }) {
     return _firestore.runTransaction<_LegacyMigrationStepResult>(
       (transaction) async {
-        final freshSource = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(sourceReference), source: 'legacy_account_code_number_migration_service.get');
+        final freshSource = await transaction.get(sourceReference).trackFirestore('GET', 'features/account/data/services/legacy_account_code_number_migration_service.dart');
         if (!freshSource.exists) {
           throw StateError('SOURCE_DOCUMENT_NOT_FOUND');
         }
@@ -276,7 +275,8 @@ class LegacyAccountCodeNumberMigrationService {
           for (final field in fieldsToDelete) {
             updates[field] = FieldValue.delete();
           }
-          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => transaction.update(sourceReference, updates));
+          FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'features/account/data/services/legacy_account_code_number_migration_service.dart', result: 'staged');
+          transaction.update(sourceReference, updates);
           return _LegacyMigrationStepResult(
             action: _LegacyMigrationAction.cleaned,
             codeNumber: codeNumber,
@@ -285,7 +285,7 @@ class LegacyAccountCodeNumberMigrationService {
         }
 
         final targetReference = collection.doc(targetId);
-        final freshTarget = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(targetReference), source: 'legacy_account_code_number_migration_service.get');
+        final freshTarget = await transaction.get(targetReference).trackFirestore('GET', 'features/account/data/services/legacy_account_code_number_migration_service.dart');
         if (freshTarget.exists) {
           throw StateError('TARGET_DOCUMENT_CONFLICT');
         }
@@ -297,8 +297,11 @@ class LegacyAccountCodeNumberMigrationService {
           migratedData.remove(field);
         }
 
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(targetReference, migratedData));
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(sourceReference));
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/account/data/services/legacy_account_code_number_migration_service.dart', result: 'staged');
+
+        transaction.set(targetReference, migratedData);
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'features/account/data/services/legacy_account_code_number_migration_service.dart', result: 'staged');
+        transaction.delete(sourceReference);
 
         return _LegacyMigrationStepResult(
           action: AccountCodeNumber.isGeneratedCode(freshCodeNumber)
@@ -308,7 +311,7 @@ class LegacyAccountCodeNumberMigrationService {
           area: area,
         );
       },
-    );
+    ).trackFirestore('TRANSACTION', 'features/account/data/services/legacy_account_code_number_migration_service.dart');
   }
 
   Future<String> _allocateCodeNumber({
@@ -318,10 +321,10 @@ class LegacyAccountCodeNumberMigrationService {
     for (var attempt = 0; attempt < 24; attempt += 1) {
       final candidate = AccountCodeNumber.generate();
       if (usedCodes.contains(candidate)) continue;
-      final duplicate = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => collection
+      final duplicate = await collection
           .where('codeNumber', isEqualTo: candidate)
           .limit(1)
-          .get(), source: 'legacy_account_code_number_migration_service.get');
+          .get().trackFirestore('GET', 'features/account/data/services/legacy_account_code_number_migration_service.dart');
       if (duplicate.docs.isNotEmpty) continue;
       usedCodes.add(candidate);
       return candidate;

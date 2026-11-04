@@ -1,5 +1,4 @@
-import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -68,9 +67,9 @@ class UserActiveStateBackfillService {
   }) async {
     onLog?.call('user_accounts_show 계정 상태 수집을 시작합니다.', 0.02);
 
-    final viewRootSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _viewRoots.get(
+    final viewRootSnapshot = await _viewRoots.get(
       const GetOptions(source: Source.server),
-    ), source: 'user_active_state_backfill_service.get');
+    ).trackFirestore('GET', 'features/account/data/services/user_active_state_backfill_service.dart');
     final activeByUserId = <String, bool>{};
     final conflictIds = <String>{};
     final viewIds = <String>{};
@@ -81,9 +80,9 @@ class UserActiveStateBackfillService {
 
     for (var index = 0; index < viewRootSnapshot.docs.length; index += 1) {
       final parent = viewRootSnapshot.docs[index];
-      final users = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => parent.reference.collection('users').get(
+      final users = await parent.reference.collection('users').get(
         const GetOptions(source: Source.server),
-      ), source: 'user_active_state_backfill_service.get');
+      ).trackFirestore('GET', 'features/account/data/services/user_active_state_backfill_service.dart');
       for (final userDoc in users.docs) {
         viewTotal += 1;
         viewIds.add(userDoc.id);
@@ -131,26 +130,23 @@ class UserActiveStateBackfillService {
         final end = offset + _batchLimit < passwordRefs.length
             ? offset + _batchLimit
             : passwordRefs.length;
-        final batch = _firestore.batch();
-        try {
+        final batch = _firestore.trackedActivityBatch('features/account/data/services/user_active_state_backfill_service.dart');
         for (final reference in passwordRefs.sublist(offset, end)) {
-          FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(
+          FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/account/data/services/user_active_state_backfill_service.dart', result: 'staged');
+          batch.set(
             reference,
             <String, dynamic>{'password': FieldValue.delete()},
             SetOptions(merge: true),
-          ));
+          );
         }
         try {
-          await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'user_active_state_backfill_service.commit');
+          await batch.commit().trackFirestore('BATCH', 'features/account/data/services/user_active_state_backfill_service.dart');
           viewPasswordsRemoved += end - offset;
         } on FirebaseException catch (error) {
           failedWrites += end - offset;
           debugPrint(
             'user_accounts_show password 정리 실패 code=${error.code} count=${end - offset}',
           );
-        }
-        } finally {
-          FirebaseActivityWriteScope.cancelBatch(batch);
         }
         onLog?.call(
           'View password 정리: $viewPasswordsRemoved/${passwordRefs.length}',
@@ -160,9 +156,9 @@ class UserActiveStateBackfillService {
     }
 
     onLog?.call('user_accounts 원본 계정 조회를 시작합니다.', 0.32);
-    final rootSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _rootUsers.get(
+    final rootSnapshot = await _rootUsers.get(
       const GetOptions(source: Source.server),
-    ), source: 'user_active_state_backfill_service.get');
+    ).trackFirestore('GET', 'features/account/data/services/user_active_state_backfill_service.dart');
     final rootIds = rootSnapshot.docs.map((doc) => doc.id).toSet();
     final orphanViews = viewIds.difference(rootIds).length;
     final rootWithoutView = rootIds.difference(viewIds).length;
@@ -186,29 +182,26 @@ class UserActiveStateBackfillService {
         final end = offset + _batchLimit < pendingUpdates.length
             ? offset + _batchLimit
             : pendingUpdates.length;
-        final batch = _firestore.batch();
-        try {
+        final batch = _firestore.trackedActivityBatch('features/account/data/services/user_active_state_backfill_service.dart');
         for (final entry in pendingUpdates.sublist(offset, end)) {
-          FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.set, () => batch.set(
+          FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/account/data/services/user_active_state_backfill_service.dart', result: 'staged');
+          batch.set(
             entry.key,
             <String, dynamic>{
               'isActive': entry.value,
               'updatedAt': FieldValue.serverTimestamp(),
             },
             SetOptions(merge: true),
-          ));
+          );
         }
         try {
-          await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'user_active_state_backfill_service.commit');
+          await batch.commit().trackFirestore('BATCH', 'features/account/data/services/user_active_state_backfill_service.dart');
           updatedRoots += end - offset;
         } on FirebaseException catch (error) {
           failedWrites += end - offset;
           debugPrint(
             'user_accounts isActive backfill 실패 code=${error.code} count=${end - offset}',
           );
-        }
-        } finally {
-          FirebaseActivityWriteScope.cancelBatch(batch);
         }
         onLog?.call(
           'Root isActive 반영: $updatedRoots/${pendingUpdates.length}',
@@ -218,9 +211,9 @@ class UserActiveStateBackfillService {
     }
 
     onLog?.call('Root/View isActive 일치 여부를 재검증합니다.', 0.78);
-    final verifySnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => _rootUsers.get(
+    final verifySnapshot = await _rootUsers.get(
       const GetOptions(source: Source.server),
-    ), source: 'user_active_state_backfill_service.get');
+    ).trackFirestore('GET', 'features/account/data/services/user_active_state_backfill_service.dart');
     var verificationMismatches = 0;
     for (final rootDoc in verifySnapshot.docs) {
       final expected = activeByUserId[rootDoc.id];

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -79,16 +78,13 @@ class LocationDebugStatus {
           : AppNavigator.context;
       if (target == null || !target.mounted) return;
 
-      final code = log.split('\n')
-          .map((line) => 'debugPrint(${jsonEncode(line)});')
-          .join('\n');
       await StatusDialog.showFailure(
         target,
         title: title,
         description: log,
-        copyText: code,
-        copyButtonLabel: 'debugPrint 코드 복사',
-        awaitManualClose: true,
+        copyText: log,
+        copyButtonLabel: '로그 복사',
+        visibleDuration: const Duration(seconds: 60),
         useCommonUi: true,
       );
     } finally {

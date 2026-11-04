@@ -1,5 +1,4 @@
-import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -135,12 +134,7 @@ class LocationWriteService {
     required LocationModel child,
     required String areaId,
   }) {
-    if (parent.companyId.trim().isEmpty ||
-        parent.companyId != child.companyId) {
-      throw StateError('LOCATION_PARENT_CHILD_COMPANY_MISMATCH');
-    }
     return <String, dynamic>{
-      'companyId': child.companyId,
       'area': child.area,
       'parentId': parent.id,
       'parentName': parent.locationName,
@@ -157,9 +151,6 @@ class LocationWriteService {
       throw ArgumentError('composite_child must have non-empty parentId');
     }
 
-    if (child.companyId.trim().isEmpty) {
-      throw StateError('LOCATION_COMPANY_ID_REQUIRED');
-    }
     final data = child.toFirestoreMap();
     data['type'] = 'composite_child';
     data['parentId'] = parentId;
@@ -182,9 +173,6 @@ class LocationWriteService {
 
     _validateParkingGrid(grid);
 
-    if (parent.companyId.trim().isEmpty) {
-      throw StateError('LOCATION_COMPANY_ID_REQUIRED');
-    }
     final data = parent.toFirestoreMap();
     data['type'] = 'composite_parent';
     data['updatedAt'] = FieldValue.serverTimestamp();
@@ -212,9 +200,6 @@ class LocationWriteService {
     }
 
     final ref = _firestore.collection('locations').doc(location.id);
-    if (location.companyId.trim().isEmpty) {
-      throw StateError('LOCATION_COMPANY_ID_REQUIRED');
-    }
     final data = location.toFirestoreMap();
     data['type'] = 'single';
     data['isSelected'] = false;
@@ -228,14 +213,14 @@ class LocationWriteService {
     data.remove('childSlotAreaIds');
     data.remove('childSlots');
 
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((transaction) async {
-        FirebaseActivityMonitor.beginTransactionAttempt();
-      final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(ref), source: 'location_write_service.get');
+    await _firestore.runTrackedActivityTransaction((transaction) async {
+      final snapshot = await transaction.get(ref).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
       if (snapshot.exists) {
         throw StateError('이미 존재하는 텍스트형 구역입니다.');
       }
-      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(ref, data));
-    }), source: 'location_write_service.runTransaction');
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+      transaction.set(ref, data);
+    }).trackFirestore('TRANSACTION', 'features/location/data/services/location_write_service.dart');
 
     debugPrint(
       'createPlainTextLocation id=${location.id} area=${location.area} name=$locationName capacity=${location.capacity}',
@@ -257,14 +242,14 @@ class LocationWriteService {
     final data = _compositeParentData(parent);
     final ref = _firestore.collection('locations').doc(parent.id);
 
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((transaction) async {
-        FirebaseActivityMonitor.beginTransactionAttempt();
-      final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(ref), source: 'location_write_service.get');
+    await _firestore.runTrackedActivityTransaction((transaction) async {
+      final snapshot = await transaction.get(ref).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
       if (snapshot.exists) {
         throw StateError('이미 존재하는 부모 구역입니다.');
       }
-      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(ref, data, SetOptions(merge: true)));
-    }), source: 'location_write_service.runTransaction');
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+      transaction.set(ref, data, SetOptions(merge: true));
+    }).trackFirestore('TRANSACTION', 'features/location/data/services/location_write_service.dart');
 
     debugPrint(
       'createCompositeParent id=${parent.id} area=${parent.area} name=$parentName',
@@ -289,9 +274,6 @@ class LocationWriteService {
     final nextOwnerByAreaId = <String, String>{};
 
     for (final child in children) {
-      if (child.companyId != parent.companyId || child.area != parent.area) {
-        throw StateError('LOCATION_PARENT_CHILD_SCOPE_MISMATCH');
-      }
       if (!_isCompositeChild(child)) {
         throw ArgumentError(
           'child must be type=composite_child: ${child.id}',
@@ -312,9 +294,8 @@ class LocationWriteService {
       }
     }
 
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((transaction) async {
-        FirebaseActivityMonitor.beginTransactionAttempt();
-      final parentSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(parentRef), source: 'location_write_service.get');
+    await _firestore.runTrackedActivityTransaction((transaction) async {
+      final parentSnapshot = await transaction.get(parentRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
       if (!parentSnapshot.exists ||
           (parentSnapshot.data()?['type'] ?? '').toString() !=
               'composite_parent') {
@@ -323,7 +304,7 @@ class LocationWriteService {
 
       final previousSlotIdsByChild = <String, Set<String>>{};
       for (final child in children) {
-        final childSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(childRefs[child.id]!), source: 'location_write_service.get');
+        final childSnapshot = await transaction.get(childRefs[child.id]!).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
         if (!childSnapshot.exists) {
           throw StateError('수정할 자식 구역이 없습니다: ${child.id}');
         }
@@ -340,7 +321,7 @@ class LocationWriteService {
           <String, DocumentSnapshot<Map<String, dynamic>>>{};
       for (final areaId in nextOwnerByAreaId.keys) {
         reservationSnapshots[areaId] =
-            await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(_reservationRef(parent.id, areaId)), source: 'location_write_service.get');
+            await transaction.get(_reservationRef(parent.id, areaId)).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
       }
 
       for (final entry in reservationSnapshots.entries) {
@@ -357,7 +338,9 @@ class LocationWriteService {
         }
       }
 
-      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => transaction.update(parentRef, parentData));
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+
+      transaction.update(parentRef, parentData);
 
       final childById = <String, LocationModel>{
         for (final child in children) child.id: child,
@@ -368,21 +351,24 @@ class LocationWriteService {
         previousAreaIds.addAll(
           previousSlotIdsByChild[child.id] ?? <String>{},
         );
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => transaction.update(childRefs[child.id]!, _compositeChildData(child)));
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+        transaction.update(childRefs[child.id]!, _compositeChildData(child));
       }
 
       for (final areaId
           in previousAreaIds.difference(nextOwnerByAreaId.keys.toSet())) {
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(_reservationRef(parent.id, areaId)));
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+        transaction.delete(_reservationRef(parent.id, areaId));
       }
       for (final entry in nextOwnerByAreaId.entries) {
         final child = childById[entry.value]!;
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+        transaction.set(
           _reservationRef(parent.id, entry.key),
           _reservationData(parent: parent, child: child, areaId: entry.key),
-        ));
+        );
       }
-    }), source: 'location_write_service.runTransaction');
+    }).trackFirestore('TRANSACTION', 'features/location/data/services/location_write_service.dart');
 
     debugPrint(
       'updateCompositeParentWithChildren parent=${parent.id} children=${children.length}',
@@ -402,9 +388,6 @@ class LocationWriteService {
     if ((child.parentId ?? '').trim() != parent.id) {
       throw ArgumentError('child parentId does not match parent id');
     }
-    if (child.companyId != parent.companyId || child.area != parent.area) {
-      throw StateError('LOCATION_PARENT_CHILD_SCOPE_MISMATCH');
-    }
 
     final childData = _compositeChildData(child);
     final parentRef = _firestore.collection('locations').doc(parent.id);
@@ -414,13 +397,12 @@ class LocationWriteService {
       for (final areaId in slotIds) areaId: _reservationRef(parent.id, areaId),
     };
 
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((transaction) async {
-        FirebaseActivityMonitor.beginTransactionAttempt();
-      final parentSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(parentRef), source: 'location_write_service.get');
-      final childSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(childRef), source: 'location_write_service.get');
+    await _firestore.runTrackedActivityTransaction((transaction) async {
+      final parentSnapshot = await transaction.get(parentRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
+      final childSnapshot = await transaction.get(childRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
       final reservationSnapshots = <String, DocumentSnapshot<Map<String, dynamic>>>{};
       for (final entry in reservationRefs.entries) {
-        reservationSnapshots[entry.key] = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(entry.value), source: 'location_write_service.get');
+        reservationSnapshots[entry.key] = await transaction.get(entry.value).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
       }
 
       if (!parentSnapshot.exists ||
@@ -437,14 +419,17 @@ class LocationWriteService {
         }
       }
 
-      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(childRef, childData, SetOptions(merge: true)));
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+
+      transaction.set(childRef, childData, SetOptions(merge: true));
       for (final areaId in slotIds) {
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+        transaction.set(
           reservationRefs[areaId]!,
           _reservationData(parent: parent, child: child, areaId: areaId),
-        ));
+        );
       }
-    }), source: 'location_write_service.runTransaction');
+    }).trackFirestore('TRANSACTION', 'features/location/data/services/location_write_service.dart');
 
     debugPrint(
       'createCompositeChild id=${child.id} parentId=${parent.id} slots=${slotIds.length}',
@@ -468,24 +453,19 @@ class LocationWriteService {
     if ((updated.parentId ?? '').trim() != parent.id) {
       throw ArgumentError('updated child parentId does not match parent id');
     }
-    if (updated.companyId != parent.companyId || updated.area != parent.area ||
-        previous.companyId != parent.companyId) {
-      throw StateError('LOCATION_PARENT_CHILD_SCOPE_MISMATCH');
-    }
 
     final parentRef = _firestore.collection('locations').doc(parent.id);
     final childRef = _firestore.collection('locations').doc(updated.id);
     final nextIds = _slotIds(updated);
 
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((transaction) async {
-        FirebaseActivityMonitor.beginTransactionAttempt();
-      final parentSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(parentRef), source: 'location_write_service.get');
-      final childSnapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(childRef), source: 'location_write_service.get');
+    await _firestore.runTrackedActivityTransaction((transaction) async {
+      final parentSnapshot = await transaction.get(parentRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
+      final childSnapshot = await transaction.get(childRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
       final reservationSnapshots =
           <String, DocumentSnapshot<Map<String, dynamic>>>{};
       for (final areaId in nextIds) {
         reservationSnapshots[areaId] =
-            await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(_reservationRef(parent.id, areaId)), source: 'location_write_service.get');
+            await transaction.get(_reservationRef(parent.id, areaId)).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
       }
 
       if (!parentSnapshot.exists ||
@@ -515,17 +495,21 @@ class LocationWriteService {
       final storedPreviousIds = _slotIdsFromData(childSnapshot.data());
       final removedIds = storedPreviousIds.difference(nextIds);
 
-      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => transaction.update(childRef, _compositeChildData(updated)));
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+
+      transaction.update(childRef, _compositeChildData(updated));
       for (final areaId in removedIds) {
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(_reservationRef(parent.id, areaId)));
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+        transaction.delete(_reservationRef(parent.id, areaId));
       }
       for (final areaId in nextIds) {
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+        transaction.set(
           _reservationRef(parent.id, areaId),
           _reservationData(parent: parent, child: updated, areaId: areaId),
-        ));
+        );
       }
-    }), source: 'location_write_service.runTransaction');
+    }).trackFirestore('TRANSACTION', 'features/location/data/services/location_write_service.dart');
 
     debugPrint(
       'updateCompositeChild id=${updated.id} parentId=${parent.id} slots=${nextIds.length}',
@@ -545,9 +529,6 @@ class LocationWriteService {
     }
 
     final ref = _firestore.collection('locations').doc(location.id);
-    if (location.companyId.trim().isEmpty) {
-      throw StateError('LOCATION_COMPANY_ID_REQUIRED');
-    }
     final data = location.toFirestoreMap();
     data['type'] = 'single';
     data['updatedAt'] = FieldValue.serverTimestamp();
@@ -559,14 +540,14 @@ class LocationWriteService {
     data['childSlotAreaIds'] = FieldValue.delete();
     data['childSlots'] = FieldValue.delete();
 
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((transaction) async {
-        FirebaseActivityMonitor.beginTransactionAttempt();
-      final snapshot = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => transaction.get(ref), source: 'location_write_service.get');
+    await _firestore.runTrackedActivityTransaction((transaction) async {
+      final snapshot = await transaction.get(ref).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
       if (!snapshot.exists) {
         throw StateError('수정할 텍스트 구역이 없습니다.');
       }
-      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => transaction.update(ref, data));
-    }), source: 'location_write_service.runTransaction');
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+      transaction.update(ref, data);
+    }).trackFirestore('TRANSACTION', 'features/location/data/services/location_write_service.dart');
     debugPrint(
       'updatePlainTextLocation id=${location.id} area=${location.area} name=$locationName',
     );
@@ -585,29 +566,28 @@ class LocationWriteService {
       return;
     }
 
-    final batch = _firestore.batch();
-    try {
+    final batch = _firestore.trackedActivityBatch('features/location/data/services/location_write_service.dart');
 
     for (final update in parentGridUpdates) {
       final ref = _firestore.collection('locations').doc(update.parentId);
-      FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.update, () => batch.update(ref, <String, dynamic>{
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+      batch.update(ref, <String, dynamic>{
         'parkingGrid': update.parkingGrid.toJson(),
         'updatedAt': FieldValue.serverTimestamp(),
-      }));
+      });
     }
 
     for (final key in slotReservationDeletes) {
-      FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.delete, () => batch.delete(_reservationRef(key.parentId, key.areaId)));
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+      batch.delete(_reservationRef(key.parentId, key.areaId));
     }
 
     for (final id in ids) {
-      FirebaseActivityWriteScope.batchCommand(batch, FirebaseActivityDocumentCommand.delete, () => batch.delete(_firestore.collection('locations').doc(id)));
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
+      batch.delete(_firestore.collection('locations').doc(id));
     }
 
-    await FirebaseActivityMonitor.track(FirebaseActivityKind.batch, () => batch.commit(), batch: batch, source: 'location_write_service.commit');
-    } finally {
-      FirebaseActivityWriteScope.cancelBatch(batch);
-    }
+    await batch.commit().trackFirestore('BATCH', 'features/location/data/services/location_write_service.dart');
     debugPrint(
       'deleteLocations area=$area ids=${ids.length} reservations=${slotReservationDeletes.length}',
     );

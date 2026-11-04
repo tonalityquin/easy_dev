@@ -24,6 +24,7 @@ class LauncherDebugAccountOverrideStore {
     'selectedArea',
     'englishSelectedAreaName',
     'division',
+    'role',
     'position',
     'cachedUserJson',
     'handle',

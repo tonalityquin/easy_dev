@@ -1,5 +1,4 @@
-import '../../../../app/firebase_activity/firebase_activity_write_scope.dart';
-import '../../../../app/firebase_activity/firebase_activity_monitor.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,7 +8,6 @@ import '../models/plate_status_draft.dart';
 import '../models/plate_status_lookup_result.dart';
 import 'plate_status_record.dart';
 import 'plate_billing_count_service.dart';
-import 'plate_document_paths.dart';
 
 const String _kLocSep = ' - ';
 const String _kLocUnknown = '미지정';
@@ -172,7 +170,6 @@ class PlateCreationService {
     required Transaction transaction,
     required String plateNumber,
     required String area,
-    required String companyId,
     required String userName,
     required String memo,
     required bool monthlyStatusScope,
@@ -185,7 +182,8 @@ class PlateCreationService {
       final monthlyRef = _firestore
           .collection(_monthlyPlateStatusCollection)
           .doc('${plateNumber}_$area');
-      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+      transaction.set(
         monthlyRef,
         <String, dynamic>{
           'customStatus': memo,
@@ -193,11 +191,10 @@ class PlateCreationService {
           'createdBy': userName,
           'lastMemoUpdatedBy': userName,
           'lastMemoSource': 'PlateCreationService.addPlate',
-          'companyId': companyId,
           'area': area,
         },
         SetOptions(merge: true),
-      ));
+      );
       return;
     }
 
@@ -212,39 +209,43 @@ class PlateCreationService {
       date: DateTime(now.year, now.month - 1, 1),
     );
     if (memo.isEmpty) {
-      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(currentRef));
-      FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(previousRef));
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+      transaction.delete(currentRef);
+      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+      transaction.delete(previousRef);
       final sourcePath = expectedStatusSourcePath.trim();
       if (sourcePath.isNotEmpty &&
           sourcePath != currentRef.path &&
           sourcePath != previousRef.path) {
-        FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.delete, () => transaction.delete(_firestore.doc(sourcePath)));
+        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+        transaction.delete(_firestore.doc(sourcePath));
       }
       return;
     }
 
-    FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => transaction.set(
+    FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+
+    transaction.set(
       currentRef,
       <String, dynamic>{
         'plateNumber': plateNumber,
-        'plateDocId': PlateDocumentPaths.vehicleId(plateNumber, area, companyId: companyId),
+        'plateDocId': '${plateNumber}_$area',
         'plateKey': _normalizedPlateKey(plateNumber),
         'plate_four_digit': _plateFourDigitValue(plateNumber),
         'source': 'PlateCreationService.addPlate',
-        'platesDocId': PlateDocumentPaths.vehicleId(plateNumber, area, companyId: companyId),
+        'platesDocId': '${plateNumber}_$area',
         'statusScope': 'plate_status',
         'monthKey': _monthKey(now),
         'customStatus': memo,
         'updatedAt': FieldValue.serverTimestamp(),
         'createdBy': userName,
-        'companyId': companyId,
         'area': area,
         'expireAt': Timestamp.fromDate(
           DateTime.utc(now.year, now.month + 1, 1),
         ),
       },
       SetOptions(merge: true),
-    ));
+    );
   }
 
 
@@ -333,13 +334,7 @@ class PlateCreationService {
     String? sectorId,
     String? sectorName,
   }) async {
-    final normalizedDivision = PlateDocumentPaths.companyFor(
-      area, companyId: division,
-    );
-    final areaId = PlateDocumentPaths.areaId(area, companyId: normalizedDivision);
-    final String plateDocId = PlateDocumentPaths.vehicleId(
-      plateNumber, area, companyId: normalizedDivision,
-    );
+    final String plateDocId = '${plateNumber}_$area';
     final String statusActorName =
         userName.trim().isEmpty ? 'unknown' : userName.trim();
     final String statusMemo = (customStatus ?? '').trim();
@@ -348,7 +343,7 @@ class PlateCreationService {
         (billingType?.trim().isNotEmpty ?? false);
     final monthlyStatusRef = _firestore
         .collection(_monthlyPlateStatusCollection)
-        .doc('${plateNumber}_$area');
+        .doc(plateDocId);
     final DateTime statusWriteTime = DateTime.now();
     final currentHistoryStatusRef = _historyStatusRef(
       plateNumber: plateNumber,
@@ -452,6 +447,8 @@ class PlateCreationService {
       'hasSector=$hasSector sectorId=$normalizedSectorId '
       'sectorName=$normalizedSectorName',
     );
+    final normalizedDivision =
+        division.trim().isEmpty ? '미지정' : division.trim();
     final countedAt = DateTime.now();
 
     final base = PlateModel(
@@ -513,9 +510,8 @@ class PlateCreationService {
         plateType == PlateType.parkingCompleted;
 
     try {
-      await FirebaseActivityMonitor.track(FirebaseActivityKind.transaction, () => _firestore.runTransaction((tx) async {
-        FirebaseActivityMonitor.beginTransactionAttempt();
-        final snap = await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(docRef), source: 'plate_creation_service.get');
+      await _firestore.runTrackedActivityTransaction((tx) async {
+        final snap = await tx.get(docRef).trackFirestore('GET', 'shared/plate/domain/services/plate_creation_service.dart');
         if (snap.exists) {
           final data = snap.data();
           final existingTypeStr = (data?[PlateFields.type] as String?) ?? '';
@@ -535,7 +531,7 @@ class PlateCreationService {
 
         final monthlyStatusSnapshot =
             (monthlyStatusScope || shouldValidateStatusSnapshot)
-                ? await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(monthlyStatusRef), source: 'plate_creation_service.get')
+                ? await tx.get(monthlyStatusRef).trackFirestore('GET', 'shared/plate/domain/services/plate_creation_service.dart')
                 : null;
         if (monthlyStatusScope) {
           final monthlyData = monthlyStatusSnapshot?.data();
@@ -604,9 +600,9 @@ class PlateCreationService {
               }
             }
             final currentStatusSnapshot =
-                await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(currentHistoryStatusRef), source: 'plate_creation_service.get');
+                await tx.get(currentHistoryStatusRef).trackFirestore('GET', 'shared/plate/domain/services/plate_creation_service.dart');
             final previousStatusSnapshot =
-                await FirebaseActivityMonitor.track(FirebaseActivityKind.read, () => tx.get(previousHistoryStatusRef), source: 'plate_creation_service.get');
+                await tx.get(previousHistoryStatusRef).trackFirestore('GET', 'shared/plate/domain/services/plate_creation_service.dart');
             DocumentSnapshot<Map<String, dynamic>>? sourceStatusSnapshot;
             if (expectedSourcePath.isNotEmpty) {
               if (expectedSourcePath == currentHistoryStatusRef.path) {
@@ -661,11 +657,9 @@ class PlateCreationService {
         }
 
         final completedViewRef =
-            _firestore.collection(_parkingCompletedViewCollection).doc(
-              PlateDocumentPaths.viewId(area, companyId: normalizedDivision));
+            _firestore.collection(_parkingCompletedViewCollection).doc(area);
         final requestsViewRef =
-            _firestore.collection(_parkingRequestsViewCollection).doc(
-              PlateDocumentPaths.viewId(area, companyId: normalizedDivision));
+            _firestore.collection(_parkingRequestsViewCollection).doc(area);
 
         if (snap.exists) {
           final data = snap.data();
@@ -699,8 +693,6 @@ class PlateCreationService {
 
           final partial = <String, dynamic>{
             PlateFields.type: plateType.firestoreValue,
-            'areaId': areaId,
-            'plateKey': PlateDocumentPaths.plateKey(plateNumber),
             PlateFields.company: normalizedDivision,
             PlateFields.division: normalizedDivision,
             if (shouldApplyPlateStatusFields)
@@ -745,11 +737,10 @@ class PlateCreationService {
             partial[PlateFields.requestTime] = FieldValue.serverTimestamp();
 
             if (canWriteRequestsView) {
-              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
+              FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              tx.set(
                 requestsViewRef,
                 <String, dynamic>{
-                  'companyId': normalizedDivision,
-                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': _buildParkingRequestsViewItem(
@@ -762,7 +753,7 @@ class PlateCreationService {
                   ),
                 },
                 SetOptions(merge: true),
-              ));
+              );
             } else {
               if (kDebugMode) {
                 debugPrint(
@@ -772,11 +763,10 @@ class PlateCreationService {
           } else {
             if (existingType == PlateType.parkingRequests &&
                 canWriteRequestsView) {
-              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
+              FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              tx.set(
                 requestsViewRef,
                 <String, dynamic>{
-                  'companyId': normalizedDivision,
-                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': <String, dynamic>{
@@ -784,7 +774,7 @@ class PlateCreationService {
                   },
                 },
                 SetOptions(merge: true),
-              ));
+              );
             }
           }
 
@@ -792,11 +782,10 @@ class PlateCreationService {
             partial['parkingCompletedAt'] = FieldValue.serverTimestamp();
 
             if (canWriteCompletedView) {
-              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
+              FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              tx.set(
                 completedViewRef,
                 <String, dynamic>{
-                  'companyId': normalizedDivision,
-                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': _buildParkingCompletedViewItem(
@@ -809,7 +798,7 @@ class PlateCreationService {
                   ),
                 },
                 SetOptions(merge: true),
-              ));
+              );
             } else {
               if (kDebugMode) {
                 debugPrint(
@@ -818,11 +807,10 @@ class PlateCreationService {
             }
 
             if (canWriteRequestsView) {
-              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
+              FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              tx.set(
                 requestsViewRef,
                 <String, dynamic>{
-                  'companyId': normalizedDivision,
-                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': <String, dynamic>{
@@ -830,28 +818,25 @@ class PlateCreationService {
                   },
                 },
                 SetOptions(merge: true),
-              ));
+              );
             }
           }
 
           final bool wasLocked = (data?['isLockedFee'] == true);
           if (wasLocked) {
             final countersRef =
-                _firestore.collection('plate_counters').doc(
-                    PlateDocumentPaths.counterId(area, companyId: normalizedDivision));
-            FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
+                _firestore.collection('plate_counters').doc('area_$area');
+            FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+            tx.set(
               countersRef,
-              {
-                'companyId': normalizedDivision,
-                'areaId': areaId,
-                'area': area,
-                'departureCompletedEvents': FieldValue.increment(1),
-              },
+              {'departureCompletedEvents': FieldValue.increment(1)},
               SetOptions(merge: true),
-            ));
+            );
           }
 
-          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.update, () => tx.update(docRef, partial));
+          FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+
+          tx.update(docRef, partial);
 
           if (shouldIncrementReentryBillingCount) {
             PlateBillingCountService.incrementInTransaction(
@@ -868,9 +853,6 @@ class PlateCreationService {
         } else {
           final createdAtValue = FieldValue.serverTimestamp();
           final map = plateWithLog.toMap();
-          map['companyId'] = normalizedDivision;
-          map['areaId'] = areaId;
-          map['plateKey'] = PlateDocumentPaths.plateKey(plateNumber);
           map[PlateFields.company] = normalizedDivision;
           map[PlateFields.division] = normalizedDivision;
           map[PlateFields.createdAt] = createdAtValue;
@@ -885,11 +867,10 @@ class PlateCreationService {
           if (plateType == PlateType.parkingRequests) {
 
             if (canWriteRequestsView) {
-              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
+              FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              tx.set(
                 requestsViewRef,
                 <String, dynamic>{
-                  'companyId': normalizedDivision,
-                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': _buildParkingRequestsViewItem(
@@ -902,7 +883,7 @@ class PlateCreationService {
                   ),
                 },
                 SetOptions(merge: true),
-              ));
+              );
             } else {
               if (kDebugMode) {
                 debugPrint(
@@ -915,11 +896,10 @@ class PlateCreationService {
             map['parkingCompletedAt'] = FieldValue.serverTimestamp();
 
             if (canWriteCompletedView) {
-              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
+              FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              tx.set(
                 completedViewRef,
                 <String, dynamic>{
-                  'companyId': normalizedDivision,
-                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': _buildParkingCompletedViewItem(
@@ -932,7 +912,7 @@ class PlateCreationService {
                   ),
                 },
                 SetOptions(merge: true),
-              ));
+              );
             } else {
               if (kDebugMode) {
                 debugPrint(
@@ -941,11 +921,10 @@ class PlateCreationService {
             }
 
             if (canWriteRequestsView) {
-              FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(
+              FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              tx.set(
                 requestsViewRef,
                 <String, dynamic>{
-                  'companyId': normalizedDivision,
-                  'areaId': areaId,
                   PlateFields.area: area,
                   PlateFields.updatedAt: FieldValue.serverTimestamp(),
                   'items': <String, dynamic>{
@@ -953,11 +932,13 @@ class PlateCreationService {
                   },
                 },
                 SetOptions(merge: true),
-              ));
+              );
             }
           }
 
-          FirebaseActivityMonitor.transactionCommand(FirebaseActivityDocumentCommand.set, () => tx.set(docRef, map));
+          FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+
+          tx.set(docRef, map);
           if (shouldIncrementBillingCount) {
             PlateBillingCountService.incrementInTransaction(
               transaction: tx,
@@ -977,7 +958,6 @@ class PlateCreationService {
             transaction: tx,
             plateNumber: plateNumber,
             area: area,
-            companyId: normalizedDivision,
             userName: statusActorName,
             memo: statusMemo,
             monthlyStatusScope: monthlyStatusScope,
@@ -986,7 +966,7 @@ class PlateCreationService {
             now: statusWriteTime,
           );
         }
-      }), source: 'plate_creation_service.runTransaction');
+      }).trackFirestore('TRANSACTION', 'shared/plate/domain/services/plate_creation_service.dart');
     } on DuplicatePlateException {
       rethrow;
     } catch (_) {

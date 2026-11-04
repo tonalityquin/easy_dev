@@ -1,3 +1,4 @@
+import '../diagnostics/firebase_activity_meter.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -257,34 +258,66 @@ class GcsCsvUploader {
     required gcs.StorageApi storage,
     required String objectName,
   }) async {
-    final dynamic res = await storage.objects.get(
-      bucketName,
-      objectName,
-      downloadOptions: gcs.DownloadOptions.fullMedia,
-    );
-
-    if (res is! gcs.Media) {
-      final msg = '예상치 못한 반환 타입: ${res.runtimeType}, Media가 아닙니다.';
-      debugPrint('⚠️ [GcsCsvUploader] $msg');
-
-      await DebugApiLogger().log(
-        {
-          'tag': 'GcsCsvUploader.loadPlateLogs',
-          'message': 'GCS objects.get 반환 타입이 Media가 아님',
-          'reason': 'invalid_response_type',
-          'bucketName': bucketName,
-          'objectName': objectName,
-          'responseType': res.runtimeType.toString(),
-        },
-        level: 'error',
-        tags: const ['gcs', 'csv', 'plate_logs'],
+    final watch = Stopwatch()..start();
+    late final List<int> bytes;
+    try {
+      final dynamic res = await storage.objects.get(
+        bucketName,
+        objectName,
+        downloadOptions: gcs.DownloadOptions.fullMedia,
       );
 
-      return <Map<String, String>>[];
-    }
+      if (res is! gcs.Media) {
+        watch.stop();
+        FirebaseActivityMeter.instance.record(
+          service: 'storage',
+          operation: 'DOWNLOAD',
+          source: 'app/auth/gcs_csv_uploader.dart',
+          result: 'error',
+          elapsedMs: watch.elapsedMilliseconds,
+          detail: 'invalid_media_type',
+        );
+        final msg = '예상치 못한 반환 타입: ${res.runtimeType}, Media가 아닙니다.';
+        debugPrint('⚠️ [GcsCsvUploader] $msg');
 
-    final gcs.Media media = res;
-    final bytes = await media.stream.expand((e) => e).toList();
+        await DebugApiLogger().log(
+          {
+            'tag': 'GcsCsvUploader.loadPlateLogs',
+            'message': 'GCS objects.get 반환 타입이 Media가 아님',
+            'reason': 'invalid_response_type',
+            'bucketName': bucketName,
+            'objectName': objectName,
+            'responseType': res.runtimeType.toString(),
+          },
+          level: 'error',
+          tags: const ['gcs', 'csv', 'plate_logs'],
+        );
+
+        return <Map<String, String>>[];
+      }
+
+      final gcs.Media media = res;
+      bytes = await media.stream.expand((e) => e).toList();
+      watch.stop();
+      FirebaseActivityMeter.instance.record(
+        service: 'storage',
+        operation: 'DOWNLOAD',
+        source: 'app/auth/gcs_csv_uploader.dart',
+        elapsedMs: watch.elapsedMilliseconds,
+        bytes: bytes.length,
+      );
+    } catch (error, stack) {
+      watch.stop();
+      FirebaseActivityMeter.instance.record(
+        service: 'storage',
+        operation: 'DOWNLOAD',
+        source: 'app/auth/gcs_csv_uploader.dart',
+        result: 'error',
+        elapsedMs: watch.elapsedMilliseconds,
+        detail: error.runtimeType.toString(),
+      );
+      Error.throwWithStackTrace(error, stack);
+    }
     return _decodeCsv(utf8.decode(bytes));
   }
 
@@ -301,7 +334,7 @@ class GcsCsvUploader {
         bucketName,
         prefix: prefix,
         pageToken: pageToken,
-      );
+      ).trackStorage('STORAGE_LIST', 'app/auth/gcs_csv_uploader.dart');
       if (res.items != null) {
         allObjects.addAll(res.items!);
       }

@@ -13,21 +13,31 @@ class SecureAuthDiagnostics {
     caseSensitive: false,
   );
   static final RegExp _sensitiveValue = RegExp(
-    r'\b(uid|firebaseUid|userId|idToken|accessToken|refreshToken|password|authorization)\s*[:=]\s*[^\s,;}]+' ,
+    r'\b(uid|firebaseUid|userId|idToken|accessToken|refreshToken|password|authorization|codeNumber|accountIdentifier|accountCode|secret|clientSecret|apiKey)\s*[:=]\s*[^\s,;}]+' ,
     caseSensitive: false,
   );
   static final RegExp _bearer = RegExp(
     r'Bearer\s+[A-Za-z0-9._\-]+',
     caseSensitive: false,
   );
+  static final RegExp _jwt = RegExp(
+    r'\beyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]*',
+  );
+  static final RegExp _accountCode = RegExp(
+    r'\b(?:\d{10,11}|(?=[a-z0-9]{11}\b)(?=[a-z0-9]*[a-z])(?=[a-z0-9]*\d)[a-z0-9]{11})\b',
+    caseSensitive: false,
+  );
 
   static String redact(String value) {
     final withoutBearer = value.replaceAll(_bearer, 'Bearer [비공개]');
-    final withoutSensitive = withoutBearer.replaceAllMapped(
+    final withoutToken = withoutBearer.replaceAll(_jwt, '[토큰 비공개]');
+    final withoutSensitive = withoutToken.replaceAllMapped(
       _sensitiveValue,
       (match) => '${match.group(1)}=[비공개]',
     );
-    return withoutSensitive.replaceAll(_email, '[이메일 비공개]');
+    return withoutSensitive
+        .replaceAll(_email, '[이메일 비공개]')
+        .replaceAll(_accountCode, '[코드 비공개]');
   }
 
   static void record(String message) {
