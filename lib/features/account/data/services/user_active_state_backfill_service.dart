@@ -176,10 +176,11 @@ class UserActiveStateBackfillService {
           'features/account/data/services/user_active_state_backfill_service.dart',
         );
         for (final item in mapPasswords.sublist(offset, end)) {
-          batch.update(item.key, <Object, Object?>{
-            FieldPath(<String>['users', item.value, 'password']):
-                FieldValue.delete(),
-          });
+          batch.set(
+            item.key,
+            UserAccountShowMap.passwordDeletePayload(item.value),
+            UserAccountShowMap.passwordDeleteOptions(item.value),
+          );
         }
         try {
           await batch.commit().trackFirestore(

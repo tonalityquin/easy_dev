@@ -52,23 +52,77 @@ class UserAccountShowMap {
     ],
   );
 
-  static Map<Object, Object?> deletePayload(String userId) =>
-      <Object, Object?>{
-        FieldPath(<String>['users', userId]): FieldValue.delete(),
+  static Map<String, dynamic> deletePayload(String userId) =>
+      <String, dynamic>{
+        'users': <String, dynamic>{userId: FieldValue.delete()},
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-  static Map<Object, Object?> statusPayload(
+  static SetOptions deleteOptions(String userId) => SetOptions(
+        mergeFields: <Object>[
+          FieldPath(<String>['users', userId]),
+          'updatedAt',
+        ],
+      );
+
+  static Map<String, dynamic> movePayload(
+    String oldId,
+    String nextId,
+    Map<String, dynamic> account,
+  ) => <String, dynamic>{
+        'users': <String, dynamic>{
+          oldId: FieldValue.delete(),
+          nextId: account,
+        },
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+  static SetOptions moveOptions(String oldId, String nextId) => SetOptions(
+        mergeFields: <Object>[
+          FieldPath(<String>['users', oldId]),
+          FieldPath(<String>['users', nextId]),
+          'updatedAt',
+        ],
+      );
+
+  static Map<String, dynamic> statusPayload(
     String userId,
     bool active,
     Object? disabledAt,
-  ) => <Object, Object?>{
-    FieldPath(<String>['users', userId, 'isActive']): active,
-    FieldPath(<String>['users', userId, 'updatedAt']):
-        FieldValue.serverTimestamp(),
-    FieldPath(<String>['users', userId, 'disabledAt']): active
-        ? FieldValue.delete()
-        : (disabledAt ?? FieldValue.serverTimestamp()),
-    'updatedAt': FieldValue.serverTimestamp(),
-  };
+  ) => <String, dynamic>{
+        'users': <String, dynamic>{
+          userId: <String, dynamic>{
+            'isActive': active,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'disabledAt': active
+                ? FieldValue.delete()
+                : (disabledAt ?? FieldValue.serverTimestamp()),
+          },
+        },
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+  static SetOptions statusOptions(String userId) => SetOptions(
+        mergeFields: <Object>[
+          FieldPath(<String>['users', userId, 'isActive']),
+          FieldPath(<String>['users', userId, 'updatedAt']),
+          FieldPath(<String>['users', userId, 'disabledAt']),
+          'updatedAt',
+        ],
+      );
+
+  static Map<String, dynamic> passwordDeletePayload(String userId) =>
+      <String, dynamic>{
+        'users': <String, dynamic>{
+          userId: <String, dynamic>{
+            'password': FieldValue.delete(),
+          },
+        },
+      };
+
+  static SetOptions passwordDeleteOptions(String userId) => SetOptions(
+        mergeFields: <Object>[
+          FieldPath(<String>['users', userId, 'password']),
+        ],
+      );
 }

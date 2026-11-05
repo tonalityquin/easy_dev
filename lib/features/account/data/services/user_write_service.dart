@@ -426,14 +426,19 @@ class UserWriteService {
       }
       if (moved && oldViewRef.path == newViewRef.path &&
           UserAccountShowMap.account(oldViewSnap.data(), oldId) != null) {
-        tx.update(newViewRef, <Object, Object?>{
-          ...UserAccountShowMap.deletePayload(oldId),
-          FieldPath(<String>['users', nextId]): summary,
-        });
+        tx.set(
+          newViewRef,
+          UserAccountShowMap.movePayload(oldId, nextId, summary),
+          UserAccountShowMap.moveOptions(oldId, nextId),
+        );
       } else {
         if (moved &&
             UserAccountShowMap.account(oldViewSnap.data(), oldId) != null) {
-          tx.update(oldViewRef, UserAccountShowMap.deletePayload(oldId));
+          tx.set(
+            oldViewRef,
+            UserAccountShowMap.deletePayload(oldId),
+            UserAccountShowMap.deleteOptions(oldId),
+          );
         }
         tx.set(
           newViewRef,
@@ -563,11 +568,12 @@ class UserWriteService {
     );
     batch.set(rootRef, rootPayload, SetOptions(merge: true));
     if (existing != null) {
-      batch.update(
+      batch.set(
         viewRef,
         UserAccountShowMap.statusPayload(
           userId, isActive, previous['disabledAt'],
         ),
+        UserAccountShowMap.statusOptions(userId),
       );
     } else {
       batch.set(
@@ -619,7 +625,11 @@ class UserWriteService {
         'features/account/data/services/user_write_service.dart',
       );
       if (existing != null) {
-        batch.update(viewRef, UserAccountShowMap.deletePayload(id));
+        batch.set(
+          viewRef,
+          UserAccountShowMap.deletePayload(id),
+          UserAccountShowMap.deleteOptions(id),
+        );
       }
       if (legacySnap.exists) batch.delete(legacyRef);
       batch.delete(rootRef);

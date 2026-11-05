@@ -25,7 +25,8 @@
 | `lib/main.dart` | 앱 시작과 Firebase 초기화. 기존 근무 알림 통신은 유지하고 Activity Bridge 수신 콜백은 등록하지 않음 |
 | `lib/app/tutorial/tutorial/start_gate_screen.dart` | 최초 설정/세션 복원 판단 |
 | `lib/features/launcher/page/power_boot_screen.dart` | 전원 시작, 최초 사용 목적 |
-| `lib/app/terminal/presentation/parkinworkin_terminal_screen.dart` | 런처, Mini Terminal, 계정 인증 Dialog, 개발자 도움말 UI, APP RESTART 제목 5회 탭과 업무 화면 이동 |
+| `lib/app/terminal/presentation/parkinworkin_terminal_screen.dart` | 런처, Mini Terminal, 계정 인증 Dialog, 개발자 도움말 UI, APP RESTART 제목 5회 탭, 인증 Route 오버레이 제거 확인 및 런처 대상 업무 화면 이동 |
+| `lib/app/init/app_navigator.dart` | 기존 Route 이름별 `onRouteChanged`·`onRouteSettled` 유지, 실제 최상단 Route 객체 및 퇴장 중인 오버레이 추적, STATUS 종료 뒤 런처 이동 재개 알림 |
 | `lib/features/launcher/application/mode_launcher_controller.dart` | 로그인 명령, 계정/지역/모드 진행, 개발자 비밀번호 성공 후 디버그 상태 활성화 |
 | `lib/features/launcher/application/terminal_auth_coordinator.dart` | 계정 유형, 로그인과 업무 계정 검증 |
 | `lib/app/auth/google_auth_session.dart` | 외부 계정과 Firebase 인증 세션 관리 |
@@ -41,7 +42,7 @@
 | `lib/app/diagnostics/firebase_activity_center_dialog.dart` | 개발자 전용 Firebase Activity Center, 보관 세션·기간의 COST 조회, 파일 커서 페이지, debugPrint 코드 복사와 페이드 애니메이션 |
 | `lib/features/account/data/services/user_status_service.dart` | 문서별 쓰기 순서 보존, 성공한 필드 값 추적, 순차 중복 UPDATE 생략 및 실제 쓰기 발생 여부 반환 |
 | `lib/features/account/domain/repositories/user_repository.dart`, `lib/features/account/data/repositories/firestore_user_repository.dart` | 로그인·지역 동기화의 실제 원격 WRITE 여부를 호출부에 반환; 직접 계정 문서를 수정할 때 상태 확인 캐시 무효화 |
-| `lib/features/account/applications/user_state.dart` | 10초 지역 쓰기 생략 규칙 제거, 저장소의 확인된 쓰기 결과를 적용하여 로그인·지역 로컬 UI 갱신 유지 |
+| `lib/features/account/applications/user_state.dart` | 기존 10초 지역 쓰기 생략 규칙 제거·확인된 원격 쓰기 및 로컬 갱신 유지. 로그인 세션 결과를 `LauncherDiagnostics`에 기록하고 인증 중 자동 STATUS Route 생성 방지 |
 | `lib/features/commute/domain/repositories/commute_log_repository.dart` | 오늘 출근·관리자 달력의 월별 문서만 GET, 레거시 GET·삭제 SET 제거, 저장소 인스턴스 간 동시 동일 월 GET 공유 |
 | `lib/shared/tts/application/foreground_task_handler.dart` | 기존 Plate TTS 및 근무 상태 알림 실행. Firebase Activity Bridge 시작·종료 호출 없음 |
 | `lib/shared/tts/data/repositories/firestore_plate_tts_listener_repository.dart` | Plate TTS용 원래 Firestore 직접 조회·스냅샷 구독 유지. Activity Center 중계 래퍼 미적용 |
@@ -86,7 +87,7 @@
 | 하단 오른쪽 | `로그인`; 개발자 비밀번호 경로에서는 `계정 확인` |
 | 도움말 실행 결과 | 인라인 로딩·성공·오류 표시, 결과 애니메이션·햅틱; 성공 시 계정 이름과 코드번호를 기존 입력 필드에 적용 |
 
-Mini Terminal의 오픈 660ms, 닫힘 410ms, 내용 페이드·스케일과 입력 필드 포커스 전환을 유지한다. 도움말은 `AnimatedSwitcher`로 등장/퇴장하고, 결과 영역은 `FadeTransition`과 `SizeTransition`으로 바뀐다. 애니메이션 감소 설정에서는 시간을 0으로 사용한다.
+Mini Terminal의 오픈 660ms, 닫힘 410ms, 내용 페이드·스케일과 입력 필드 포커스 전환을 유지한다. 도움말은 `AnimatedSwitcher`로 등장/퇴장하고, 결과 영역은 `FadeTransition`과 `SizeTransition`으로 바뀐다. 개발자 비밀번호 인증 오류 안내에는 160ms Fade·Slide 전환을 추가하며 애니메이션 감소 설정에서는 시간을 0으로 사용한다. 인증 중 로그인 세션 동기화가 성공하거나 실패해도 자동 성공·실패 STATUS 다이얼로그를 열지 않고 `LauncherDiagnostics.record()`에 결과를 남긴다. 닫힘 모션 완료 후 인증창 자신의 Route만 종료한다. 호출자가 직접 생성·보관한 `RawDialogRoute`의 Pop 결과와 `route.completed`를 차례로 확인하여 **170ms Fade·Slide 퇴장 및 오버레이 제거 완료**를 기다린 다음 런처 결과를 처리한다. 모션 감소 설정에서는 전환 시간이 0ms가 된다.
 
 ### 서로 다른 개발자 기능
 
@@ -98,6 +99,8 @@ Mini Terminal의 오픈 660ms, 닫힘 410ms, 내용 페이드·스케일과 입�
 | 전역 Developer Mode ON 상태의 `STATUS` | 진단 상태 Dialog 및 `debugPrint 코드 복사` | 기존 `DevAuth.devModeEnabled` 기준 유지 |
 | `APP RESTART` 제목을 2초 이내 간격으로 5회 탭 | 재시작 Dialog를 닫힘 애니메이션과 함께 종료하고 업무 목적지로 이동 | 인증·지역·모드 검증 생략 없음 |
 | 개발자 비밀번호 인증 성공 | 기존 승인 검증 후 `DebugSessionController.enable()` 호출 | 디버그 모드 ON이 확인돼야 로그인 완료 처리 |
+
+개발자 비밀번호 인증 중 다른 STATUS Route가 위에 올라오는 상태에서도 `Navigator.pop()`으로 임의 최상단 Route를 닫지 않는다. 인증창 Route가 현재 최상단이고 명시적 종료가 허용된 경우에는 `pop()`으로 기존 Route Fade 애니메이션을 유지한다. 다른 Route가 최상단이면 소유한 인증창 Route만 `removeRoute()`로 종료하며 다른 팝업을 대신 닫지 않는다. 별도 STATUS는 사용자 요청으로 열린 경우에만 표시하며 로그인 성공·실패 진단은 기존 개발자 STATUS 클립보드에 유지한다. 인증창의 `route.completed` 확인 뒤 런처의 실제 Route가 최상단인지 검사하고, 사용자가 직접 연 STATUS 등 다른 Route가 위에 있으면 이를 강제 삭제하지 않고 정상 종료 및 오버레이 제거까지 화면 전환을 보류한다. 현재 로그인 런처가 최상단이 된 뒤에만 `pushReplacementNamed()`를 실행한다. STATUS 등 `PopupRoute`만 정상 종료를 기다리며, 전혀 다른 업무 PageRoute가 최상단이면 `launcher_navigation_stack_invalid`로 처리해 이전 로그인 전환을 중단한다. `_closing`은 첫 Route 검사 통과 뒤에 설정하고 이동 실패 시 복구해 영구 잠금이 발생하지 않도록 한다. 이 변경은 인증 성공·Role·지역·Firebase 쓰기 정책에 영향을 주지 않는다.
 
 `_developerPasswordMode`와 전역 `DevAuth.devModeEnabled`는 별도 상태다. Debug 빌드의 개발자 승인 경로와 Release 빌드의 허용 계정 승인 경로도 다르다. 도움말 아이콘은 **일반 계정과 개발자 비밀번호 모드 ON을 모두 충족할 때만** 표시되며, 실행 함수에서도 같은 계정 유형 및 상태를 검사한다. 개인형·태블릿형은 기존 개발자 비밀번호 로그인만 유지하고 일반형 dev 초기화 기능에서 배제한다. 이 UI 검사로 Firestore 서버의 권한 규칙이 강화되는 것은 아니다. 개발자 도움말을 표시하거나 실행하는 것만으로는 전역 Developer Mode를 임의 ON으로 바꾸지 않는다. **개발자 비밀번호 로그인 검증에 성공한 경우에만** 기존 `DebugSessionController.enable()`을 호출하여 전역 디버그 모드를 ON으로 전환하고, 실패하면 로그인 완료로 처리하지 않는다.
 
@@ -158,6 +161,8 @@ Mini Terminal의 오픈 660ms, 닫힘 410ms, 내용 페이드·스케일과 입�
 `DevBootstrapService`는 요청, 회사·지역 준비, 계정 쓰기 단계, 성공·실패를 `ParkinWorkinTerminalDiagnostics.record()`로 기록하며 내부적으로 `debugPrint`를 호출한다. 계정 코드번호, 이메일, 인증 토큰은 새 초기화 진단에 원문으로 기록하지 않는다. 기존 서비스의 상세 메시지를 그대로 노출하는 대신 단계별 이벤트와 처리된 문서 수를 기록한다.
 
 최초 개발자 초기화 완료 기록의 `writeOperations`는 회사·본사 지역·표시용 메타 생성 각 1건과 신규 계정 Batch 3건을 합산하므로 모두 신규 생성되면 6건이다. 경량 View만 복구하면 1건으로 기록한다. 기존 STATUS의 완료 안내와 복사한 `debugPrint(...)` 코드에 동일한 수정 수치가 반영된다. 최초 초기화에 없는 문서를 새로 쓰는 경우에만 실제 쓰기가 발생한다.
+
+로그인 세션 동기화는 성공 시 `login_session_sync_succeeded`, 실패 시 `login_session_sync_failed`를 `LauncherDiagnostics.record(scope: auth)`로 기록한다. 개발자 비밀번호 인증창은 `launcher_auth_dialog_close_started`, `launcher_auth_dialog_route_close_requested`, `launcher_auth_dialog_route_popped`(Navigator 종료 결과), `launcher_auth_dialog_overlay_removed`(퇴장 및 오버레이 제거 완료), 기존 호환 이벤트 `launcher_auth_dialog_route_closed`를 순서대로 기록하며 Route를 식별할 수 없는 경우 `launcher_auth_dialog_close_failed`를 기록한다. 런처 이동 단계에서는 `launcher_navigation_deferred`·`launcher_navigation_resumed`·`launcher_navigation_stack_invalid`·`launcher_dashboard_navigation_requested`를 구분하여 기록한다. 세션 동기화 결과를 표시하기 위해 런처 인증 도중 자동 STATUS Route를 추가하지 않는다. 성공·실패 진단은 `LauncherDiagnostics.debugPrintCode`와 `ParkinWorkinTerminalDiagnostics.debugPrintCodeWithJournal()`의 기존 STATUS 복사 경로에 포함된다. 기존 `DevFirebaseDebugDialog.show()`는 로그인 이외의 업무 기능에서 그대로 사용할 수 있다.
 
 로그 복사는 기존 `ParkinWorkinTerminalDiagnostics.debugPrintCode` 형식을 유지한다. 개발자 `STATUS`에서는 클립보드 버튼을 누를 때 `debugPrintCodeWithJournal()`로 기존 진단과 로컬 보관된 현재 세션의 Firebase 기록을 비동기로 합친다. APP RESTART 건너뛰기 및 디버그 자동 활성화도 `LauncherDiagnostics.record()` 및 `ParkinWorkinTerminalDiagnostics.record()`에 기록되어 `debugPrint(...)` 코드 복사 대상에 포함된다. 개발자 `STATUS` Dialog의 클립보드 버튼은 진입 시 및 복사 실행 직전에 `DevAuth.isDevModeEnabled()`로 권한을 재확인하며, 별도의 제목 5회 탭 복사는 개발자 권한을 제공하지 않는다. 진단 복사 과정에는 Firestore 읽기·쓰기가 필요 없다. UI는 연결 실패·권한 만료·문서 충돌과 일반 네트워크 오류를 구분해 표시한다.
 
@@ -272,7 +277,7 @@ Firebase Auth·Google Auth·App Check의 진단 이벤트는 실제 Firebase 과
 
 트랜잭션은 `runTrackedActivityTransaction()`으로 실행한다. `Zone`에 시도별 `STAGE_*` 작업 수를 저장하고, 재시도 중 실패한 시도의 수를 버리고 **최종 Firestore Future 성공 이후 마지막 성공 시도에서 확인된 쓰기만 `COMMITTED_TRANSACTION`으로 기록**한다. 배치는 `trackedActivityBatch()`가 `set/update/delete` 횟수를 수집하고 원래 `WriteBatch.commit()` 성공 후 `COMMITTED_BATCH`를 기록한다. 커밋 실패는 확정 집계 0건이며 기존 `BATCH`·`TRANSACTION` 로그와 예외 처리는 유지한다. SDK에 드러나지 않은 서버 내부 동작과 기존 `STAGE_*`가 삽입되지 않은 트랜잭션 작업은 관측 범위 밖일 수 있다.
 
-중첩 Map 계정 상태 변경·계정 삭제·레거시 필드 정리는 `FieldPath`를 키로 사용하는 부분 업데이트를 전달한다. `FirebaseActivityWriteBatch.update()`는 문자열 필드명과 `FieldPath`를 모두 담을 수 있도록 `Map<Object, Object?>`를 받고, 원래 Firestore Batch에 그대로 위임한다. `FieldValue.delete()`로 **문서 내부 Map 필드**를 제거하는 호출은 `update()`에 해당해 `WRITE`로 계측하며, 문서 자체를 제거하는 `batch.delete()`만 `DELETE`로 계측한다. 성공한 `commit()` 이후에만 확정 작업 수를 기록한다.
+현재 프로젝트의 FlutterFire `WriteBatch.update()` 및 `Transaction.update()`는 `Map<String, dynamic>`을 요구한다. 따라서 `FirebaseActivityWriteBatch.update()`도 해당 타입을 유지한다. 중첩 Map의 특정 사용자 ID와 하위 필드를 안전하게 바꿀 때는 **문자열 키를 가진 계층형 Map 데이터**를 `set(..., SetOptions(mergeFields: [FieldPath(...)]))`로 전달한다. `FieldPath`는 `update()`의 Map 키가 아니라 `mergeFields`의 요소로 사용하므로 사용자 ID에 점(`.`)이 있어도 경로 분리 오류를 피한다. `FieldValue.delete()`로 문서 내부 Map 필드를 제거하는 작업은 **문서 쓰기(WRITE)** 로 계측하고, 문서 자체를 삭제하는 `batch.delete()`만 `DELETE`로 계측한다. 실제 `set`/`update`는 커밋 성공 후 `COMMITTED_BATCH`에 기록한다.
 
 `COST`는 전체 활동 로그의 별칭이 아니라 전용 분석 화면이다. `OBSERVED`는 호출 수·반환 문서 수·캐시/서버 응답·확정 쓰기·삭제·스냅샷·Storage 처리 바이트를 제시한다. `ESTIMATED`는 현재 SDK 관측값으로 확정 과금액을 산출할 수 없다는 조건을 표시하며 **임의 금액을 생성하지 않는다**. `UNAVAILABLE`에는 인덱스 읽기·Rules 의존 읽기·저장 용량·SDK 내부 재시도·다른 클라이언트 비용을 명시한다. COST 복사 버튼은 전체 이벤트가 아닌 이 세 범주의 요약을 `debugPrint(...)`로 출력한다.
 
@@ -357,7 +362,7 @@ Firebase UID를 업무 accountId로 바꾸거나 GCS `publicRead`를 제거하�
 | 완전한 상태에서 재실행 | 정상 흐름에서 쓰기 0, 확인 읽기 발생 | 정기 실행/자동 리스너 없음 |
 | 계정 연결 | Google/Firebase 인증 API, 별도 Firestore 사용자 문서 생성 없음 | 요금제에 따라 인증 비용 정책 별도 |
 | 계정 중복 검사 | 일반 신규 계정은 코드 예약 GET 1회, 개발자 신규 계정은 코드 예약 GET 1회 + Root GET 1회 | 인덱스 완전성 검증은 운영 선행 조건 |
-| 중첩 Map `FieldPath` Batch 타입 호환 | 래퍼의 `update()` 매개변수 형식만 확장, 실제 SET·UPDATE·DELETE 요청 건수 불변 | 추가 Firestore 조회·쓰기·요금 절감 없음; 기존 계측을 그대로 적용 |
+| 중첩 Map `FieldPath` Batch 타입 호환 | 래퍼의 `update()`를 SDK 타입으로 되돌리고 `set(..., mergeFields: [FieldPath(...)])` 사용 | 추가 Firestore 조회·문서 쓰기 없음; 기존 부분 갱신과 원자성 유지 |
 | 실시간 차량·음성 수신 | Firestore `snapshots()` 읽기 및 재연결 | 이용량에 따라 과금, 정상 기능이므로 유지 |
 | 음성 전송 후 정리 | 전송마다 정리 대상 최대 32개 조회 | 전송량 증가 시 실제 비용을 계측하고 최적화 판단 |
 | GCS 공개 이미지 | 저장·요청·다운로드 네트워크 사용량 | `publicRead` 유지, 전송 트래픽 관찰 |
@@ -411,7 +416,7 @@ Firebase UID를 업무 accountId로 바꾸거나 GCS `publicRead`를 제거하�
 | 계정 A 활성·비활성 상태 변경 | Root·지역 Map의 계정 A 상태만 변경하고 같은 지역 계정 B 및 표시용 Count 보존, `COMMITTED_BATCH` 확인 |
 | 계정 A 삭제 | Root·코드 예약 문서 삭제와 `users.{계정A}` Map 필드 삭제가 정상 실행되고 계정 B Map 보존 |
 | 기존 Map의 `password` Backfill | 대상 `users.{계정ID}.password` 필드만 제거하고 기존 계정·상위 메타 보존 |
-| 중첩 Map 계측 래퍼 정적 검사 | `Map<Object, Object?>` 인자 전달에 따른 타입 오류가 `flutter analyze`에서 사라짐 |
+| 중첩 Map 계측 래퍼 정적 검사 | `Map<String, dynamic>`의 계층형 본문과 `mergeFields` 사용으로 보고된 5개 타입 오류가 `flutter analyze`에서 사라짐 |
 | 개발자 STATUS 로그 증가·클립보드 | 진단 건수 Fade·Slide, 모션 감소 시 0ms, 개발자 모드 ON에서 `debugPrint(...)` 코드 복사 가능 |
 | 애니메이션 감소 설정 | 효과가 즉시 전환되어도 기능 유지 |
 | 작업 완료 후 기존 로그인 | 이름·코드 입력 및 이메일 일치 검증 유지, 개발자 비밀번호는 별도 요건 |
@@ -419,6 +424,15 @@ Firebase UID를 업무 accountId로 바꾸거나 GCS `publicRead`를 제거하�
 | APP RESTART 제목 5회 탭 | 닫힘 모션·진단 이벤트, 재시작 스킵, 기존 업무 목적지로 이동 |
 | APP RESTART 제목 탭 간격 2초 초과 | 연속 입력 카운터 초기화 |
 | APP RESTART `재시작` 버튼 | 기존 플랫폼 재시작 흐름 유지, 제목 5회 탭과 중복 실행 없음 |
+| 개발자 로그인 세션 동기화 성공·실패 | 인증 과정 중 STATUS 자동 팝업 없음, 성공·실패 이벤트 기록, 기존 원격 저장·실패 예외 처리 유지 |
+| 개발자 인증창 닫기 | 410ms Mini Terminal 닫힘 → 소유 Route 종료 → 170ms Fade·Slide → `RawDialogRoute.completed`로 반투명 배경 제거 완료 확인 |
+| 인증창 위 별도 STATUS 창 존재 | 인증창 자신의 Route만 제거, STATUS는 강제 닫지 않고 사용자 종료 및 오버레이 제거 완료 이후 런처 이동 재개 |
+| 인증창 종료 후 본사 이동 | `launcher_auth_dialog_route_popped` → `launcher_auth_dialog_overlay_removed` → `launcher_dialog_phase_changed ... closed` → `launcher_presentation_finalize_start` → `terminal_close_complete` → `launcher_dashboard_navigation_requested` 확인 |
+| STATUS 퇴장 중 대시보드 이동 요청 | 다른 Route가 위에 있거나 `completed`가 남아 있으면 `launcher_navigation_deferred`, 종료 후 `launcher_navigation_resumed` 기록 |
+| STATUS가 런처 위에 있는 상태에서 뒤로가기 | 먼저 STATUS를 정상 종료, 본사 이동 후 과거 런처 재등장 없음 |
+| 대시보드 이동 실패·Dispose | `launcher_navigation_stack_invalid` 기록, 이전 `_closing` 잠금 복구 또는 취소, 중복 전환 없음 |
+| 인증 중 오류 메시지 | 160ms Fade·Slide, 모션 감소 시 즉시 전환 |
+| 개발자 모드 ON에서 로그인 후 STATUS 복사 | 자동 팝업 없이 기존 STATUS 화면에서 `login_session_sync_*` 및 Route 종료 이벤트 `debugPrint(...)` 복사 |
 | 개발자 비밀번호 검증 성공 + 승인 유효 | 디버그 ON, 공유 ValueNotifier 반영, `STATUS` 및 `debugPrint 코드 복사` 사용 가능 |
 | 개발자 비밀번호 검증 실패 또는 승인 세션 만료 | 로그인 완료·디버그 자동 활성화 없음 |
 | 개발자 디버그 활성화 자체 실패 | 기존 인증을 완료한 것으로 처리하지 않으며 오류 표시 후 재시도 가능 |
@@ -585,9 +599,9 @@ Firebase UID를 업무 accountId로 바꾸거나 GCS `publicRead`를 제거하�
 
 이 패치는 제공된 Flutter 분석기 진단 두 오류와 두 경고를 대상으로 한 최소 수정이다. 현재 작업 환경에 Flutter·Dart SDK가 없어 `flutter analyze`와 실기기 실행은 수행하지 못했다. 완전한 프로젝트에서 `flutter analyze`로 네 진단이 해소되는지 확인해야 한다.
 
-### 2026-11-05 중첩 Map `FieldPath` 및 Firebase Activity Batch 호환 수정
+### 2026-11-05 중첩 Map `FieldPath` 및 Firebase Activity Batch 호환 수정 이력
 
-이전 `261104 0020.zip` 기준의 수정 기록은 그대로 보존한다. 지역 문서 내부 `users` 중첩 Map으로 전환된 `261105 0340.zip`에서는 기존 `Map<String, dynamic>` 매개변수로 `Map<Object, Object?>`를 받지 못해 활성 상태 변경, 계정 삭제 및 상태 Backfill 호출부에서 타입 불일치가 발생한다. 이번 변경은 공통 래퍼만 확장하며 계정 CRUD의 필드 경로와 저장 횟수는 수정하지 않는다.
+이 절은 `261105 0340.zip`에 대한 이전 패치의 이력이다. 당시 제안은 `FirebaseActivityWriteBatch.update()`만 `Map<Object, Object?>`로 확장하는 것이었으나 실제 프로젝트의 Firestore SDK는 `Map<String, dynamic>`을 요구해 호출부 5곳에서 컴파일 오류가 발생했다. 아래 표의 확장안은 **현재 적용 코드가 아니라 폐기된 이전 시도**다.
 
 | 항목 | 수정 전 | 수정 후 | 근거 |
 | --- | --- | --- | --- |
@@ -597,9 +611,60 @@ Firebase UID를 업무 accountId로 바꾸거나 GCS `publicRead`를 제거하�
 | `user_active_state_backfill_service.dart` | `password` 필드 삭제용 Map 타입을 래퍼가 거부 | 호출부 유지, 래퍼가 그대로 전달 | 레거시 필드만 삭제하고 원본 정보 보존 |
 | `developer_operation_status_dialog.dart` | 로그 건수 라벨은 즉시 변경 | 220ms Fade·Slide `AnimatedSwitcher` 추가 | STATUS의 진단 누적 상태를 구분하고 `disableAnimations`에 따라 0ms 적용 |
 
-Batch 래퍼는 원래 `WriteBatch.update()`를 호출한 뒤 `_writes`를 1 증가시키고, `commit()`이 성공해야 `COMMITTED_BATCH`를 기록한다. 이 계측 원칙과 `AccountRoleDiagnostics`·`DeveloperOperationTrace`의 개발자 모드 ON `debugPrint(...)` 복사 권한 검사는 유지한다. `FieldPath`의 사용자 ID를 점 구분 문자열로 변환하거나 `users` 전체 Map을 덮어쓰지 않는다. Firestore 읽기·쓰기·삭제 요청량은 타입 변경 자체로 달라지지 않는다.
+이력상 `Map<Object, Object?>` 래퍼 확장안을 적용했으나 실제 프로젝트의 `WriteBatch.update()` 및 `Transaction.update()`가 `Map<String, dynamic>`을 요구하여 컴파일 오류 5건이 발생했다. 후속 수정에서는 래퍼를 SDK 타입으로 복원하고, 사용자 Map 이동·상태 갱신·삭제·Backfill을 계층형 문자열 Map과 `SetOptions(mergeFields: [FieldPath(...)])`의 `set()`으로 변경했다. 이 방식은 사용자 ID를 점 구분 문자열로 합치지 않고 다른 사용자 Map과 표시용 Count를 보존한다. `set()`은 문서 쓰기 1건으로 계측하며 원래의 Batch·트랜잭션 원자성, `AccountRoleDiagnostics`·`DeveloperOperationTrace`의 개발자 모드 ON `debugPrint(...)` 복사 권한 검사를 유지한다.
 
 소스 ZIP에 `pubspec.yaml` 및 실제 Flutter/Dart SDK가 포함되지 않아 의존성 버전 기반의 컴파일 성공 여부는 여기서 확인할 수 없다. 프로젝트에서 `flutter analyze`로 위 세 호출의 타입 오류 제거를 확인하고, 활성 상태 변경·삭제·Backfill·STATUS 복사 및 모션 감소 설정을 실제 기기와 Firestore에서 검증해야 한다. 정적 구조 확인만으로 실행 성공이나 요금 절감을 선언하지 않는다.
+
+### 2026-11-05 개발자 로그인 모달 Route 충돌 방지
+
+`261105 1259.zip`과 같은 날 로그인 진단에서 본사 컨텍스트 활성화는 성공했지만 인증창 종료 애니메이션 뒤에 Route 종료와 대시보드 이동 로그가 없었다. 세션 저장 성공 직후 `user_state.dart`가 `unawaited(DevFirebaseDebugDialog.show())`로 별도 STATUS Route를 열었고 비밀번호 인증창은 `Navigator.of(context).pop()`으로 최상단 Route를 종료해 충돌 가능성이 있었다. 이는 원인 후보이며 당시 로그만으로 어떤 Route가 제거됐는지까지 확정한 것은 아니다.
+
+| 수정 파일 | 수정 전 | 수정 후 | 실행 검증 |
+| --- | --- | --- | --- |
+| `user_state.dart` | 로그인 원격 저장 성공·실패 시 별도 STATUS 자동 팝업 | `LauncherDiagnostics.record()`로 결과 기록, 기존 예외 및 `debugPrint` 유지 | 로그인 중 자동 모달이 생기지 않음 |
+| `parkinworkin_terminal_screen.dart` | 인증창 종료 시 최상단 `Navigator.pop()` | 인증창 소유 `ModalRoute` 식별, 닫힘 애니메이션 후 현재 Route만 pop 또는 특정 Route만 remove, 종료 완료 진단 추가 | `showGeneralDialog` 완료 및 대시보드 진입 |
+| 비밀번호 인증 오류 UI | 기본 Fade `AnimatedSwitcher` | Fade·Slide 160ms 전환, 모션 감소 시 0ms | 오류 UI 레이아웃과 접근성 |
+| 개발자 STATUS | 인증 중 자동 성공·실패 팝업과 겹칠 수 있음 | 자동 팝업 없이 누적 진단을 수동 STATUS에서 복사, 기존 권한 검사 유지 | ON에서 복사 가능, OFF에서 제한 |
+
+로그인 세션의 Firestore 저장, Root 계정, 중첩 Map, 표시 전용 Count, Role 7종 및 회사·지역 접근은 변경하지 않는다. 실제 `flutter analyze`와 개발자 로그인·일반 Google 로그인·모션 감소·STATUS 복사 검증을 완료하기 전에는 실기기 해결이 확인됐다고 기록하지 않는다.
+
+### 2026-11-05 로그인 인증 Route 오버레이 제거 및 Navigator 스택 보호 후속 보완
+
+**기준 소스: `261105 1401.zip`.** 바로 위의 로그인 Route 충돌 방지 이력은 그대로 보존한다. 기존 `showGeneralDialog()`의 반환 Future는 Route 종료 결과를 알려주지만 반투명 오버레이까지 제거됐음을 보장하지 않았고, 수동 STATUS가 런처 위에 남아 있으면 `pushReplacementNamed()`가 런처가 아닌 STATUS를 교체할 수 있었다. 이는 코드상 존재했던 위험이며 실제 단말에서 발생한 횟수는 확인되지 않았다.
+
+| 수정 파일 | 이전 동작 | 후속 수정 | 근거 |
+| --- | --- | --- | --- |
+| `parkinworkin_terminal_screen.dart` | `showGeneralDialog()` Future 뒤 `route_closed` 기록 | `RawDialogRoute<void>`을 직접 `Navigator.push`하고 `route.completed` 후 `launcher_auth_dialog_overlay_removed` 및 `route_closed` 기록 | Pop Future와 모달 퇴장·오버레이 제거 완료 시점이 다름 |
+| `parkinworkin_terminal_screen.dart` | 인증창을 제거해도 STATUS가 위에 있을 수 있음 | `ModalRoute.of(context)`와 실제 최상단 Route가 일치할 때까지 전환 보류, STATUS 종료 후 재개 | `pushReplacementNamed()`는 최상단 Route를 교체함 |
+| `parkinworkin_terminal_screen.dart` | `_closing=true` 설정 후 Route 상태 변화를 별도 대기하지 않음 | 먼저 최상단 상태 검사, 전환 중 추가 모달도 재확인, 오류 발생 시 `_closing`과 시작 화면 애니메이션 복구 | 영구 잠금·이전 런처 잔존 예방 |
+| `app_navigator.dart` | `didRemove`에서 제거한 Route 아래를 최상단으로 오인할 수 있음 | 실제 Route 스택 객체 추적, 퇴장 중 `TransitionRoute.completed`가 끝나면 구독자 통지 | STATUS 위에서 비밀번호창 `removeRoute()`하는 상황에서도 정확한 최상단 유지 |
+| Mini Terminal 모달 전환 | 170ms Fade | 기존 Fade에 부드러운 미세 Slide 추가, 애니메이션 감소 시 0ms | 사용자 진입·퇴장 흐름 명료화 |
+
+**진단 계약:** `launcher_auth_dialog_route_popped`는 종료 결과 확정, `launcher_auth_dialog_overlay_removed`는 `RawDialogRoute.completed` 완료를 뜻한다. 이전 호환 이벤트 `launcher_auth_dialog_route_closed`는 완료 시점까지 늦춰 기록한다. STATUS 등 상위 Route가 남아 있으면 `launcher_navigation_deferred`, 정상 닫힘 후 `launcher_navigation_resumed`, 상태 불일치·실패는 `launcher_navigation_stack_invalid`, 실제 교체 요청은 `launcher_dashboard_navigation_requested`로 기록한다. `AppNavigatorObserver`는 기존 `main.dart`의 `onRouteChanged`와 `onRouteSettled` 콜백을 변경하지 않으며 새로운 Route 객체 구독은 별도로 유지한다.
+
+**검증 계약:** 개발자 비밀번호·Google 일반 로그인·자동 세션 복원·APP RESTART(확인 및 5회 탭)·모션 감소 ON/OFF·STATUS 수동 열기/닫기·다른 사용자 Route 이동·뒤로가기·위젯 dispose를 각각 검증한다. 로그인창을 닫은 뒤 오버레이가 완전히 사라지고 본사 대시보드가 보이며, 뒤로가기로 이전 런처가 재등장하지 않아야 한다. 실제 `flutter analyze` 및 실기기 테스트는 별도 수행 전까지 미검증으로 남긴다.
+
+
+
+### 2026-11-05 실제 FlutterFire 시그니처에 맞춘 중첩 Map 쓰기 보정
+
+`261105 0414.zip` 기준 사용자가 보고한 `argument_type_not_assignable` 다섯 건은 이전 `Map<Object, Object?>` 방식이 설치된 FlutterFire `WriteBatch.update()`와 `Transaction.update()`의 `Map<String, dynamic>` 입력 계약에 맞지 않아 발생했다. 계측 래퍼 매개변수만 확장해도 원래 SDK로 전달하는 지점에서 오류가 나므로, 다음과 같이 **부분 변경을 `set(..., SetOptions(mergeFields: [FieldPath(...)])`로 대체**한다.
+
+| 오류가 발생했던 곳 | 기존 구현 | 수정된 구현 | 안전성 기준 |
+| --- | --- | --- | --- |
+| `firebase_activity_meter.dart:728` | 원래 SDK의 `update()`에 `Map<Object, Object?>` 전달 | 계측 래퍼의 `update()`를 `Map<String, dynamic>`으로 복원 | 기존 문자열 기반 업데이트와 확정 계측 유지 |
+| `user_write_service.dart:429` | Map 필드 두 키를 `tx.update()` | `tx.set()` + `movePayload/moveOptions` | 이전 ID 제거 + 새 ID 등록, 다른 사용자 보존 |
+| `user_write_service.dart:436` | 이전 Map ID를 `tx.update()`로 삭제 | `tx.set()` + `deletePayload/deleteOptions` | 해당 Map 키만 제거 |
+| `dev_user_write_service.dart:246` | 개발자 ID 변경 시 `tx.update()` | `tx.set()` + `movePayload/moveOptions` | 일반 계정과 동일 저장 규칙 |
+| `dev_user_write_service.dart:253` | 이전 개발자 Map ID를 `tx.update()` | `tx.set()` + `deletePayload/deleteOptions` | 이전 지역 Map 항목만 제거 |
+| 계정 활성 상태 `user_write_service.dart` | `batch.update()`에 `FieldPath` 키 Map 전달 | `batch.set()` + `statusPayload/statusOptions` | `isActive`, `updatedAt`, `disabledAt`만 변경 |
+| 계정 삭제 `user_write_service.dart` | `batch.update()`에 `FieldPath` 키 Map 전달 | `batch.set()` + `deletePayload/deleteOptions` | Root·예약 삭제와 원자적 처리 |
+| 활성 상태 Backfill | `batch.update()`에 `FieldPath` 키 Map 전달 | `batch.set()` + `passwordDeletePayload/passwordDeleteOptions` | 기존 Map의 `password` 필드만 삭제 |
+
+`mergeFields`는 사용자 ID를 점 구분 문자열로 만들지 않고 `FieldPath(<String>['users', userId, ...])`로 경로를 구분한다. 문서의 `users` 전체 Map이나 `totalCount`, `activeCount`, `inactiveCount`를 덮어쓰지 않는다. 문서 내부 키 삭제는 여전히 문서 쓰기 1건이며 `COMMITTED_BATCH` 계측에 포함된다. `AccountRoleDiagnostics`, STATUS의 `debugPrint(...)` 클립보드 복사와 개발자 모드 ON 확인, 기존 Fade·Slide·Scale 애니메이션 및 모션 감소 설정은 변경하지 않는다.
+
+컴파일 확인은 실제 프로젝트에서 `flutter analyze`로 수행한다. Firebase 실환경에서는 동일 지역의 사용자 두 명을 준비한 뒤 활성 전환·삭제·ID 변경·지역 이동·Backfill 각각을 실행하여 **대상 Map만 변경되는지** 확인한다. `FieldValue.delete()`가 포함된 `set(..., mergeFields: ...)` 처리와 서버 권한은 실제 SDK 및 Firestore Rules에서 확인할 항목이므로 실행하지 않은 테스트를 통과로 기록하지 않는다.
+
 
 
 ### 2026-11-04 앱 실행 전체 구간 Firebase Activity Journal 추가
@@ -903,7 +968,7 @@ user_accounts_show/{division}-{area}            지역별 View 문서
 
 이동·수정 중 기존 하위 사용자 문서가 남아 있다면 동일 트랜잭션에서 이전 문서를 제거한다. 읽기 단계에서 대상 Map 및 기존 하위 문서의 ID 충돌을 검사한다. 동일 지역의 다른 계정 Map을 덮어쓰지 않으며, 이전·새 지역이 다를 경우 양쪽 문서의 변경을 원자적으로 처리한다. 문서 크기 제한, 동시 편집 시 재시도, 보안 규칙 검사에 따른 실패는 정상적으로 오류로 처리한다.
 
-활성·비활성 변경은 `UserAccountShowMap.statusPayload()`의 `FieldPath(['users', userId, ...])`를 사용하고, 계정 삭제는 `UserAccountShowMap.deletePayload()`의 `FieldPath(['users', userId])`에 `FieldValue.delete()`를 적용한다. 상태 Backfill은 `FieldPath(['users', userId, 'password'])`로 오래된 View 비밀번호 필드만 정리한다. 이 세 부분 UPDATE는 `FirebaseActivityWriteBatch.update()`의 `Map<Object, Object?>` 계약을 통과해야 한다. 다른 계정 Map과 표시용 Count는 갱신하지 않는다.
+활성·비활성 변경은 `UserAccountShowMap.statusPayload()`와 `statusOptions()`를 사용해 `users.{userId}.isActive`, `updatedAt`, `disabledAt`만 선택적으로 SET한다. 계정 삭제는 `deletePayload()` 및 `deleteOptions()`로 해당 Map 항목에 `FieldValue.delete()`를 적용한다. ID가 바뀌거나 동일 지역에서 이동하는 경우 `movePayload()`와 `moveOptions()`를 사용해 이전 키 삭제와 새 키 추가를 한 번의 트랜잭션 문서 쓰기로 처리한다. 상태 Backfill은 `passwordDeletePayload()`와 `passwordDeleteOptions()`로 오래된 View `password` 필드만 정리한다. 이 부분 쓰기는 모두 `Map<String, dynamic>`과 `SetOptions(mergeFields: [FieldPath(...)])`를 이용하며 다른 사용자 Map 및 표시용 Count를 변경하지 않는다.
 
 ### 12.6 목록 조회·원본 상세 조회·전환기 호환성
 
@@ -926,6 +991,8 @@ user_accounts_show/{division}-{area}            지역별 View 문서
 | `dev_bootstrap_map_complete` | 최초 개발 환경 생성·복구의 계산상 문서 쓰기 횟수 |
 
 기존 저장 진행률 및 STATUS Fade·Scale 애니메이션, 상태 `AnimatedSwitcher`, 입력 상태 문구 Fade·Slide, Root 상세 로딩 전환을 유지한다. 개발자 계정 목록의 지역 변경·새로고침에는 **Fade·Slide `AnimatedSwitcher`**를 추가하고, 기존 행별 `CommonAnimatedReveal` 및 원본 로딩 `AnimatedSwitcher`도 유지한다. `MediaQuery.disableAnimations`가 활성화되면 추가된 전환 시간이 0이 된다. 수정 Dart에는 주석을 넣지 않으며 `hintText`, `helperText`를 추가하지 않는다.
+
+런처 개발자 로그인 성공·실패 시 별도 STATUS를 자동 생성하지 않고 `login_session_sync_succeeded`/`login_session_sync_failed` 진단만 기록한다. 인증창은 `launcher_auth_dialog_route_popped`와 `launcher_auth_dialog_overlay_removed`를 구분하고, `launcher_dialog_phase_changed ... closed` 이후 런처가 최상단일 때 대시보드 전환을 진행한다. 수동 STATUS가 위에 있다면 강제 닫지 않고 사용자가 종료한 뒤 `TransitionRoute.completed`까지 기다려 재개한다. `launcher_navigation_deferred`·`launcher_navigation_resumed`·`launcher_dashboard_navigation_requested`의 기록은 기존 개발자 STATUS의 `debugPrint(...)` 복사에 포함되며, 모드 ON 및 복사 직전 권한 검사 정책은 그대로 유지한다.
 
 개발자 STATUS의 `debugPrint` 기록 건수 라벨에도 220ms Fade·Slide `AnimatedSwitcher`를 적용한다. 기록이 늘어날 때 라벨만 전환되며 기존 진행률·성공/실패·복사 버튼은 유지한다. `MediaQuery.disableAnimations`가 활성화되면 로그 건수 전환도 0ms로 처리한다. `AccountRoleDiagnostics`와 `DeveloperOperationTrace`가 수집한 코드는 개발자 모드 ON에서만 기존 STATUS 복사 경로로 제공하고, 복사 직전에 모드를 재확인한다.
 
@@ -950,9 +1017,10 @@ Firestore 단일 문서는 최대 **1MiB**이므로 지역별 사용자가 과�
 | 동일 지역 계정 수정 | 해당 ID의 Map만 변경, 다른 계정과 Count 보존 |
 | 지역 이동 및 ID 변경 | 이전 Map 키 삭제, 대상 Map 키 추가, 중복 없음 |
 | 활성 상태·삭제 | Map/Root/예약 동기화, Count 불변 |
-| 계측 Batch `FieldPath` 상태 UPDATE | `flutter analyze` 타입 오류 없음, 대상 계정만 변경, `COMMITTED_BATCH` 쓰기 건수 기록 |
-| 계측 Batch `FieldPath` Map 키 삭제 | 특정 계정만 Map에서 삭제, 문서 내부 필드 삭제는 WRITE로 집계 |
-| 상태 Backfill `FieldPath` 정리 | 대상 Map의 `password` 필드만 삭제, 다른 사용자와 Count 불변 |
+| 상태 변경 `mergeFields` SET | `flutter analyze` 타입 오류 없음, 대상 계정의 상태 필드만 변경, `COMMITTED_BATCH` 쓰기 건수 기록 |
+| 계정 이동 `mergeFields` SET | 같은 문서에서 기존 사용자 키 제거와 새 키 추가, 다른 사용자 및 Count 보존 |
+| 계정 삭제 `mergeFields` SET | 특정 계정만 Map에서 삭제, 문서 내부 필드 삭제는 WRITE로 집계 |
+| 상태 Backfill `mergeFields` SET | 대상 Map의 `password` 필드만 삭제, 다른 사용자와 Count 불변 |
 | STATUS 로그 건수 애니메이션 | 220ms Fade·Slide 전환, 모션 감소 시 0ms, 클립보드 복사 유지 |
 | 동일 지역 동시 사용자 생성 | 양쪽 사용자 Map이 유지되거나 충돌 시 명확한 오류 |
 | 신규 지역 목록 조회 | 지역 문서 1 GET로 목록 구성, 활성 필터 정상 |
@@ -971,9 +1039,9 @@ Firestore 단일 문서는 최대 **1MiB**이므로 지역별 사용자가 과�
 
 ### 13.2 쓰기 및 읽기의 정합성
 
-Root가 전체 계정의 원본이다. Map은 목록 표시용 복제 자료이므로 편집 초기값으로 사용하지 않는다. 계정 항목 쓰기는 `FieldPath(['users', userId])`를 사용해 해당 계정 Map만 교체하고, 삭제는 `FieldPath`의 개별 키 삭제를 수행한다. 다른 계정 Map이나 표시용 Count 세 값은 갱신하지 않는다. 트랜잭션·Batch 원자성은 복수 문서의 변경을 함께 처리하는 데 사용한다.
+Root가 전체 계정의 원본이다. Map은 목록 표시용 복제 자료이므로 편집 초기값으로 사용하지 않는다. 계정 항목 쓰기·상태 갱신·삭제·이동은 문자열 키의 계층형 Map과 `SetOptions(mergeFields: [FieldPath(['users', userId]), ...])`를 함께 사용해 해당 계정 필드만 변경한다. `FieldPath` 객체를 `Transaction.update()` 또는 `WriteBatch.update()`의 Map 키로 사용하지 않는다. 다른 계정 Map이나 표시용 Count 세 값은 갱신하지 않는다. 트랜잭션·Batch 원자성은 복수 문서의 변경을 함께 처리하는 데 사용한다.
 
-문서 내부 Map 필드 변경과 레거시 비밀번호 필드 삭제에서 생성한 `Map<Object, Object?>`는 Firebase Activity 계측 Batch 래퍼도 수용해야 한다. 이는 Flutter/Dart 타입 호환을 위한 변경이며 Region Map 스키마, Count 관리 정책, 원자적 저장 및 비용을 변경하지 않는다.
+문서 내부 Map 필드 변경과 레거시 비밀번호 필드 삭제는 `Map<String, dynamic>` 계층형 데이터 및 `SetOptions.mergeFields`의 `FieldPath`로 수행한다. 계측 Batch 래퍼는 실제 SDK의 `Map<String, dynamic>` 계약을 유지한다. Region Map 스키마, Count 관리 정책, 원자적 저장 및 기본 문서 작업 건수는 변경하지 않는다.
 
 ### 13.3 데이터 보호 정책
 

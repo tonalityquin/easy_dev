@@ -243,14 +243,19 @@ class DevUserWriteService {
       }
       if (moved && oldViewRef.path == newViewRef.path &&
           UserAccountShowMap.account(oldViewSnap.data(), oldId) != null) {
-        tx.update(newViewRef, <Object, Object?>{
-          ...UserAccountShowMap.deletePayload(oldId),
-          FieldPath(<String>['users', newId]): summary,
-        });
+        tx.set(
+          newViewRef,
+          UserAccountShowMap.movePayload(oldId, newId, summary),
+          UserAccountShowMap.moveOptions(oldId, newId),
+        );
       } else {
         if (moved &&
             UserAccountShowMap.account(oldViewSnap.data(), oldId) != null) {
-          tx.update(oldViewRef, UserAccountShowMap.deletePayload(oldId));
+          tx.set(
+            oldViewRef,
+            UserAccountShowMap.deletePayload(oldId),
+            UserAccountShowMap.deleteOptions(oldId),
+          );
         }
         tx.set(
           newViewRef,

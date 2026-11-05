@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../utils/motion_timing_diagnostics.dart';
+import '../../init/app_navigator.dart';
 import '../../auth/google_auth_session.dart';
 import '../../../features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../../features/launcher/application/launcher_actions.dart';
@@ -114,6 +115,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
   bool _reduceMotion = false;
   bool _launcherPresentationReady = false;
   bool _launcherNavigationFinalizing = false;
+  Completer<bool>? _pendingLauncherRouteWaiter;
   _LauncherDialogPhase _launcherDialogPhase = _LauncherDialogPhase.closed;
   _ActiveWorkSessionRestorePhase _activeSessionRestorePhase =
       _ActiveWorkSessionRestorePhase.idle;
@@ -1189,13 +1191,14 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
 
   Future<void> _showLauncherDialog({
     required WidgetBuilder builder,
+    String purpose = 'interaction',
   }) async {
     _setLauncherDialogPhase(
       _LauncherDialogPhase.opening,
       source: 'dialog_route_start',
     );
-    await showGeneralDialog<void>(
-      context: context,
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final dialogRoute = RawDialogRoute<void>(
       barrierDismissible: false,
       barrierLabel: 'launcher interaction',
       barrierColor: const Color(0xB8000000),
@@ -1234,10 +1237,53 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
         );
         return FadeTransition(
           opacity: curved,
-          child: child,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.018),
+              end: Offset.zero,
+            ).animate(curved),
+            child: child,
+          ),
         );
       },
     );
+    await navigator.push<void>(dialogRoute);
+    if (purpose == 'developer_password') {
+      LauncherDiagnostics.record(
+        'launcher_auth_dialog_route_popped',
+        scope: 'auth',
+        meta: <String, Object?>{'purpose': purpose},
+      );
+    }
+    await dialogRoute.completed;
+    if (purpose == 'developer_password') {
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_auth_dialog_overlay_removed',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'purpose': purpose,
+          'phase': _launcherDialogPhase.name,
+        },
+      );
+      LauncherDiagnostics.record(
+        'launcher_auth_dialog_overlay_removed',
+        scope: 'auth',
+        meta: <String, Object?>{'purpose': purpose},
+      );
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_auth_dialog_route_closed',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'purpose': purpose,
+          'phase': _launcherDialogPhase.name,
+        },
+      );
+      LauncherDiagnostics.record(
+        'launcher_auth_dialog_route_closed',
+        scope: 'auth',
+        meta: <String, Object?>{'purpose': purpose},
+      );
+    }
   }
 
   Future<void> _showLauncherAccountTypeDialog() async {
@@ -1385,6 +1431,7 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
       },
     );
     await _showLauncherDialog(
+      purpose: 'developer_password',
       builder: (dialogContext) => _LauncherPasswordDialog(
         accountKind: _launcherController!.selectedAccountKindLabel,
         reduceMotion: _reduceMotion,
@@ -1633,37 +1680,166 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
     }
   }
 
-  Future<void> _closeLauncherAndNavigate(String route) async {
-    if (_closing) return;
-    setState(() => _closing = true);
-    _bottomLockTimer?.cancel();
-    _commandInputFocusNode.unfocus();
-    FocusManager.instance.primaryFocus?.unfocus();
-    ParkinWorkinTerminalDiagnostics.record(
-      'terminal_close_start',
-      context: _contextLabel,
-      meta: <String, Object?>{'targetRoute': route},
-    );
-    if (_reduceMotion) {
-      _openController.value = 0;
-    } else {
-      await _openController.reverse(from: 1);
+  Future<bool> _waitForLauncherRouteReady(String targetRoute) async {
+    if (!mounted) return false;
+    final launcherRoute = ModalRoute.of(context);
+    final observer = AppNavigator.observer;
+    if (launcherRoute == null ||
+        !launcherRoute.isActive ||
+        !observer.containsRoute(launcherRoute)) {
+      LauncherDiagnostics.record(
+        'launcher_navigation_stack_invalid',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'targetRoute': targetRoute,
+          'reason': 'launcher_route_missing',
+        },
+      );
+      return false;
     }
-    if (!mounted) return;
-    ParkinWorkinTerminalDiagnostics.record(
-      'terminal_close_complete',
-      context: _contextLabel,
+    bool isReady() =>
+        launcherRoute.isActive &&
+        launcherRoute.isCurrent &&
+        identical(observer.currentTopRoute, launcherRoute) &&
+        !observer.hasPendingOverlayRemovals;
+    bool canWaitForPopup() {
+      final top = observer.currentTopRoute;
+      return identical(top, launcherRoute) || top is PopupRoute<dynamic>;
+    }
+    if (isReady()) return true;
+    if (!canWaitForPopup()) {
+      LauncherDiagnostics.record(
+        'launcher_navigation_stack_invalid',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'targetRoute': targetRoute,
+          'reason': 'unexpected_non_popup_route',
+          'topRouteType': observer.currentTopRoute?.runtimeType.toString() ?? '-',
+        },
+      );
+      return false;
+    }
+    LauncherDiagnostics.record(
+      'launcher_navigation_deferred',
+      scope: 'auth',
       meta: <String, Object?>{
-        'targetRoute': route,
-        'runtimeContextReady':
-            _isLauncher ? _launcherController!.runtimeContextReady : false,
-        'workStatusNotification':
-            WorkStatusNotificationController.status.value.title,
-        'workStatusNotificationService':
-            WorkStatusNotificationController.status.value.serviceRunning,
+        'targetRoute': targetRoute,
+        'topRoute': observer.currentTopRoute?.settings.name ?? '-',
+        'topRouteType': observer.currentTopRoute?.runtimeType.toString() ?? '-',
+        'pendingOverlayRemoval': observer.hasPendingOverlayRemovals,
       },
     );
-    Navigator.of(context).pushReplacementNamed(route);
+    final pending = Completer<bool>();
+    void onRouteChange() {
+      if (pending.isCompleted) return;
+      if (!mounted || !launcherRoute.isActive || !canWaitForPopup()) {
+        pending.complete(false);
+      } else if (isReady()) {
+        pending.complete(true);
+      }
+    }
+    observer.addRouteChangeListener(onRouteChange);
+    _pendingLauncherRouteWaiter = pending;
+    onRouteChange();
+    final resumed = await pending.future;
+    observer.removeRouteChangeListener(onRouteChange);
+    if (identical(_pendingLauncherRouteWaiter, pending)) {
+      _pendingLauncherRouteWaiter = null;
+    }
+    if (!resumed || !mounted) {
+      LauncherDiagnostics.record(
+        'launcher_navigation_stack_invalid',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'targetRoute': targetRoute,
+          'reason': mounted ? 'launcher_route_inactive' : 'launcher_disposed',
+        },
+      );
+      return false;
+    }
+    LauncherDiagnostics.record(
+      'launcher_navigation_resumed',
+      scope: 'auth',
+      meta: <String, Object?>{'targetRoute': targetRoute},
+    );
+    return true;
+  }
+
+  Future<void> _closeLauncherAndNavigate(String route) async {
+    if (_closing || !(await _waitForLauncherRouteReady(route))) return;
+    if (!mounted || _closing) return;
+    setState(() => _closing = true);
+    var navigationRequested = false;
+    try {
+      _bottomLockTimer?.cancel();
+      _commandInputFocusNode.unfocus();
+      FocusManager.instance.primaryFocus?.unfocus();
+      ParkinWorkinTerminalDiagnostics.record(
+        'terminal_close_start',
+        context: _contextLabel,
+        meta: <String, Object?>{'targetRoute': route},
+      );
+      if (_reduceMotion) {
+        _openController.value = 0;
+      } else {
+        await _openController.reverse(from: 1);
+      }
+      if (!mounted || !(await _waitForLauncherRouteReady(route))) return;
+      final launcherRoute = ModalRoute.of(context);
+      if (launcherRoute == null ||
+          !launcherRoute.isCurrent ||
+          !identical(AppNavigator.observer.currentTopRoute, launcherRoute) ||
+          AppNavigator.observer.hasPendingOverlayRemovals) {
+        LauncherDiagnostics.record(
+          'launcher_navigation_stack_invalid',
+          scope: 'auth',
+          meta: <String, Object?>{
+            'targetRoute': route,
+            'reason': 'route_changed_before_replacement',
+          },
+        );
+        return;
+      }
+      ParkinWorkinTerminalDiagnostics.record(
+        'terminal_close_complete',
+        context: _contextLabel,
+        meta: <String, Object?>{
+          'targetRoute': route,
+          'runtimeContextReady':
+              _isLauncher ? _launcherController!.runtimeContextReady : false,
+          'workStatusNotification':
+              WorkStatusNotificationController.status.value.title,
+          'workStatusNotificationService':
+              WorkStatusNotificationController.status.value.serviceRunning,
+        },
+      );
+      LauncherDiagnostics.record(
+        'launcher_dashboard_navigation_requested',
+        scope: 'auth',
+        meta: <String, Object?>{'targetRoute': route},
+      );
+      Navigator.of(context).pushReplacementNamed(route);
+      navigationRequested = true;
+    } catch (error) {
+      LauncherDiagnostics.record(
+        'launcher_navigation_stack_invalid',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'targetRoute': route,
+          'reason': 'navigation_exception',
+          'errorType': error.runtimeType.toString(),
+        },
+      );
+    } finally {
+      if (!navigationRequested && mounted) {
+        setState(() => _closing = false);
+        if (_reduceMotion) {
+          _openController.value = 1;
+        } else {
+          await _openController.forward(from: 0);
+        }
+      }
+    }
   }
 
   Future<void> _closeWorkspaceTerminal() async {
@@ -1718,6 +1894,9 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
             'Mini terminal open: ${_miniTerminalOpenDuration.inMilliseconds}ms',
             'Mini terminal close: ${_miniTerminalCloseDuration.inMilliseconds}ms',
             'Dialog route transition: ${_miniTerminalRouteDuration.inMilliseconds}ms',
+            'Navigator top route: ${AppNavigator.observer.currentTopRoute?.settings.name ?? '-'}',
+            'Navigator top route type: ${AppNavigator.observer.currentTopRoute?.runtimeType.toString() ?? '-'}',
+            'Navigator overlay removal pending: ${AppNavigator.observer.hasPendingOverlayRemovals}',
             'Selection transport: structured',
             'Activity signature: ${_lastLauncherActivitySignature.isEmpty ? '-' : _lastLauncherActivitySignature}',
           ].join('\n')
@@ -2075,6 +2254,11 @@ class _ParkinWorkinTerminalScreenState extends State<ParkinWorkinTerminalScreen>
 
   @override
   void dispose() {
+    final pending = _pendingLauncherRouteWaiter;
+    if (pending != null && !pending.isCompleted) {
+      pending.complete(false);
+    }
+    _pendingLauncherRouteWaiter = null;
     WidgetsBinding.instance.removeObserver(this);
     _bottomLockTimer?.cancel();
     _scrollController.removeListener(_handleScroll);
@@ -6420,6 +6604,7 @@ class _LauncherPasswordDialogState extends State<_LauncherPasswordDialog> {
   final GlobalKey<_MiniTerminalFrameState> _frameKey =
       GlobalKey<_MiniTerminalFrameState>();
   bool _busy = false;
+  bool _allowRoutePop = false;
   String? _passwordError;
   String? _submitError;
 
@@ -6522,13 +6707,51 @@ class _LauncherPasswordDialogState extends State<_LauncherPasswordDialog> {
     final result = await widget.onAuthenticate(password);
     if (!mounted) return;
     if (result.accepted) {
+      final ownedRoute = ModalRoute.of(context);
+      if (ownedRoute == null || !ownedRoute.isActive) {
+        LauncherDiagnostics.record(
+          'launcher_auth_dialog_close_failed',
+          scope: 'auth',
+          meta: const <String, Object?>{'reason': 'owned_route_unavailable'},
+        );
+        setState(() {
+          _busy = false;
+          _submitError = '인증창을 종료하지 못했습니다. 다시 시도해 주세요.';
+        });
+        return;
+      }
       await HapticFeedback.lightImpact();
       FocusManager.instance.primaryFocus?.unfocus();
       widget.onClosing();
+      LauncherDiagnostics.record(
+        'launcher_auth_dialog_close_started',
+        scope: 'auth',
+      );
       await WidgetsBinding.instance.endOfFrame;
       await _frameKey.currentState?.close();
       if (!mounted) return;
-      Navigator.of(context).pop();
+      setState(() => _allowRoutePop = true);
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      final navigator = Navigator.of(context, rootNavigator: true);
+      if (!ownedRoute.isActive) {
+        LauncherDiagnostics.record(
+          'launcher_auth_dialog_close_failed',
+          scope: 'auth',
+          meta: const <String, Object?>{'reason': 'route_already_inactive'},
+        );
+        return;
+      }
+      ParkinWorkinTerminalDiagnostics.record(
+        'launcher_auth_dialog_route_close_requested',
+        context: 'launcher',
+        meta: <String, Object?>{'wasCurrent': ownedRoute.isCurrent},
+      );
+      if (ownedRoute.isCurrent) {
+        navigator.pop<void>();
+      } else {
+        navigator.removeRoute(ownedRoute);
+      }
       return;
     }
     await HapticFeedback.mediumImpact();
@@ -6543,7 +6766,7 @@ class _LauncherPasswordDialogState extends State<_LauncherPasswordDialog> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
+      canPop: _allowRoutePop,
       child: _MiniTerminalFrame(
         key: _frameKey,
         title: 'PASSWORD AUTHENTICATION',
@@ -6608,6 +6831,16 @@ class _LauncherPasswordDialogState extends State<_LauncherPasswordDialog> {
                   : const Duration(milliseconds: 160),
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, .10),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
               child: _submitError == null
                   ? const SizedBox.shrink()
                   : Padding(

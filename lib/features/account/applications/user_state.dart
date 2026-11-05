@@ -578,53 +578,35 @@ class UserState extends ChangeNotifier {
       final successLine =
           '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser remote session update success userId=${updatedUser.id} elapsedMs=$elapsedMs firebaseRead=0 firebaseWrite=${wrote ? 1 : 0} userAccountsShowRead=0 userAccountsShowWrite=0';
       debugPrint(successLine);
-      unawaited(
-        DevFirebaseDebugDialog.show(
-          operation: 'user.login.updateLoginSession',
-          details: <String, Object?>{
-            'source': 'UserState.updateLoginUser',
-            'userId': updatedUser.id,
-            'currentArea': updatedUser.currentArea,
-            'selectedArea': updatedUser.selectedArea,
-            'isSaved': updatedUser.isSaved,
-            'firebaseRead': 0,
-            'firebaseWrite': wrote ? 1 : 0,
-            'userAccountsShowRead': 0,
-            'userAccountsShowWrite': 0,
-            'elapsedMs': elapsedMs,
-          },
-          title: '로그인 세션 동기화 완료',
-          success: true,
-          copyAsDebugPrintCode: true,
-          devModeOnly: true,
-        ),
+      LauncherDiagnostics.record(
+        'login_session_sync_succeeded',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'source': 'UserState.updateLoginUser',
+          'firebaseRead': 0,
+          'firebaseWrite': wrote ? 1 : 0,
+          'userAccountsShowRead': 0,
+          'userAccountsShowWrite': 0,
+          'elapsedMs': elapsedMs,
+        },
       );
     } catch (error, stackTrace) {
       final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
       debugPrint(
         '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUser remote session update failed userId=${updatedUser.id} elapsedMs=$elapsedMs error=$error\n$stackTrace',
       );
-      unawaited(
-        DevFirebaseDebugDialog.show(
-          operation: 'user.login.updateLoginSession',
-          error: error,
-          stackTrace: stackTrace,
-          details: <String, Object?>{
-            'source': 'UserState.updateLoginUser',
-            'userId': updatedUser.id,
-            'currentArea': updatedUser.currentArea,
-            'selectedArea': updatedUser.selectedArea,
-            'isSaved': updatedUser.isSaved,
-            'firebaseRead': 0,
-            'firebaseWriteAttempted': 1,
-            'userAccountsShowRead': 0,
-            'userAccountsShowWrite': 0,
-            'elapsedMs': elapsedMs,
-          },
-          title: '로그인 세션 동기화 실패',
-          copyAsDebugPrintCode: true,
-          devModeOnly: true,
-        ),
+      LauncherDiagnostics.record(
+        'login_session_sync_failed',
+        scope: 'auth',
+        meta: <String, Object?>{
+          'source': 'UserState.updateLoginUser',
+          'errorType': error.runtimeType.toString(),
+          'firebaseRead': 0,
+          'firebaseWriteAttempted': 1,
+          'userAccountsShowRead': 0,
+          'userAccountsShowWrite': 0,
+          'elapsedMs': elapsedMs,
+        },
       );
       rethrow;
     }

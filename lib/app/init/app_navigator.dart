@@ -7,6 +7,40 @@ class AppNavigatorObserver extends NavigatorObserver {
 
   final Map<Route<dynamic>, AnimationStatusListener> _settleListeners =
       <Route<dynamic>, AnimationStatusListener>{};
+  final List<Route<dynamic>> _routeStack = <Route<dynamic>>[];
+  final Set<TransitionRoute<dynamic>> _pendingOverlayRemovals =
+      <TransitionRoute<dynamic>>{};
+  final Set<VoidCallback> _routeChangeListeners = <VoidCallback>{};
+
+  Route<dynamic>? get currentTopRoute =>
+      _routeStack.isEmpty ? null : _routeStack.last;
+
+  bool get hasPendingOverlayRemovals => _pendingOverlayRemovals.isNotEmpty;
+
+  bool containsRoute(Route<dynamic> route) => _routeStack.contains(route);
+
+  void addRouteChangeListener(VoidCallback listener) {
+    _routeChangeListeners.add(listener);
+  }
+
+  void removeRouteChangeListener(VoidCallback listener) {
+    _routeChangeListeners.remove(listener);
+  }
+
+  void _notifyRouteChangeListeners() {
+    for (final listener in List<VoidCallback>.of(_routeChangeListeners)) {
+      listener();
+    }
+  }
+
+  void _trackOverlayRemoval(Route<dynamic> route) {
+    if (route is! TransitionRoute<dynamic>) return;
+    _pendingOverlayRemovals.add(route);
+    route.completed.whenComplete(() {
+      _pendingOverlayRemovals.remove(route);
+      _notifyRouteChangeListeners();
+    });
+  }
 
   void _setCurrent(Route<dynamic>? route) {
     currentRoute = route?.settings.name;
@@ -14,6 +48,7 @@ class AppNavigatorObserver extends NavigatorObserver {
     debugPrint(
       '[APP_NAVIGATOR][${DateTime.now().toIso8601String()}] currentRoute=${currentRoute ?? '-'}',
     );
+    _notifyRouteChangeListeners();
   }
 
   void _notifySettled(Route<dynamic>? route) {
@@ -87,20 +122,36 @@ class AppNavigatorObserver extends NavigatorObserver {
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _setCurrent(route);
+    _routeStack.remove(route);
+    _routeStack.add(route);
+    _setCurrent(currentTopRoute);
     _watchPushOrReplaceSettled(route);
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _setCurrent(previousRoute);
-    _watchPopSettled(route, previousRoute);
+    _routeStack.remove(route);
+    _trackOverlayRemoval(route);
+    final next = currentTopRoute;
+    _setCurrent(next);
+    _watchPopSettled(route, next);
   }
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     _detachSettleListener(oldRoute);
-    _setCurrent(newRoute);
+    final index = oldRoute == null ? -1 : _routeStack.indexOf(oldRoute);
+    if (index >= 0) {
+      if (newRoute == null) {
+        _routeStack.removeAt(index);
+      } else {
+        _routeStack[index] = newRoute;
+      }
+    } else if (newRoute != null) {
+      _routeStack.remove(newRoute);
+      _routeStack.add(newRoute);
+    }
+    _setCurrent(currentTopRoute);
     if (newRoute != null) {
       _watchPushOrReplaceSettled(newRoute);
     }
@@ -109,10 +160,13 @@ class AppNavigatorObserver extends NavigatorObserver {
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     _detachSettleListener(route);
-    _setCurrent(previousRoute);
-    if (previousRoute != null) {
+    _routeStack.remove(route);
+    _trackOverlayRemoval(route);
+    final next = currentTopRoute;
+    _setCurrent(next);
+    if (next != null) {
       WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _notifySettled(previousRoute),
+        (_) => _notifySettled(next),
       );
     }
   }
