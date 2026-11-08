@@ -34,8 +34,17 @@ class UserAccountShowMap {
     return result;
   }
 
-  static bool isComplete(Map<String, dynamic>? source) =>
-      source?['usersMapComplete'] == true;
+  static List<MapEntry<String, Map<String, dynamic>>> validatedEntries(
+    Map<String, dynamic>? source,
+  ) {
+    if (source == null) {
+      throw StateError('USER_ACCOUNT_VIEW_MISSING');
+    }
+    if (source['users'] is! Map) {
+      throw StateError('USER_ACCOUNT_VIEW_USERS_INVALID');
+    }
+    return entries(source);
+  }
 
   static Map<String, dynamic> putPayload(
     String userId,

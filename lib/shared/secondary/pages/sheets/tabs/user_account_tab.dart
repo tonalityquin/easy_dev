@@ -6,6 +6,8 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../../../../../features/account/applications/user_state.dart';
 
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../../app/utils/status_dialog.dart';
@@ -41,19 +43,40 @@ class UserAccountsTab extends StatefulWidget {
   State<UserAccountsTab> createState() => _UserAccountsTabState();
 }
 
+typedef _DevUserListEntries = List<MapEntry<String, Map<String, dynamic>>>;
+
 class _UserAccountsTabState extends State<UserAccountsTab> {
   static final List<String> _roles = RoleType.values.map((role) => role.name).toList(growable: false);
 
   final Map<String, Map<String, dynamic>> _editedUsers = <String, Map<String, dynamic>>{};
   final DevUserWriteService _devUserWriteService = DevUserWriteService();
   final Map<String, Future<List<String>>> _primaryAreaFutures = <String, Future<List<String>>>{};
+  final Map<String, Future<_DevUserListEntries>> _userListFutures =
+      <String, Future<_DevUserListEntries>>{};
+  final Map<String, int> _userListReuseCounts = <String, int>{};
+  final Map<String, int> _userListInFlightRequests = <String, int>{};
+  static const int _userListCacheLimit = 12;
+  int _userListRequestSequence = 0;
   final Set<String> _savingIds = <String>{};
   bool _creating = false;
   String? _selectedUserId;
+  String? _editingUserId;
   String? _loadingRootUserId;
   int _refreshTick = 0;
   String? _scopeAreasDivision;
   Future<List<String>>? _scopeAreasFuture;
+
+  String _requireRequesterManagerRole(String operation) {
+    final roleName = context.read<UserState>().role;
+    final role = RoleType.fromName(roleName);
+    if (role?.canManageAccounts != true) {
+      AccountRoleDiagnostics.recordCreation(
+        'ops_user_${operation}_blocked reason=role_denied',
+      );
+      throw StateError('ACCOUNT_MANAGEMENT_ROLE_DENIED');
+    }
+    return role!.name;
+  }
 
   Future<bool> _isManualCodeAuthorized({bool interactive = false}) async {
     final enabled = await DevAuth.isDevModeEnabled();
@@ -180,7 +203,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       final qs = await fs
           .collection('areas')
           .where('division', whereIn: chunk)
-          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/user_account_tab.dart');
+          .get(const GetOptions(source: Source.server)).trackFirestore('QUERY', 'shared/secondary/pages/sheets/tabs/user_account_tab.dart', collection: 'areas', pathTemplate: 'areas',);
 
 
       for (final d in qs.docs) {
@@ -197,7 +220,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     final qs = await FirebaseFirestore.instance
         .collection('areas')
         .where('division', isEqualTo: division)
-        .get(const GetOptions(source: Source.serverAndCache)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/user_account_tab.dart');
+        .get(const GetOptions(source: Source.serverAndCache)).trackFirestore('QUERY', 'shared/secondary/pages/sheets/tabs/user_account_tab.dart', collection: 'areas', pathTemplate: 'areas',);
 
     return qs;
   }
@@ -255,8 +278,13 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     if (oldWidget.selectedDivision != widget.selectedDivision) {
       _scopeAreasDivision = null;
       _scopeAreasFuture = null;
-      _selectedUserId = null;
       _primaryAreaFutures.clear();
+    }
+    if (oldWidget.selectedDivision != widget.selectedDivision ||
+        oldWidget.selectedArea != widget.selectedArea) {
+      _selectedUserId = null;
+      _editingUserId = null;
+      _editedUsers.clear();
     }
   }
 
@@ -266,7 +294,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       final snap = await FirebaseFirestore.instance
           .collection('areas')
           .doc(docId)
-          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/user_account_tab.dart');
+          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/user_account_tab.dart', collection: 'areas', pathTemplate: 'areas/*', readPurpose: 'USER_MANAGEMENT_AREA_ENGLISH_NAME_FETCH');
 
 
       final data = snap.data();
@@ -277,32 +305,134 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     }
   }
 
-  Future<List<MapEntry<String, Map<String, dynamic>>>> _fetchUsersForArea(
+  String _userListScopeKey(String division, String area) =>
+      '${division.trim()}\u0000${area.trim()}';
+
+  void _invalidateUserListScope(
+    String division,
+    String area, {
+    required String reason,
+  }) {
+    final key = _userListScopeKey(division, area);
+    final hadCache = _userListFutures.remove(key) != null;
+    final reuses = _userListReuseCounts.remove(key) ?? 0;
+    AccountRoleDiagnostics.record(
+      'dev_user_list_cache_invalidated scopeId=${key.hashCode.toRadixString(16)} '
+      'reason=$reason cached=$hadCache reuses=$reuses',
+    );
+  }
+
+  Future<_DevUserListEntries> _usersForArea(String division, String area) {
+    final key = _userListScopeKey(division, area);
+    final cached = _userListFutures[key];
+    if (cached != null) {
+      final reuses = (_userListReuseCounts[key] ?? 0) + 1;
+      _userListReuseCounts[key] = reuses;
+      if (reuses == 1 || reuses % 50 == 0) {
+        AccountRoleDiagnostics.record(
+          'dev_user_list_fetch_reused scopeId=${key.hashCode.toRadixString(16)} '
+          'reuses=$reuses',
+        );
+      }
+      return cached;
+    }
+
+    while (_userListFutures.length >= _userListCacheLimit) {
+      final oldestKey = _userListFutures.keys.first;
+      _userListFutures.remove(oldestKey);
+      _userListReuseCounts.remove(oldestKey);
+      AccountRoleDiagnostics.record(
+        'dev_user_list_cache_evicted scopeId=${oldestKey.hashCode.toRadixString(16)} '
+        'reason=capacity',
+      );
+    }
+
+    final requestId = ++_userListRequestSequence;
+    _userListInFlightRequests[key] = requestId;
+    final scopeId = key.hashCode.toRadixString(16);
+    final stopwatch = Stopwatch()..start();
+    AccountRoleDiagnostics.record(
+      'dev_user_list_fetch_started scopeId=$scopeId requestId=$requestId '
+      'reason=cache_miss',
+    );
+
+    late final Future<_DevUserListEntries> future;
+    future = _fetchUsersForArea(division, area).then(
+      (entries) {
+        stopwatch.stop();
+        if (_userListInFlightRequests[key] == requestId) {
+          _userListInFlightRequests.remove(key);
+        }
+        AccountRoleDiagnostics.record(
+          'dev_user_list_fetch_completed scopeId=$scopeId requestId=$requestId '
+          'users=${entries.length} elapsedMs=${stopwatch.elapsedMilliseconds} '
+          'cached=${identical(_userListFutures[key], future)}',
+        );
+        return entries;
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        stopwatch.stop();
+        if (_userListInFlightRequests[key] == requestId) {
+          _userListInFlightRequests.remove(key);
+        }
+        if (identical(_userListFutures[key], future)) {
+          _userListFutures.remove(key);
+          _userListReuseCounts.remove(key);
+        }
+        AccountRoleDiagnostics.recordList(
+          'dev_user_list_fetch_failed reason=${error is StateError ? error.message : error.runtimeType} '
+          'elapsedMs=${stopwatch.elapsedMilliseconds}',
+        );
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
+    _userListFutures[key] = future;
+    return future;
+  }
+
+  void _refreshSelectedUserList({required String reason}) {
+    final division = widget.selectedDivision?.trim();
+    final area = widget.selectedArea?.trim();
+    if (division == null || division.isEmpty || area == null || area.isEmpty) {
+      return;
+    }
+    final key = _userListScopeKey(division, area);
+    if (_userListInFlightRequests.containsKey(key)) {
+      AccountRoleDiagnostics.record(
+        'dev_user_list_refresh_skipped scopeId=${key.hashCode.toRadixString(16)} '
+        'reason=request_in_flight',
+      );
+      return;
+    }
+    _invalidateUserListScope(division, area, reason: reason);
+    setState(() => _refreshTick++);
+  }
+
+  Future<_DevUserListEntries> _fetchUsersForArea(
     String division,
     String area,
   ) async {
     final showId = _showDocId(division, area);
     final parent = FirebaseFirestore.instance
         .collection('user_accounts_show').doc(showId);
+    AccountRoleDiagnostics.recordList(
+      'dev_user_map_only_start expectedGets=1 legacyQueries=0',
+    );
     final snapshot = await parent.get(
       const GetOptions(source: Source.serverAndCache),
-    ).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/user_account_tab.dart');
-    final indexed = <String, Map<String, dynamic>>{};
-    if (!UserAccountShowMap.isComplete(snapshot.data())) {
-      final legacy = await parent.collection('users').get(
-        const GetOptions(source: Source.serverAndCache),
-      ).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/user_account_tab.dart');
-      for (final doc in legacy.docs) {
-        indexed[doc.id] = doc.data();
-      }
+    ).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/user_account_tab.dart', collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*', readPurpose: 'USER_MANAGEMENT_ACCOUNT_LIST_SHOW_FETCH');
+    try {
+      final entries = UserAccountShowMap.validatedEntries(snapshot.data());
+      AccountRoleDiagnostics.recordList(
+        'dev_user_map_only_complete users=${entries.length} documentGetRequests=1 legacyQueries=0 fromCache=${snapshot.metadata.isFromCache}',
+      );
+      return entries;
+    } catch (error) {
+      AccountRoleDiagnostics.recordList(
+        'dev_user_map_only_failed reason=${error is StateError ? error.message : error.runtimeType}',
+      );
+      rethrow;
     }
-    for (final entry in UserAccountShowMap.entries(snapshot.data())) {
-      indexed[entry.key] = entry.value;
-    }
-    AccountRoleDiagnostics.record(
-      'dev_user_map_list_loaded users=${indexed.length} legacyFallback=${!UserAccountShowMap.isComplete(snapshot.data())}',
-    );
-    return indexed.entries.toList(growable: false);
   }
 
   String _showDocId(String? division, String? area) {
@@ -369,11 +499,20 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       standardModeMessage: '개발자 모드 OFF: 운영 계정 수정 로그를 콘솔에 기록합니다.',
     );
 
+    var serverCommitted = false;
     try {
+      final requesterRole = _requireRequesterManagerRole('update');
       final originalSnapshot = await FirebaseFirestore.instance
           .collection('user_accounts')
           .doc(oldId)
-          .get(const GetOptions(source: Source.server));
+          .get(const GetOptions(source: Source.server))
+          .trackFirestore(
+            'GET',
+            'shared/secondary/pages/sheets/tabs/user_account_tab.dart',
+            collection: 'user_accounts',
+            pathTemplate: 'user_accounts/*',
+            readPurpose: 'USER_MANAGEMENT_EDIT_ORIGINAL_SERVER_VALIDATION',
+          );
       if (!originalSnapshot.exists || originalSnapshot.data() == null) {
         throw StateError('USER_NOT_FOUND');
       }
@@ -435,6 +574,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         throw StateError('PREVIOUS_PRIMARY_ASSIGNMENT_REQUIRED');
       }
       await _devUserWriteService.updateUser(
+        requesterRole: requesterRole,
         user: user,
         previousUserId: oldId,
         previousDivision: previousDivision,
@@ -443,6 +583,22 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         targetArea: primaryArea,
         log: (message) => trace.log(message),
       );
+      serverCommitted = true;
+      AccountRoleDiagnostics.recordList(
+        'ops_user_update_server_committed transaction=true',
+      );
+      _invalidateUserListScope(
+        previousDivision,
+        previousArea,
+        reason: 'account_update_previous_scope',
+      );
+      if (previousDivision != primaryDivision || previousArea != primaryArea) {
+        _invalidateUserListScope(
+          primaryDivision,
+          primaryArea,
+          reason: 'account_update_target_scope',
+        );
+      }
       trace.log('DevUserWriteService 계정 수정 완료', progress: 0.92);
       await trace.succeed('운영 계정 수정이 완료되었습니다.');
       if (!mounted) return;
@@ -465,9 +621,33 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         _editedUsers.remove(oldId);
         _editedUsers.remove(newId);
         _selectedUserId = null;
+        _editingUserId = null;
         _refreshTick++;
       });
     } catch (e, st) {
+      if (serverCommitted) {
+        AccountRoleDiagnostics.recordList(
+          'ops_user_update_postcommit_failed type=${e.runtimeType} serverCommitted=true',
+        );
+        debugPrint('[ACCOUNT_UPDATE] serverCommitted=true uiFollowup=${e.runtimeType}');
+        if (mounted) {
+          setState(() {
+            _selectedUserId = null;
+            _editingUserId = null;
+            _refreshTick++;
+          });
+          if (!trace.developerMode) {
+            try {
+              await StatusDialog.showSuccess(
+                context,
+                title: StatusDialog.userAccountSaveSuccess,
+                useCommonUi: true,
+              );
+            } catch (_) {}
+          }
+        }
+        return;
+      }
       debugPrint('❌ 계정 저장 실패: $e');
       await trace.fail(
         '운영 계정 수정 중 예외가 발생했습니다.',
@@ -531,7 +711,9 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 
     trace.log('passwordPolicy=manual_firestore_only appPasswordWrite=false');
 
+    var serverCommitted = false;
     try {
+      final requesterRole = _requireRequesterManagerRole('create');
       if (draft.codeEntryMode == UserCodeEntryMode.developerManual) {
         final authorized = await _isManualCodeAuthorized();
         if (!authorized) {
@@ -584,10 +766,20 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         progress: 0.38,
       );
       await _devUserWriteService.createUser(
+        requesterRole: requesterRole,
         user: user,
         division: draft.division,
         area: draft.area,
         log: (message) => trace.log(message),
+      );
+      serverCommitted = true;
+      AccountRoleDiagnostics.recordCreation(
+        'ops_user_create_server_committed writes=3',
+      );
+      _invalidateUserListScope(
+        draft.division,
+        draft.area,
+        reason: 'account_create_success',
       );
       trace.log('DevUserWriteService 계정 생성 완료', progress: 0.92);
       await trace.succeed('운영 계정 생성이 완료되었습니다.');
@@ -609,6 +801,25 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       if (!mounted) return;
       setState(() => _refreshTick++);
     } catch (e, st) {
+      if (serverCommitted) {
+        AccountRoleDiagnostics.recordCreation(
+          'ops_user_create_postcommit_failed type=${e.runtimeType} serverCommitted=true',
+        );
+        debugPrint('[ACCOUNT_CREATE] serverCommitted=true uiFollowup=${e.runtimeType}');
+        if (mounted) {
+          setState(() => _refreshTick++);
+          if (!trace.developerMode) {
+            try {
+              await StatusDialog.showSuccess(
+                context,
+                title: StatusDialog.userAccountSaveSuccess,
+                useCommonUi: true,
+              );
+            } catch (_) {}
+          }
+        }
+        return;
+      }
       debugPrint('❌ 계정 생성 실패: $e');
       await trace.fail(
         '운영 계정 생성 중 예외가 발생했습니다.',
@@ -659,6 +870,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                   : (value) {
                       setState(() {
                         _selectedUserId = null;
+                        _editingUserId = null;
                         _scopeAreasDivision = null;
                         _scopeAreasFuture = null;
                       });
@@ -711,7 +923,10 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                           onChanged: _creating
                               ? null
                               : (value) {
-                                  setState(() => _selectedUserId = null);
+                                  setState(() {
+                                    _selectedUserId = null;
+                                    _editingUserId = null;
+                                  });
                                   widget.onAreaChanged(value);
                                 },
                           decoration: opsInputDecoration(
@@ -735,6 +950,10 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   }) {
     final tokens = CommonUiTheme.of(context);
     final canCreate = !_creating && divisionList.isNotEmpty;
+    final canRefresh = !_creating && _savingIds.isEmpty &&
+        (widget.selectedDivision ?? '').trim().isNotEmpty &&
+        (widget.selectedArea ?? '').trim().isNotEmpty;
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return OpsDockListSurface(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(13, 11, 9, 11),
@@ -780,9 +999,37 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
             ),
             const SizedBox(width: 8),
             AnimatedSwitcher(
-              duration: MediaQuery.maybeOf(context)?.disableAnimations ?? false
-                  ? Duration.zero
-                  : CommonUiMotion.selection,
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              switchInCurve: Curves.easeOutCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.9, end: 1).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: CommonIconButton(
+                key: ValueKey<String>('user_list_refresh_$_refreshTick'),
+                icon: Icons.refresh_rounded,
+                tooltip: '계정 목록 새로고침',
+                onPressed: canRefresh
+                    ? () => _refreshSelectedUserList(reason: 'manual_refresh')
+                    : null,
+                haptic: CommonHaptic.selection,
+              ),
+            ),
+            const SizedBox(width: 6),
+            AnimatedSwitcher(
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              switchInCurve: CommonUiMotion.enter,
+              switchOutCurve: CommonUiMotion.exit,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.9, end: 1).animate(animation),
+                  child: child,
+                ),
+              ),
               child: _creating
                   ? SizedBox(
                       key: const ValueKey<String>('user_creating'),
@@ -927,6 +1174,61 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         ),
       ),
     );
+  }
+
+  Future<void> _openUserEditor(
+    String id, {
+    required String division,
+    required String area,
+  }) async {
+    if (_loadingRootUserId != null || _selectedUserId != id) return;
+    setState(() => _loadingRootUserId = id);
+    AccountRoleDiagnostics.recordList(
+      'dev_user_edit_root_load_start reason=explicit_edit',
+    );
+    try {
+      final original = await FirebaseFirestore.instance
+          .collection('user_accounts')
+          .doc(id)
+          .get(const GetOptions(source: Source.server))
+          .trackFirestore(
+            'GET',
+            'shared/secondary/pages/sheets/tabs/user_account_tab.dart',
+            collection: 'user_accounts',
+            pathTemplate: 'user_accounts/*',
+           readPurpose: 'USER_MANAGEMENT_EDIT_ROOT_SERVER_FETCH');
+      if (!original.exists || original.data() == null) {
+        throw StateError('USER_NOT_FOUND');
+      }
+      if (!mounted || _selectedUserId != id ||
+          widget.selectedDivision != division || widget.selectedArea != area) {
+        return;
+      }
+      setState(() {
+        _editedUsers[id] = _copyUser(
+          original.data()!,
+          primaryDivision: division,
+          primaryArea: area,
+        );
+        _editingUserId = id;
+      });
+      AccountRoleDiagnostics.recordList(
+        'dev_user_edit_root_load_complete found=true firestoreGets=1',
+      );
+    } catch (error) {
+      AccountRoleDiagnostics.recordList(
+        'dev_user_edit_root_load_failed reason=${error is StateError ? error.message : error.runtimeType}',
+      );
+      if (!mounted) return;
+      await StatusDialog.showFailure(
+        context,
+        title: '계정 원본을 불러오지 못했습니다',
+        description: '네트워크 상태를 확인하고 다시 시도하세요.',
+        useCommonUi: true,
+      );
+    } finally {
+      if (mounted) setState(() => _loadingRootUserId = null);
+    }
   }
 
   Widget _buildUserEditor(
@@ -1083,7 +1385,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         ),
         child: FutureBuilder<List<MapEntry<String, Map<String, dynamic>>>>(
           key: ValueKey<String>('$division-$area-$_refreshTick'),
-          future: _fetchUsersForArea(division, area),
+          future: _usersForArea(division, area),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const SizedBox(
@@ -1097,7 +1399,13 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                 child: OpsEmptyState(
                   icon: Icons.error_outline_rounded,
                   title: '계정 목록을 불러오지 못했습니다',
-                  message: snapshot.error.toString(),
+                  message: snapshot.error.toString().contains(
+                          'USER_ACCOUNT_VIEW_MISSING')
+                      ? '계정 목록 문서가 없습니다. 관리자 복구가 필요합니다.'
+                      : snapshot.error.toString().contains(
+                          'USER_ACCOUNT_VIEW_USERS_INVALID')
+                          ? '계정 목록 데이터 형식을 확인해야 합니다.'
+                      : snapshot.error.toString(),
                 ),
               );
             }
@@ -1141,49 +1449,16 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                     selected: selected,
                     selectionColor: tokens.accent,
                     selectedContainer: tokens.accentContainer,
-                    onTap: () async {
+                    onTap: () {
                       if (_loadingRootUserId != null) return;
-                      if (selected) {
-                        setState(() => _selectedUserId = null);
-                        return;
-                      }
-                      setState(() => _loadingRootUserId = id);
-                      AccountRoleDiagnostics.record('dev_user_edit_root_load_start view=map');
-                      try {
-                        final original = await FirebaseFirestore.instance
-                            .collection('user_accounts').doc(id)
-                            .get(const GetOptions(source: Source.server))
-                            .trackFirestore(
-                              'GET',
-                              'shared/secondary/pages/sheets/tabs/user_account_tab.dart',
-                            );
-                        if (!original.exists || original.data() == null) {
-                          throw StateError('USER_NOT_FOUND');
-                        }
-                        if (!mounted) return;
-                        AccountRoleDiagnostics.record('dev_user_edit_root_load_complete found=true');
-                        setState(() {
-                          _selectedUserId = id;
-                          _editedUsers[id] = _copyUser(
-                            original.data()!,
-                            primaryDivision: division,
-                            primaryArea: area,
-                          );
-                        });
-                      } catch (error) {
-                        AccountRoleDiagnostics.record(
-                          'dev_user_edit_root_load_failed type=${error.runtimeType}',
-                        );
-                        if (!mounted) return;
-                        await StatusDialog.showFailure(
-                          context,
-                          title: '계정 원본을 불러오지 못했습니다',
-                          description: '네트워크 상태를 확인하고 다시 선택하세요.',
-                          useCommonUi: true,
-                        );
-                      } finally {
-                        if (mounted) setState(() => _loadingRootUserId = null);
-                      }
+                      setState(() {
+                        _selectedUserId = selected ? null : id;
+                        _editingUserId = null;
+                        if (selected) _editedUsers.remove(id);
+                      });
+                      AccountRoleDiagnostics.recordList(
+                        'dev_user_row_selection source=view rootGets=0',
+                      );
                     },
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1267,12 +1542,52 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                           curve: Curves.easeOutCubic,
                           alignment: Alignment.topCenter,
                           child: selected
-                              ? _buildUserEditor(
-                                  context,
-                                  id: id,
-                                  data: data,
-                                  updated: updated,
-                                  divisionList: divisionList,
+                              ? AnimatedSwitcher(
+                                  duration: reduceMotion
+                                      ? Duration.zero
+                                      : CommonUiMotion.selection,
+                                  switchInCurve: CommonUiMotion.enter,
+                                  switchOutCurve: CommonUiMotion.exit,
+                                  transitionBuilder: (child, animation) =>
+                                      FadeTransition(
+                                    opacity: animation,
+                                    child: SlideTransition(
+                                      position: Tween<Offset>(
+                                        begin: const Offset(0, -0.035),
+                                        end: Offset.zero,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                                  child: _editingUserId == id
+                                      ? KeyedSubtree(
+                                          key: ValueKey<String>('editor_$id'),
+                                          child: _buildUserEditor(
+                                            context,
+                                            id: id,
+                                            data: data,
+                                            updated: updated,
+                                            divisionList: divisionList,
+                                          ),
+                                        )
+                                      : Padding(
+                                          key: ValueKey<String>('open_editor_$id'),
+                                          padding: const EdgeInsets.only(top: 10),
+                                          child: Align(
+                                            alignment: Alignment.centerRight,
+                                            child: OutlinedButton.icon(
+                                              onPressed: _loadingRootUserId == null
+                                                  ? () => _openUserEditor(
+                                                        id,
+                                                        division: division,
+                                                        area: area,
+                                                      )
+                                                  : null,
+                                              icon: const Icon(Icons.edit_outlined),
+                                              label: const Text('상세 수정'),
+                                            ),
+                                          ),
+                                        ),
                                 )
                               : const SizedBox.shrink(),
                         ),
@@ -1286,6 +1601,14 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _userListFutures.clear();
+    _userListReuseCounts.clear();
+    _userListInFlightRequests.clear();
+    super.dispose();
   }
 
   @override

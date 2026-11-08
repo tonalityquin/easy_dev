@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
 import '../../../../app/models/capability.dart';
@@ -676,6 +677,11 @@ class InputPlateController {
 
     trace?.add('입차 처리 시작');
     emitDebug('submit=start status=${statusLookupState.name}');
+    FirebaseActivityMeter.instance.traceStep(
+      'REGISTER_SUBMIT_BEGIN',
+      source: 'shared/page/input/controllers/input_plate_controller.dart',
+      detail: 'statusLookupState=${statusLookupState.name}',
+    );
 
     if (!statusLookupReadyForSubmit) {
       final stateName = statusLookupState.name;
@@ -689,6 +695,12 @@ class InputPlateController {
         'state=$stateName plate=${buildPlateNumber()}',
       );
       trace?.add('중단: 상태 조회 미완료 state=$stateName');
+      FirebaseActivityMeter.instance.traceStep(
+        'REGISTER_SUBMIT_BLOCKED',
+        source: 'shared/page/input/controllers/input_plate_controller.dart',
+        detail: 'reason=status_lookup state=$stateName',
+        result: 'blocked',
+      );
       emitDebug('submit=blocked reason=status_lookup state=$stateName');
       if (context.mounted && trace == null && onDebug == null) {
         final lookupTrace = await DeveloperOperationTrace.start(
@@ -718,6 +730,12 @@ class InputPlateController {
     trace?.add('isInputValid=$isValid');
     if (!isValid) {
       trace?.add('중단: 번호판 입력 불완전');
+      FirebaseActivityMeter.instance.traceStep(
+        'REGISTER_SUBMIT_BLOCKED',
+        source: 'shared/page/input/controllers/input_plate_controller.dart',
+        detail: 'reason=invalid_plate',
+        result: 'blocked',
+      );
       if (context.mounted) {
         showFailedSnackbar(context, '번호판 입력을 확인해주세요.', useCommonUi: true);
       }
@@ -943,6 +961,11 @@ class InputPlateController {
       emitDebug(
         'image_upload=complete uploaded=${currentUploadResult.uploadedUrls.length} failed=${currentUploadResult.failedCount}',
       );
+      FirebaseActivityMeter.instance.traceStep(
+        'REGISTER_IMAGE_UPLOAD_RESULT',
+        source: 'shared/page/input/controllers/input_plate_controller.dart',
+        detail: 'uploaded=${currentUploadResult.uploadedUrls.length} failed=${currentUploadResult.failedCount}',
+      );
 
       if (context.mounted && currentUploadResult.hasFailure && trace == null) {
         await StatusDialog.showFailure(
@@ -1005,6 +1028,12 @@ class InputPlateController {
       );
       trace?.add('입차 등록 결과=$wasSuccessful');
       emitDebug('register=complete success=$wasSuccessful');
+      FirebaseActivityMeter.instance.traceStep(
+        'REGISTER_SERVICE_RESULT',
+        source: 'shared/page/input/controllers/input_plate_controller.dart',
+        detail: 'registered=$wasSuccessful',
+        result: wasSuccessful ? 'success' : 'blocked',
+      );
 
       if (!wasSuccessful) {
         trace?.add('중단: registerPlateEntry returned false');

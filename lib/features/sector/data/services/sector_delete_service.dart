@@ -29,7 +29,7 @@ class SectorDeleteService {
         .doc(normalizedId);
 
     try {
-      final snapshot = await reference.get().trackFirestore('GET', 'features/sector/data/services/sector_delete_service.dart');
+      final snapshot = await reference.get().trackFirestore('GET', 'features/sector/data/services/sector_delete_service.dart', collection: 'sector', readPurpose: 'SECTOR_DELETE_SOURCE_VALIDATION');
       if (!snapshot.exists || snapshot.data() == null) {
         throw const SectorNotFoundException();
       }
@@ -39,7 +39,7 @@ class SectorDeleteService {
         throw const SectorAreaMismatchException();
       }
 
-      await reference.delete().trackFirestore('DELETE', 'features/sector/data/services/sector_delete_service.dart');
+      await reference.delete().trackFirestore('DELETE', 'features/sector/data/services/sector_delete_service.dart', collection: 'sector');
       debugPrint(
         '[SectorDeleteService] 삭제 완료: id=$normalizedId, area=$normalizedArea',
       );

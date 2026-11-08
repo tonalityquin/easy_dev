@@ -1,3 +1,4 @@
+import '../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:async';
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
@@ -364,7 +365,12 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     final id = plateId.trim();
     if (id.isEmpty) return null;
     final repo = context.read<PlateRepository>();
-    return repo.getPlate(id);
+    return await FirebaseActivityMeter.instance.traceAction<PlateModel?>(
+      kind: 'PLATE_DETAIL_OPEN',
+      source: 'shared/real_time_table/real_time_table_body.dart',
+      plateId: id,
+      action: () => repo.getPlate(id, readPurpose: 'PLATE_DETAIL_OPEN'),
+    );
   }
 
   String _expectedPlateTypeNameForCollection(String collection) {

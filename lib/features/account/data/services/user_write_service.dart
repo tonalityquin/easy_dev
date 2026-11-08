@@ -85,7 +85,7 @@ class UserWriteService {
         (field) => _getTabletCollectionRef()
             .where(field, isEqualTo: normalized)
             .limit(10)
-            .get().trackFirestore('GET', 'features/account/data/services/user_write_service.dart'),
+            .get().trackFirestore('QUERY', 'features/account/data/services/user_write_service.dart', collection: 'tablet_accounts', pathTemplate: 'tablet_accounts'),
       ),
     );
     final excluded = (excludeDocumentId ?? '').trim();
@@ -152,15 +152,15 @@ class UserWriteService {
         _getUserCollectionRef()
             .where('codeNumber', isEqualTo: normalized)
             .limit(10)
-            .get().trackFirestore('GET', 'features/account/data/services/user_write_service.dart'),
+            .get().trackFirestore('QUERY', 'features/account/data/services/user_write_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts'),
         _getUserCollectionRef()
             .where('phone', isEqualTo: normalized)
             .limit(10)
-            .get().trackFirestore('GET', 'features/account/data/services/user_write_service.dart'),
+            .get().trackFirestore('QUERY', 'features/account/data/services/user_write_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts'),
         _getUserCollectionRef()
             .where('handle', isEqualTo: normalized)
             .limit(10)
-            .get().trackFirestore('GET', 'features/account/data/services/user_write_service.dart'),
+            .get().trackFirestore('QUERY', 'features/account/data/services/user_write_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts'),
       ],
     );
     final duplicated = snapshots
@@ -227,16 +227,16 @@ class UserWriteService {
     final codeRef = _getUserCodeCollectionRef().doc(code);
     final viewRef = _getUserShowCollectionRef()
         .doc(_showDocId(division, area));
-    AccountRoleDiagnostics.record('user_create_start strategy=single_code_read_three_write_batch');
+    AccountRoleDiagnostics.recordCreation('user_create_start strategy=single_code_read_three_write_batch');
     try {
       final reserved = await codeRef.get(
         const GetOptions(source: Source.server),
-      ).trackFirestore('GET', 'features/account/data/services/user_write_service.dart');
+      ).trackFirestore('GET', 'features/account/data/services/user_write_service.dart', collection: 'user_account_codes', pathTemplate: 'user_account_codes/*', readPurpose: 'USER_CREATE_CODE_DUPLICATE_CHECK');
       if (reserved.exists) {
-        AccountRoleDiagnostics.record('user_create_rejected reason=duplicate_code');
+        AccountRoleDiagnostics.recordCreation('user_create_rejected reason=duplicate_code');
         throw StateError('CODE_NUMBER_ALREADY_EXISTS');
       }
-      AccountRoleDiagnostics.record('user_create_code_check reads=1 duplicate=false');
+      AccountRoleDiagnostics.recordCreation('user_create_code_check reads=1 duplicate=false');
       final view = <String, dynamic>{
         ...UserAccountViewProjection.fromUser(user),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -256,11 +256,11 @@ class UserWriteService {
         UserAccountShowMap.putPayload(user.id, view),
         UserAccountShowMap.putOptions(user.id),
       );
-      AccountRoleDiagnostics.record('user_create_batch_start writes=3 view=map');
+      AccountRoleDiagnostics.recordCreation('user_create_batch_start writes=3 view=map createPolicy=projection_only');
       await batch.commit();
-      AccountRoleDiagnostics.record('user_create_batch_committed writes=3 view=map');
+      AccountRoleDiagnostics.recordCreation('user_create_batch_committed writes=3 view=map');
     } catch (error) {
-      AccountRoleDiagnostics.record(
+      AccountRoleDiagnostics.recordCreation(
         'user_create_failed type=${error.runtimeType} reason=${_createFailureCategory(error)}',
       );
       rethrow;
@@ -290,13 +290,13 @@ class UserWriteService {
     );
     try {
       await _firestore.runTrackedActivityTransaction((tx) async {
-        final existing = await tx.get(docRef).trackFirestore('GET', 'features/account/data/services/user_write_service.dart');
+        final existing = await tx.get(docRef).trackFirestore('GET', 'features/account/data/services/user_write_service.dart', collection: 'tablet_accounts', pathTemplate: 'tablet_accounts/*', readPurpose: 'TABLET_CREATE_EXISTENCE_CHECK');
         if (existing.exists) {
           throw StateError('해당 코드번호와 업무 지역으로 등록된 태블릿이 이미 있습니다.');
         }
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/account/data/services/user_write_service.dart', result: 'staged');
         tx.set(docRef, tablet.toMap());
-      }).trackFirestore('TRANSACTION', 'features/account/data/services/user_write_service.dart');
+      });
       TabletAccountDiagnostics.record(
         'document_create_complete',
         meta: <String, Object?>{
@@ -343,13 +343,12 @@ class UserWriteService {
     final newArea = _areaOfUser(user);
     final newViewRef = _getUserShowCollectionRef()
         .doc(_showDocId(_divisionOfUser(user), newArea));
-    final newLegacyRef = newViewRef.collection('users').doc(nextId);
     final newCodeRef = _getUserCodeCollectionRef().doc(nextCode);
     AccountRoleDiagnostics.record('user_update_start view=map counts=disabled');
     await _firestore.runTrackedActivityTransaction((tx) async {
       final oldRootSnap = await tx.get(oldRootRef).trackFirestore(
         'GET', 'features/account/data/services/user_write_service.dart',
-      );
+      collection: 'user_accounts', pathTemplate: 'user_accounts/*', readPurpose: 'USER_UPDATE_SOURCE_ACCOUNT_VALIDATION');
       if (!oldRootSnap.exists || oldRootSnap.data() == null) {
         throw StateError('USER_NOT_FOUND:$oldId');
       }
@@ -358,49 +357,39 @@ class UserWriteService {
       final oldViewRef = _getUserShowCollectionRef().doc(
         _showDocId(_divisionOfUser(oldUser), _areaOfUser(oldUser)),
       );
-      final oldLegacyRef = oldViewRef.collection('users').doc(oldId);
       final oldCode = _rootAccountCode(oldData);
       final oldCodeRef = oldCode.isEmpty
           ? null
           : _getUserCodeCollectionRef().doc(oldCode);
       final nextCodeSnap = await tx.get(newCodeRef).trackFirestore(
         'GET', 'features/account/data/services/user_write_service.dart',
-      );
+      collection: 'user_account_codes', pathTemplate: 'user_account_codes/*', readPurpose: 'USER_UPDATE_NEXT_CODE_RESERVATION_CHECK');
       final previousCodeSnap = oldCodeRef == null || oldCode == nextCode
           ? nextCodeSnap
           : await tx.get(oldCodeRef).trackFirestore(
               'GET', 'features/account/data/services/user_write_service.dart',
-            );
+            collection: 'user_account_codes', pathTemplate: 'user_account_codes/*', readPurpose: 'USER_UPDATE_PREVIOUS_CODE_RESERVATION_CHECK');
       final owner = (nextCodeSnap.data()?['userId'] ?? '').toString();
       if (nextCodeSnap.exists && owner != oldId && owner != nextId) {
         throw StateError('CODE_NUMBER_ALREADY_EXISTS');
       }
       final oldViewSnap = await tx.get(oldViewRef).trackFirestore(
         'GET', 'features/account/data/services/user_write_service.dart',
-      );
-      final oldLegacySnap = await tx.get(oldLegacyRef).trackFirestore(
-        'GET', 'features/account/data/services/user_write_service.dart',
-      );
+      collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*', readPurpose: 'USER_UPDATE_OLD_PROJECTION_VALIDATION');
       final moved = oldViewRef.path != newViewRef.path || oldId != nextId;
       final newViewSnap = oldViewRef.path == newViewRef.path
           ? oldViewSnap
           : await tx.get(newViewRef).trackFirestore(
               'GET', 'features/account/data/services/user_write_service.dart',
-            );
+            collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*', readPurpose: 'USER_UPDATE_NEW_PROJECTION_CONFLICT_CHECK');
       if (oldId != nextId) {
         final newRootSnap = await tx.get(newRootRef).trackFirestore(
           'GET', 'features/account/data/services/user_write_service.dart',
-        );
+        collection: 'user_accounts', pathTemplate: 'user_accounts/*', readPurpose: 'USER_UPDATE_TARGET_ROOT_CONFLICT_CHECK');
         if (newRootSnap.exists) throw StateError('USER_ALREADY_EXISTS:$nextId');
       }
       if (moved) {
         if (UserAccountShowMap.account(newViewSnap.data(), nextId) != null) {
-          throw StateError('SHOW_USER_ALREADY_EXISTS:$nextId');
-        }
-        final nextLegacySnap = await tx.get(newLegacyRef).trackFirestore(
-          'GET', 'features/account/data/services/user_write_service.dart',
-        );
-        if (nextLegacySnap.exists && newLegacyRef.path != oldLegacyRef.path) {
           throw StateError('SHOW_USER_ALREADY_EXISTS:$nextId');
         }
       }
@@ -409,14 +398,14 @@ class UserWriteService {
       if (oldData.containsKey('createdAt')) {
         rootData['createdAt'] = oldData['createdAt'];
       }
-      final formerView = UserAccountShowMap.account(oldViewSnap.data(), oldId) ??
-          oldLegacySnap.data();
+      final formerView = UserAccountShowMap.account(oldViewSnap.data(), oldId);
+      if (formerView == null) throw StateError('SHOW_USER_DOC_MISSING:$oldId');
       final summary = <String, dynamic>{
         ...UserAccountViewProjection.fromUser(user),
         'isActive': existingActive,
         'updatedAt': FieldValue.serverTimestamp(),
         if (!existingActive)
-          'disabledAt': formerView?['disabledAt'] ?? FieldValue.serverTimestamp(),
+          'disabledAt': formerView['disabledAt'] ?? FieldValue.serverTimestamp(),
       };
       if (oldId == nextId) {
         tx.set(newRootRef, rootData, SetOptions(merge: true));
@@ -446,7 +435,6 @@ class UserWriteService {
           UserAccountShowMap.putOptions(nextId),
         );
       }
-      if (oldLegacySnap.exists) tx.delete(oldLegacyRef);
       tx.set(newCodeRef, _userCodeReservationPayload(
         userId: nextId,
         codeNumber: nextCode,
@@ -458,8 +446,9 @@ class UserWriteService {
           (previousCodeSnap.data()?['userId'] ?? '').toString() == oldId) {
         tx.delete(oldCodeRef);
       }
-    }).trackFirestore('TRANSACTION', 'features/account/data/services/user_write_service.dart');
+    });
     AccountRoleDiagnostics.record('user_update_committed view=map counts=disabled');
+    AccountRoleDiagnostics.recordList('user_update_committed view=map_only legacyViewReads=0');
   }
 
   Future<void> updateTablet(
@@ -489,7 +478,7 @@ class UserWriteService {
     try {
       await _firestore.runTrackedActivityTransaction((tx) async {
         if (moving) {
-          final existing = await tx.get(nextRef).trackFirestore('GET', 'features/account/data/services/user_write_service.dart');
+          final existing = await tx.get(nextRef).trackFirestore('GET', 'features/account/data/services/user_write_service.dart', collection: 'tablet_accounts', pathTemplate: 'tablet_accounts/*', readPurpose: 'TABLET_MOVE_TARGET_DUPLICATE_CHECK');
           if (existing.exists) {
             throw StateError('해당 코드번호와 업무 지역으로 등록된 태블릿이 이미 있습니다.');
           }
@@ -501,7 +490,7 @@ class UserWriteService {
         }
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/account/data/services/user_write_service.dart', result: 'staged');
         tx.set(nextRef, tablet.toMap(), SetOptions(merge: true));
-      }).trackFirestore('TRANSACTION', 'features/account/data/services/user_write_service.dart');
+      });
       TabletAccountDiagnostics.record(
         moving ? 'document_move_complete' : 'document_update_complete',
         meta: <String, Object?>{
@@ -539,7 +528,7 @@ class UserWriteService {
     final rootRef = _getUserCollectionRef().doc(userId);
     final rootSnap = await rootRef.get().trackFirestore(
       'GET', 'features/account/data/services/user_write_service.dart',
-    );
+    collection: 'user_accounts', pathTemplate: 'user_accounts/*', readPurpose: 'USER_ACTIVE_ROOT_VALIDATION');
     if (!rootSnap.exists || rootSnap.data() == null) {
       throw StateError('USER_NOT_FOUND:$userId');
     }
@@ -548,16 +537,9 @@ class UserWriteService {
         .doc(_showDocId(_divisionOfUser(user), _areaOfUser(user)));
     final viewSnap = await viewRef.get().trackFirestore(
       'GET', 'features/account/data/services/user_write_service.dart',
-    );
+    collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*', readPurpose: 'USER_ACTIVE_PROJECTION_VALIDATION');
     final existing = UserAccountShowMap.account(viewSnap.data(), userId);
-    final legacyRef = viewRef.collection('users').doc(userId);
-    final legacySnap = existing == null
-        ? await legacyRef.get().trackFirestore(
-            'GET', 'features/account/data/services/user_write_service.dart',
-          )
-        : null;
-    final previous = existing ?? legacySnap?.data();
-    if (previous == null) throw StateError('SHOW_USER_DOC_MISSING:$userId');
+    if (existing == null) throw StateError('SHOW_USER_DOC_MISSING:$userId');
     final rootPayload = <String, dynamic>{
       ..._weekdayScheduleMigrationPayload(user),
       'isActive': isActive,
@@ -567,31 +549,15 @@ class UserWriteService {
       'features/account/data/services/user_write_service.dart',
     );
     batch.set(rootRef, rootPayload, SetOptions(merge: true));
-    if (existing != null) {
-      batch.set(
-        viewRef,
-        UserAccountShowMap.statusPayload(
-          userId, isActive, previous['disabledAt'],
-        ),
-        UserAccountShowMap.statusOptions(userId),
-      );
-    } else {
-      batch.set(
-        viewRef,
-        UserAccountShowMap.putPayload(userId, <String, dynamic>{
-          ...UserAccountViewProjection.fromUser(user),
-          'isActive': isActive,
-          'updatedAt': FieldValue.serverTimestamp(),
-          if (!isActive)
-            'disabledAt': previous['disabledAt'] ?? FieldValue.serverTimestamp(),
-        }),
-        UserAccountShowMap.putOptions(userId),
-      );
-      batch.delete(legacyRef);
-    }
+    batch.set(
+      viewRef,
+      UserAccountShowMap.statusPayload(userId, isActive, existing['disabledAt']),
+      UserAccountShowMap.statusOptions(userId),
+    );
     AccountRoleDiagnostics.record('user_active_batch_start view=map counts=disabled');
     await batch.commit();
     AccountRoleDiagnostics.record('user_active_batch_committed view=map');
+    AccountRoleDiagnostics.recordList('user_active_committed view=map_only legacyViewReads=0');
   }
 
   Future<void> deleteUsers(List<String> ids) async {
@@ -599,24 +565,21 @@ class UserWriteService {
       final rootRef = _getUserCollectionRef().doc(id);
       final rootSnap = await rootRef.get().trackFirestore(
         'GET', 'features/account/data/services/user_write_service.dart',
-      );
+      collection: 'user_accounts', pathTemplate: 'user_accounts/*', readPurpose: 'USER_DELETE_ROOT_VALIDATION');
       if (!rootSnap.exists || rootSnap.data() == null) continue;
       final user = UserModel.fromMap(rootSnap.id, rootSnap.data()!);
       final viewRef = _getUserShowCollectionRef()
           .doc(_showDocId(_divisionOfUser(user), _areaOfUser(user)));
       final viewSnap = await viewRef.get().trackFirestore(
         'GET', 'features/account/data/services/user_write_service.dart',
-      );
+      collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*', readPurpose: 'USER_DELETE_PROJECTION_VALIDATION');
       final existing = UserAccountShowMap.account(viewSnap.data(), id);
-      final legacyRef = viewRef.collection('users').doc(id);
-      final legacySnap = await legacyRef.get().trackFirestore(
-        'GET', 'features/account/data/services/user_write_service.dart',
-      );
+      if (existing == null) throw StateError('SHOW_USER_DOC_MISSING:$id');
       final code = AccountCodeNumber.normalize(user.codeNumber);
       final codeRef = code.isEmpty ? null : _getUserCodeCollectionRef().doc(code);
       final codeSnap = codeRef == null ? null : await codeRef.get(
         const GetOptions(source: Source.server),
-      ).trackFirestore('GET', 'features/account/data/services/user_write_service.dart');
+      ).trackFirestore('GET', 'features/account/data/services/user_write_service.dart', collection: 'user_account_codes', pathTemplate: 'user_account_codes/*', readPurpose: 'USER_DELETE_CODE_RESERVATION_VALIDATION');
       if (codeSnap != null && codeSnap.exists &&
           (codeSnap.data()?['userId'] ?? '').toString() != id) {
         throw StateError('USER_CODE_RESERVATION_MISMATCH');
@@ -624,14 +587,11 @@ class UserWriteService {
       final batch = _firestore.trackedActivityBatch(
         'features/account/data/services/user_write_service.dart',
       );
-      if (existing != null) {
-        batch.set(
-          viewRef,
-          UserAccountShowMap.deletePayload(id),
-          UserAccountShowMap.deleteOptions(id),
-        );
-      }
-      if (legacySnap.exists) batch.delete(legacyRef);
+      batch.set(
+        viewRef,
+        UserAccountShowMap.deletePayload(id),
+        UserAccountShowMap.deleteOptions(id),
+      );
       batch.delete(rootRef);
       if (codeRef != null && codeSnap != null && codeSnap.exists) {
         batch.delete(codeRef);
@@ -639,6 +599,7 @@ class UserWriteService {
       AccountRoleDiagnostics.record('user_delete_batch_start view=map counts=disabled');
       await batch.commit();
       AccountRoleDiagnostics.record('user_delete_batch_committed view=map counts=disabled');
+      AccountRoleDiagnostics.recordList('user_delete_committed view=map_only legacyViewReads=0');
     }
   }
 
@@ -646,7 +607,7 @@ class UserWriteService {
     for (final id in ids) {
       final docRef = _getTabletCollectionRef().doc(id);
       try {
-        await docRef.delete().trackFirestore('DELETE', 'features/account/data/services/user_write_service.dart');
+        await docRef.delete().trackFirestore('DELETE', 'features/account/data/services/user_write_service.dart', collection: 'tablet_accounts', pathTemplate: 'tablet_accounts/*');
 
       } on FirebaseException {
         rethrow;

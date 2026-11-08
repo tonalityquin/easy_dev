@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../design_system/common_ui/common_ui_overlays.dart';
 import '../models/account_role_diagnostics.dart';
 import '../../features/selector/application/dev_auth.dart';
+import '../diagnostics/firebase_activity_meter.dart';
 import 'status_dialog.dart';
 
 enum DeveloperOperationState {
@@ -44,6 +45,16 @@ class DeveloperOperationTrace extends ChangeNotifier {
       if (AccountRoleDiagnostics.debugPrintCode.isNotEmpty)
         AccountRoleDiagnostics.debugPrintCode,
     ].join('\n');
+  }
+
+  Future<String> debugPrintCodeWithJournal() async {
+    if (!DevAuth.devModeEnabled.value ||
+        !await DevAuth.isDevModeEnabled()) return '';
+    final activityCode = await FirebaseActivityMeter.instance.exportJournalCode();
+    return <String>[
+      debugPrintCode,
+      activityCode,
+    ].where((part) => part.trim().isNotEmpty).join('\n');
   }
 
   static Future<DeveloperOperationTrace> start({
@@ -146,6 +157,7 @@ class DeveloperOperationTrace extends ChangeNotifier {
         title: title,
         description: description,
         copyText: copyText,
+        copyTextProvider: debugPrintCodeWithJournal,
         copyButtonLabel: 'debugPrint 코드 복사',
         visibleDuration: Duration.zero,
         useCommonUi: useCommonUi,
@@ -158,6 +170,7 @@ class DeveloperOperationTrace extends ChangeNotifier {
       title: title,
       description: description,
       copyText: copyText,
+      copyTextProvider: debugPrintCodeWithJournal,
       copyButtonLabel: 'debugPrint 코드 복사',
       visibleDuration: Duration.zero,
       useCommonUi: useCommonUi,
@@ -326,9 +339,17 @@ class _DeveloperOperationStatusDialogState
   Future<void> _copyDebugPrintCode() async {
     if (!DevAuth.devModeEnabled.value ||
         !await DevAuth.isDevModeEnabled()) return;
-    await Clipboard.setData(
-      ClipboardData(text: widget.trace.debugPrintCode),
-    );
+    final code = await widget.trace.debugPrintCodeWithJournal();
+    if (code.isEmpty || !mounted) return;
+    try {
+      await Clipboard.setData(
+        ClipboardData(text: code),
+      );
+      debugPrint('[DEVELOPER_STATUS] debugPrint_code_copy_success chars=${code.length}');
+    } catch (error) {
+      debugPrint('[DEVELOPER_STATUS] debugPrint_code_copy_failed errorType=${error.runtimeType}');
+      rethrow;
+    }
     if (!mounted) return;
     _copyTimer?.cancel();
     setState(() => _copied = true);
@@ -651,20 +672,25 @@ class _DeveloperOperationStatusDialogState
               ),
             ),
             actions: [
-              OutlinedButton.icon(
-                onPressed: _copyDebugPrintCode,
-                icon: AnimatedSwitcher(
-                  duration: fastMotion,
-                  child: Icon(
-                    _copied ? Icons.check_rounded : Icons.copy_all_rounded,
-                    key: ValueKey<bool>(_copied),
+              AnimatedScale(
+                scale: _copied && !_reduceMotion ? 1.02 : 1,
+                duration: fastMotion,
+                curve: Curves.easeOutCubic,
+                child: OutlinedButton.icon(
+                  onPressed: _copyDebugPrintCode,
+                  icon: AnimatedSwitcher(
+                    duration: fastMotion,
+                    child: Icon(
+                      _copied ? Icons.check_rounded : Icons.copy_all_rounded,
+                      key: ValueKey<bool>(_copied),
+                    ),
                   ),
-                ),
-                label: AnimatedSwitcher(
-                  duration: fastMotion,
-                  child: Text(
-                    _copied ? '복사 완료' : 'debugPrint 코드 복사',
-                    key: ValueKey<bool>(_copied),
+                  label: AnimatedSwitcher(
+                    duration: fastMotion,
+                    child: Text(
+                      _copied ? '복사 완료' : 'debugPrint 코드 복사',
+                      key: ValueKey<bool>(_copied),
+                    ),
                   ),
                 ),
               ),

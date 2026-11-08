@@ -612,6 +612,12 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         message.contains('USER_ALREADY_EXISTS')) {
       return '이미 사용 중인 코드번호입니다.';
     }
+    if (message.contains('ACCOUNT_CREATE_ROLE_DENIED')) {
+      return '현재 계정에는 신규 계정을 등록할 권한이 없습니다.';
+    }
+    if (message.contains('permission-denied')) {
+      return '서버에서 계정 저장 권한을 확인하지 못했습니다. 입력 내용은 유지됩니다.';
+    }
     return message.trim().isEmpty
         ? '계정 정보를 저장하지 못했습니다. 입력 내용을 유지했습니다.'
         : message.trim();
@@ -840,7 +846,7 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
         return;
       }
 
-      trace.log('Firestore 및 사용자 캐시 반영 완료', progress: 0.92);
+      trace.log('Firestore 저장 성공, 목록·캐시 후처리 결과는 별도 진단에 기록', progress: 0.92);
       await trace.succeed('$operationTitle이 완료되었습니다.');
       if (!mounted) return;
       workspace?.setSettingsDirty(false, source: 'submit_success');
@@ -1262,17 +1268,33 @@ class _UserSettingWorkspaceState extends State<UserSettingWorkspace> {
                 duration:
                     _reduceMotion ? Duration.zero : CommonUiMotion.selection,
                 curve: CommonUiMotion.enter,
-                child: _saveError == null
-                    ? const SizedBox.shrink()
-                    : Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
-                            child: _buildFlatInlineMessage(context, _saveError),
-                          ),
-                          divider,
-                        ],
-                      ),
+                child: AnimatedSwitcher(
+                  duration: _reduceMotion ? Duration.zero : CommonUiMotion.component,
+                  switchInCurve: CommonUiMotion.enter,
+                  switchOutCurve: CommonUiMotion.exit,
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, -0.06),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: _saveError == null
+                      ? const SizedBox.shrink(key: ValueKey<String>('save_error_none'))
+                      : Column(
+                          key: ValueKey<String>('save_error_$_saveError'),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+                              child: _buildFlatInlineMessage(context, _saveError),
+                            ),
+                            divider,
+                          ],
+                        ),
+                ),
               ),
               _buildIdentitySection(context),
               divider,

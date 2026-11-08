@@ -406,7 +406,7 @@ class FirestorePlateRepository implements PlateRepository {
         },
       },
       SetOptions(merge: true),
-    ).trackFirestore('SET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+    ).trackFirestore('SET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'monthly_plate_status_view', pathTemplate: 'monthly_plate_status_view/*',);
   }
 
   Future<void> _removeMonthlyViewItem({
@@ -424,7 +424,7 @@ class FirestorePlateRepository implements PlateRepository {
         },
       },
       SetOptions(merge: true),
-    ).trackFirestore('SET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+    ).trackFirestore('SET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'monthly_plate_status_view', pathTemplate: 'monthly_plate_status_view/*',);
   }
 
   Future<void> _rebuildMonthlyViewFromQuery({
@@ -449,7 +449,7 @@ class FirestorePlateRepository implements PlateRepository {
         'items': items,
       },
       SetOptions(merge: true),
-    ).trackFirestore('SET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+    ).trackFirestore('SET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'monthly_plate_status_view', pathTemplate: 'monthly_plate_status_view/*',);
   }
 
   Future<void> _syncMonthlyViewItemFromSource({
@@ -460,7 +460,7 @@ class FirestorePlateRepository implements PlateRepository {
     if (safeArea.isEmpty) return;
     final canonicalPlate = _canonicalPlateNumber(plateNumber);
     final docId = _plateDocId(canonicalPlate, safeArea);
-    final doc = await _firestore.collection(_monthlyPlateStatusCollection).doc(docId).get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+    final doc = await _firestore.collection(_monthlyPlateStatusCollection).doc(docId).get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'monthly_plate_status', pathTemplate: 'monthly_plate_status/*', readPurpose: 'MONTHLY_VIEW_SOURCE_SYNC');
     if (!doc.exists) {
       await _removeMonthlyViewItem(area: safeArea, docId: docId);
       return;
@@ -592,7 +592,7 @@ class FirestorePlateRepository implements PlateRepository {
               final sourceRef = sourcePath.isEmpty
                   ? targetRef
                   : _firestore.doc(sourcePath);
-              final sourceSnapshot = await transaction.get(sourceRef).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+              final sourceSnapshot = await transaction.get(sourceRef).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', documentReference: sourceRef, readPurpose: 'STATUS_MEMO_SOURCE_CONFLICT_CHECK');
               final latestDraft = PlateStatusDraft.fromMap(
                 sourceSnapshot.data(),
               );
@@ -606,7 +606,7 @@ class FirestorePlateRepository implements PlateRepository {
               if (statusScope == PlateStatusScope.monthly) {
                 final monthlySnapshot = sourceRef.path == monthlyRef.path
                     ? sourceSnapshot
-                    : await transaction.get(monthlyRef).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+                    : await transaction.get(monthlyRef).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', documentReference: monthlyRef, readPurpose: 'STATUS_MEMO_MONTHLY_SCOPE_REVALIDATION');
                 final monthlyData = monthlySnapshot.data();
                 if (!monthlySnapshot.exists || monthlyData == null) {
                   throw const PlateStatusScopeException(
@@ -638,7 +638,7 @@ class FirestorePlateRepository implements PlateRepository {
                 return;
               }
 
-              final monthlySnapshot = await transaction.get(monthlyRef).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+              final monthlySnapshot = await transaction.get(monthlyRef).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', documentReference: monthlyRef, readPurpose: 'STATUS_MEMO_MONTHLY_SCOPE_GUARD');
               final monthlyData = monthlySnapshot.data();
               if (monthlySnapshot.exists && monthlyData != null) {
                 final monthlyRecord = PlateStatusRecord.fromMap(
@@ -654,7 +654,7 @@ class FirestorePlateRepository implements PlateRepository {
 
               final currentSnapshot = sourceRef.path == currentHistoryRef.path
                   ? sourceSnapshot
-                  : await transaction.get(currentHistoryRef).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+                  : await transaction.get(currentHistoryRef).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', documentReference: currentHistoryRef, readPurpose: 'STATUS_MEMO_CURRENT_HISTORY_REVALIDATION');
               if (sourceRef.path != currentHistoryRef.path &&
                   currentSnapshot.exists) {
                 final currentDraft = PlateStatusDraft.fromMap(
@@ -811,8 +811,11 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<PlateModel?> getPlate(String documentId) {
-    return _queryService.getPlate(documentId);
+  Future<PlateModel?> getPlate(
+    String documentId, {
+    String readPurpose = 'PLATE_READ_UNCLASSIFIED',
+  }) {
+    return _queryService.getPlate(documentId, readPurpose: readPurpose);
   }
 
   @override
@@ -833,7 +836,7 @@ class FirestorePlateRepository implements PlateRepository {
           .where('isSelected', isEqualTo: true)
           .where('selectedBy', isEqualTo: trimmedUserName)
           .where('type', whereIn: types)
-          .get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+          .get().trackFirestore('QUERY', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'plates', pathTemplate: 'plates', readPurpose: 'DRIVING_RECOVERY',);
 
       final out = snap.docs.map((d) => PlateModel.fromDocument(d)).toList(growable: false);
       out.sort((a, b) {
@@ -849,7 +852,7 @@ class FirestorePlateRepository implements PlateRepository {
           .collection('plates')
           .where('isSelected', isEqualTo: true)
           .where('selectedBy', isEqualTo: trimmedUserName)
-          .get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+          .get().trackFirestore('QUERY', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'plates', pathTemplate: 'plates', readPurpose: 'DRIVING_RECOVERY',);
 
       final out = snap.docs
           .map((d) => PlateModel.fromDocument(d))
@@ -886,12 +889,12 @@ class FirestorePlateRepository implements PlateRepository {
     );
 
     try {
-      final snapServer = await query.get(const GetOptions(source: Source.server)).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+      final snapServer = await query.get(const GetOptions(source: Source.server)).trackFirestore('QUERY', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'plates', pathTemplate: 'plates', readPurpose: 'TYPE_AREA_QUERY_${type.firestoreValue}',);
       final serverResults = _plateModelsFromSnapshot(snapServer, type);
       return PlateFetchResult(items: serverResults, sourceLabel: 'server');
     } catch (_) {
       if (!cacheFirst) rethrow;
-      final snapCache = await query.get(const GetOptions(source: Source.cache)).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+      final snapCache = await query.get(const GetOptions(source: Source.cache)).trackFirestore('QUERY', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'plates', pathTemplate: 'plates', readPurpose: 'TYPE_AREA_QUERY_${type.firestoreValue}',);
       final cacheResults = _plateModelsFromSnapshot(snapCache, type);
       return PlateFetchResult(items: cacheResults, sourceLabel: 'cache');
     }
@@ -929,7 +932,7 @@ class FirestorePlateRepository implements PlateRepository {
         },
       },
       SetOptions(merge: true),
-    ).trackFirestore('SET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+    ).trackFirestore('SET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: c, pathTemplate: '$c/*',);
 
     debugPrint(
       '✅ [FirestorePlateRepository.upsertViewItem] collection=$c area=$a plateId=$docId createdAtSource=transition_snapshot createdAtAvailable=${createdAt != null} additionalPlateRead=0',
@@ -956,7 +959,7 @@ class FirestorePlateRepository implements PlateRepository {
         },
       },
       SetOptions(merge: true),
-    ).trackFirestore('SET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+    ).trackFirestore('SET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: c, pathTemplate: '$c/*',);
   }
 
   @override
@@ -997,7 +1000,12 @@ class FirestorePlateRepository implements PlateRepository {
       return Stream<List<ViewRowData>>.value(const <ViewRowData>[]);
     }
 
-    return _firestore.collection(c).doc(a).snapshots().trackFirestoreSnapshots('shared/plate/data/repositories/firestore_plate_repository.dart').map(
+    return _firestore.collection(c).doc(a).snapshots().trackFirestoreSnapshots(
+      'shared/plate/data/repositories/firestore_plate_repository.dart',
+      collection: c,
+      pathTemplate: '$c/*',
+      operation: 'GET',
+    ).map(
           (snap) => _viewRowsFromSnapshot(
             snap,
             primaryAtField: primaryAtField,
@@ -1019,7 +1027,7 @@ class FirestorePlateRepository implements PlateRepository {
     );
 
     try {
-      final snap = await _firestore.collection('plates').doc(docId).get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+      final snap = await _firestore.collection('plates').doc(docId).get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'plates', pathTemplate: 'plates/*', readPurpose: 'PLATE_HISTORY_FETCH');
 
       if (!snap.exists) {
         throw StateError('문서를 찾을 수 없습니다.');
@@ -1073,7 +1081,7 @@ class FirestorePlateRepository implements PlateRepository {
 
     await _firestore.collection('plates').doc(docId).update({
       'logs': FieldValue.arrayUnion([log]),
-    }).trackFirestore('UPDATE', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+    }).trackFirestore('UPDATE', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'plates', pathTemplate: 'plates/*');
   }
 
   @override
@@ -1118,6 +1126,37 @@ class FirestorePlateRepository implements PlateRepository {
     required String plateNumber,
     required String area,
     required PlateStatusScope scope,
+    String? readPurpose,
+  }) {
+    return FirebaseActivityMeter.instance.traceAction<PlateStatusLookupResult>(
+      kind: readPurpose ?? 'STATUS_LOOKUP',
+      source: 'shared/plate/data/repositories/firestore_plate_repository.dart',
+      plateId: '${plateNumber}_$area',
+      detail: 'scope=${scope.name} purpose=${readPurpose ?? 'UNCLASSIFIED_CALLER'}',
+      isFailureResult: (result) => result.isFailed,
+      action: () async {
+        final result = await _lookupPlateStatus(
+          plateNumber: plateNumber,
+          area: area,
+          scope: scope,
+          readPurpose: readPurpose,
+        );
+        FirebaseActivityMeter.instance.traceStep(
+          'STATUS_LOOKUP_RESULT',
+          source: 'shared/plate/data/repositories/firestore_plate_repository.dart',
+          detail: 'scope=${scope.name} result=${result.isFailed ? 'error' : result.isFound ? 'found' : result.isInactive ? 'inactive' : 'not_found'}',
+          result: result.isFailed ? 'error' : 'success',
+        );
+        return result;
+      },
+    );
+  }
+
+  Future<PlateStatusLookupResult> _lookupPlateStatus({
+    required String plateNumber,
+    required String area,
+    required PlateStatusScope scope,
+    String? readPurpose,
   }) async {
     final safeArea = _safeArea(area);
     final docId = _plateDocId(plateNumber, safeArea);
@@ -1125,7 +1164,7 @@ class FirestorePlateRepository implements PlateRepository {
     if (scope == PlateStatusScope.monthly) {
       final ref = _firestore.collection('monthly_plate_status').doc(docId);
       try {
-        final doc = await ref.get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+        final doc = await ref.get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'monthly_plate_status', pathTemplate: 'monthly_plate_status/*', readPurpose: '${readPurpose ?? 'STATUS_LOOKUP'}_MONTHLY');
         final data = doc.data();
         if (!doc.exists || data == null) {
           return const PlateStatusLookupResult.notFound();
@@ -1171,7 +1210,7 @@ class FirestorePlateRepository implements PlateRepository {
             .doc(monthKey)
             .collection('plates')
             .doc(docId);
-        final doc = await ref.get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+        final doc = await ref.get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'plate_status', pathTemplate: 'plate_status/*/months/*/plates/*', readPurpose: '${readPurpose ?? 'STATUS_LOOKUP'}_${month.month == now.month && month.year == now.year ? 'CURRENT_MONTH' : 'PREVIOUS_MONTH'}',);
         final data = doc.data();
         if (doc.exists && data != null) {
           return PlateStatusLookupResult.found(
@@ -1209,7 +1248,7 @@ class FirestorePlateRepository implements PlateRepository {
       area: safeArea,
     );
     try {
-      final monthlySnapshot = await monthlyRef.get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+      final monthlySnapshot = await monthlyRef.get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', documentReference: monthlyRef, readPurpose: 'STATUS_MEMO_SCOPE_RESOLUTION');
       final monthlyData = monthlySnapshot.data();
       if (monthlySnapshot.exists && monthlyData != null) {
         final record = PlateStatusRecord.fromMap(
@@ -1434,7 +1473,7 @@ class FirestorePlateRepository implements PlateRepository {
       return const <String>[];
     }
 
-    final doc = await _firestore.collection(collectionName).doc(safeArea).get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+    final doc = await _firestore.collection(collectionName).doc(safeArea).get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: collectionName, pathTemplate: '$collectionName/*', readPurpose: 'PARKING_OCCUPANCY_CHECK',);
     if (!doc.exists) {
       return const <String>[];
     }
@@ -1472,7 +1511,7 @@ class FirestorePlateRepository implements PlateRepository {
           .collection('monthly_plate_status')
           .where('area', isEqualTo: safeArea)
           .limit(1)
-          .get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+          .get().trackFirestore('QUERY', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'monthly_plate_status', pathTemplate: 'monthly_plate_status',);
 
       return qs.docs.isNotEmpty;
     } catch (e, st) {
@@ -1506,7 +1545,12 @@ class FirestorePlateRepository implements PlateRepository {
         .where('type', isEqualTo: '정기')
         .where('area', isEqualTo: safeArea)
         .orderBy('updatedAt', descending: true)
-        .snapshots().trackFirestoreSnapshots('shared/plate/data/repositories/firestore_plate_repository.dart')
+        .snapshots().trackFirestoreSnapshots(
+          'shared/plate/data/repositories/firestore_plate_repository.dart',
+          collection: 'monthly_plate_status',
+          pathTemplate: 'monthly_plate_status',
+          operation: 'QUERY',
+        )
         .map((snapshot) => snapshot.docs
             .map((doc) => PlateStatusRecord.fromMap(doc.data(), docId: doc.id))
             .toList(growable: false));
@@ -1542,6 +1586,16 @@ class FirestorePlateRepository implements PlateRepository {
   @override
   Future<List<Map<String, dynamic>>> fetchMonthlyPlateStatusView({
     required String area,
+  }) {
+    return FirebaseActivityMeter.instance.traceAction<List<Map<String, dynamic>>>(
+      kind: 'MONTHLY_LIST_VIEW_LOAD',
+      source: 'shared/plate/data/repositories/firestore_plate_repository.dart',
+      action: () => _fetchMonthlyPlateStatusView(area: area),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchMonthlyPlateStatusView({
+    required String area,
   }) async {
     final safeArea = area.trim();
     if (safeArea.isEmpty) {
@@ -1552,7 +1606,7 @@ class FirestorePlateRepository implements PlateRepository {
       final doc = await _firestore
           .collection(_monthlyPlateStatusViewCollection)
           .doc(safeArea)
-          .get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart')
+          .get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'monthly_plate_status_view', pathTemplate: 'monthly_plate_status_view', readPurpose: 'MONTHLY_LIST_VIEW_FETCH')
           .timeout(const Duration(seconds: 10));
       final data = doc.data() ?? const <String, dynamic>{};
       final items = data['items'];
@@ -1581,12 +1635,17 @@ class FirestorePlateRepository implements PlateRepository {
         return List<Map<String, dynamic>>.unmodifiable(out);
       }
 
+      FirebaseActivityMeter.instance.traceStep(
+        'MONTHLY_VIEW_FALLBACK_REQUIRED',
+        source: 'shared/plate/data/repositories/firestore_plate_repository.dart',
+        detail: 'reason=view_items_missing_or_empty',
+      );
       final source = await _firestore
           .collection(_monthlyPlateStatusCollection)
           .where('type', isEqualTo: '정기')
           .where('area', isEqualTo: safeArea)
           .orderBy('updatedAt', descending: true)
-          .get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart')
+          .get().trackFirestore('QUERY', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'monthly_plate_status', pathTemplate: 'monthly_plate_status', readPurpose: 'MONTHLY_LIST_FALLBACK_QUERY')
           .timeout(const Duration(seconds: 10));
       if (source.docs.isEmpty) {
         return const <Map<String, dynamic>>[];
@@ -1661,7 +1720,7 @@ class FirestorePlateRepository implements PlateRepository {
       final source = await _firestore
           .collection(_monthlyPlateStatusCollection)
           .where('type', isEqualTo: '정기')
-          .get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart')
+          .get().trackFirestore('QUERY', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'monthly_plate_status', pathTemplate: 'monthly_plate_status',)
           .timeout(const Duration(seconds: 30));
 
       final grouped = <String, Map<String, dynamic>>{};
@@ -1687,7 +1746,13 @@ class FirestorePlateRepository implements PlateRepository {
 
       final existingViews = await _firestore
           .collection(_monthlyPlateStatusViewCollection)
-          .get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart')
+          .get()
+          .trackFirestore(
+            'QUERY',
+            'shared/plate/data/repositories/firestore_plate_repository.dart',
+            collection: 'monthly_plate_status_view',
+            pathTemplate: 'monthly_plate_status_view',
+          )
           .timeout(const Duration(seconds: 30));
 
       var batch = _firestore.trackedActivityBatch('shared/plate/data/repositories/firestore_plate_repository.dart');
@@ -1798,7 +1863,7 @@ class FirestorePlateRepository implements PlateRepository {
 
     try {
       await _firestore.runTrackedActivityTransaction((tx) async {
-        final monthlySnap = await tx.get(monthlyRef).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart').timeout(const Duration(seconds: 10));
+        final monthlySnap = await tx.get(monthlyRef).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'monthly_plate_status', pathTemplate: 'monthly_plate_status/*', readPurpose: 'MONTHLY_DELETE_STATE_VALIDATION').timeout(const Duration(seconds: 10));
         final data = monthlySnap.data() ?? <String, dynamic>{};
         final storedArea = _textValue(data['area']);
         final area = storedArea.isNotEmpty ? storedArea : fallbackArea;
@@ -1834,7 +1899,7 @@ class FirestorePlateRepository implements PlateRepository {
         debugPrint(
           '[FirestorePlateRepository][MonthlyMarker] action=delete docId=$trimmed area=$area months=${markerMonths.join(',')}',
         );
-      }).trackFirestore('TRANSACTION', 'shared/plate/data/repositories/firestore_plate_repository.dart').timeout(const Duration(seconds: 10));
+      }).timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.deleteMonthlyPlateStatus',
@@ -1904,7 +1969,7 @@ class FirestorePlateRepository implements PlateRepository {
 
     try {
       await _firestore.runTrackedActivityTransaction((tx) async {
-        final snap = await tx.get(ref).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart').timeout(const Duration(seconds: 10));
+        final snap = await tx.get(ref).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'monthly_plate_status', pathTemplate: 'monthly_plate_status/*', readPurpose: 'MONTHLY_PAYMENT_STATE_VALIDATION').timeout(const Duration(seconds: 10));
         final existing = snap.data() ?? <String, dynamic>{};
         final currentMonthKey = _monthKey(DateTime.now());
         final markerMonths = _markerMonthsFromData(existing);
@@ -1958,7 +2023,7 @@ class FirestorePlateRepository implements PlateRepository {
           },
           SetOptions(merge: true),
         );
-      }).trackFirestore('TRANSACTION', 'shared/plate/data/repositories/firestore_plate_repository.dart').timeout(const Duration(seconds: 10));
+      }).timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.recordMonthlyPaymentAndMaybeExtend',
@@ -2003,7 +2068,7 @@ class FirestorePlateRepository implements PlateRepository {
     final viewRef = _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea);
     try {
       await _firestore.runTrackedActivityTransaction((tx) async {
-        final snap = await tx.get(ref).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart').timeout(const Duration(seconds: 10));
+        final snap = await tx.get(ref).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'monthly_plate_status', pathTemplate: 'monthly_plate_status/*', readPurpose: 'MONTHLY_EXTENSION_STATE_VALIDATION').timeout(const Duration(seconds: 10));
         final existing = snap.data() ?? <String, dynamic>{};
         final payload = <String, dynamic>{
           'startDate': startDate,
@@ -2036,7 +2101,7 @@ class FirestorePlateRepository implements PlateRepository {
           },
           SetOptions(merge: true),
         );
-      }).trackFirestore('TRANSACTION', 'shared/plate/data/repositories/firestore_plate_repository.dart').timeout(const Duration(seconds: 10));
+      }).timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.extendMonthlyDateRange',
@@ -2071,7 +2136,7 @@ class FirestorePlateRepository implements PlateRepository {
     final viewRef = _firestore.collection(_monthlyPlateStatusViewCollection).doc(safeArea);
     try {
       await _firestore.runTrackedActivityTransaction((tx) async {
-        final snap = await tx.get(ref).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart').timeout(const Duration(seconds: 10));
+        final snap = await tx.get(ref).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', documentReference: ref, readPurpose: 'MONTHLY_MEMO_CLEAR_STATE_VALIDATION').timeout(const Duration(seconds: 10));
         final existing = snap.data() ?? <String, dynamic>{};
         final payload = <String, dynamic>{
           'customStatus': '',
@@ -2103,7 +2168,7 @@ class FirestorePlateRepository implements PlateRepository {
           },
           SetOptions(merge: true),
         );
-      }).trackFirestore('TRANSACTION', 'shared/plate/data/repositories/firestore_plate_repository.dart').timeout(const Duration(seconds: 10));
+      }).timeout(const Duration(seconds: 10));
     } catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.clearMonthlyMemoAndStatusWithAudit',
@@ -2135,7 +2200,7 @@ class FirestorePlateRepository implements PlateRepository {
       return null;
     }
 
-    final doc = await _firestore.collection(safeCollection).doc(safeArea).get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+    final doc = await _firestore.collection(safeCollection).doc(safeArea).get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: safeCollection, pathTemplate: '$safeCollection/*', readPurpose: FirebaseActivityMeter.instance.currentActionTrace?.kind.startsWith('TTS_') == true ? 'TTS_VIEW_REFRESH' : 'VIEW_DOCUMENT_FETCH',);
     return doc.data();
   }
 
@@ -2155,7 +2220,7 @@ class FirestorePlateRepository implements PlateRepository {
         .where('area', isEqualTo: trimmedArea)
         .where('type', isEqualTo: plateType.firestoreValue)
         .count()
-        .get().trackFirestore('AGGREGATION', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+        .get().trackFirestore('AGGREGATION', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'plates', pathTemplate: 'plates',);
 
     return aggregate.count ?? 0;
   }
@@ -2188,7 +2253,7 @@ class FirestorePlateRepository implements PlateRepository {
         .where('logScope', isEqualTo: 'plate_out_log')
         .where('area', isEqualTo: safeArea)
         .where('plate_four_digit', isEqualTo: fourDigit)
-        .get().trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart');
+        .get().trackFirestore('QUERY', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: 'plates', pathTemplate: '**/plates');
 
     final items = snapshot.docs
         .map((doc) => PlateOutLogSearchResult(
@@ -2301,7 +2366,7 @@ class FirestorePlateRepository implements PlateRepository {
       );
 
       await _firestore.runTrackedActivityTransaction((tx) async {
-        final snap = await tx.get(ref).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart').timeout(const Duration(seconds: 10));
+        final snap = await tx.get(ref).trackFirestore('GET', 'shared/plate/data/repositories/firestore_plate_repository.dart', documentReference: ref, readPurpose: 'MONTHLY_STATUS_UPSERT_STATE_VALIDATION').timeout(const Duration(seconds: 10));
         final existing = snap.data() ?? <String, dynamic>{};
 
         if (emptyMonthly) {
@@ -2395,7 +2460,7 @@ class FirestorePlateRepository implements PlateRepository {
           },
           SetOptions(merge: true),
         );
-      }).trackFirestore('TRANSACTION', 'shared/plate/data/repositories/firestore_plate_repository.dart').timeout(const Duration(seconds: 10));
+      }).timeout(const Duration(seconds: 10));
     } on FirebaseException catch (e, st) {
       await _showMonthlyFirebaseDebug(
         operation: 'monthly.setMonthlyPlateStatus',

@@ -116,7 +116,7 @@ class CommuteLogRepository {
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
-    ).trackFirestore('SET', 'features/commute/domain/repositories/commute_log_repository.dart');
+    ).trackFirestore('SET', 'features/commute/domain/repositories/commute_log_repository.dart', collection: 'commute_user_logs');
   }
 
   void _recordOptimization(
@@ -174,7 +174,7 @@ class CommuteLogRepository {
       userId: userId,
       status: status,
       yearMonth: yearMonth,
-    ).get().trackFirestore('GET', '$_source.readMonthLogs');
+    ).get().trackFirestore('GET', '$_source.readMonthLogs', collection: 'commute_user_logs', readPurpose: 'COMMUTE_MONTH_LOG_FETCH');
     if (!snap.exists) return <String, dynamic>{};
     return _extractLogsMap(snap.data());
   }
@@ -316,7 +316,7 @@ class CommuteLogRepository {
           'logs': logsPayload,
         },
         SetOptions(merge: true),
-      ).trackFirestore('SET', 'features/commute/domain/repositories/commute_log_repository.dart');
+      ).trackFirestore('SET', 'features/commute/domain/repositories/commute_log_repository.dart', collection: 'commute_user_logs');
     }
   }
 
@@ -358,7 +358,7 @@ class CommuteLogRepository {
           'logs': logsPayload,
         },
         SetOptions(merge: true),
-      ).trackFirestore('SET', 'features/commute/domain/repositories/commute_log_repository.dart');
+      ).trackFirestore('SET', 'features/commute/domain/repositories/commute_log_repository.dart', collection: 'commute_user_logs');
 
       await _deleteMonthDocIfEmpty(
         status: status,
@@ -384,12 +384,12 @@ class CommuteLogRepository {
       status: status,
       yearMonth: yearMonth,
     );
-    final snap = await docRef.get().trackFirestore('GET', 'features/commute/domain/repositories/commute_log_repository.dart');
+    final snap = await docRef.get().trackFirestore('GET', 'features/commute/domain/repositories/commute_log_repository.dart', collection: 'commute_user_logs', readPurpose: 'COMMUTE_MONTH_EMPTY_DOCUMENT_RECHECK');
     if (!snap.exists) return;
 
     final logs = _extractLogsMap(snap.data());
     if (logs.isEmpty) {
-      await docRef.delete().trackFirestore('DELETE', 'features/commute/domain/repositories/commute_log_repository.dart');
+      await docRef.delete().trackFirestore('DELETE', 'features/commute/domain/repositories/commute_log_repository.dart', collection: 'commute_user_logs');
     }
   }
 

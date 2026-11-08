@@ -18,7 +18,7 @@ class BillDeleteService {
       
 
       
-      await docRef.delete().trackFirestore('DELETE', 'features/payment/data/services/bill_delete_service.dart');
+      await docRef.delete().trackFirestore('DELETE', 'features/payment/data/services/bill_delete_service.dart', collection: 'bill');
 
       
     } catch (_) {

@@ -14,7 +14,7 @@ class PlateBillingCountRepository {
       _firestore.collection(PlateBillingCountService.collectionName);
 
   Future<List<PlateBillingCountModel>> fetchByMonth(String month) async {
-    final snapshot = await _collection.where('month', isEqualTo: month).get().trackFirestore('GET', 'features/dev/data/repositories/plate_billing_count_repository.dart');
+    final snapshot = await _collection.where('month', isEqualTo: month).get().trackFirestore('QUERY', 'features/dev/data/repositories/plate_billing_count_repository.dart', collection: 'plate_billing_counts');
     final rows = snapshot.docs
         .where((doc) => doc.data()['aggregationAxis'] == 'division_area')
         .map(PlateBillingCountModel.fromDoc)
@@ -31,11 +31,11 @@ class PlateBillingCountRepository {
   }
 
   Future<void> deleteDocument(String id) async {
-    await _collection.doc(id).delete().trackFirestore('DELETE', 'features/dev/data/repositories/plate_billing_count_repository.dart');
+    await _collection.doc(id).delete().trackFirestore('DELETE', 'features/dev/data/repositories/plate_billing_count_repository.dart', collection: 'plate_billing_counts');
   }
 
   Future<int> deleteMonth(String month) async {
-    final snapshot = await _collection.where('month', isEqualTo: month).get().trackFirestore('GET', 'features/dev/data/repositories/plate_billing_count_repository.dart');
+    final snapshot = await _collection.where('month', isEqualTo: month).get().trackFirestore('QUERY', 'features/dev/data/repositories/plate_billing_count_repository.dart', collection: 'plate_billing_counts');
     if (snapshot.docs.isEmpty) return 0;
     var deleted = 0;
     for (var i = 0; i < snapshot.docs.length; i += 450) {
@@ -45,7 +45,7 @@ class PlateBillingCountRepository {
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'features/dev/data/repositories/plate_billing_count_repository.dart', result: 'staged');
         batch.delete(doc.reference);
       }
-      await batch.commit().trackFirestore('BATCH', 'features/dev/data/repositories/plate_billing_count_repository.dart');
+      await batch.commit().trackFirestore('BATCH', 'features/dev/data/repositories/plate_billing_count_repository.dart', collection: 'plate_billing_counts');
       deleted += end - i;
     }
     return deleted;

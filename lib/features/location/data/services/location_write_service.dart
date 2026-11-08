@@ -214,13 +214,13 @@ class LocationWriteService {
     data.remove('childSlots');
 
     await _firestore.runTrackedActivityTransaction((transaction) async {
-      final snapshot = await transaction.get(ref).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
+      final snapshot = await transaction.get(ref).trackFirestore('GET', 'features/location/data/services/location_write_service.dart', collection: 'locations', pathTemplate: 'locations/*', readPurpose: 'LOCATION_PARENT_CREATE_EXISTENCE_CHECK');
       if (snapshot.exists) {
         throw StateError('이미 존재하는 텍스트형 구역입니다.');
       }
       FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
       transaction.set(ref, data);
-    }).trackFirestore('TRANSACTION', 'features/location/data/services/location_write_service.dart');
+    });
 
     debugPrint(
       'createPlainTextLocation id=${location.id} area=${location.area} name=$locationName capacity=${location.capacity}',
@@ -243,13 +243,13 @@ class LocationWriteService {
     final ref = _firestore.collection('locations').doc(parent.id);
 
     await _firestore.runTrackedActivityTransaction((transaction) async {
-      final snapshot = await transaction.get(ref).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
+      final snapshot = await transaction.get(ref).trackFirestore('GET', 'features/location/data/services/location_write_service.dart', collection: 'locations', pathTemplate: 'locations/*', readPurpose: 'LOCATION_PARENT_UPDATE_VALIDATION');
       if (snapshot.exists) {
         throw StateError('이미 존재하는 부모 구역입니다.');
       }
       FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
       transaction.set(ref, data, SetOptions(merge: true));
-    }).trackFirestore('TRANSACTION', 'features/location/data/services/location_write_service.dart');
+    });
 
     debugPrint(
       'createCompositeParent id=${parent.id} area=${parent.area} name=$parentName',
@@ -295,7 +295,7 @@ class LocationWriteService {
     }
 
     await _firestore.runTrackedActivityTransaction((transaction) async {
-      final parentSnapshot = await transaction.get(parentRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
+      final parentSnapshot = await transaction.get(parentRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart', documentReference: parentRef, readPurpose: 'LOCATION_CHILDREN_REPLACE_PARENT_VALIDATION');
       if (!parentSnapshot.exists ||
           (parentSnapshot.data()?['type'] ?? '').toString() !=
               'composite_parent') {
@@ -304,7 +304,7 @@ class LocationWriteService {
 
       final previousSlotIdsByChild = <String, Set<String>>{};
       for (final child in children) {
-        final childSnapshot = await transaction.get(childRefs[child.id]!).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
+        final childSnapshot = await transaction.get(childRefs[child.id]!).trackFirestore('GET', 'features/location/data/services/location_write_service.dart', collection: 'locations', pathTemplate: 'locations/*', readPurpose: 'LOCATION_CHILDREN_REPLACE_CHILD_VALIDATION');
         if (!childSnapshot.exists) {
           throw StateError('수정할 자식 구역이 없습니다: ${child.id}');
         }
@@ -321,7 +321,7 @@ class LocationWriteService {
           <String, DocumentSnapshot<Map<String, dynamic>>>{};
       for (final areaId in nextOwnerByAreaId.keys) {
         reservationSnapshots[areaId] =
-            await transaction.get(_reservationRef(parent.id, areaId)).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
+            await transaction.get(_reservationRef(parent.id, areaId)).trackFirestore('GET', 'features/location/data/services/location_write_service.dart', collection: 'locationSlotReservations', pathTemplate: 'locationSlotReservations/*', readPurpose: 'LOCATION_CHILDREN_REPLACE_RESERVATION_CONFLICT_CHECK');
       }
 
       for (final entry in reservationSnapshots.entries) {
@@ -368,7 +368,7 @@ class LocationWriteService {
           _reservationData(parent: parent, child: child, areaId: entry.key),
         );
       }
-    }).trackFirestore('TRANSACTION', 'features/location/data/services/location_write_service.dart');
+    });
 
     debugPrint(
       'updateCompositeParentWithChildren parent=${parent.id} children=${children.length}',
@@ -398,11 +398,11 @@ class LocationWriteService {
     };
 
     await _firestore.runTrackedActivityTransaction((transaction) async {
-      final parentSnapshot = await transaction.get(parentRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
-      final childSnapshot = await transaction.get(childRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
+      final parentSnapshot = await transaction.get(parentRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart', documentReference: parentRef, readPurpose: 'LOCATION_CHILD_CREATE_PARENT_VALIDATION');
+      final childSnapshot = await transaction.get(childRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart', collection: 'locations', pathTemplate: 'locations/*', readPurpose: 'LOCATION_CHILD_CREATE_DUPLICATE_CHECK');
       final reservationSnapshots = <String, DocumentSnapshot<Map<String, dynamic>>>{};
       for (final entry in reservationRefs.entries) {
-        reservationSnapshots[entry.key] = await transaction.get(entry.value).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
+        reservationSnapshots[entry.key] = await transaction.get(entry.value).trackFirestore('GET', 'features/location/data/services/location_write_service.dart', collection: 'locationSlotReservations', pathTemplate: 'locationSlotReservations/*', readPurpose: 'LOCATION_CHILD_CREATE_RESERVATION_CONFLICT_CHECK');
       }
 
       if (!parentSnapshot.exists ||
@@ -429,7 +429,7 @@ class LocationWriteService {
           _reservationData(parent: parent, child: child, areaId: areaId),
         );
       }
-    }).trackFirestore('TRANSACTION', 'features/location/data/services/location_write_service.dart');
+    });
 
     debugPrint(
       'createCompositeChild id=${child.id} parentId=${parent.id} slots=${slotIds.length}',
@@ -459,13 +459,13 @@ class LocationWriteService {
     final nextIds = _slotIds(updated);
 
     await _firestore.runTrackedActivityTransaction((transaction) async {
-      final parentSnapshot = await transaction.get(parentRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
-      final childSnapshot = await transaction.get(childRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
+      final parentSnapshot = await transaction.get(parentRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart', documentReference: parentRef, readPurpose: 'LOCATION_CHILD_UPDATE_PARENT_VALIDATION');
+      final childSnapshot = await transaction.get(childRef).trackFirestore('GET', 'features/location/data/services/location_write_service.dart', collection: 'locations', pathTemplate: 'locations/*', readPurpose: 'LOCATION_CHILD_UPDATE_SOURCE_VALIDATION');
       final reservationSnapshots =
           <String, DocumentSnapshot<Map<String, dynamic>>>{};
       for (final areaId in nextIds) {
         reservationSnapshots[areaId] =
-            await transaction.get(_reservationRef(parent.id, areaId)).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
+            await transaction.get(_reservationRef(parent.id, areaId)).trackFirestore('GET', 'features/location/data/services/location_write_service.dart', collection: 'locationSlotReservations', pathTemplate: 'locationSlotReservations/*', readPurpose: 'LOCATION_CHILD_UPDATE_RESERVATION_CONFLICT_CHECK');
       }
 
       if (!parentSnapshot.exists ||
@@ -509,7 +509,7 @@ class LocationWriteService {
           _reservationData(parent: parent, child: updated, areaId: areaId),
         );
       }
-    }).trackFirestore('TRANSACTION', 'features/location/data/services/location_write_service.dart');
+    });
 
     debugPrint(
       'updateCompositeChild id=${updated.id} parentId=${parent.id} slots=${nextIds.length}',
@@ -541,13 +541,13 @@ class LocationWriteService {
     data['childSlots'] = FieldValue.delete();
 
     await _firestore.runTrackedActivityTransaction((transaction) async {
-      final snapshot = await transaction.get(ref).trackFirestore('GET', 'features/location/data/services/location_write_service.dart');
+      final snapshot = await transaction.get(ref).trackFirestore('GET', 'features/location/data/services/location_write_service.dart', documentReference: ref, readPurpose: 'LOCATION_LEGACY_DOCUMENT_UPDATE_VALIDATION');
       if (!snapshot.exists) {
         throw StateError('수정할 텍스트 구역이 없습니다.');
       }
       FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'features/location/data/services/location_write_service.dart', result: 'staged');
       transaction.update(ref, data);
-    }).trackFirestore('TRANSACTION', 'features/location/data/services/location_write_service.dart');
+    });
     debugPrint(
       'updatePlainTextLocation id=${location.id} area=${location.area} name=$locationName',
     );

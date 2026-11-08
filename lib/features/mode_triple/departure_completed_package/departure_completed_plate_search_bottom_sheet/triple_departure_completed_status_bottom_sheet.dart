@@ -205,7 +205,7 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
         n: 1,
       );
 
-      final freshPlate = await repo.getPlate(documentId) ?? fallbackPlate;
+      final freshPlate = await repo.getPlate(documentId, readPurpose: 'POST_BILLING_SETTLEMENT_REFRESH') ?? fallbackPlate;
 
       await plateState.tripleUpdatePlateLocally(
         PlateType.departureCompleted,
@@ -295,7 +295,7 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
           source: 'departureCompletedStatus.prebill.repo.settlePlateBilling',
           n: 1,
         );
-        final freshPlate = await repo.getPlate(plateId) ?? fallbackPlate;
+        final freshPlate = await repo.getPlate(plateId, readPurpose: 'POST_BILLING_SETTLEMENT_REFRESH') ?? fallbackPlate;
         await plateState.tripleUpdatePlateLocally(
           PlateType.departureCompleted,
           freshPlate,
@@ -388,7 +388,7 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
         n: 1,
       );
 
-      final refreshedPlate = await repo.getPlate(plateId) ?? fallbackPlate;
+      final refreshedPlate = await repo.getPlate(plateId, readPurpose: 'POST_BILLING_CANCEL_REFRESH') ?? fallbackPlate;
 
       await plateState.tripleUpdatePlateLocally(
         PlateType.departureCompleted,

@@ -1,6 +1,6 @@
-import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:io';
 import 'dart:async';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
@@ -502,7 +502,12 @@ class InputPlateService {
     }
 
     try {
-      return await inputState.commonRegisterPlateEntry(
+      FirebaseActivityMeter.instance.traceStep(
+        'REGISTER_PERSIST_START',
+        source: 'shared/page/input/application/input_plate_service.dart',
+        detail: 'statusWriteRequested=$statusWriteRequested scope=$selectedBillType',
+      );
+      final registered = await inputState.commonRegisterPlateEntry(
         context: context,
         plateNumber: plateNumber,
         location: location,
@@ -534,7 +539,20 @@ class InputPlateService {
         sectorId: sectorId,
         sectorName: sectorName,
       );
+      FirebaseActivityMeter.instance.traceStep(
+        'REGISTER_PERSIST_RESULT',
+        source: 'shared/page/input/application/input_plate_service.dart',
+        detail: 'registered=$registered',
+        result: registered ? 'success' : 'blocked',
+      );
+      return registered;
     } catch (e) {
+      FirebaseActivityMeter.instance.traceStep(
+        'REGISTER_PERSIST_FAILED',
+        source: 'shared/page/input/application/input_plate_service.dart',
+        detail: 'errorType=${e.runtimeType}',
+        result: 'error',
+      );
       await _logApiError(
         tag: 'InputPlateService.registerPlateEntry',
         message: '입차 등록(registerPlateEntry) 실패',

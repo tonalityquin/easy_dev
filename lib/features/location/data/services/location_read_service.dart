@@ -18,7 +18,7 @@ class LocationReadService {
       snapshot = await _firestore
           .collection('locations')
           .where('area', isEqualTo: cleanArea)
-          .get().trackFirestore('GET', 'features/location/data/services/location_read_service.dart');
+          .get().trackFirestore('QUERY', 'features/location/data/services/location_read_service.dart', collection: 'locations');
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint('❌ locations.read 실패(area=$cleanArea): $e');

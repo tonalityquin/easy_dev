@@ -16,7 +16,7 @@ class BillWriteService {
         (key, value) => value == null || value.toString().trim().isEmpty);
 
     try {
-      await docRef.set(data).trackFirestore('SET', 'features/payment/data/services/bill_write_service.dart');
+      await docRef.set(data).trackFirestore('SET', 'features/payment/data/services/bill_write_service.dart', collection: 'bill');
       debugPrint("✅ 일반 정산 저장 성공: ${bill.id}");
     } catch (e, st) {
       debugPrint("🔥 일반 정산 저장 실패: $e");
@@ -33,7 +33,7 @@ class BillWriteService {
         (key, value) => value == null || value.toString().trim().isEmpty);
 
     try {
-      await docRef.set(data).trackFirestore('SET', 'features/payment/data/services/bill_write_service.dart');
+      await docRef.set(data).trackFirestore('SET', 'features/payment/data/services/bill_write_service.dart', collection: 'bill');
       debugPrint("✅ 정기 정산 저장 성공: ${bill.id}");
     } catch (e, st) {
       debugPrint("🔥 정기 정산 저장 실패: $e");

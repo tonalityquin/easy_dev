@@ -286,108 +286,115 @@ class PlateWriteService {
   }
 
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate) async {
-    final docRef = _firestore.collection('plates').doc(documentId);
+    await FirebaseActivityMeter.instance.traceAction<void>(
+      kind: 'PLATE_UPSERT',
+      source: 'shared/plate/domain/services/plate_write_service.dart',
+      plateId: documentId,
+      action: () async {
+        final docRef = _firestore.collection('plates').doc(documentId);
 
-    try {
-      final docSnapshot =
-          await docRef.get().trackFirestore('GET', 'shared/plate/domain/services/plate_write_service.dart').timeout(const Duration(seconds: 10));
+        try {
+          final docSnapshot =
+              await docRef.get().trackFirestore('GET', 'shared/plate/domain/services/plate_write_service.dart', collection: 'plates', pathTemplate: 'plates/*', readPurpose: 'UPSERT_EXISTENCE_CHECK').timeout(const Duration(seconds: 10));
 
-      var newData = plate.toMap();
+          var newData = plate.toMap();
 
-      if (newData.containsKey(PlateFields.location)) {
-        newData[PlateFields.location] =
-            _normalizePlatesLocationValue(newData[PlateFields.location]);
-      }
+          if (newData.containsKey(PlateFields.location)) {
+            newData[PlateFields.location] =
+                _normalizePlatesLocationValue(newData[PlateFields.location]);
+          }
 
-      newData = _enforceZeroFeeLock(newData, existing: docSnapshot.data());
+          newData = _enforceZeroFeeLock(newData, existing: docSnapshot.data());
 
-      final exists = docSnapshot.exists;
-      if (!exists) {
-        newData[PlateFields.createdAt] = FieldValue.serverTimestamp();
-      }
-      final existingData = docSnapshot.data() ?? const <String, dynamic>{};
+          final exists = docSnapshot.exists;
+          if (!exists) {
+            newData[PlateFields.createdAt] = FieldValue.serverTimestamp();
+          }
+          final existingData = docSnapshot.data() ?? const <String, dynamic>{};
 
-      final compOld = Map<String, dynamic>.from(existingData)
-        ..remove(PlateFields.logs);
-      final compNew = Map<String, dynamic>.from(newData)
-        ..remove(PlateFields.logs);
+          final compOld = Map<String, dynamic>.from(existingData)
+            ..remove(PlateFields.logs);
+          final compNew = Map<String, dynamic>.from(newData)
+            ..remove(PlateFields.logs);
 
-      if (exists && _isSameData(compOld, compNew)) {
-        return;
-      }
+          if (exists && _isSameData(compOld, compNew)) {
+            return;
+          }
 
-      if (exists) {
-        newData.remove(PlateFields.logs);
-      }
+          if (exists) {
+            newData.remove(PlateFields.logs);
+          }
 
-      newData['updatedAt'] = FieldValue.serverTimestamp();
+          newData['updatedAt'] = FieldValue.serverTimestamp();
 
-      await docRef
-          .set(newData, SetOptions(merge: true)).trackFirestore('SET', 'shared/plate/domain/services/plate_write_service.dart')
-          .timeout(const Duration(seconds: 10));
+          await docRef
+              .set(newData, SetOptions(merge: true)).trackFirestore('SET', 'shared/plate/domain/services/plate_write_service.dart', collection: 'plates', pathTemplate: 'plates/*',)
+              .timeout(const Duration(seconds: 10));
 
-      final action = exists ? 'update' : 'create';
-      final createdAtGuard = exists ? 'preserved' : 'serverTimestamp_assigned';
-      debugPrint(
-        '✅ [PlateWriteService.addOrUpdatePlate] documentId=$documentId action=$action createdAtGuard=$createdAtGuard',
-      );
+          final action = exists ? 'update' : 'create';
+          final createdAtGuard = exists ? 'preserved' : 'serverTimestamp_assigned';
+          debugPrint(
+            '✅ [PlateWriteService.addOrUpdatePlate] documentId=$documentId action=$action createdAtGuard=$createdAtGuard',
+          );
 
-      unawaited(
-        DevFirebaseDebugDialog.show(
-          operation: 'PlateWriteService.addOrUpdatePlate.$action',
-          details: <String, Object?>{
-            'documentId': documentId,
-            'action': action,
-            'createdAtSource': exists
-                ? 'existing_document_preserved'
-                : 'FieldValue.serverTimestamp()',
-            'createdAtGuard': createdAtGuard,
-            'updatedAtSource': 'FieldValue.serverTimestamp()',
-          },
-          title: 'Plate 저장 확인',
-          useCommonUi: true,
-          success: true,
-          copyAsDebugPrintCode: true,
-          devModeOnly: true,
-        ),
-      );
-    } on TimeoutException catch (error, stackTrace) {
-      await DevFirebaseDebugDialog.show(
-        operation: 'PlateWriteService.addOrUpdatePlate.timeout',
-        error: error,
-        stackTrace: stackTrace,
-        details: <String, Object?>{'documentId': documentId},
-        title: 'Plate 저장 실패',
-        useCommonUi: true,
-        copyAsDebugPrintCode: true,
-        devModeOnly: true,
-      );
-      rethrow;
-    } on FirebaseException catch (error, stackTrace) {
-      await DevFirebaseDebugDialog.show(
-        operation: 'PlateWriteService.addOrUpdatePlate.firebase',
-        error: error,
-        stackTrace: stackTrace,
-        details: <String, Object?>{'documentId': documentId},
-        title: 'Plate 저장 실패',
-        useCommonUi: true,
-        copyAsDebugPrintCode: true,
-        devModeOnly: true,
-      );
-      rethrow;
-    } catch (error, stackTrace) {
-      await DevFirebaseDebugDialog.show(
-        operation: 'PlateWriteService.addOrUpdatePlate.unknown',
-        error: error,
-        stackTrace: stackTrace,
-        details: <String, Object?>{'documentId': documentId},
-        title: 'Plate 저장 실패',
-        useCommonUi: true,
-        copyAsDebugPrintCode: true,
-        devModeOnly: true,
-      );
-      rethrow;
-    }
+          unawaited(
+            DevFirebaseDebugDialog.show(
+              operation: 'PlateWriteService.addOrUpdatePlate.$action',
+              details: <String, Object?>{
+                'documentId': documentId,
+                'action': action,
+                'createdAtSource': exists
+                    ? 'existing_document_preserved'
+                    : 'FieldValue.serverTimestamp()',
+                'createdAtGuard': createdAtGuard,
+                'updatedAtSource': 'FieldValue.serverTimestamp()',
+              },
+              title: 'Plate 저장 확인',
+              useCommonUi: true,
+              success: true,
+              copyAsDebugPrintCode: true,
+              devModeOnly: true,
+            ),
+          );
+        } on TimeoutException catch (error, stackTrace) {
+          await DevFirebaseDebugDialog.show(
+            operation: 'PlateWriteService.addOrUpdatePlate.timeout',
+            error: error,
+            stackTrace: stackTrace,
+            details: <String, Object?>{'documentId': documentId},
+            title: 'Plate 저장 실패',
+            useCommonUi: true,
+            copyAsDebugPrintCode: true,
+            devModeOnly: true,
+          );
+          rethrow;
+        } on FirebaseException catch (error, stackTrace) {
+          await DevFirebaseDebugDialog.show(
+            operation: 'PlateWriteService.addOrUpdatePlate.firebase',
+            error: error,
+            stackTrace: stackTrace,
+            details: <String, Object?>{'documentId': documentId},
+            title: 'Plate 저장 실패',
+            useCommonUi: true,
+            copyAsDebugPrintCode: true,
+            devModeOnly: true,
+          );
+          rethrow;
+        } catch (error, stackTrace) {
+          await DevFirebaseDebugDialog.show(
+            operation: 'PlateWriteService.addOrUpdatePlate.unknown',
+            error: error,
+            stackTrace: stackTrace,
+            details: <String, Object?>{'documentId': documentId},
+            title: 'Plate 저장 실패',
+            useCommonUi: true,
+            copyAsDebugPrintCode: true,
+            devModeOnly: true,
+          );
+          rethrow;
+        }
+      },
+    );
   }
 
   Future<void> updatePlate(
@@ -399,400 +406,414 @@ class PlateWriteService {
       Map<String, dynamic> before,
     )? transactionExtension,
   }) async {
-    final docRef = _firestore.collection('plates').doc(documentId);
+    await FirebaseActivityMeter.instance.traceAction<void>(
+      kind: 'PLATE_UPDATE',
+      source: 'shared/plate/domain/services/plate_write_service.dart',
+      plateId: documentId,
+      action: () async {
+        final docRef = _firestore.collection('plates').doc(documentId);
 
-    final bool shouldSyncPcView = await _shouldSyncParkingCompletedView();
-    final bool shouldSyncDepView = await _shouldSyncDepartureRequestsView();
-    final bool shouldSyncReqView = await _shouldSyncParkingRequestsView();
+        final bool shouldSyncPcView = await _shouldSyncParkingCompletedView();
+        final bool shouldSyncDepView = await _shouldSyncDepartureRequestsView();
+        final bool shouldSyncReqView = await _shouldSyncParkingRequestsView();
 
-    try {
-      await _firestore.runTrackedActivityTransaction((tx) async {
-        final snap = await tx.get(docRef).trackFirestore('GET', 'shared/plate/domain/services/plate_write_service.dart');
-        if (!snap.exists) {
-          throw FirebaseException(
-            plugin: 'cloud_firestore',
-            code: 'not-found',
-            message: 'plate $documentId not found',
-          );
-        }
+        try {
+          await _firestore.runTrackedActivityTransaction((tx) async {
+            final snap = await tx.get(docRef).trackFirestore('GET', 'shared/plate/domain/services/plate_write_service.dart', collection: 'plates', pathTemplate: 'plates/*', readPurpose: 'TRANSACTION_UPDATE_VALIDATION',);
+            if (!snap.exists) {
+              throw FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'not-found',
+                message: 'plate $documentId not found',
+              );
+            }
 
-        final before = snap.data() ?? <String, dynamic>{};
+            final before = snap.data() ?? <String, dynamic>{};
 
-        final fields = _enforceZeroFeeLock(
-          Map<String, dynamic>.from(updatedFields),
-          existing: before,
-        );
-
-        if (fields.containsKey(PlateFields.location)) {
-          fields[PlateFields.location] =
-              _normalizePlatesLocationValue(fields[PlateFields.location]);
-        }
-
-        if (log != null) {
-          fields['logs'] = FieldValue.arrayUnion([log.toMap()]);
-        }
-
-        fields['updatedAt'] = FieldValue.serverTimestamp();
-
-        if (transactionExtension != null) {
-          await transactionExtension(tx, before);
-        }
-        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
-        tx.update(docRef, fields);
-
-        final String beforeType =
-            ((before[PlateFields.type] as String?) ?? '').trim();
-        final String afterType =
-            (((fields[PlateFields.type] as String?) ?? beforeType)).trim();
-
-        final String beforeArea = _extractAreaFromPlateDoc(before, documentId);
-
-        final String afterArea = (() {
-          final raw = fields[PlateFields.area];
-          if (raw is String && raw.trim().isNotEmpty) return raw.trim();
-          return beforeArea;
-        })();
-
-        final String beforePlateNumber =
-            _extractPlateNumberFromPlateDoc(before, documentId);
-
-        String afterPlateNumber = beforePlateNumber;
-        final String? pn1 = (fields['plateNumber'] as String?)?.trim();
-        final String? pn2 =
-            (fields[PlateFields.plateNumber] as String?)?.trim();
-        if (pn1 != null && pn1.isNotEmpty) {
-          afterPlateNumber = pn1;
-        } else if (pn2 != null && pn2.isNotEmpty) {
-          afterPlateNumber = pn2;
-        }
-
-        final String beforeLocation =
-            _normalizeLocation(before[PlateFields.location]);
-        final String afterLocation = _normalizeLocation(
-          fields.containsKey(PlateFields.location)
-              ? fields[PlateFields.location]
-              : before[PlateFields.location],
-        );
-
-        final bool beforeSelected = _toBool(before[PlateFields.isSelected]);
-        final bool afterSelected = fields.containsKey(PlateFields.isSelected)
-            ? _toBool(fields[PlateFields.isSelected])
-            : beforeSelected;
-
-        final String beforeSelectedBy =
-            ((before[PlateFields.selectedBy] as String?) ?? '').trim();
-        final String afterSelectedBy = (() {
-          final raw = fields[PlateFields.selectedBy];
-          if (raw is String) return raw.trim();
-          if (fields.containsKey(PlateFields.selectedBy)) return '';
-          return beforeSelectedBy;
-        })();
-
-        final String beforeSectorId =
-            (before[PlateFields.sectorId]?.toString() ?? '').trim();
-        final String beforeSectorName =
-            (before[PlateFields.sectorName]?.toString() ?? '').trim();
-        final String afterSectorId = (() {
-          if (!fields.containsKey(PlateFields.sectorId)) return beforeSectorId;
-          final raw = fields[PlateFields.sectorId];
-          return raw is String ? raw.trim() : '';
-        })();
-        final String afterSectorName = (() {
-          if (!fields.containsKey(PlateFields.sectorName)) {
-            return beforeSectorName;
-          }
-          final raw = fields[PlateFields.sectorName];
-          return raw is String ? raw.trim() : '';
-        })();
-
-        final bool typeChanged = beforeType != afterType;
-        final bool areaChanged = beforeArea != afterArea;
-        final bool locationChanged = beforeLocation != afterLocation;
-        final bool plateNumberChanged = beforePlateNumber != afterPlateNumber;
-        final bool selectedChanged = beforeSelected != afterSelected;
-        final bool selectedByChanged = beforeSelectedBy != afterSelectedBy;
-        final bool sectorChanged = beforeSectorId != afterSectorId ||
-            beforeSectorName != afterSectorName;
-        final dynamic originalCreatedAt = before[PlateFields.createdAt];
-
-        final bool affectsViews = typeChanged ||
-            areaChanged ||
-            locationChanged ||
-            plateNumberChanged ||
-            selectedChanged ||
-            selectedByChanged ||
-            sectorChanged;
-
-        if (!affectsViews) {
-          return;
-        }
-
-        DocumentReference<Map<String, dynamic>> _viewRef(
-          String collection,
-          String area,
-        ) =>
-            _firestore.collection(collection).doc(area);
-
-        void _txRemoveViewItem({
-          required String collection,
-          required String area,
-          required String plateDocId,
-        }) {
-          if (area.trim().isEmpty) return;
-          final ref = _viewRef(collection, area.trim());
-
-          FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
-
-          tx.set(
-            ref,
-            <String, dynamic>{
-              'area': area.trim(),
-              'updatedAt': FieldValue.serverTimestamp(),
-              'items': <String, dynamic>{
-                plateDocId: FieldValue.delete(),
-              }
-            },
-            SetOptions(merge: true),
-          );
-        }
-
-        void _txUpsertViewItemFields({
-          required String collection,
-          required String area,
-          required String plateDocId,
-          required String plateNumber,
-          required String location,
-          String? primaryTimeField,
-          dynamic primaryTimeValue,
-          bool includeSelectionState = false,
-          bool isSelected = false,
-          String? selectedBy,
-          String? sectorId,
-          String? sectorName,
-          dynamic createdAtValue,
-        }) {
-          if (area.trim().isEmpty) return;
-
-          final ref = _viewRef(collection, area.trim());
-          final selectedByValue = isSelected ? selectedBy?.trim() : null;
-
-          final item = <String, dynamic>{
-            'plateNumber': plateNumber,
-            PlateFields.plateNumber: plateNumber,
-            'location': location,
-            PlateFields.sectorId:
-                sectorId == null || sectorId.trim().isEmpty
-                    ? null
-                    : sectorId.trim(),
-            PlateFields.sectorName:
-                sectorName == null || sectorName.trim().isEmpty
-                    ? null
-                    : sectorName.trim(),
-            'updatedAt': FieldValue.serverTimestamp(),
-            if (createdAtValue != null)
-              PlateFields.createdAt: createdAtValue,
-            if (primaryTimeField != null)
-              primaryTimeField:
-                  primaryTimeValue ?? FieldValue.serverTimestamp(),
-            if (includeSelectionState) 'isSelected': isSelected,
-            if (includeSelectionState)
-              'selectedBy': selectedByValue == null || selectedByValue.isEmpty
-                  ? null
-                  : selectedByValue,
-          };
-
-          FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
-
-          tx.set(
-            ref,
-            <String, dynamic>{
-              'area': area.trim(),
-              'updatedAt': FieldValue.serverTimestamp(),
-              'items': <String, dynamic>{
-                plateDocId: item,
-              }
-            },
-            SetOptions(merge: true),
-          );
-        }
-
-        const String reqCollection = 'parking_requests_view';
-        const String pcCollection = 'parking_completed_view';
-        const String depCollection = 'departure_requests_view';
-
-        final bool beforeIsReq =
-            beforeType == PlateType.parkingRequests.firestoreValue;
-        final bool afterIsReq =
-            afterType == PlateType.parkingRequests.firestoreValue;
-
-        final bool beforeIsPc =
-            beforeType == PlateType.parkingCompleted.firestoreValue;
-        final bool afterIsPc =
-            afterType == PlateType.parkingCompleted.firestoreValue;
-
-        final bool beforeIsDep =
-            beforeType == PlateType.departureRequests.firestoreValue;
-        final bool afterIsDep =
-            afterType == PlateType.departureRequests.firestoreValue;
-
-        if (shouldSyncReqView) {
-          if (beforeIsReq && (!afterIsReq || areaChanged)) {
-            _txRemoveViewItem(
-              collection: reqCollection,
-              area: beforeArea,
-              plateDocId: documentId,
+            final fields = _enforceZeroFeeLock(
+              Map<String, dynamic>.from(updatedFields),
+              existing: before,
             );
-          }
 
-          if (afterIsReq) {
-            if (typeChanged ||
+            if (fields.containsKey(PlateFields.location)) {
+              fields[PlateFields.location] =
+                  _normalizePlatesLocationValue(fields[PlateFields.location]);
+            }
+
+            if (log != null) {
+              fields['logs'] = FieldValue.arrayUnion([log.toMap()]);
+            }
+
+            fields['updatedAt'] = FieldValue.serverTimestamp();
+
+            if (transactionExtension != null) {
+              await transactionExtension(tx, before);
+            }
+            FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
+            tx.update(docRef, fields);
+
+            final String beforeType =
+                ((before[PlateFields.type] as String?) ?? '').trim();
+            final String afterType =
+                (((fields[PlateFields.type] as String?) ?? beforeType)).trim();
+            FirebaseActivityMeter.instance.traceStep(
+              'PLATE_UPDATE_STATE',
+              source: 'shared/plate/domain/services/plate_write_service.dart',
+              detail: 'beforeType=$beforeType afterType=$afterType '
+                  'beforeSelected=${before['isSelected']} '
+                  'requestedSelected=${fields['isSelected']}',
+            );
+
+            final String beforeArea = _extractAreaFromPlateDoc(before, documentId);
+
+            final String afterArea = (() {
+              final raw = fields[PlateFields.area];
+              if (raw is String && raw.trim().isNotEmpty) return raw.trim();
+              return beforeArea;
+            })();
+
+            final String beforePlateNumber =
+                _extractPlateNumberFromPlateDoc(before, documentId);
+
+            String afterPlateNumber = beforePlateNumber;
+            final String? pn1 = (fields['plateNumber'] as String?)?.trim();
+            final String? pn2 =
+                (fields[PlateFields.plateNumber] as String?)?.trim();
+            if (pn1 != null && pn1.isNotEmpty) {
+              afterPlateNumber = pn1;
+            } else if (pn2 != null && pn2.isNotEmpty) {
+              afterPlateNumber = pn2;
+            }
+
+            final String beforeLocation =
+                _normalizeLocation(before[PlateFields.location]);
+            final String afterLocation = _normalizeLocation(
+              fields.containsKey(PlateFields.location)
+                  ? fields[PlateFields.location]
+                  : before[PlateFields.location],
+            );
+
+            final bool beforeSelected = _toBool(before[PlateFields.isSelected]);
+            final bool afterSelected = fields.containsKey(PlateFields.isSelected)
+                ? _toBool(fields[PlateFields.isSelected])
+                : beforeSelected;
+
+            final String beforeSelectedBy =
+                ((before[PlateFields.selectedBy] as String?) ?? '').trim();
+            final String afterSelectedBy = (() {
+              final raw = fields[PlateFields.selectedBy];
+              if (raw is String) return raw.trim();
+              if (fields.containsKey(PlateFields.selectedBy)) return '';
+              return beforeSelectedBy;
+            })();
+
+            final String beforeSectorId =
+                (before[PlateFields.sectorId]?.toString() ?? '').trim();
+            final String beforeSectorName =
+                (before[PlateFields.sectorName]?.toString() ?? '').trim();
+            final String afterSectorId = (() {
+              if (!fields.containsKey(PlateFields.sectorId)) return beforeSectorId;
+              final raw = fields[PlateFields.sectorId];
+              return raw is String ? raw.trim() : '';
+            })();
+            final String afterSectorName = (() {
+              if (!fields.containsKey(PlateFields.sectorName)) {
+                return beforeSectorName;
+              }
+              final raw = fields[PlateFields.sectorName];
+              return raw is String ? raw.trim() : '';
+            })();
+
+            final bool typeChanged = beforeType != afterType;
+            final bool areaChanged = beforeArea != afterArea;
+            final bool locationChanged = beforeLocation != afterLocation;
+            final bool plateNumberChanged = beforePlateNumber != afterPlateNumber;
+            final bool selectedChanged = beforeSelected != afterSelected;
+            final bool selectedByChanged = beforeSelectedBy != afterSelectedBy;
+            final bool sectorChanged = beforeSectorId != afterSectorId ||
+                beforeSectorName != afterSectorName;
+            final dynamic originalCreatedAt = before[PlateFields.createdAt];
+
+            final bool affectsViews = typeChanged ||
                 areaChanged ||
+                locationChanged ||
+                plateNumberChanged ||
                 selectedChanged ||
                 selectedByChanged ||
-                locationChanged ||
-                plateNumberChanged ||
-                sectorChanged) {
-              final reqAt = _extractTimestampForAny(
-                before: before,
-                fields: fields,
-                keys: const <String>['parkingRequestedAt', 'requestTime'],
-              );
+                sectorChanged;
 
-              _txUpsertViewItemFields(
-                collection: reqCollection,
-                area: afterArea,
-                plateDocId: documentId,
-                plateNumber: afterPlateNumber,
-                location: afterLocation,
-                sectorId: afterSectorId,
-                sectorName: afterSectorName,
-                createdAtValue: originalCreatedAt,
-                primaryTimeField: 'parkingRequestedAt',
-                primaryTimeValue: reqAt,
-                includeSelectionState: true,
-                isSelected: afterSelected,
-                selectedBy: afterSelectedBy,
+            if (!affectsViews) {
+              return;
+            }
+
+            DocumentReference<Map<String, dynamic>> _viewRef(
+              String collection,
+              String area,
+            ) =>
+                _firestore.collection(collection).doc(area);
+
+            void _txRemoveViewItem({
+              required String collection,
+              required String area,
+              required String plateDocId,
+            }) {
+              if (area.trim().isEmpty) return;
+              final ref = _viewRef(collection, area.trim());
+
+              FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
+
+              tx.set(
+                ref,
+                <String, dynamic>{
+                  'area': area.trim(),
+                  'updatedAt': FieldValue.serverTimestamp(),
+                  'items': <String, dynamic>{
+                    plateDocId: FieldValue.delete(),
+                  }
+                },
+                SetOptions(merge: true),
               );
             }
-          }
-        }
 
-        if (shouldSyncPcView) {
-          if (beforeIsPc && (!afterIsPc || areaChanged)) {
-            _txRemoveViewItem(
-              collection: pcCollection,
-              area: beforeArea,
-              plateDocId: documentId,
-            );
-          }
+            void _txUpsertViewItemFields({
+              required String collection,
+              required String area,
+              required String plateDocId,
+              required String plateNumber,
+              required String location,
+              String? primaryTimeField,
+              dynamic primaryTimeValue,
+              bool includeSelectionState = false,
+              bool isSelected = false,
+              String? selectedBy,
+              String? sectorId,
+              String? sectorName,
+              dynamic createdAtValue,
+            }) {
+              if (area.trim().isEmpty) return;
 
-          if (afterIsPc) {
-            if (typeChanged ||
-                areaChanged ||
-                locationChanged ||
-                plateNumberChanged ||
-                sectorChanged) {
-              final pcAt = _extractTimestampForAny(
-                before: before,
-                fields: fields,
-                keys: const <String>['parkingCompletedAt'],
-              );
+              final ref = _viewRef(collection, area.trim());
+              final selectedByValue = isSelected ? selectedBy?.trim() : null;
 
-              _txUpsertViewItemFields(
-                collection: pcCollection,
-                area: afterArea,
-                plateDocId: documentId,
-                plateNumber: afterPlateNumber,
-                location: afterLocation,
-                sectorId: afterSectorId,
-                sectorName: afterSectorName,
-                createdAtValue: originalCreatedAt,
-                primaryTimeField: 'parkingCompletedAt',
-                primaryTimeValue: pcAt,
-              );
-            }
-          }
-        }
+              final item = <String, dynamic>{
+                'plateNumber': plateNumber,
+                PlateFields.plateNumber: plateNumber,
+                'location': location,
+                PlateFields.sectorId:
+                    sectorId == null || sectorId.trim().isEmpty
+                        ? null
+                        : sectorId.trim(),
+                PlateFields.sectorName:
+                    sectorName == null || sectorName.trim().isEmpty
+                        ? null
+                        : sectorName.trim(),
+                'updatedAt': FieldValue.serverTimestamp(),
+                if (createdAtValue != null)
+                  PlateFields.createdAt: createdAtValue,
+                if (primaryTimeField != null)
+                  primaryTimeField:
+                      primaryTimeValue ?? FieldValue.serverTimestamp(),
+                if (includeSelectionState) 'isSelected': isSelected,
+                if (includeSelectionState)
+                  'selectedBy': selectedByValue == null || selectedByValue.isEmpty
+                      ? null
+                      : selectedByValue,
+              };
 
-        if (shouldSyncDepView) {
-          if (beforeIsDep && (!afterIsDep || areaChanged)) {
-            _txRemoveViewItem(
-              collection: depCollection,
-              area: beforeArea,
-              plateDocId: documentId,
-            );
-          }
+              FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
 
-          if (afterIsDep) {
-            if (typeChanged ||
-                areaChanged ||
-                selectedChanged ||
-                selectedByChanged ||
-                locationChanged ||
-                plateNumberChanged ||
-                sectorChanged) {
-              final depAt = _extractTimestampForAny(
-                before: before,
-                fields: fields,
-                keys: const <String>['departureRequestedAt'],
-              );
-
-              _txUpsertViewItemFields(
-                collection: depCollection,
-                area: afterArea,
-                plateDocId: documentId,
-                plateNumber: afterPlateNumber,
-                location: afterLocation,
-                sectorId: afterSectorId,
-                sectorName: afterSectorName,
-                createdAtValue: originalCreatedAt,
-                primaryTimeField: 'departureRequestedAt',
-                primaryTimeValue: depAt,
-                includeSelectionState: true,
-                isSelected: afterSelected,
-                selectedBy: afterSelectedBy,
+              tx.set(
+                ref,
+                <String, dynamic>{
+                  'area': area.trim(),
+                  'updatedAt': FieldValue.serverTimestamp(),
+                  'items': <String, dynamic>{
+                    plateDocId: item,
+                  }
+                },
+                SetOptions(merge: true),
               );
             }
-          }
-        }
-      }).trackFirestore('TRANSACTION', 'shared/plate/domain/services/plate_write_service.dart');
 
-      debugPrint("✅ 문서 업데이트 완료(+view sync): $documentId");
-    } on FirebaseException catch (e, st) {
-      debugPrint("🔥 문서 업데이트 실패: $e");
-      unawaited(
-        DevFirebaseDebugDialog.show(
-          operation: 'plateWrite.updatePlate',
-          error: e,
-          stackTrace: st,
-          details: <String, Object?>{
-            'collection': 'plates',
-            'documentId': documentId,
-            'updatedFields': updatedFields.keys.toList(growable: false),
-            'hasLog': log != null,
-            'hasTransactionExtension': transactionExtension != null,
-          },
-        ),
-      );
-      rethrow;
-    } catch (e, st) {
-      debugPrint("🔥 문서 업데이트 실패: $e");
-      unawaited(
-        DevFirebaseDebugDialog.show(
-          operation: 'plateWrite.updatePlate',
-          error: e,
-          stackTrace: st,
-          details: <String, Object?>{
-            'collection': 'plates',
-            'documentId': documentId,
-            'updatedFields': updatedFields.keys.toList(growable: false),
-            'hasLog': log != null,
-            'hasTransactionExtension': transactionExtension != null,
-          },
-        ),
-      );
-      rethrow;
-    }
+            const String reqCollection = 'parking_requests_view';
+            const String pcCollection = 'parking_completed_view';
+            const String depCollection = 'departure_requests_view';
+
+            final bool beforeIsReq =
+                beforeType == PlateType.parkingRequests.firestoreValue;
+            final bool afterIsReq =
+                afterType == PlateType.parkingRequests.firestoreValue;
+
+            final bool beforeIsPc =
+                beforeType == PlateType.parkingCompleted.firestoreValue;
+            final bool afterIsPc =
+                afterType == PlateType.parkingCompleted.firestoreValue;
+
+            final bool beforeIsDep =
+                beforeType == PlateType.departureRequests.firestoreValue;
+            final bool afterIsDep =
+                afterType == PlateType.departureRequests.firestoreValue;
+
+            if (shouldSyncReqView) {
+              if (beforeIsReq && (!afterIsReq || areaChanged)) {
+                _txRemoveViewItem(
+                  collection: reqCollection,
+                  area: beforeArea,
+                  plateDocId: documentId,
+                );
+              }
+
+              if (afterIsReq) {
+                if (typeChanged ||
+                    areaChanged ||
+                    selectedChanged ||
+                    selectedByChanged ||
+                    locationChanged ||
+                    plateNumberChanged ||
+                    sectorChanged) {
+                  final reqAt = _extractTimestampForAny(
+                    before: before,
+                    fields: fields,
+                    keys: const <String>['parkingRequestedAt', 'requestTime'],
+                  );
+
+                  _txUpsertViewItemFields(
+                    collection: reqCollection,
+                    area: afterArea,
+                    plateDocId: documentId,
+                    plateNumber: afterPlateNumber,
+                    location: afterLocation,
+                    sectorId: afterSectorId,
+                    sectorName: afterSectorName,
+                    createdAtValue: originalCreatedAt,
+                    primaryTimeField: 'parkingRequestedAt',
+                    primaryTimeValue: reqAt,
+                    includeSelectionState: true,
+                    isSelected: afterSelected,
+                    selectedBy: afterSelectedBy,
+                  );
+                }
+              }
+            }
+
+            if (shouldSyncPcView) {
+              if (beforeIsPc && (!afterIsPc || areaChanged)) {
+                _txRemoveViewItem(
+                  collection: pcCollection,
+                  area: beforeArea,
+                  plateDocId: documentId,
+                );
+              }
+
+              if (afterIsPc) {
+                if (typeChanged ||
+                    areaChanged ||
+                    locationChanged ||
+                    plateNumberChanged ||
+                    sectorChanged) {
+                  final pcAt = _extractTimestampForAny(
+                    before: before,
+                    fields: fields,
+                    keys: const <String>['parkingCompletedAt'],
+                  );
+
+                  _txUpsertViewItemFields(
+                    collection: pcCollection,
+                    area: afterArea,
+                    plateDocId: documentId,
+                    plateNumber: afterPlateNumber,
+                    location: afterLocation,
+                    sectorId: afterSectorId,
+                    sectorName: afterSectorName,
+                    createdAtValue: originalCreatedAt,
+                    primaryTimeField: 'parkingCompletedAt',
+                    primaryTimeValue: pcAt,
+                  );
+                }
+              }
+            }
+
+            if (shouldSyncDepView) {
+              if (beforeIsDep && (!afterIsDep || areaChanged)) {
+                _txRemoveViewItem(
+                  collection: depCollection,
+                  area: beforeArea,
+                  plateDocId: documentId,
+                );
+              }
+
+              if (afterIsDep) {
+                if (typeChanged ||
+                    areaChanged ||
+                    selectedChanged ||
+                    selectedByChanged ||
+                    locationChanged ||
+                    plateNumberChanged ||
+                    sectorChanged) {
+                  final depAt = _extractTimestampForAny(
+                    before: before,
+                    fields: fields,
+                    keys: const <String>['departureRequestedAt'],
+                  );
+
+                  _txUpsertViewItemFields(
+                    collection: depCollection,
+                    area: afterArea,
+                    plateDocId: documentId,
+                    plateNumber: afterPlateNumber,
+                    location: afterLocation,
+                    sectorId: afterSectorId,
+                    sectorName: afterSectorName,
+                    createdAtValue: originalCreatedAt,
+                    primaryTimeField: 'departureRequestedAt',
+                    primaryTimeValue: depAt,
+                    includeSelectionState: true,
+                    isSelected: afterSelected,
+                    selectedBy: afterSelectedBy,
+                  );
+                }
+              }
+            }
+          });
+
+          debugPrint("✅ 문서 업데이트 완료(+view sync): $documentId");
+        } on FirebaseException catch (e, st) {
+          debugPrint("🔥 문서 업데이트 실패: $e");
+          unawaited(
+            DevFirebaseDebugDialog.show(
+              operation: 'plateWrite.updatePlate',
+              error: e,
+              stackTrace: st,
+              details: <String, Object?>{
+                'collection': 'plates',
+                'documentId': documentId,
+                'updatedFields': updatedFields.keys.toList(growable: false),
+                'hasLog': log != null,
+                'hasTransactionExtension': transactionExtension != null,
+              },
+            ),
+          );
+          rethrow;
+        } catch (e, st) {
+          debugPrint("🔥 문서 업데이트 실패: $e");
+          unawaited(
+            DevFirebaseDebugDialog.show(
+              operation: 'plateWrite.updatePlate',
+              error: e,
+              stackTrace: st,
+              details: <String, Object?>{
+                'collection': 'plates',
+                'documentId': documentId,
+                'updatedFields': updatedFields.keys.toList(growable: false),
+                'hasLog': log != null,
+                'hasTransactionExtension': transactionExtension != null,
+              },
+            ),
+          );
+          rethrow;
+        }
+      },
+    );
   }
 
   Future<void> deletePlate(
@@ -800,67 +821,74 @@ class PlateWriteService {
     String? area,
     bool syncViews = true,
   }) async {
-    final docRef = _firestore.collection('plates').doc(documentId);
-
-    final normalizedArea = (area ?? '').trim().isNotEmpty
-        ? area!.trim()
-        : _fallbackAreaFromDocId(documentId).trim();
-
-    _debugDeleteCostAndShape(
+    await FirebaseActivityMeter.instance.traceAction<void>(
+      kind: 'PLATE_DELETE',
+      source: 'shared/plate/domain/services/plate_write_service.dart',
       plateId: documentId,
-      area: normalizedArea,
-      syncViews: syncViews && normalizedArea.isNotEmpty,
-    );
+      action: () async {
+        final docRef = _firestore.collection('plates').doc(documentId);
 
-    try {
-      if (!syncViews || normalizedArea.isEmpty) {
-        await docRef.delete().trackFirestore('DELETE', 'shared/plate/domain/services/plate_write_service.dart');
-        dev.log("🗑️ 문서 삭제 완료(plates only): $documentId", name: "Firestore");
-        return;
-      }
+        final normalizedArea = (area ?? '').trim().isNotEmpty
+            ? area!.trim()
+            : _fallbackAreaFromDocId(documentId).trim();
 
-      final batch = _firestore.trackedActivityBatch('shared/plate/domain/services/plate_write_service.dart');
-
-      FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
-
-      batch.delete(docRef);
-
-      void removeFromView(String collection) {
-        final viewRef = _firestore.collection(collection).doc(normalizedArea);
-        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
-        batch.set(
-          viewRef,
-          <String, dynamic>{
-            'area': normalizedArea,
-            'updatedAt': FieldValue.serverTimestamp(),
-            'items': <String, dynamic>{
-              documentId: FieldValue.delete(),
-            }
-          },
-          SetOptions(merge: true),
+        _debugDeleteCostAndShape(
+          plateId: documentId,
+          area: normalizedArea,
+          syncViews: syncViews && normalizedArea.isNotEmpty,
         );
-      }
 
-      removeFromView('parking_requests_view');
-      removeFromView('parking_completed_view');
-      removeFromView('departure_requests_view');
+        try {
+          if (!syncViews || normalizedArea.isEmpty) {
+            await docRef.delete().trackFirestore('DELETE', 'shared/plate/domain/services/plate_write_service.dart', documentReference: docRef);
+            dev.log("🗑️ 문서 삭제 완료(plates only): $documentId", name: "Firestore");
+            return;
+          }
 
-      await batch.commit().trackFirestore('BATCH', 'shared/plate/domain/services/plate_write_service.dart');
+          final batch = _firestore.trackedActivityBatch('shared/plate/domain/services/plate_write_service.dart');
 
-      dev.log(
-        "🗑️ 문서 삭제 완료(+view cleanup): $documentId",
-        name: "Firestore",
-      );
-    } on FirebaseException catch (e) {
-      if (e.code == 'not-found') {
-        debugPrint("⚠️ 삭제 시 문서 없음 (무시): $documentId");
-        return;
-      }
-      dev.log("🔥 문서 삭제 실패: $e", name: "Firestore");
-      rethrow;
-    } catch (_) {
-      rethrow;
-    }
+          FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
+
+          batch.delete(docRef);
+
+          void removeFromView(String collection) {
+            final viewRef = _firestore.collection(collection).doc(normalizedArea);
+            FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
+            batch.set(
+              viewRef,
+              <String, dynamic>{
+                'area': normalizedArea,
+                'updatedAt': FieldValue.serverTimestamp(),
+                'items': <String, dynamic>{
+                  documentId: FieldValue.delete(),
+                }
+              },
+              SetOptions(merge: true),
+            );
+          }
+
+          removeFromView('parking_requests_view');
+          removeFromView('parking_completed_view');
+          removeFromView('departure_requests_view');
+
+          await batch.commit().trackFirestore('BATCH', 'shared/plate/domain/services/plate_write_service.dart');
+
+          dev.log(
+            "🗑️ 문서 삭제 완료(+view cleanup): $documentId",
+            name: "Firestore",
+          );
+        } on FirebaseException catch (e) {
+          if (e.code == 'not-found') {
+            debugPrint("⚠️ 삭제 시 문서 없음 (무시): $documentId");
+            return;
+          }
+          dev.log("🔥 문서 삭제 실패: $e", name: "Firestore");
+          rethrow;
+        } catch (_) {
+          rethrow;
+        }
+      },
+    );
   }
 
   Future<DateTime?> transitionPlateType({
@@ -871,126 +899,135 @@ class PlateWriteService {
     Map<String, dynamic>? extraFields,
     bool forceOverride = true,
   }) async {
-    final docRef = _firestore.collection('plates').doc(plateId);
+    return await FirebaseActivityMeter.instance.traceAction<DateTime?>(
+      kind: 'TYPE_CHANGE',
+      source: 'shared/plate/domain/services/plate_write_service.dart',
+      plateId: plateId,
+      detail: 'fromType=$fromType toType=$toType',
+      action: () async {
+        final docRef = _firestore.collection('plates').doc(plateId);
 
-    try {
-      final createdAt = await _firestore.runTransaction<DateTime?>((tx) async {
-        final snap = await tx.get(docRef).trackFirestore('GET', 'shared/plate/domain/services/plate_write_service.dart');
-        if (!snap.exists) {
-          throw FirebaseException(plugin: 'cloud_firestore', code: 'not-found');
-        }
-        final data = snap.data() ?? <String, dynamic>{};
-        final currType = (data['type'] as String?) ?? '';
-        final rawCreatedAt = data[PlateFields.createdAt];
-        final createdAt = rawCreatedAt is Timestamp
-            ? rawCreatedAt.toDate()
-            : rawCreatedAt is DateTime
-                ? rawCreatedAt
-                : null;
+        try {
+          final createdAt = await _firestore.runTrackedActivityTransaction<DateTime?>((tx) async {
+            final snap = await tx.get(docRef).trackFirestore('GET', 'shared/plate/domain/services/plate_write_service.dart', collection: 'plates', pathTemplate: 'plates/*', readPurpose: 'TRANSACTION_STATE_VALIDATION');
+            if (!snap.exists) {
+              throw FirebaseException(plugin: 'cloud_firestore', code: 'not-found');
+            }
+            final data = snap.data() ?? <String, dynamic>{};
+            final currType = (data['type'] as String?) ?? '';
+            FirebaseActivityMeter.instance.traceStep('TYPE_STATE_VALIDATED', source: 'shared/plate/domain/services/plate_write_service.dart', detail: 'expectedType=$fromType actualType=$currType nextType=$toType selected=${data['isSelected']}');
+            final rawCreatedAt = data[PlateFields.createdAt];
+            final createdAt = rawCreatedAt is Timestamp
+                ? rawCreatedAt.toDate()
+                : rawCreatedAt is DateTime
+                    ? rawCreatedAt
+                    : null;
 
-        if (currType != fromType) {
-          throw FirebaseException(
-            plugin: 'cloud_firestore',
-            code: 'invalid-state',
-            message: 'expected $fromType but was $currType',
+            if (currType != fromType) {
+              throw FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'invalid-state',
+                message: 'expected $fromType but was $currType',
+              );
+            }
+
+            final currentSelectedBy = data['selectedBy'] as String?;
+            if (!forceOverride &&
+                currentSelectedBy != null &&
+                currentSelectedBy.isNotEmpty &&
+                currentSelectedBy != actor) {
+              throw FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'conflict',
+                message: 'selected by $currentSelectedBy',
+              );
+            }
+
+            Map<String, dynamic>? normalizedExtra;
+            if (extraFields != null) {
+              normalizedExtra = Map<String, dynamic>.from(extraFields);
+              if (normalizedExtra.containsKey(PlateFields.location)) {
+                normalizedExtra[PlateFields.location] =
+                    _normalizePlatesLocationValue(
+                        normalizedExtra[PlateFields.location]);
+              } else if (normalizedExtra.containsKey('location')) {
+                normalizedExtra['location'] =
+                    _normalizePlatesLocationValue(normalizedExtra['location']);
+              }
+            }
+
+            final update = <String, dynamic>{
+              'type': toType,
+              'isSelected': false,
+              'selectedBy': null,
+              'updatedAt': FieldValue.serverTimestamp(),
+              if (normalizedExtra != null) ...normalizedExtra,
+              'logs': FieldValue.arrayUnion([
+                {
+                  'action': '$fromType → $toType',
+                  'performedBy': actor,
+                  'timestamp': DateTime.now().toIso8601String(),
+                },
+              ]),
+            };
+
+            FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
+
+            tx.update(docRef, update);
+            return createdAt;
+          }, source: 'shared/plate/domain/services/plate_write_service.dart');
+
+          debugPrint(
+            '✅ [PlateWriteService.transitionPlateType] plateId=$plateId createdAtSource=transaction_snapshot createdAtAvailable=${createdAt != null}',
           );
-        }
-
-        final currentSelectedBy = data['selectedBy'] as String?;
-        if (!forceOverride &&
-            currentSelectedBy != null &&
-            currentSelectedBy.isNotEmpty &&
-            currentSelectedBy != actor) {
-          throw FirebaseException(
-            plugin: 'cloud_firestore',
-            code: 'conflict',
-            message: 'selected by $currentSelectedBy',
+          return createdAt;
+        } on FirebaseException catch (e, st) {
+          unawaited(
+            DevFirebaseDebugDialog.show(
+              operation: 'PlateWriteService.transitionPlateType.firebase',
+              error: e,
+              stackTrace: st,
+              details: <String, Object?>{
+                'collection': 'plates',
+                'plateId': plateId,
+                'actor': actor,
+                'fromType': fromType,
+                'toType': toType,
+                'extraFields': extraFields?.keys.toList(growable: false),
+                'forceOverride': forceOverride,
+              },
+              title: 'Plate 상태 전환 실패',
+              useCommonUi: true,
+              copyAsDebugPrintCode: true,
+              devModeOnly: true,
+            ),
           );
+          rethrow;
+        } catch (e, st) {
+          unawaited(
+            DevFirebaseDebugDialog.show(
+              operation: 'PlateWriteService.transitionPlateType.unknown',
+              error: e,
+              stackTrace: st,
+              details: <String, Object?>{
+                'collection': 'plates',
+                'plateId': plateId,
+                'actor': actor,
+                'fromType': fromType,
+                'toType': toType,
+                'extraFields': extraFields?.keys.toList(growable: false),
+                'forceOverride': forceOverride,
+              },
+              title: 'Plate 상태 전환 실패',
+              useCommonUi: true,
+              copyAsDebugPrintCode: true,
+              devModeOnly: true,
+            ),
+          );
+          throw Exception("DB 업데이트 실패: $e");
         }
-
-        Map<String, dynamic>? normalizedExtra;
-        if (extraFields != null) {
-          normalizedExtra = Map<String, dynamic>.from(extraFields);
-          if (normalizedExtra.containsKey(PlateFields.location)) {
-            normalizedExtra[PlateFields.location] =
-                _normalizePlatesLocationValue(
-                    normalizedExtra[PlateFields.location]);
-          } else if (normalizedExtra.containsKey('location')) {
-            normalizedExtra['location'] =
-                _normalizePlatesLocationValue(normalizedExtra['location']);
-          }
-        }
-
-        final update = <String, dynamic>{
-          'type': toType,
-          'isSelected': false,
-          'selectedBy': null,
-          'updatedAt': FieldValue.serverTimestamp(),
-          if (normalizedExtra != null) ...normalizedExtra,
-          'logs': FieldValue.arrayUnion([
-            {
-              'action': '$fromType → $toType',
-              'performedBy': actor,
-              'timestamp': DateTime.now().toIso8601String(),
-            },
-          ]),
-        };
-
-        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
-
-        tx.update(docRef, update);
-        return createdAt;
-      }).trackFirestore('TRANSACTION', 'shared/plate/domain/services/plate_write_service.dart');
-
-      debugPrint(
-        '✅ [PlateWriteService.transitionPlateType] plateId=$plateId createdAtSource=transaction_snapshot createdAtAvailable=${createdAt != null}',
-      );
-      return createdAt;
-    } on FirebaseException catch (e, st) {
-      unawaited(
-        DevFirebaseDebugDialog.show(
-          operation: 'PlateWriteService.transitionPlateType.firebase',
-          error: e,
-          stackTrace: st,
-          details: <String, Object?>{
-            'collection': 'plates',
-            'plateId': plateId,
-            'actor': actor,
-            'fromType': fromType,
-            'toType': toType,
-            'extraFields': extraFields?.keys.toList(growable: false),
-            'forceOverride': forceOverride,
-          },
-          title: 'Plate 상태 전환 실패',
-          useCommonUi: true,
-          copyAsDebugPrintCode: true,
-          devModeOnly: true,
-        ),
-      );
-      rethrow;
-    } catch (e, st) {
-      unawaited(
-        DevFirebaseDebugDialog.show(
-          operation: 'PlateWriteService.transitionPlateType.unknown',
-          error: e,
-          stackTrace: st,
-          details: <String, Object?>{
-            'collection': 'plates',
-            'plateId': plateId,
-            'actor': actor,
-            'fromType': fromType,
-            'toType': toType,
-            'extraFields': extraFields?.keys.toList(growable: false),
-            'forceOverride': forceOverride,
-          },
-          title: 'Plate 상태 전환 실패',
-          useCommonUi: true,
-          copyAsDebugPrintCode: true,
-          devModeOnly: true,
-        ),
-      );
-      throw Exception("DB 업데이트 실패: $e");
-    }
+      },
+    );
   }
 
   Future<void> recordWhoPlateClick(
@@ -999,192 +1036,200 @@ class PlateWriteService {
     String? selectedBy,
     required String area,
   }) async {
-    final docRef = _firestore.collection('plates').doc(id);
+    await FirebaseActivityMeter.instance.traceAction<void>(
+      kind: isSelected ? 'DRIVING_START' : 'DRIVING_CANCEL',
+      source: 'shared/plate/domain/services/plate_write_service.dart',
+      plateId: id,
+      action: () async {
+        final docRef = _firestore.collection('plates').doc(id);
 
-    final canUpsertDepView = await _canUpsertDepartureRequestsView();
-    final canUpsertReqView = await _canUpsertParkingRequestsView();
+        final canUpsertDepView = await _canUpsertDepartureRequestsView();
+        final canUpsertReqView = await _canUpsertParkingRequestsView();
 
-    try {
-      await _firestore.runTrackedActivityTransaction((tx) async {
-        final snap = await tx.get(docRef).trackFirestore('GET', 'shared/plate/domain/services/plate_write_service.dart');
-        if (!snap.exists) {
-          throw FirebaseException(
-            plugin: 'cloud_firestore',
-            code: 'not-found',
-            message: 'plate $id not found',
-          );
-        }
+        try {
+          await _firestore.runTrackedActivityTransaction((tx) async {
+            final snap = await tx.get(docRef).trackFirestore('GET', 'shared/plate/domain/services/plate_write_service.dart', collection: 'plates', pathTemplate: 'plates/*', readPurpose: 'TRANSACTION_DRIVING_VALIDATION');
+            if (!snap.exists) {
+              throw FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'not-found',
+                message: 'plate $id not found',
+              );
+            }
 
-        final data = snap.data() ?? {};
-        final type = (data['type'] as String?) ?? '';
-        final typeEnum = plateTypeFromFirestoreValue(type);
+            final data = snap.data() ?? {};
+            final type = (data['type'] as String?) ?? '';
+            FirebaseActivityMeter.instance.traceStep('DRIVING_STATE_VALIDATED', source: 'shared/plate/domain/services/plate_write_service.dart', detail: 'actualType=$type beforeSelected=${data['isSelected']} requestedSelected=$isSelected');
+            final typeEnum = plateTypeFromFirestoreValue(type);
 
-        final allowed = {
-          PlateType.parkingRequests,
-          PlateType.departureRequests,
-        };
-        if (!allowed.contains(typeEnum)) {
-          throw FirebaseException(
-            plugin: 'cloud_firestore',
-            code: 'invalid-state',
-            message: 'cannot set driving on $type',
-          );
-        }
+            final allowed = {
+              PlateType.parkingRequests,
+              PlateType.departureRequests,
+            };
+            if (!allowed.contains(typeEnum)) {
+              throw FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'invalid-state',
+                message: 'cannot set driving on $type',
+              );
+            }
 
-        final currentSelectedBy = data['selectedBy'] as String?;
-        if (isSelected &&
-            currentSelectedBy != null &&
-            currentSelectedBy.isNotEmpty &&
-            currentSelectedBy != selectedBy) {
-          throw FirebaseException(
-            plugin: 'cloud_firestore',
-            code: 'conflict',
-            message: 'already selected by $currentSelectedBy',
-          );
-        }
+            final currentSelectedBy = data['selectedBy'] as String?;
+            if (isSelected &&
+                currentSelectedBy != null &&
+                currentSelectedBy.isNotEmpty &&
+                currentSelectedBy != selectedBy) {
+              throw FirebaseException(
+                plugin: 'cloud_firestore',
+                code: 'conflict',
+                message: 'already selected by $currentSelectedBy',
+              );
+            }
 
-        final update = <String, dynamic>{
-          'isSelected': isSelected,
-          'selectedBy': isSelected ? selectedBy : null,
-          'updatedAt': FieldValue.serverTimestamp(),
-          if (isSelected && (selectedBy?.trim().isNotEmpty ?? false))
-            'logs': FieldValue.arrayUnion([
-              {
-                'action': '주행 중',
-                'performedBy': selectedBy,
-                'timestamp': DateTime.now().toIso8601String(),
-              }
-            ]),
-        };
-
-        FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
-
-        tx.update(docRef, update);
-
-        final docArea = ((data['area'] as String?) ?? area).trim();
-
-        if (typeEnum == PlateType.departureRequests && docArea.isNotEmpty) {
-          if (!canUpsertDepView) {
-            return;
-          }
-
-          final viewRef =
-              _firestore.collection('departure_requests_view').doc(docArea);
-
-          final plateNumber = ((data['plateNumber'] as String?) ??
-                  _fallbackPlateFromDocId(id))
-              .trim();
-
-          final location = _normalizeLocation(data['location']);
-
-          final depRequestedAt = data['departureRequestedAt'];
-          final selectedByValue = isSelected ? selectedBy?.trim() : null;
-
-          FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
-
-          tx.set(
-            viewRef,
-            <String, dynamic>{
-              'area': docArea,
+            final update = <String, dynamic>{
+              'isSelected': isSelected,
+              'selectedBy': isSelected ? selectedBy : null,
               'updatedAt': FieldValue.serverTimestamp(),
-              'items': <String, dynamic>{
-                id: <String, dynamic>{
-                  'plateNumber': plateNumber,
-                  PlateFields.plateNumber: plateNumber,
-                  'location': location,
-                  'departureRequestedAt':
-                      depRequestedAt ?? FieldValue.serverTimestamp(),
-                  if (data[PlateFields.createdAt] != null)
-                    PlateFields.createdAt: data[PlateFields.createdAt],
-                  'isSelected': isSelected,
-                  'selectedBy': selectedByValue == null || selectedByValue.isEmpty
-                      ? null
-                      : selectedByValue,
-                  'updatedAt': FieldValue.serverTimestamp(),
-                }
+              if (isSelected && (selectedBy?.trim().isNotEmpty ?? false))
+                'logs': FieldValue.arrayUnion([
+                  {
+                    'action': '주행 중',
+                    'performedBy': selectedBy,
+                    'timestamp': DateTime.now().toIso8601String(),
+                  }
+                ]),
+            };
+
+            FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
+
+            tx.update(docRef, update);
+
+            final docArea = ((data['area'] as String?) ?? area).trim();
+
+            if (typeEnum == PlateType.departureRequests && docArea.isNotEmpty) {
+              if (!canUpsertDepView) {
+                return;
               }
-            },
-            SetOptions(merge: true),
-          );
-        }
 
-        if (typeEnum == PlateType.parkingRequests && docArea.isNotEmpty) {
-          if (!canUpsertReqView) {
-            return;
-          }
+              final viewRef =
+                  _firestore.collection('departure_requests_view').doc(docArea);
 
-          final viewRef =
-              _firestore.collection('parking_requests_view').doc(docArea);
+              final plateNumber = ((data['plateNumber'] as String?) ??
+                      _fallbackPlateFromDocId(id))
+                  .trim();
 
-          final plateNumber = ((data['plateNumber'] as String?) ??
-                  _fallbackPlateFromDocId(id))
-              .trim();
+              final location = _normalizeLocation(data['location']);
 
-          final location = _normalizeLocation(data['location']);
+              final depRequestedAt = data['departureRequestedAt'];
+              final selectedByValue = isSelected ? selectedBy?.trim() : null;
 
-          final reqAt = data['requestTime'] ?? data['parkingRequestedAt'];
-          final selectedByValue = isSelected ? selectedBy?.trim() : null;
+              FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
 
-          FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
-
-          tx.set(
-            viewRef,
-            <String, dynamic>{
-              'area': docArea,
-              'updatedAt': FieldValue.serverTimestamp(),
-              'items': <String, dynamic>{
-                id: <String, dynamic>{
-                  'plateNumber': plateNumber,
-                  PlateFields.plateNumber: plateNumber,
-                  'location': location,
-                  'parkingRequestedAt': reqAt ?? FieldValue.serverTimestamp(),
-                  if (data[PlateFields.createdAt] != null)
-                    PlateFields.createdAt: data[PlateFields.createdAt],
-                  'isSelected': isSelected,
-                  'selectedBy': selectedByValue == null || selectedByValue.isEmpty
-                      ? null
-                      : selectedByValue,
+              tx.set(
+                viewRef,
+                <String, dynamic>{
+                  'area': docArea,
                   'updatedAt': FieldValue.serverTimestamp(),
-                }
+                  'items': <String, dynamic>{
+                    id: <String, dynamic>{
+                      'plateNumber': plateNumber,
+                      PlateFields.plateNumber: plateNumber,
+                      'location': location,
+                      'departureRequestedAt':
+                          depRequestedAt ?? FieldValue.serverTimestamp(),
+                      if (data[PlateFields.createdAt] != null)
+                        PlateFields.createdAt: data[PlateFields.createdAt],
+                      'isSelected': isSelected,
+                      'selectedBy': selectedByValue == null || selectedByValue.isEmpty
+                          ? null
+                          : selectedByValue,
+                      'updatedAt': FieldValue.serverTimestamp(),
+                    }
+                  }
+                },
+                SetOptions(merge: true),
+              );
+            }
+
+            if (typeEnum == PlateType.parkingRequests && docArea.isNotEmpty) {
+              if (!canUpsertReqView) {
+                return;
               }
-            },
-            SetOptions(merge: true),
+
+              final viewRef =
+                  _firestore.collection('parking_requests_view').doc(docArea);
+
+              final plateNumber = ((data['plateNumber'] as String?) ??
+                      _fallbackPlateFromDocId(id))
+                  .trim();
+
+              final location = _normalizeLocation(data['location']);
+
+              final reqAt = data['requestTime'] ?? data['parkingRequestedAt'];
+              final selectedByValue = isSelected ? selectedBy?.trim() : null;
+
+              FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
+
+              tx.set(
+                viewRef,
+                <String, dynamic>{
+                  'area': docArea,
+                  'updatedAt': FieldValue.serverTimestamp(),
+                  'items': <String, dynamic>{
+                    id: <String, dynamic>{
+                      'plateNumber': plateNumber,
+                      PlateFields.plateNumber: plateNumber,
+                      'location': location,
+                      'parkingRequestedAt': reqAt ?? FieldValue.serverTimestamp(),
+                      if (data[PlateFields.createdAt] != null)
+                        PlateFields.createdAt: data[PlateFields.createdAt],
+                      'isSelected': isSelected,
+                      'selectedBy': selectedByValue == null || selectedByValue.isEmpty
+                          ? null
+                          : selectedByValue,
+                      'updatedAt': FieldValue.serverTimestamp(),
+                    }
+                  }
+                },
+                SetOptions(merge: true),
+              );
+            }
+          });
+        } on FirebaseException catch (e, st) {
+          unawaited(
+            DevFirebaseDebugDialog.show(
+              operation: 'plateWrite.recordWhoPlateClick',
+              error: e,
+              stackTrace: st,
+              details: <String, Object?>{
+                'collection': 'plates',
+                'plateId': id,
+                'isSelected': isSelected,
+                'selectedBy': selectedBy,
+                'areaArgument': area,
+              },
+            ),
           );
+          rethrow;
+        } catch (e, st) {
+          unawaited(
+            DevFirebaseDebugDialog.show(
+              operation: 'plateWrite.recordWhoPlateClick',
+              error: e,
+              stackTrace: st,
+              details: <String, Object?>{
+                'collection': 'plates',
+                'plateId': id,
+                'isSelected': isSelected,
+                'selectedBy': selectedBy,
+                'areaArgument': area,
+              },
+            ),
+          );
+          throw Exception("DB 업데이트 실패: $e");
         }
-      }).trackFirestore('TRANSACTION', 'shared/plate/domain/services/plate_write_service.dart');
-    } on FirebaseException catch (e, st) {
-      unawaited(
-        DevFirebaseDebugDialog.show(
-          operation: 'plateWrite.recordWhoPlateClick',
-          error: e,
-          stackTrace: st,
-          details: <String, Object?>{
-            'collection': 'plates',
-            'plateId': id,
-            'isSelected': isSelected,
-            'selectedBy': selectedBy,
-            'areaArgument': area,
-          },
-        ),
-      );
-      rethrow;
-    } catch (e, st) {
-      unawaited(
-        DevFirebaseDebugDialog.show(
-          operation: 'plateWrite.recordWhoPlateClick',
-          error: e,
-          stackTrace: st,
-          details: <String, Object?>{
-            'collection': 'plates',
-            'plateId': id,
-            'isSelected': isSelected,
-            'selectedBy': selectedBy,
-            'areaArgument': area,
-          },
-        ),
-      );
-      throw Exception("DB 업데이트 실패: $e");
-    }
+      },
+    );
   }
 
   Map<String, dynamic> _enforceZeroFeeLock(

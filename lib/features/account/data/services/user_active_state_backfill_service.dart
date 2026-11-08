@@ -70,11 +70,10 @@ class UserActiveStateBackfillService {
 
     final viewRootSnapshot = await _viewRoots.get(
       const GetOptions(source: Source.server),
-    ).trackFirestore('GET', 'features/account/data/services/user_active_state_backfill_service.dart');
+    ).trackFirestore('QUERY', 'features/account/data/services/user_active_state_backfill_service.dart', collection: 'user_accounts_show', pathTemplate: 'user_accounts_show');
     final activeByUserId = <String, bool>{};
     final conflictIds = <String>{};
     final viewIds = <String>{};
-    final passwordRefs = <DocumentReference<Map<String, dynamic>>>[];
     final mapPasswords = <MapEntry<DocumentReference<Map<String, dynamic>>, String>>[];
     var viewTotal = 0;
     var duplicateViews = 0;
@@ -100,21 +99,10 @@ class UserActiveStateBackfillService {
     for (var index = 0; index < viewRootSnapshot.docs.length; index += 1) {
       final parent = viewRootSnapshot.docs[index];
       final mapEntries = UserAccountShowMap.entries(parent.data());
-      final mapIds = <String>{};
       for (final entry in mapEntries) {
-        mapIds.add(entry.key);
         registerView(entry.key, entry.value);
         if (entry.value.containsKey('password')) {
           mapPasswords.add(MapEntry(parent.reference, entry.key));
-        }
-      }
-      if (!UserAccountShowMap.isComplete(parent.data())) {
-        final legacy = await parent.reference.collection('users').get(
-          const GetOptions(source: Source.server),
-        ).trackFirestore('GET', 'features/account/data/services/user_active_state_backfill_service.dart');
-        for (final doc in legacy.docs) {
-          if (doc.data().containsKey('password')) passwordRefs.add(doc.reference);
-          if (!mapIds.contains(doc.id)) registerView(doc.id, doc.data());
         }
       }
       final progress = viewRootSnapshot.docs.isEmpty
@@ -137,36 +125,10 @@ class UserActiveStateBackfillService {
 
     var failedWrites = 0;
     var viewPasswordsRemoved = 0;
-    if (passwordRefs.isNotEmpty) {
-      for (var offset = 0; offset < passwordRefs.length; offset += _batchLimit) {
-        final end = offset + _batchLimit < passwordRefs.length
-            ? offset + _batchLimit
-            : passwordRefs.length;
-        final batch = _firestore.trackedActivityBatch('features/account/data/services/user_active_state_backfill_service.dart');
-        for (final reference in passwordRefs.sublist(offset, end)) {
-          FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/account/data/services/user_active_state_backfill_service.dart', result: 'staged');
-          batch.set(
-            reference,
-            <String, dynamic>{'password': FieldValue.delete()},
-            SetOptions(merge: true),
-          );
-        }
-        try {
-          await batch.commit().trackFirestore('BATCH', 'features/account/data/services/user_active_state_backfill_service.dart');
-          viewPasswordsRemoved += end - offset;
-        } on FirebaseException catch (error) {
-          failedWrites += end - offset;
-          debugPrint(
-            'user_accounts_show password 정리 실패 code=${error.code} count=${end - offset}',
-          );
-        }
-        onLog?.call(
-          'View password 정리: $viewPasswordsRemoved/${passwordRefs.length}',
-          0.22 + (end / passwordRefs.length) * 0.08,
-        );
-      }
-    }
-
+    final knownViewParents = <String, DocumentSnapshot<Map<String, dynamic>>>{
+      for (final parent in viewRootSnapshot.docs)
+        parent.reference.path: parent,
+    };
     if (mapPasswords.isNotEmpty) {
       for (var offset = 0; offset < mapPasswords.length; offset += _batchLimit) {
         final end = offset + _batchLimit < mapPasswords.length
@@ -176,6 +138,8 @@ class UserActiveStateBackfillService {
           'features/account/data/services/user_active_state_backfill_service.dart',
         );
         for (final item in mapPasswords.sublist(offset, end)) {
+          final knownParent = knownViewParents[item.key.path];
+          if (knownParent != null) batch.observeDocument(knownParent);
           batch.set(
             item.key,
             UserAccountShowMap.passwordDeletePayload(item.value),
@@ -195,10 +159,10 @@ class UserActiveStateBackfillService {
       }
     }
 
-    onLog?.call('user_accounts 원본 계정 조회를 시작합니다.', 0.32);
+    onLog?.call('현재 View Map 확인 완료, 레거시 하위 조회 없이 Root 계정 조회를 시작합니다.', 0.32);
     final rootSnapshot = await _rootUsers.get(
       const GetOptions(source: Source.server),
-    ).trackFirestore('GET', 'features/account/data/services/user_active_state_backfill_service.dart');
+    ).trackFirestore('QUERY', 'features/account/data/services/user_active_state_backfill_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
     final rootIds = rootSnapshot.docs.map((doc) => doc.id).toSet();
     final orphanViews = viewIds.difference(rootIds).length;
     final rootWithoutView = rootIds.difference(viewIds).length;
@@ -253,7 +217,7 @@ class UserActiveStateBackfillService {
     onLog?.call('Root/View isActive 일치 여부를 재검증합니다.', 0.78);
     final verifySnapshot = await _rootUsers.get(
       const GetOptions(source: Source.server),
-    ).trackFirestore('GET', 'features/account/data/services/user_active_state_backfill_service.dart');
+    ).trackFirestore('QUERY', 'features/account/data/services/user_active_state_backfill_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
     var verificationMismatches = 0;
     for (final rootDoc in verifySnapshot.docs) {
       final expected = activeByUserId[rootDoc.id];

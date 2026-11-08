@@ -109,7 +109,7 @@ class PlateStatusService {
               _candidateMonths(dt, lookbackMonths: deleteLookbackMonths);
           for (final month in months) {
             final candidate = _docRef(plateNumber, safeArea, forDate: month);
-            await candidate.delete().trackFirestore('DELETE', 'shared/plate/domain/services/plate_status_service.dart').timeout(const Duration(seconds: 10));
+            await candidate.delete().trackFirestore('DELETE', 'shared/plate/domain/services/plate_status_service.dart', collection: 'monthly_plate_status').timeout(const Duration(seconds: 10));
           }
         }
         return;
@@ -132,13 +132,13 @@ class PlateStatusService {
 
       await _firestore.runTrackedActivityTransaction((transaction) async {
         final snapshot =
-            await transaction.get(ref).trackFirestore('GET', 'shared/plate/domain/services/plate_status_service.dart').timeout(const Duration(seconds: 10));
+            await transaction.get(ref).trackFirestore('GET', 'shared/plate/domain/services/plate_status_service.dart', collection: 'monthly_plate_status', readPurpose: 'STATUS_HISTORY_MONTH_UPSERT_VALIDATION').timeout(const Duration(seconds: 10));
         if (!snapshot.exists) {
           data['createdAt'] = FieldValue.serverTimestamp();
         }
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_status_service.dart', result: 'staged');
         transaction.set(ref, data, SetOptions(merge: true));
-      }).trackFirestore('TRANSACTION', 'shared/plate/domain/services/plate_status_service.dart').timeout(const Duration(seconds: 10));
+      }).timeout(const Duration(seconds: 10));
     } on FirebaseException {
       rethrow;
     } on TimeoutException {
@@ -183,7 +183,7 @@ class PlateStatusService {
 
       if (emptyMonthly) {
         if (deleteWhenEmpty) {
-          await ref.delete().trackFirestore('DELETE', 'shared/plate/domain/services/plate_status_service.dart').timeout(const Duration(seconds: 10));
+          await ref.delete().trackFirestore('DELETE', 'shared/plate/domain/services/plate_status_service.dart', collection: 'monthly_plate_status').timeout(const Duration(seconds: 10));
         }
         return;
       }
@@ -209,13 +209,13 @@ class PlateStatusService {
 
       await _firestore.runTrackedActivityTransaction((transaction) async {
         final snapshot =
-            await transaction.get(ref).trackFirestore('GET', 'shared/plate/domain/services/plate_status_service.dart').timeout(const Duration(seconds: 10));
+            await transaction.get(ref).trackFirestore('GET', 'shared/plate/domain/services/plate_status_service.dart', collection: 'monthly_plate_status', readPurpose: 'MONTHLY_STATUS_UPSERT_VALIDATION').timeout(const Duration(seconds: 10));
         if (!snapshot.exists) {
           data['createdAt'] = FieldValue.serverTimestamp();
         }
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_status_service.dart', result: 'staged');
         transaction.set(ref, data, SetOptions(merge: true));
-      }).trackFirestore('TRANSACTION', 'shared/plate/domain/services/plate_status_service.dart').timeout(const Duration(seconds: 10));
+      }).timeout(const Duration(seconds: 10));
     } on FirebaseException {
       rethrow;
     } on TimeoutException {
@@ -242,7 +242,7 @@ class PlateStatusService {
 
     try {
       await _firestore.runTrackedActivityTransaction((transaction) async {
-        final snapshot = await transaction.get(ref).trackFirestore('GET', 'shared/plate/domain/services/plate_status_service.dart');
+        final snapshot = await transaction.get(ref).trackFirestore('GET', 'shared/plate/domain/services/plate_status_service.dart', collection: 'monthly_plate_status', readPurpose: 'MONTHLY_MEMO_UPDATE_STATE_VALIDATION');
         final source = snapshot.data();
         if (!snapshot.exists || source == null) {
           if (skipIfDocMissing) return;
@@ -261,7 +261,7 @@ class PlateStatusService {
         }
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'shared/plate/domain/services/plate_status_service.dart', result: 'staged');
         transaction.update(ref, data);
-      }).trackFirestore('TRANSACTION', 'shared/plate/domain/services/plate_status_service.dart').timeout(const Duration(seconds: 10));
+      }).timeout(const Duration(seconds: 10));
     } on FirebaseException catch (error) {
       if (skipIfDocMissing && error.code == 'not-found') return;
       rethrow;
@@ -290,11 +290,11 @@ class PlateStatusService {
     try {
       await _firestore.runTrackedActivityTransaction((transaction) async {
         final snapshot =
-            await transaction.get(ref).trackFirestore('GET', 'shared/plate/domain/services/plate_status_service.dart').timeout(const Duration(seconds: 10));
+            await transaction.get(ref).trackFirestore('GET', 'shared/plate/domain/services/plate_status_service.dart', collection: 'monthly_plate_status', readPurpose: 'MONTHLY_MEMO_UPSERT_STATE_VALIDATION').timeout(const Duration(seconds: 10));
         if (!snapshot.exists) return;
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_status_service.dart', result: 'staged');
         transaction.set(ref, data, SetOptions(merge: true));
-      }).trackFirestore('TRANSACTION', 'shared/plate/domain/services/plate_status_service.dart').timeout(const Duration(seconds: 10));
+      }).timeout(const Duration(seconds: 10));
     } on FirebaseException {
       rethrow;
     } on TimeoutException {
@@ -316,7 +316,7 @@ class PlateStatusService {
           'customStatus': '',
           'updatedAt': FieldValue.serverTimestamp(),
         },
-      ).trackFirestore('UPDATE', 'shared/plate/domain/services/plate_status_service.dart').timeout(const Duration(seconds: 10));
+      ).trackFirestore('UPDATE', 'shared/plate/domain/services/plate_status_service.dart', collection: 'monthly_plate_status').timeout(const Duration(seconds: 10));
     } on FirebaseException catch (error) {
       if (error.code == 'not-found') return;
       rethrow;
@@ -340,7 +340,7 @@ class PlateStatusService {
       final months = _candidateMonths(dt, lookbackMonths: lookbackMonths);
       for (final month in months) {
         final candidate = _docRef(plateNumber, safeArea, forDate: month);
-        await candidate.delete().trackFirestore('DELETE', 'shared/plate/domain/services/plate_status_service.dart');
+        await candidate.delete().trackFirestore('DELETE', 'shared/plate/domain/services/plate_status_service.dart', collection: 'monthly_plate_status');
       }
     } on FirebaseException {
       rethrow;

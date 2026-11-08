@@ -86,7 +86,7 @@ class LocationCountService {
           .where('area', isEqualTo: _area)
           .where('type', isEqualTo: _type)
           .count()
-          .get().trackFirestore('AGGREGATION', 'features/location/data/services/location_count_service.dart');
+          .get().trackFirestore('AGGREGATION', 'features/location/data/services/location_count_service.dart', collection: 'plates', pathTemplate: 'plates/*');
 
       final int safeCount = snapshot.count ?? 0;
       return safeCount;

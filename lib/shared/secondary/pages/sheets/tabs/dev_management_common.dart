@@ -157,7 +157,6 @@ class DevAreaSettingsDraft {
       'inactiveCount': 0,
       'totalCount': 0,
       'users': <String, dynamic>{},
-      'usersMapComplete': true,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }

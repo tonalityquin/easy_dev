@@ -186,11 +186,31 @@ class FirebaseActivityJournal {
     bool? fromCache,
     int committedWrites = 0,
     int committedDeletes = 0,
+    String? requestId,
+    String? actionId,
+    String? actionKind,
+    String? plateRef,
+    String? readPurpose,
+    String? parentOperationId,
+    String? collection,
+    String? pathTemplate,
+    String? firebaseCode,
+    String? responseSource,
   }) {
     final encoded = jsonEncode(<String, Object?>{
-      'schemaVersion': 2,
+      'schemaVersion': 4,
       'timeMs': time.millisecondsSinceEpoch,
       'eventId': eventId,
+      'requestId': requestId,
+      'actionId': actionId,
+      'actionKind': actionKind,
+      'plateRef': plateRef,
+      'readPurpose': readPurpose,
+      'parentOperationId': parentOperationId,
+      'collection': collection,
+      'pathTemplate': pathTemplate,
+      'firebaseCode': firebaseCode,
+      'responseSource': responseSource,
       'sessionId': eventSessionId,
       'service': service,
       'operation': operation,
@@ -739,7 +759,7 @@ class FirebaseActivityJournal {
             if (decoded is! Map<String, dynamic>) continue;
             if (!_matches(decoded, null, sinceMs)) continue;
             totalEvents++;
-            if ((decoded['schemaVersion'] as num?)?.toInt() != 2) {
+            if (!<int>{2, 3, 4}.contains((decoded['schemaVersion'] as num?)?.toInt())) {
               legacyEvents++;
             }
             final operation = (decoded['operation'] ?? '').toString();
@@ -757,7 +777,8 @@ class FirebaseActivityJournal {
             if (operation == 'LISTEN_START') listenStarts++;
             if (operation == 'LISTEN_CANCEL') listenCancels++;
             if (operation == 'AGGREGATION') aggregation++;
-            if (operation == 'TRANSACTION') transaction++;
+            if (operation == 'TRANSACTION' ||
+                operation == 'COMMITTED_TRANSACTION') transaction++;
             if (operation == 'BATCH') batch++;
             if (service == 'storage' && <String>{
               'UPLOAD', 'DOWNLOAD', 'STORAGE_DELETE', 'STORAGE_LIST',
@@ -765,7 +786,7 @@ class FirebaseActivityJournal {
             }.contains(operation)) {
               storage++;
             }
-            final structured = (decoded['schemaVersion'] as num?)?.toInt() == 2;
+            final structured = <int>{2, 3, 4}.contains((decoded['schemaVersion'] as num?)?.toInt());
             if (!structured) continue;
             committedWrites += (decoded['committedWrites'] as num?)?.toInt() ?? 0;
             committedDeletes += (decoded['committedDeletes'] as num?)?.toInt() ?? 0;

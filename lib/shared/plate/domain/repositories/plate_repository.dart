@@ -68,7 +68,7 @@ abstract class PlateRepository {
     required String area,
   });
 
-  Future<PlateModel?> getPlate(String documentId);
+  Future<PlateModel?> getPlate(String documentId, {String readPurpose = 'PLATE_READ_UNCLASSIFIED'});
 
   Future<List<PlateModel>> fetchSelectedPlatesByUser({
     required String userName,
@@ -144,6 +144,7 @@ abstract class PlateRepository {
     required String plateNumber,
     required String area,
     required PlateStatusScope scope,
+    String? readPurpose,
   });
 
   Future<PlateStatusScope> resolvePlateStatusScope({

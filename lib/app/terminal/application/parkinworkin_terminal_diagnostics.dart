@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../diagnostics/firebase_activity_meter.dart';
+import '../../diagnostics/firebase_auth_rules_diagnostics.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -65,6 +66,7 @@ class ParkinWorkinTerminalDiagnostics {
       ...MotionTimingDiagnostics.lines,
       ...BuildOptimizationDiagnostics.lines,
       ...StatusDialog.debugLines,
+      ...FirebaseAuthRulesDiagnostics.lines,
       ...FirebaseActivityMeter.instance.events.reversed.map((event) => event.line),
       ..._lines,
     ];
@@ -84,6 +86,9 @@ class ParkinWorkinTerminalDiagnostics {
   }
 
   static Future<String> debugPrintCodeWithJournal() async {
+    if (!DevAuth.devModeEnabled.value ||
+        !await DevAuth.isDevModeEnabled()) return '';
+    await FirebaseAuthRulesDiagnostics.inspect(source: 'terminal_status_copy');
     final merged = <String>[
       ...StartupTasks.debugLines,
       ...WorkStatusNotificationController.debugLines,
@@ -98,6 +103,7 @@ class ParkinWorkinTerminalDiagnostics {
       ...MotionTimingDiagnostics.lines,
       ...BuildOptimizationDiagnostics.lines,
       ...StatusDialog.debugLines,
+      ...FirebaseAuthRulesDiagnostics.lines,
       ..._lines,
     ];
     final ordinary = merged
@@ -120,7 +126,10 @@ class ParkinWorkinTerminalDiagnostics {
     final enabled = await DevAuth.isDevModeEnabled();
     if (!enabled || !context.mounted) return;
     await BuildOptimizationDiagnostics.refresh(source: 'terminal_status');
-    if (!context.mounted) return;
+    final authSnapshot = await FirebaseAuthRulesDiagnostics.inspect(
+      source: 'terminal_status_open',
+    );
+    if (!context.mounted || !DevAuth.devModeEnabled.value) return;
     record(
       'developer_status_open',
       context: terminalContext,
@@ -145,6 +154,21 @@ class ParkinWorkinTerminalDiagnostics {
       context,
       title: 'ParkinWorkin Terminal Status',
       description: description,
+      securitySummary: '${authSnapshot.summary}\n'
+          '${FirebaseActivityMeter.instance.rulesAuditSummary}\n'
+          '${AccountRoleDiagnostics.creationSummary}\n'
+          '${AccountRoleDiagnostics.listSummary}',
+      securitySummaryChanges: Listenable.merge(<Listenable>[
+        FirebaseActivityMeter.instance.summary,
+        FirebaseAuthRulesDiagnostics.revision,
+        AccountRoleDiagnostics.creationRevision,
+        AccountRoleDiagnostics.listRevision,
+      ]),
+      securitySummaryProvider: () =>
+          "${FirebaseAuthRulesDiagnostics.current?.summary ?? '인증 상태: 확인되지 않음'}\n"
+          '${FirebaseActivityMeter.instance.rulesAuditSummary}\n'
+          '${AccountRoleDiagnostics.creationSummary}\n'
+          '${AccountRoleDiagnostics.listSummary}',
       copyText: debugPrintCode,
       copyTextProvider: debugPrintCodeWithJournal,
       requireDeveloperModeForCopy: true,

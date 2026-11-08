@@ -55,7 +55,7 @@ class UserReadService {
     await _getUserCollectionRef().doc(id).set(
       <String, dynamic>{'isActive': active},
       SetOptions(merge: true),
-    ).trackFirestore('SET', 'features/account/data/services/user_read_service.dart');
+    ).trackFirestore('SET', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts/*',);
   }
 
   Future<UserModel> _userFromRootWithActiveState(
@@ -95,19 +95,10 @@ class UserReadService {
       final showRef = _getUserShowCollectionRef()
           .doc(_showDocId(division, area));
       final showSnap = viewOptions == null
-          ? await showRef.get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart')
-          : await showRef.get(viewOptions).trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
-      var active = UserAccountShowMap.account(showSnap.data(), id)?['isActive'];
-      if (active is! bool && !UserAccountShowMap.isComplete(showSnap.data())) {
-        final legacySnap = viewOptions == null
-            ? await showRef.collection('users').doc(id).get().trackFirestore(
-                'GET', 'features/account/data/services/user_read_service.dart',
-              )
-            : await showRef.collection('users').doc(id).get(viewOptions).trackFirestore(
-                'GET', 'features/account/data/services/user_read_service.dart',
-              );
-        active = legacySnap.data()?['isActive'];
-      }
+          ? await showRef.get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*', readPurpose: 'USER_ACTIVE_PROJECTION_FALLBACK_FETCH')
+          : await showRef.get(viewOptions).trackFirestore('GET', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*', readPurpose: 'USER_ACTIVE_PROJECTION_SERVER_FALLBACK_FETCH');
+      final active = UserAccountShowMap.account(showSnap.data(), id)?['isActive'];
+      AccountRoleDiagnostics.recordList('user_active_root_fallback view=map_only legacyViewReads=0');
       if (active is! bool) {
         debugPrint(
           'user_accounts isActive 확인 실패 → userId=$id reason=view_state_missing',
@@ -151,7 +142,7 @@ class UserReadService {
   Future<UserModel?> getUserById(String userId) async {
     debugPrint('getUserById 호출 → ID: $userId');
     try {
-      final doc = await _getUserCollectionRef().doc(userId).get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+      final doc = await _getUserCollectionRef().doc(userId).get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts/*', readPurpose: 'USER_ACCOUNT_DETAIL_FETCH');
 
       if (!doc.exists) {
         debugPrint('DB 문서 없음 → userId=$userId');
@@ -167,7 +158,7 @@ class UserReadService {
     try {
       final doc = await _getUserCollectionRef()
           .doc(userId)
-          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts/*', readPurpose: 'USER_ACCOUNT_SERVER_REVALIDATION');
 
       if (!doc.exists) {
         return null;
@@ -193,7 +184,7 @@ class UserReadService {
       final codeSnapshot = await _getUserCollectionRef()
           .where('codeNumber', isEqualTo: normalized)
           .limit(2)
-          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+          .get().trackFirestore('QUERY', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
       if (codeSnapshot.docs.length > 1) {
         debugPrint(
           'getUserByAccountCode, 중복 코드번호 감지 - accountCode: ${AccountCodeNumber.mask(normalized)} source=codeNumber',
@@ -209,7 +200,7 @@ class UserReadService {
         final legacySnapshot = await _getUserCollectionRef()
             .where(field, isEqualTo: normalized)
             .limit(2)
-            .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+            .get().trackFirestore('QUERY', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
         if (legacySnapshot.docs.length > 1) {
           debugPrint(
             'getUserByAccountCode, 중복 legacy 식별자 감지 - accountCode: ${AccountCodeNumber.mask(normalized)} source=$field',
@@ -248,7 +239,7 @@ class UserReadService {
       final snapshot = await _getUserCollectionRef()
           .where('codeNumber', isEqualTo: normalized)
           .limit(10)
-          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+          .get().trackFirestore('QUERY', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
       final users = await Future.wait(
         snapshot.docs.map(
           (doc) => _userFromRootWithActiveState(doc.id, doc.data()),
@@ -274,7 +265,7 @@ class UserReadService {
       final snapshot = await _getUserCollectionRef()
           .where('name', isEqualTo: normalized)
           .limit(20)
-          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+          .get().trackFirestore('QUERY', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
       final users = await Future.wait(
         snapshot.docs.map(
           (doc) => _userFromRootWithActiveState(doc.id, doc.data()),
@@ -301,18 +292,18 @@ class UserReadService {
       var qs = await _getUserCollectionRef()
           .where('handle', isEqualTo: h)
           .limit(1)
-          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+          .get().trackFirestore('QUERY', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
       if (qs.docs.isEmpty) {
         qs = await _getUserCollectionRef()
             .where('codeNumber', isEqualTo: h)
             .limit(1)
-            .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+            .get().trackFirestore('QUERY', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
       }
       if (qs.docs.isEmpty) {
         qs = await _getUserCollectionRef()
             .where('phone', isEqualTo: h)
             .limit(1)
-            .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+            .get().trackFirestore('QUERY', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
       }
 
       if (qs.docs.isNotEmpty) {
@@ -368,7 +359,7 @@ class UserReadService {
           (field) => _getTabletCollectionRef()
               .where(field, isEqualTo: normalized)
               .limit(50)
-              .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart'),
+              .get().trackFirestore('QUERY', 'features/account/data/services/user_read_service.dart', collection: 'tablet_accounts', pathTemplate: 'tablet_accounts',),
         ),
       );
       final byId =
@@ -464,7 +455,7 @@ class UserReadService {
     );
 
     try {
-      final direct = await _getTabletCollectionRef().doc(documentId).get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+      final direct = await _getTabletCollectionRef().doc(documentId).get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart', collection: 'tablet_accounts', pathTemplate: 'tablet_accounts/*', readPurpose: 'USER_ACCOUNT_CODE_AREA_RESOLUTION');
       if (direct.exists && direct.data() != null) {
         TabletAccountDiagnostics.record(
           'code_number_area_lookup_direct_hit',
@@ -608,7 +599,7 @@ class UserReadService {
     try {
       final querySnapshot = await _getUserCollectionRef()
           .where('areas', arrayContains: selectedArea)
-          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+          .get().trackFirestore('QUERY', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
 
       final users = await Future.wait(
         querySnapshot.docs.map(
@@ -632,31 +623,32 @@ class UserReadService {
     try {
       final parent = _getUserShowCollectionRef().doc(docId);
       final snap = await parent.get().trackFirestore(
-        'GET', 'features/account/data/services/user_read_service.dart',
-      );
-      final indexed = <String, Map<String, dynamic>>{};
-      if (!UserAccountShowMap.isComplete(snap.data())) {
-        final legacy = await parent.collection('users').get().trackFirestore(
-          'GET', 'features/account/data/services/user_read_service.dart',
-        );
-        for (final doc in legacy.docs) {
-          indexed[doc.id] = doc.data();
-        }
-      }
-      for (final entry in UserAccountShowMap.entries(snap.data())) {
-        indexed[entry.key] = entry.value;
-      }
-      final users = indexed.entries
+        'GET', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*',
+       readPurpose: 'USER_ACCOUNT_LIST_SHOW_FETCH');
+      final entries = UserAccountShowMap.validatedEntries(snap.data());
+      final users = entries
           .map((entry) => _userFromShowData(entry.key, entry.value))
           .toList(growable: false);
-      AccountRoleDiagnostics.record(
-        'user_show_map_read_complete users=${users.length} legacyFallback=${!UserAccountShowMap.isComplete(snap.data())}',
+      AccountRoleDiagnostics.recordList(
+        'user_show_map_only_complete users=${users.length} documentGetRequests=1 legacyQueries=0 activeOnly=false fromCache=${snap.metadata.isFromCache}',
       );
-      await updateCacheWithUsers(area.trim(), users);
+      try {
+        await updateCacheWithUsers('${division.trim()}|${area.trim()}', users);
+      } catch (error) {
+        AccountRoleDiagnostics.recordList(
+          'user_show_cache_failed type=${error.runtimeType} serverGetSucceeded=true',
+        );
+      }
       return users;
-    } on FirebaseException {
+    } on FirebaseException catch (error) {
+      AccountRoleDiagnostics.recordList(
+        'user_show_map_only_failed reason=firestore_${error.code} activeOnly=false',
+      );
       rethrow;
     } catch (error) {
+      AccountRoleDiagnostics.recordList(
+        'user_show_map_only_failed reason=${error is StateError ? error.message : error.runtimeType} activeOnly=false',
+      );
       debugPrint('refreshUsersByDivisionAreaFromShow 예외: $error');
       rethrow;
     }
@@ -671,31 +663,26 @@ class UserReadService {
     try {
       final parent = _getUserShowCollectionRef().doc(docId);
       final snap = await parent.get().trackFirestore(
-        'GET', 'features/account/data/services/user_read_service.dart',
-      );
-      final indexed = <String, Map<String, dynamic>>{};
-      if (!UserAccountShowMap.isComplete(snap.data())) {
-        final legacy = await parent.collection('users').get().trackFirestore(
-          'GET', 'features/account/data/services/user_read_service.dart',
-        );
-        for (final doc in legacy.docs) {
-          indexed[doc.id] = doc.data();
-        }
-      }
-      for (final entry in UserAccountShowMap.entries(snap.data())) {
-        indexed[entry.key] = entry.value;
-      }
-      final users = indexed.entries
+        'GET', 'features/account/data/services/user_read_service.dart', collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*',
+       readPurpose: 'USER_ACTIVE_ACCOUNT_LIST_SHOW_FETCH');
+      final entries = UserAccountShowMap.validatedEntries(snap.data());
+      final users = entries
           .where((entry) => entry.value['isActive'] == true)
           .map((entry) => _userFromShowData(entry.key, entry.value))
           .toList(growable: false);
-      AccountRoleDiagnostics.record(
-        'user_show_map_active_read_complete users=${users.length} legacyFallback=${!UserAccountShowMap.isComplete(snap.data())}',
+      AccountRoleDiagnostics.recordList(
+        'user_show_map_only_complete users=${users.length} documentGetRequests=1 legacyQueries=0 activeOnly=true fromCache=${snap.metadata.isFromCache}',
       );
       return users;
-    } on FirebaseException {
+    } on FirebaseException catch (error) {
+      AccountRoleDiagnostics.recordList(
+        'user_show_map_only_failed reason=firestore_${error.code} activeOnly=true',
+      );
       rethrow;
     } catch (error, stackTrace) {
+      AccountRoleDiagnostics.recordList(
+        'user_show_map_only_failed reason=${error is StateError ? error.message : error.runtimeType} activeOnly=true',
+      );
       debugPrint(
         'refreshActiveUsersByDivisionAreaFromShow 예외 → $division / $area → $error\nStackTrace:\n$stackTrace',
       );
@@ -710,7 +697,7 @@ class UserReadService {
     try {
       final querySnapshot = await _getTabletCollectionRef()
           .where('areas', arrayContains: selectedArea)
-          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+          .get().trackFirestore('QUERY', 'features/account/data/services/user_read_service.dart', collection: 'tablet_accounts', pathTemplate: 'tablet_accounts',);
 
       final tablets = querySnapshot.docs
           .map((doc) => TabletModel.fromMap(doc.id, doc.data()))
@@ -741,7 +728,7 @@ class UserReadService {
     try {
       final doc = await _getAreasCollectionRef()
           .doc('${division.trim()}-${area.trim()}')
-          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart');
+          .get().trackFirestore('GET', 'features/account/data/services/user_read_service.dart', collection: 'areas', pathTemplate: 'areas/*', readPurpose: 'USER_AREA_ENGLISH_NAME_FETCH');
       String? name;
       if (doc.exists) {
         name = doc.data()?['englishName'] as String?;

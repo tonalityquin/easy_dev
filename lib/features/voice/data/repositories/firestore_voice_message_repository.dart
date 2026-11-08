@@ -36,7 +36,13 @@ class FirestoreVoiceMessageRepository implements VoiceMessageRepository {
     return _messagesRef(channelId)
         .orderBy('createdAt', descending: true)
         .limit(retainedMessageCount)
-        .snapshots().trackFirestoreSnapshots('features/voice/data/repositories/firestore_voice_message_repository.dart')
+        .snapshots()
+        .trackFirestoreSnapshots(
+          'features/voice/data/repositories/firestore_voice_message_repository.dart',
+          collection: 'voice_channels',
+          pathTemplate: 'voice_channels/*/messages',
+          operation: 'QUERY',
+        )
         .map(
           (snapshot) => snapshot.docs
               .map(
@@ -81,7 +87,7 @@ class FirestoreVoiceMessageRepository implements VoiceMessageRepository {
       durationMs: durationMs,
       createdAt: DateTime.now(),
     );
-    await _messagesRef(channel.id).doc(messageId).set(message.toMap()).trackFirestore('SET', 'features/voice/data/repositories/firestore_voice_message_repository.dart');
+    await _messagesRef(channel.id).doc(messageId).set(message.toMap()).trackFirestore('SET', 'features/voice/data/repositories/firestore_voice_message_repository.dart', collection: 'voice_channels');
     await _firestore.collection('voice_channels').doc(channel.id).set(
       <String, dynamic>{
         'areaKey': channel.areaKey,
@@ -90,7 +96,7 @@ class FirestoreVoiceMessageRepository implements VoiceMessageRepository {
         'lastSenderName': session.displayName,
       },
       SetOptions(merge: true),
-    ).trackFirestore('SET', 'features/voice/data/repositories/firestore_voice_message_repository.dart');
+    ).trackFirestore('SET', 'features/voice/data/repositories/firestore_voice_message_repository.dart', collection: 'voice_channels');
     await pruneOldMessages(channel.id);
   }
 
@@ -99,7 +105,7 @@ class FirestoreVoiceMessageRepository implements VoiceMessageRepository {
     String channelId,
     voice_message message,
   ) async {
-    await _messagesRef(channelId).doc(message.id).delete().trackFirestore('DELETE', 'features/voice/data/repositories/firestore_voice_message_repository.dart');
+    await _messagesRef(channelId).doc(message.id).delete().trackFirestore('DELETE', 'features/voice/data/repositories/firestore_voice_message_repository.dart', collection: 'voice_channels');
     if (message.storagePath.isNotEmpty) {
       await _storage.ref(message.storagePath).delete().trackStorage('STORAGE_DELETE', 'features/voice/data/repositories/firestore_voice_message_repository.dart');
     }
@@ -110,7 +116,7 @@ class FirestoreVoiceMessageRepository implements VoiceMessageRepository {
     final snapshot = await _messagesRef(channelId)
         .orderBy('createdAt', descending: true)
         .limit(32)
-        .get().trackFirestore('GET', 'features/voice/data/repositories/firestore_voice_message_repository.dart');
+        .get().trackFirestore('QUERY', 'features/voice/data/repositories/firestore_voice_message_repository.dart', collection: 'voice_channels');
     if (snapshot.docs.length <= retainedMessageCount) {
       return;
     }
@@ -119,7 +125,7 @@ class FirestoreVoiceMessageRepository implements VoiceMessageRepository {
         id: doc.id,
         data: doc.data(),
       );
-      await doc.reference.delete().trackFirestore('DELETE', 'features/voice/data/repositories/firestore_voice_message_repository.dart');
+      await doc.reference.delete().trackFirestore('DELETE', 'features/voice/data/repositories/firestore_voice_message_repository.dart', collection: 'voice_channels');
       if (message.storagePath.isNotEmpty) {
         try {
           await _storage.ref(message.storagePath).delete().trackStorage('STORAGE_DELETE', 'features/voice/data/repositories/firestore_voice_message_repository.dart');

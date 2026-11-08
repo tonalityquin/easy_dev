@@ -229,7 +229,7 @@ class _DoubleDepartureCompletedStatusDockState
             reason: result.reason?.trim(),
           ),
         );
-        return await repo.getPlate(documentId) ?? fallbackPlate;
+        return await repo.getPlate(documentId, readPurpose: 'POST_BILLING_SETTLEMENT_REFRESH') ?? fallbackPlate;
       },
     );
     parkingStatusTraceLog(
@@ -403,7 +403,7 @@ Future<PlateModel?> _cancelSettlement({
     if (!context.mounted) return null;
     parkingStatusTraceLog(context,'정산이 취소되었습니다.');
 
-    return await repo.getPlate(plate.id) ?? plate.copyWith(isLockedFee: false);
+    return await repo.getPlate(plate.id, readPurpose: 'POST_BILLING_CANCEL_REFRESH') ?? plate.copyWith(isLockedFee: false);
   } catch (e) {
     if (!context.mounted) return null;
     parkingStatusTraceLog(context,'정산 취소 중 오류가 발생했습니다: $e');

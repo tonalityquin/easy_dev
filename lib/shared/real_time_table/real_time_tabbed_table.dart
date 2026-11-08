@@ -4057,7 +4057,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
             );
             try {
               if (!mounted) return null;
-              final plate = await context.read<PlateRepository>().getPlate(plateId);
+              final plate = await context.read<PlateRepository>().getPlate(plateId, readPurpose: 'PLATE_DETAIL_OPEN');
               _emitRequestHudDebug(
                 'plate_detail_load_success',
                 <String, Object?>{

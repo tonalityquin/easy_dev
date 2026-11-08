@@ -128,7 +128,7 @@ class FirestoreAreaRepository implements AreaRepository {
     }
 
     final docId = '$trimmedDivision-$trimmedArea';
-    final doc = await _firestore.collection('areas').doc(docId).get().trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart');
+    final doc = await _firestore.collection('areas').doc(docId).get().trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart', collection: 'areas', readPurpose: 'AREA_HEADQUARTER_MEMBERSHIP_CHECK');
     if (!doc.exists) return false;
     final record = _toAreaRecord(doc.data());
     if (record == null ||
@@ -158,7 +158,7 @@ class FirestoreAreaRepository implements AreaRepository {
     if (trimmedDivision.isNotEmpty) {
       final docId = '$trimmedDivision-$trimmedArea';
       final ref = _firestore.collection('areas').doc(docId);
-      final doc = options == null ? await ref.get().trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart') : await ref.get(options).trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart');
+      final doc = options == null ? await ref.get().trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart', collection: 'areas', readPurpose: 'AREA_BY_NAME_DEFAULT_FETCH') : await ref.get(options).trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart', collection: 'areas', readPurpose: 'AREA_BY_NAME_SERVER_FETCH');
       if (!doc.exists) return null;
 
       final record = _toAreaRecord(doc.data());
@@ -179,7 +179,7 @@ class FirestoreAreaRepository implements AreaRepository {
         .collection('areas')
         .where('name', isEqualTo: trimmedArea)
         .limit(1);
-    final qs = options == null ? await query.get().trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart') : await query.get(options).trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart');
+    final qs = options == null ? await query.get().trackFirestore('QUERY', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart', collection: 'areas') : await query.get(options).trackFirestore('QUERY', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart', collection: 'areas');
 
     if (qs.docs.isEmpty) return null;
     final record = _toAreaRecord(qs.docs.first.data());
@@ -208,7 +208,7 @@ class FirestoreAreaRepository implements AreaRepository {
         .collection('areas')
         .where('division', isEqualTo: trimmedDivision);
     final options = _getOptions(serverOnly);
-    final qs = options == null ? await query.get().trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart') : await query.get(options).trackFirestore('GET', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart');
+    final qs = options == null ? await query.get().trackFirestore('QUERY', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart', collection: 'areas') : await query.get(options).trackFirestore('QUERY', 'features/dev/data/repositories/area_repo_package/firestore_area_repository.dart', collection: 'areas');
 
     final records = qs.docs
         .map((doc) => _toAreaRecord(doc.data()))

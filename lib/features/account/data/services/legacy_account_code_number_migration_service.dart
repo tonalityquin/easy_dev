@@ -85,7 +85,12 @@ class LegacyAccountCodeNumberMigrationService {
   }) async {
     final collection = _firestore.collection(collectionName);
     onLog?.call('$collectionName 전체 계정 조회를 시작합니다.', 0.04);
-    final snapshot = await collection.get().trackFirestore('GET', 'features/account/data/services/legacy_account_code_number_migration_service.dart');
+    final snapshot = await collection.get().trackFirestore(
+      'QUERY',
+      'features/account/data/services/legacy_account_code_number_migration_service.dart',
+      collection: collectionName,
+      pathTemplate: collection.path,
+    );
     final usedCodes = <String>{};
     for (final doc in snapshot.docs) {
       final code = AccountCodeNumber.normalize(
@@ -221,7 +226,7 @@ class LegacyAccountCodeNumberMigrationService {
   }) {
     return _firestore.runTransaction<_LegacyMigrationStepResult>(
       (transaction) async {
-        final freshSource = await transaction.get(sourceReference).trackFirestore('GET', 'features/account/data/services/legacy_account_code_number_migration_service.dart');
+        final freshSource = await transaction.get(sourceReference).trackFirestore('GET', 'features/account/data/services/legacy_account_code_number_migration_service.dart', documentReference: sourceReference, readPurpose: 'LEGACY_ACCOUNT_CODE_SOURCE_REVALIDATION');
         if (!freshSource.exists) {
           throw StateError('SOURCE_DOCUMENT_NOT_FOUND');
         }
@@ -285,7 +290,7 @@ class LegacyAccountCodeNumberMigrationService {
         }
 
         final targetReference = collection.doc(targetId);
-        final freshTarget = await transaction.get(targetReference).trackFirestore('GET', 'features/account/data/services/legacy_account_code_number_migration_service.dart');
+        final freshTarget = await transaction.get(targetReference).trackFirestore('GET', 'features/account/data/services/legacy_account_code_number_migration_service.dart', documentReference: targetReference, readPurpose: 'LEGACY_ACCOUNT_CODE_TARGET_DUPLICATE_CHECK');
         if (freshTarget.exists) {
           throw StateError('TARGET_DOCUMENT_CONFLICT');
         }
@@ -324,7 +329,7 @@ class LegacyAccountCodeNumberMigrationService {
       final duplicate = await collection
           .where('codeNumber', isEqualTo: candidate)
           .limit(1)
-          .get().trackFirestore('GET', 'features/account/data/services/legacy_account_code_number_migration_service.dart');
+          .get().trackFirestore('QUERY', 'features/account/data/services/legacy_account_code_number_migration_service.dart', collection: collection.id, pathTemplate: collection.path,);
       if (duplicate.docs.isNotEmpty) continue;
       usedCodes.add(candidate);
       return candidate;

@@ -1,3 +1,4 @@
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -475,7 +476,12 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
     if (_primaryBusy) return;
     setState(() => _primaryBusy = true);
     try {
-      await fn();
+      await FirebaseActivityMeter.instance.traceAction<void>(
+        kind: 'STATUS_PRIMARY_ACTION',
+        source: 'features/mode_triple/parking_completed_status_bottom_sheet.dart',
+        plateId: _plate.id,
+        action: fn,
+      );
     } finally {
       if (mounted) setState(() => _primaryBusy = false);
     }
@@ -485,7 +491,12 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
     if (_primaryBusy) return false;
     setState(() => _primaryBusy = true);
     try {
-      return await fn();
+      return await FirebaseActivityMeter.instance.traceAction<bool>(
+        kind: 'STATUS_PRIMARY_ACTION',
+        source: 'features/mode_triple/parking_completed_status_bottom_sheet.dart',
+        plateId: _plate.id,
+        action: fn,
+      );
     } finally {
       if (mounted) setState(() => _primaryBusy = false);
     }
@@ -555,7 +566,7 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
         n: 1,
       );
 
-      final freshPlate = await repo.getPlate(id) ?? fallbackPlate;
+      final freshPlate = await repo.getPlate(id, readPurpose: 'POST_BILLING_SETTLEMENT_REFRESH') ?? fallbackPlate;
 
       await plateState.tripleUpdatePlateLocally(
         PlateType.parkingCompleted,
@@ -1144,7 +1155,7 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
           source: 'parkingCompletedStatus.prebill.repo.settlePlateBilling',
           n: 1,
         );
-        final refreshedPlate = await repo.getPlate(documentId) ?? fallbackPlate;
+        final refreshedPlate = await repo.getPlate(documentId, readPurpose: 'POST_BILLING_SETTLEMENT_REFRESH') ?? fallbackPlate;
         await plateState.tripleUpdatePlateLocally(
           PlateType.parkingCompleted,
           refreshedPlate,
@@ -1279,7 +1290,7 @@ class _StatusSideDockContentState extends State<_StatusSideDockContent> {
           n: 1,
         );
 
-        final refreshedPlate = await repo.getPlate(documentId) ?? updatedPlate;
+        final refreshedPlate = await repo.getPlate(documentId, readPurpose: 'POST_BILLING_CANCEL_REFRESH') ?? updatedPlate;
 
         await plateState.tripleUpdatePlateLocally(
           PlateType.parkingCompleted,

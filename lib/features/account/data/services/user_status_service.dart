@@ -167,14 +167,14 @@ class UserStatusService {
     final source =
         'features/account/data/services/user_status_service.dart.$opName';
     try {
-      await docRef.update(delta).trackFirestore('UPDATE', source);
+      await docRef.update(delta).trackFirestore('UPDATE', source, collection: col.id, pathTemplate: col.path,);
     } on FirebaseException catch (error) {
       if (error.code != 'not-found' || opName == 'updateLoginSession') {
         rethrow;
       }
       await docRef
           .set(fullUpdates, SetOptions(merge: true))
-          .trackFirestore('SET', source);
+          .trackFirestore('SET', source, collection: col.id, pathTemplate: col.path,);
     }
   }
 

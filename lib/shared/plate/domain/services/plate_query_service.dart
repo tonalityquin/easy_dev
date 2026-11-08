@@ -8,12 +8,25 @@ import '../models/plate_model.dart';
 class PlateQueryService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<PlateModel?> getPlate(String documentId) async {
+  Future<PlateModel?> getPlate(
+    String documentId, {
+    String readPurpose = 'PLATE_READ_UNCLASSIFIED',
+  }) {
+    return FirebaseActivityMeter.instance.traceAction<PlateModel?>(
+      kind: 'PLATE_READ',
+      source: 'shared/plate/domain/services/plate_query_service.dart',
+      plateId: documentId,
+      detail: 'readPurpose=$readPurpose',
+      action: () => _getPlate(documentId, readPurpose),
+    );
+  }
+
+  Future<PlateModel?> _getPlate(String documentId, String readPurpose) async {
     try {
       final doc = await _firestore
           .collection('plates')
           .doc(documentId)
-          .get().trackFirestore('GET', 'shared/plate/domain/services/plate_query_service.dart')
+          .get().trackFirestore('GET', 'shared/plate/domain/services/plate_query_service.dart', collection: 'plates', pathTemplate: 'plates/*', readPurpose: readPurpose)
           .timeout(const Duration(seconds: 10));
 
       if (!doc.exists) {
@@ -117,7 +130,7 @@ class PlateQueryService {
     List<String> tags = const ['plates', 'query'],
   }) async {
     try {
-      final querySnapshot = await query.get().trackFirestore('GET', 'shared/plate/domain/services/plate_query_service.dart');
+      final querySnapshot = await query.get().trackFirestore('QUERY', 'shared/plate/domain/services/plate_query_service.dart', collection: 'plates', pathTemplate: 'plates', readPurpose: op);
       final results = querySnapshot.docs
           .map((doc) => PlateModel.fromDocument(doc))
           .toList();

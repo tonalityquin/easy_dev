@@ -1,3 +1,4 @@
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../app/utils/snackbar_helper.dart';
@@ -68,9 +69,10 @@ class DrivingRecoveryService {
     _commonRecoveryShownInThisSession = true;
 
     final repo = context.read<PlateRepository>();
-    final plates = await _fetchMyDrivingPlates(
-      repository: repo,
-      userName: userName,
+    final plates = await FirebaseActivityMeter.instance.traceAction<List<PlateModel>>(
+      kind: 'DRIVING_RECOVERY',
+      source: 'shared/plate/application/common/driving_recovery_gate.dart',
+      action: () => _fetchMyDrivingPlates(repository: repo, userName: userName),
     );
 
     if (!context.mounted) return;
@@ -166,7 +168,7 @@ class _DrivingRecoveryDialogState extends State<_DrivingRecoveryDialog> {
   Future<PlateModel?> _fetchPlateById(String id) async {
     try {
       final repo = context.read<PlateRepository>();
-      return await repo.getPlate(id);
+      return await repo.getPlate(id, readPurpose: 'DRIVING_RECOVERY_DETAIL_CHECK');
     } catch (_) {
       return null;
     }
@@ -235,7 +237,7 @@ class _DrivingRecoveryDialogState extends State<_DrivingRecoveryDialog> {
     try {
       late final PlateModel? latest;
       try {
-        latest = await repo.getPlate(p.id);
+        latest = await repo.getPlate(p.id, readPurpose: 'DRIVING_RECOVERY_DETAIL_CHECK');
       } catch (_) {
         return;
       }
@@ -260,7 +262,7 @@ class _DrivingRecoveryDialogState extends State<_DrivingRecoveryDialog> {
         PlateModel? current = p;
         var refreshed = false;
         try {
-          current = await repo.getPlate(p.id);
+          current = await repo.getPlate(p.id, readPurpose: 'DRIVING_RECOVERY_DETAIL_CHECK');
           refreshed = true;
         } catch (_) {}
 

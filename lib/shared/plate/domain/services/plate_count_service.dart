@@ -43,7 +43,7 @@ class PlateCountService {
 
     try {
       final agg =
-          await baseQuery.count().get().trackFirestore('AGGREGATION', 'shared/plate/domain/services/plate_count_service.dart').timeout(const Duration(seconds: 10));
+          await baseQuery.count().get().trackFirestore('AGGREGATION', 'shared/plate/domain/services/plate_count_service.dart', collection: 'plates', pathTemplate: 'plates').timeout(const Duration(seconds: 10));
       final int count = agg.count ?? 0;
 
       _setCached(cacheKey, count);
@@ -66,7 +66,7 @@ class PlateCountService {
 
     try {
       final agg =
-          await baseQuery.count().get().trackFirestore('AGGREGATION', 'shared/plate/domain/services/plate_count_service.dart').timeout(const Duration(seconds: 10));
+          await baseQuery.count().get().trackFirestore('AGGREGATION', 'shared/plate/domain/services/plate_count_service.dart', collection: 'plates', pathTemplate: 'plates').timeout(const Duration(seconds: 10));
       final int docCount = agg.count ?? 0;
 
       _setCached(cacheKey, docCount);
@@ -83,7 +83,7 @@ class PlateCountService {
 
     try {
       final extraSnap =
-          await _firestore.collection('plate_counters').doc('area_$area').get().trackFirestore('GET', 'shared/plate/domain/services/plate_count_service.dart');
+          await _firestore.collection('plate_counters').doc('area_$area').get().trackFirestore('GET', 'shared/plate/domain/services/plate_count_service.dart', collection: 'plate_counters', pathTemplate: 'plate_counters/*', readPurpose: 'DEPARTURE_COMPLETED_EXTRA_COUNT_FETCH');
 
       final int extras =
           (extraSnap.data()?['departureCompletedEvents'] as int?) ?? 0;

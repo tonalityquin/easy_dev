@@ -26,7 +26,7 @@ class FirestoreVoiceChannelRepository
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
-    ).trackFirestore('SET', 'features/voice/data/repositories/firestore_voice_channel_repository.dart');
+    ).trackFirestore('SET', 'features/voice/data/repositories/firestore_voice_channel_repository.dart', collection: 'voice_channels');
     return VoiceChannel(
       id: areaKey,
       areaName: areaName,

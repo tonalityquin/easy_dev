@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import '../../../../app/utils/motion_timing_diagnostics.dart';
 import '../../../../app/utils/developer_operation_status_dialog.dart';
 import '../../../../app/utils/snackbar_helper.dart';
@@ -895,6 +896,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       plateNumber: plateNumber,
       area: _safeArea(area),
       scope: PlateStatusScope.history,
+      readPurpose: 'INPUT_HISTORY_LOOKUP',
     );
   }
 
@@ -906,6 +908,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       plateNumber: plateNumber,
       area: _safeArea(area),
       scope: PlateStatusScope.monthly,
+      readPurpose: 'INPUT_MONTHLY_STATUS_LOOKUP',
     );
     if (result.isFound) {
       return _MonthlyFetchResult.success(
@@ -1662,12 +1665,18 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       'register=start plate=${controller.buildPlateNumber()} area=${context.read<AreaState>().currentArea}',
       progress: .72,
     );
-    final success = await controller.submitPlateEntry(
-      context,
-          () {
-        if (mounted) setState(() {});
-      },
-      onDebug: _log,
+    final success = await FirebaseActivityMeter.instance.traceAction<bool>(
+      kind: 'PLATE_REGISTER',
+      source: 'shared/page/input/pages/input_plate_screen.dart',
+      plateId:
+          '${controller.buildPlateNumber()}_${context.read<AreaState>().currentArea}',
+      action: () => controller.submitPlateEntry(
+        context,
+        () {
+          if (mounted) setState(() {});
+        },
+        onDebug: _log,
+      ),
     );
     if (!mounted) return;
     if (!success) {

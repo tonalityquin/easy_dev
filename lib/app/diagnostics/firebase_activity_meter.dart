@@ -3,12 +3,15 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../features/selector/application/dev_auth.dart';
 import '../utils/secure_auth_diagnostics.dart';
 import 'firebase_activity_journal.dart';
+import 'firebase_auth_rules_diagnostics.dart';
+import 'firestore_rules_audit.dart';
 
 @immutable
 class FirebaseActivityEvent {
@@ -23,6 +26,16 @@ class FirebaseActivityEvent {
     required this.sessionId,
     required this.origin,
     this.operationId,
+    this.requestId,
+    this.actionId,
+    this.actionKind,
+    this.plateRef,
+    this.readPurpose,
+    this.parentOperationId,
+    this.collection,
+    this.pathTemplate,
+    this.firebaseCode,
+    this.responseSource,
     this.documents,
     this.bytes,
     this.fromCache,
@@ -41,6 +54,16 @@ class FirebaseActivityEvent {
   final String sessionId;
   final String origin;
   final String? operationId;
+  final String? requestId;
+  final String? actionId;
+  final String? actionKind;
+  final String? plateRef;
+  final String? readPurpose;
+  final String? parentOperationId;
+  final String? collection;
+  final String? pathTemplate;
+  final String? firebaseCode;
+  final String? responseSource;
   final int? documents;
   final int? bytes;
   final bool? fromCache;
@@ -61,6 +84,16 @@ class FirebaseActivityEvent {
       'sessionId=$sessionId',
       'origin=$origin',
       if (operationId != null) 'operationId=$operationId',
+      if (requestId != null) 'requestId=$requestId',
+      if (actionId != null) 'actionId=$actionId',
+      if (actionKind != null) 'actionKind=$actionKind',
+      if (plateRef != null) 'plateRef=$plateRef',
+      if (readPurpose != null) 'readPurpose=$readPurpose',
+      if (parentOperationId != null) 'parentOperationId=$parentOperationId',
+      if (collection != null) 'collection=$collection',
+      if (pathTemplate != null) 'pathTemplate=$pathTemplate',
+      if (firebaseCode != null) 'firebaseCode=$firebaseCode',
+      if (responseSource != null) 'responseSource=$responseSource',
       if (documents != null) 'documents=$documents',
       if (bytes != null) 'payloadBytes=$bytes',
       if (fromCache != null) 'fromCache=$fromCache',
@@ -161,15 +194,58 @@ class FirebaseWriteCommitDelta {
   int updates = 0;
   int deletes = 0;
   String source = 'firestore.transaction';
+  bool tracksOperations = false;
+  final List<FirestoreRulesWriteTarget> targets = <FirestoreRulesWriteTarget>[];
+  final List<FirestoreRulesWriteTarget> readTargets = <FirestoreRulesWriteTarget>[];
+  final Map<String, bool> knownExistence = <String, bool>{};
+  final Map<String, Map<String, dynamic>> knownBefore =
+      <String, Map<String, dynamic>>{};
+  final Set<String> pathsWithWrites = <String>{};
 
   int get writes => sets + updates;
   bool get hasOperations => writes > 0 || deletes > 0;
 
   void stage(String operation, String eventSource) {
     source = eventSource;
+    if (tracksOperations) return;
     if (operation == 'STAGE_SET') sets++;
     if (operation == 'STAGE_UPDATE') updates++;
     if (operation == 'STAGE_DELETE') deletes++;
+  }
+
+  void trackDocument(String operation, String path, {
+    Object? data,
+    bool merge = false,
+    bool mergeNestedMaps = false,
+    bool exactDiffAllowed = true,
+  }) {
+    if (operation == 'SET') sets++;
+    if (operation == 'UPDATE') updates++;
+    if (operation == 'DELETE') deletes++;
+    final exists = knownExistence[path];
+    final exactKeys = exists == true && exactDiffAllowed &&
+            !pathsWithWrites.contains(path) && operation != 'DELETE'
+        ? FirestoreRulesAudit.affectedKeysFromKnownState(
+            before: knownBefore[path],
+            payload: data,
+            merge: merge || operation == 'UPDATE',
+            mergeNestedMaps: merge && mergeNestedMaps,
+          )
+        : null;
+    final safeKeys = operation == 'UPDATE' || (operation == 'SET' && merge)
+        ? FirestoreRulesAudit.safeProjectionKeys(data)
+        : null;
+    pathsWithWrites.add(path);
+    targets.add(FirestoreRulesWriteTarget(
+      operation: operation,
+      collection: FirestoreRulesAudit.collectionFor(path),
+      pathTemplate: FirestoreRulesAudit.pathTemplateFor(path),
+      documentExists: exists,
+      documentEvidence: exists == null ? 'UNKNOWN' : 'TRANSACTION_GET',
+      changedKeys: exactKeys ?? safeKeys,
+      fieldEvidence: exactKeys != null ? 'KNOWN_BEFORE_AFTER'
+          : safeKeys != null ? 'WRITE_SCOPE' : 'UNKNOWN',
+    ));
   }
 
   FirebaseWriteCommitDelta copy() {
@@ -178,8 +254,86 @@ class FirebaseWriteCommitDelta {
     result.updates = updates;
     result.deletes = deletes;
     result.source = source;
+    result.tracksOperations = tracksOperations;
+    result.targets.addAll(targets);
+    result.readTargets.addAll(readTargets);
+    result.knownExistence.addAll(knownExistence);
+    result.knownBefore.addAll(knownBefore);
+    result.pathsWithWrites.addAll(pathsWithWrites);
     return result;
   }
+}
+
+class _TrackedFirestoreTransaction implements Transaction {
+  _TrackedFirestoreTransaction(this._delegate, this._attempt);
+
+  final Transaction _delegate;
+  final FirebaseWriteCommitDelta _attempt;
+
+  @override
+  Future<DocumentSnapshot<T>> get<T extends Object?>(
+    DocumentReference<T> documentReference,
+  ) async {
+    final snapshot = await _delegate.get<T>(documentReference);
+    _attempt.readTargets.add(FirestoreRulesWriteTarget(
+      operation: 'GET',
+      collection: FirestoreRulesAudit.collectionFor(documentReference.path),
+      pathTemplate: FirestoreRulesAudit.pathTemplateFor(documentReference.path),
+      documentExists: snapshot.exists,
+      documentEvidence: 'TRANSACTION_GET',
+    ));
+    _attempt.knownExistence[documentReference.path] = snapshot.exists;
+    final data = snapshot.data();
+    if (snapshot.exists && data is Map<String, dynamic>) {
+      _attempt.knownBefore[documentReference.path] = data;
+    }
+    return snapshot;
+  }
+
+  @override
+  Transaction set<T>(DocumentReference<T> documentReference, T data,
+      [SetOptions? options]) {
+    _delegate.set<T>(documentReference, data, options);
+    _attempt.trackDocument(
+      'SET', documentReference.path,
+      data: data,
+      merge: options?.merge == true || options?.mergeFields != null,
+      mergeNestedMaps: options?.merge == true,
+      exactDiffAllowed: options?.mergeFields == null,
+    );
+    return this;
+  }
+
+  @override
+  Transaction update(DocumentReference<Object?> documentReference,
+      Map<Object, Object?> data) {
+    final dynamic delegate = _delegate;
+    delegate.update(documentReference, data);
+    _attempt.trackDocument('UPDATE', documentReference.path, data: data);
+    return this;
+  }
+
+  @override
+  Transaction delete(DocumentReference<Object?> documentReference) {
+    _delegate.delete(documentReference);
+    _attempt.trackDocument('DELETE', documentReference.path);
+    return this;
+  }
+}
+
+@immutable
+class FirebaseActionTrace {
+  const FirebaseActionTrace({
+    required this.id,
+    required this.kind,
+    this.plateRef,
+    this.parentId,
+  });
+
+  final String id;
+  final String kind;
+  final String? plateRef;
+  final String? parentId;
 }
 
 class FirebaseActivityMeter {
@@ -188,6 +342,128 @@ class FirebaseActivityMeter {
   static final FirebaseActivityMeter instance = FirebaseActivityMeter._();
   static const int maxEvents = 500;
   static const Object transactionAttemptKey = #firebaseActivityTransactionAttempt;
+  static const Object actionTraceKey = #firebaseActionTrace;
+
+  FirebaseActionTrace? get currentActionTrace =>
+      Zone.current[actionTraceKey] as FirebaseActionTrace?;
+
+  String? get currentActionId => currentActionTrace?.id;
+
+  final Map<String, String> _plateAliases = <String, String>{};
+  final Map<String, int> _viewFailuresByAction = <String, int>{};
+  final Map<String, int> _resultFailuresByAction = <String, int>{};
+
+  String plateRefFor(String plateId) {
+    final normalized = plateId.trim();
+    if (normalized.isEmpty) return 'P-unknown';
+    return _plateAliases.putIfAbsent(
+      normalized,
+      () => 'P-${_plateAliases.length + 1}',
+    );
+  }
+
+  Future<T> traceAction<T>({
+    required String kind,
+    required String source,
+    required Future<T> Function() action,
+    String? plateId,
+    String? detail,
+    bool Function(T result)? isFailureResult,
+  }) {
+    final parent = currentActionTrace;
+    if (parent != null) {
+      record(
+        service: 'workflow',
+        operation: 'ACTION_NESTED',
+        source: source,
+        detail: 'kind=$kind${detail == null ? '' : ' $detail'}',
+      );
+      if (isFailureResult == null) return action();
+      return action().then((result) {
+        if (isFailureResult(result)) {
+          _resultFailuresByAction[parent.id] =
+              (_resultFailuresByAction[parent.id] ?? 0) + 1;
+          record(
+            service: 'workflow',
+            operation: 'ACTION_NESTED_RESULT_FAILED',
+            source: source,
+            result: 'error',
+            detail: 'kind=$kind',
+          );
+        }
+        return result;
+      });
+    }
+    final trace = FirebaseActionTrace(
+      id: nextOperationId(),
+      kind: kind,
+      plateRef: plateId == null ? null : plateRefFor(plateId),
+    );
+    return runZoned<Future<T>>(() async {
+      final watch = Stopwatch()..start();
+      record(
+        service: 'workflow',
+        operation: 'ACTION_START',
+        source: source,
+        detail: detail,
+      );
+      try {
+        final result = await action();
+        watch.stop();
+        final viewFailures = _viewFailuresByAction.remove(trace.id) ?? 0;
+        final resultFailures = _resultFailuresByAction.remove(trace.id) ?? 0;
+        final failed = isFailureResult?.call(result) ?? false;
+        record(
+          service: 'workflow',
+          operation: failed
+              ? 'ACTION_FAILED'
+              : result is bool && result == false
+                  ? 'ACTION_BLOCKED'
+                  : viewFailures == 0 && resultFailures == 0
+                      ? 'ACTION_COMPLETE'
+                      : 'ACTION_PARTIAL',
+          source: source,
+          result: failed ? 'error' : 'success',
+          elapsedMs: watch.elapsedMilliseconds,
+          detail: 'viewFailures=$viewFailures resultFailures=$resultFailures',
+        );
+        return result;
+      } catch (error) {
+        watch.stop();
+        final viewFailures = _viewFailuresByAction.remove(trace.id) ?? 0;
+        final resultFailures = _resultFailuresByAction.remove(trace.id) ?? 0;
+        record(
+          service: 'workflow',
+          operation: 'ACTION_FAILED',
+          source: source,
+          result: 'error',
+          elapsedMs: watch.elapsedMilliseconds,
+          detail: 'errorType=${error.runtimeType} viewFailures=$viewFailures resultFailures=$resultFailures',
+        );
+        rethrow;
+      }
+    }, zoneValues: <Object, Object>{actionTraceKey: trace});
+  }
+
+  void traceStep(String operation, {
+    required String source,
+    String? detail,
+    String result = 'success',
+  }) {
+    final actionId = currentActionId;
+    if (operation == 'VIEW_WRITE_FAILED' && actionId != null) {
+      _viewFailuresByAction[actionId] =
+          (_viewFailuresByAction[actionId] ?? 0) + 1;
+    }
+    record(
+      service: 'workflow',
+      operation: operation,
+      source: source,
+      detail: detail,
+      result: result,
+    );
+  }
+
 
   final ValueNotifier<FirebaseActivitySummary> summary =
       ValueNotifier<FirebaseActivitySummary>(const FirebaseActivitySummary());
@@ -263,6 +539,13 @@ class FirebaseActivityMeter {
     bool? fromCache,
     String? detail,
     String? operationId,
+    String? requestId,
+    String? collection,
+    String? pathTemplate,
+    String? firebaseCode,
+    String? responseSource,
+    String? readPurpose,
+    String? parentOperationId,
     int committedWrites = 0,
     int committedDeletes = 0,
   }) {
@@ -270,6 +553,7 @@ class FirebaseActivityMeter {
     if (result == 'staged' && attempt is FirebaseWriteCommitDelta) {
       attempt.stage(operation, source);
     }
+    final trace = currentActionTrace;
     final normalizedSource = source.replaceAll(RegExp(r'[^a-zA-Z0-9_./-]'), '_');
     final event = FirebaseActivityEvent(
       time: DateTime.now(),
@@ -282,6 +566,20 @@ class FirebaseActivityMeter {
       sessionId: sessionId,
       origin: 'app',
       operationId: operationId,
+      requestId: requestId,
+      actionId: trace?.id,
+      actionKind: trace?.kind,
+      plateRef: trace?.plateRef,
+      readPurpose: readPurpose ??
+          (service == 'firestore' && (operation == 'GET' || operation == 'QUERY')
+              ? 'UNCLASSIFIED_CALL_SITE'
+              : null),
+      parentOperationId: parentOperationId ??
+          (service == 'firestore' && requestId != null ? trace?.id : trace?.parentId),
+      collection: collection,
+      pathTemplate: pathTemplate,
+      firebaseCode: firebaseCode,
+      responseSource: responseSource,
       documents: documents,
       bytes: bytes,
       fromCache: fromCache,
@@ -312,6 +610,16 @@ class FirebaseActivityMeter {
         sessionId: remoteSession,
         origin: 'foreground',
         operationId: payload['operationId']?.toString(),
+        requestId: payload['requestId']?.toString(),
+        actionId: payload['actionId']?.toString(),
+        actionKind: payload['actionKind']?.toString(),
+        plateRef: payload['plateRef']?.toString(),
+        readPurpose: payload['readPurpose']?.toString(),
+        parentOperationId: payload['parentOperationId']?.toString(),
+        collection: payload['collection']?.toString(),
+        pathTemplate: payload['pathTemplate']?.toString(),
+        firebaseCode: payload['firebaseCode']?.toString(),
+        responseSource: payload['responseSource']?.toString(),
         documents: (payload['documents'] as num?)?.toInt(),
         bytes: (payload['bytes'] as num?)?.toInt(),
         fromCache: payload['fromCache'] as bool?,
@@ -363,6 +671,16 @@ class FirebaseActivityMeter {
       fromCache: event.fromCache,
       committedWrites: event.committedWrites,
       committedDeletes: event.committedDeletes,
+      requestId: event.requestId,
+      actionId: event.actionId,
+      actionKind: event.actionKind,
+      plateRef: event.plateRef,
+      readPurpose: event.readPurpose,
+      parentOperationId: event.parentOperationId,
+      collection: event.collection,
+      pathTemplate: event.pathTemplate,
+      firebaseCode: event.firebaseCode,
+      responseSource: event.responseSource,
     );
     if (_events.length > maxEvents) {
       _events.removeRange(0, _events.length - maxEvents);
@@ -418,7 +736,7 @@ class FirebaseActivityMeter {
       activeListeners: _active,
       storage: sum(storageOperations),
       aggregation: count('AGGREGATION'),
-      transaction: count('TRANSACTION'),
+      transaction: count('TRANSACTION') + count('COMMITTED_TRANSACTION'),
       batch: count('BATCH'),
       errors: _errors,
       uploadBytes: _uploadBytes,
@@ -432,17 +750,41 @@ class FirebaseActivityMeter {
     );
   }
 
-  void listenerOpened(String source) {
+  void listenerOpened(String source, {
+    String? requestId,
+    String? collection,
+    String? pathTemplate,
+  }) {
     _active++;
-    record(service: 'firestore', operation: 'LISTEN_START', source: source);
+    record(
+      service: 'firestore', operation: 'LISTEN_START', source: source,
+      requestId: requestId, collection: collection, pathTemplate: pathTemplate,
+      readPurpose: 'REALTIME_LISTENER',
+    );
   }
 
-  void listenerClosed(String source) {
+  void listenerClosed(String source, {
+    String? requestId,
+    String? collection,
+    String? pathTemplate,
+  }) {
     if (_active > 0) _active--;
-    record(service: 'firestore', operation: 'LISTEN_CANCEL', source: source);
+    record(
+      service: 'firestore', operation: 'LISTEN_CANCEL', source: source,
+      requestId: requestId, collection: collection, pathTemplate: pathTemplate,
+      readPurpose: 'REALTIME_LISTENER',
+    );
   }
 
-  void snapshotReceived(Object? value, String source) {
+  void snapshotReceived(Object? value, String source, {
+    String? requestId,
+    String? collection,
+    String? pathTemplate,
+    FirebaseAuthRulesSnapshot? authAtEvent,
+    bool sessionChanged = false,
+    String? authEvidence,
+    String? authContext,
+  }) {
     int? documents;
     bool? cache;
     String? detail;
@@ -462,7 +804,29 @@ class FirebaseActivityMeter {
       documents: documents,
       fromCache: cache,
       detail: detail,
+      requestId: requestId,
+      readPurpose: 'REALTIME_LISTENER',
+      collection: collection,
+      pathTemplate: pathTemplate,
+      responseSource: cache == null ? 'unknown' : cache ? 'cache' : 'server',
     );
+    if (requestId != null) {
+      recordRulesAudit(
+        requestId: requestId,
+        collection: collection,
+        operation: value is QuerySnapshot
+            ? 'QUERY'
+            : value is DocumentSnapshot ? 'GET' : 'SNAP',
+        source: source,
+        pathTemplate: pathTemplate,
+        success: true,
+        fromCache: cache,
+        authOverride: authAtEvent,
+        sessionChanged: sessionChanged,
+        authEvidence: authEvidence,
+        authContext: authContext,
+      );
+    }
   }
 
   Future<T> trackFuture<T>(
@@ -471,14 +835,28 @@ class FirebaseActivityMeter {
     required String operation,
     required String source,
     int? bytes,
+    String? collection,
+    String? pathTemplate,
+    Set<String>? changedKeys,
+    String? readPurpose,
+    FirebaseAuthRulesSnapshot? authOverride,
+    bool useCapturedAuth = false,
   }) {
     final watch = Stopwatch()..start();
+    final requestId = service == 'firestore' ? nextOperationId() : null;
+    final authAtStart = useCapturedAuth
+        ? authOverride
+        : service == 'firestore'
+            ? FirebaseAuthRulesDiagnostics.captureForRequest()
+            : null;
     return future.then<T>((value) {
       watch.stop();
       String resolvedOperation = operation;
       int? documents;
       bool? cache;
       int? resolvedBytes = bytes;
+      String? resolvedCollection = collection;
+      String? resolvedPathTemplate = pathTemplate;
       if (service == 'firestore') {
         if (operation == 'GET' && value is QuerySnapshot) {
           resolvedOperation = 'QUERY';
@@ -489,6 +867,14 @@ class FirebaseActivityMeter {
         } else if (value is DocumentSnapshot) {
           documents = value.exists ? 1 : 0;
           cache = value.metadata.isFromCache;
+          final segments = value.reference.path.split('/');
+          if (segments.length.isEven && segments.length >= 2) {
+            resolvedCollection ??= segments.first;
+            resolvedPathTemplate ??= List<String>.generate(
+              segments.length,
+              (index) => index.isEven ? segments[index] : '*',
+            ).join('/');
+          }
         }
       }
       if (service == 'storage') {
@@ -508,7 +894,30 @@ class FirebaseActivityMeter {
         documents: documents,
         fromCache: cache,
         bytes: resolvedBytes,
+        requestId: requestId,
+        readPurpose: readPurpose,
+        collection: resolvedCollection,
+        pathTemplate: resolvedPathTemplate,
+        responseSource: service == 'firestore'
+            ? (cache == true ? 'cache' : cache == false ? 'server'
+                : <String>{'SET', 'CREATE', 'UPDATE', 'DELETE', 'BATCH', 'TRANSACTION'}.contains(resolvedOperation)
+                    ? 'sdk_acknowledged' : 'unknown')
+            : null,
       );
+      if (service == 'firestore' && requestId != null) {
+        recordRulesAudit(
+          requestId: requestId,
+          collection: resolvedCollection,
+          operation: resolvedOperation,
+          source: source,
+          pathTemplate: resolvedPathTemplate,
+          changedKeys: changedKeys,
+          success: true,
+          fromCache: cache,
+          authOverride: authAtStart,
+          sessionChanged: (authAtStart != null && !FirebaseAuthRulesDiagnostics.isSameSession(authAtStart)),
+        );
+      }
       return value;
     }, onError: (Object error, StackTrace stack) {
       watch.stop();
@@ -519,36 +928,292 @@ class FirebaseActivityMeter {
         result: 'error',
         elapsedMs: watch.elapsedMilliseconds,
         detail: error.runtimeType.toString(),
+        requestId: requestId,
+        readPurpose: readPurpose,
+        collection: collection,
+        pathTemplate: pathTemplate,
+        firebaseCode: error is FirebaseException ? error.code : null,
+        responseSource: 'unknown',
       );
+      if (service == 'firestore' && requestId != null) {
+        recordRulesAudit(
+          requestId: requestId,
+          collection: collection,
+          operation: operation,
+          source: source,
+          pathTemplate: pathTemplate,
+          changedKeys: changedKeys,
+          success: false,
+          firebaseCode: error is FirebaseException ? error.code : null,
+          authOverride: authAtStart,
+          sessionChanged: (authAtStart != null && !FirebaseAuthRulesDiagnostics.isSameSession(authAtStart)),
+        );
+      }
       Error.throwWithStackTrace(error, stack);
     });
   }
 
-  Stream<T> observeSnapshots<T>(Stream<T> stream, String source) {
+  void recordRulesAudit({
+    required String requestId,
+    required String? collection,
+    required String operation,
+    required String source,
+    required bool success,
+    String? firebaseCode,
+    bool? fromCache,
+    String? pathTemplate,
+    Set<String>? changedKeys,
+    bool? documentExists,
+    FirebaseAuthRulesSnapshot? authOverride,
+    bool sessionChanged = false,
+    String? authEvidence,
+    String? authContext,
+    bool requestSent = true,
+    String? expectedOverride,
+  }) {
+    if (!DevAuth.devModeEnabled.value) return;
+    final audit = FirestoreRulesAudit.compare(
+      collection: collection,
+      operation: operation,
+      success: success,
+      firebaseCode: firebaseCode,
+      fromCache: fromCache,
+      pathTemplate: pathTemplate,
+      changedKeys: changedKeys,
+      documentExists: documentExists,
+      authOverride: authOverride,
+      requireCapturedAuth: true,
+      sessionChanged: sessionChanged,
+      authEvidence: authEvidence,
+      requestSent: requestSent,
+      expectedOverride: expectedOverride,
+    );
+    record(
+      service: 'security',
+      operation: 'RULES_COMPARE',
+      source: source,
+      result: 'audit',
+      requestId: requestId,
+      collection: collection,
+      pathTemplate: pathTemplate,
+      firebaseCode: firebaseCode,
+      detail: 'firestoreOperation=$operation ${audit.detail}'
+          '${authContext == null ? '' : ' $authContext'}',
+    );
+  }
+
+  void recordWriteTargets({
+    required String requestId,
+    required String source,
+    required List<FirestoreRulesWriteTarget> targets,
+    required FirebaseAuthRulesSnapshot? authOverride,
+    required String kind,
+  }) {
+    if (!DevAuth.devModeEnabled.value) return;
+    for (var index = 0; index < targets.length; index++) {
+      final target = targets[index];
+      final expected = target.documentEvidence == 'PREEXISTING_SNAPSHOT' &&
+              target.collection == 'user_accounts_show' &&
+              target.operation == 'SET'
+          ? 'UNKNOWN'
+          : FirestoreRulesAudit.expected(
+        collection: target.collection,
+        operation: target.operation,
+        pathTemplate: target.pathTemplate,
+        changedKeys: target.changedKeys,
+        documentExists: target.documentExists,
+        authOverride: authOverride,
+        requireCapturedAuth: true,
+      );
+      record(
+        service: 'security',
+        operation: 'RULES_ITEM',
+        source: source,
+        result: 'audit',
+        requestId: requestId,
+        collection: target.collection,
+        pathTemplate: target.pathTemplate,
+        detail: 'kind=$kind item=${index + 1} '
+            'firestoreOperation=${target.operation} '
+            'documentExists=${target.documentExists ?? 'unknown'} '
+            'changedKeysKnown=${target.changedKeys != null} '
+            'fieldEvidence=${target.fieldEvidence} '
+            'documentEvidence=${target.documentEvidence} '
+            'expected=$expected verification=POLICY_CANDIDATE',
+      );
+    }
+  }
+
+  Future<T> runFirestore<T>({
+    required String operation,
+    required String source,
+    required String collection,
+    required Future<T> Function() action,
+    String? pathTemplate,
+    Set<String>? changedKeys,
+  }) {
+    final authAtStart = FirebaseAuthRulesDiagnostics.captureForRequest();
+    try {
+      return trackFuture<T>(
+        action(),
+        service: 'firestore',
+        operation: operation,
+        source: source,
+        collection: collection,
+        pathTemplate: pathTemplate,
+        changedKeys: changedKeys,
+        authOverride: authAtStart,
+        useCapturedAuth: true,
+      );
+    } catch (error, stack) {
+      final requestId = nextOperationId();
+      record(
+        service: 'firestore',
+        operation: operation,
+        source: source,
+        result: 'error',
+        requestId: requestId,
+        collection: collection,
+        pathTemplate: pathTemplate,
+        firebaseCode: error is FirebaseException ? error.code : null,
+        detail: error.runtimeType.toString(),
+      );
+      recordRulesAudit(
+        requestId: requestId,
+        collection: collection,
+        operation: operation,
+        source: source,
+        success: false,
+        firebaseCode: error is FirebaseException ? error.code : null,
+        pathTemplate: pathTemplate,
+        changedKeys: changedKeys,
+        authOverride: authAtStart,
+        sessionChanged: (authAtStart != null && !FirebaseAuthRulesDiagnostics.isSameSession(authAtStart)),
+        requestSent: false,
+      );
+      return Future<T>.error(error, stack);
+    }
+  }
+
+  String get rulesAuditSummary {
+    final selected = _events.where((event) =>
+        event.service == 'security' && event.operation == 'RULES_COMPARE');
+    var consistent = 0;
+    var mismatched = 0;
+    var unverified = 0;
+    for (final event in selected) {
+      final detail = event.detail ?? '';
+      if (detail.contains('comparison=CONSISTENT')) {
+        consistent++;
+      } else if (detail.contains('comparison=UNEXPECTED_')) {
+        mismatched++;
+      } else {
+        unverified++;
+      }
+    }
+    return 'Rules 관측(최근 메모리): 일치 $consistent · 불일치 $mismatched · 확인 불가 $unverified';
+  }
+
+  Stream<T> observeSnapshots<T>(
+    Stream<T> stream,
+    String source, {
+    String? collection,
+    String? pathTemplate,
+    String? operation,
+  }) {
+    final requestId = nextOperationId();
     StreamSubscription<T>? subscription;
+    FirebaseAuthSessionIdentity? listenerIdentity;
+    String? observedOperation = operation;
     bool open = false;
     late final StreamController<T> controller;
+    String sessionEvidence(FirebaseAuthSessionIdentity current) {
+      final started = listenerIdentity;
+      if (started == null) return 'AUTH_AT_START_UNAVAILABLE';
+      return FirebaseAuthRulesDiagnostics.sessionEvidence(started, current);
+    }
+    String sessionContext(
+      FirebaseAuthSessionIdentity current,
+      String evidence,
+    ) {
+      return 'authStartUidPresent=${listenerIdentity?.uid != null} '
+          'authCurrentUidPresent=${current.uid != null} '
+          'authSessionMatches=${evidence == 'MATCH'}';
+    }
+    FirebaseAuthRulesSnapshot? authForEvent(
+      FirebaseAuthSessionIdentity current,
+      String evidence,
+    ) {
+      if (evidence != 'MATCH' || current.uid == null) return null;
+      final checked = FirebaseAuthRulesDiagnostics.captureForRequest();
+      if (checked == null || checked.sessionUid != current.uid ||
+          checked.sessionGeneration != current.generation) return null;
+      return checked;
+    }
     void stop() {
       if (!open) return;
       open = false;
-      listenerClosed(source);
+      listenerClosed(
+        source, requestId: requestId,
+        collection: collection, pathTemplate: pathTemplate,
+      );
     }
     void start() {
       if (open) return;
       open = true;
-      listenerOpened(source);
+      observedOperation = operation;
+      listenerIdentity = FirebaseAuthRulesDiagnostics.captureSessionIdentity();
+      listenerOpened(
+        source, requestId: requestId,
+        collection: collection, pathTemplate: pathTemplate,
+      );
       subscription = stream.listen(
         (event) {
-          snapshotReceived(event, source);
+          if (event is QuerySnapshot) {
+            observedOperation = 'QUERY';
+          } else if (event is DocumentSnapshot) {
+            observedOperation = 'GET';
+          }
+          final currentIdentity =
+              FirebaseAuthRulesDiagnostics.captureSessionIdentity();
+          final evidence = sessionEvidence(currentIdentity);
+          snapshotReceived(
+            event, source,
+            requestId: requestId,
+            collection: collection,
+            pathTemplate: pathTemplate,
+            authAtEvent: authForEvent(currentIdentity, evidence),
+            authEvidence: evidence == 'MATCH' ? null : evidence,
+            authContext: sessionContext(currentIdentity, evidence),
+          );
           controller.add(event);
         },
         onError: (Object error, StackTrace stack) {
+          final currentIdentity =
+              FirebaseAuthRulesDiagnostics.captureSessionIdentity();
+          final evidence = sessionEvidence(currentIdentity);
           record(
             service: 'firestore',
             operation: 'SNAP',
             source: source,
             result: 'error',
             detail: error.runtimeType.toString(),
+            requestId: requestId,
+            collection: collection,
+            pathTemplate: pathTemplate,
+            firebaseCode: error is FirebaseException ? error.code : null,
+          );
+          recordRulesAudit(
+            requestId: requestId,
+            collection: collection,
+            operation: observedOperation ?? 'SNAP',
+            source: source,
+            pathTemplate: pathTemplate,
+            success: false,
+            firebaseCode: error is FirebaseException ? error.code : null,
+            authOverride: authForEvent(currentIdentity, evidence),
+            authEvidence: evidence == 'MATCH' ? null : evidence,
+            authContext: sessionContext(currentIdentity, evidence),
           );
           controller.addError(error, stack);
         },
@@ -715,37 +1380,159 @@ class FirebaseActivityWriteBatch {
 
   final WriteBatch _delegate;
   final String _source;
+  final List<FirestoreRulesWriteTarget> _targets = <FirestoreRulesWriteTarget>[];
   int _writes = 0;
   int _deletes = 0;
   bool _committed = false;
+  final Map<String, bool> _knownExistence = <String, bool>{};
+  final Map<String, Map<String, dynamic>> _knownBefore =
+      <String, Map<String, dynamic>>{};
+
+  void observeDocument<T>(DocumentSnapshot<T> snapshot) {
+    _knownExistence[snapshot.reference.path] = snapshot.exists;
+    final data = snapshot.data();
+    if (snapshot.exists && data is Map<String, dynamic>) {
+      _knownBefore[snapshot.reference.path] = data;
+    }
+  }
 
   void set<T>(DocumentReference<T> document, T data, [SetOptions? options]) {
     _delegate.set<T>(document, data, options);
     _writes++;
+    _targets.add(FirestoreRulesWriteTarget(
+      operation: 'SET',
+      collection: FirestoreRulesAudit.collectionFor(document.path),
+      pathTemplate: FirestoreRulesAudit.pathTemplateFor(document.path),
+      documentExists: _knownExistence[document.path],
+      documentEvidence: _knownExistence.containsKey(document.path)
+          ? 'PREEXISTING_SNAPSHOT' : 'UNKNOWN',
+      changedKeys: _knownExistence[document.path] == true &&
+              options?.mergeFields == null
+          ? FirestoreRulesAudit.affectedKeysFromKnownState(
+                  before: _knownBefore[document.path],
+                  payload: data,
+                  merge: options?.merge == true || options?.mergeFields != null,
+                  mergeNestedMaps: options?.merge == true,
+                ) ?? ((options?.merge == true || options?.mergeFields != null)
+                    ? FirestoreRulesAudit.safeProjectionKeys(data) : null)
+          : (options?.merge == true || options?.mergeFields != null)
+              ? FirestoreRulesAudit.safeProjectionKeys(data)
+              : null,
+      fieldEvidence: _knownExistence[document.path] == true &&
+              options?.mergeFields == null &&
+              FirestoreRulesAudit.affectedKeysFromKnownState(
+                before: _knownBefore[document.path],
+                payload: data,
+                merge: options?.merge == true || options?.mergeFields != null,
+                mergeNestedMaps: options?.merge == true,
+              ) != null
+          ? 'PRIOR_SNAPSHOT_DIFF'
+          : options?.merge == true || options?.mergeFields != null
+              ? 'WRITE_SCOPE' : 'UNKNOWN',
+    ));
   }
 
   void update(DocumentReference<Object?> document, Map<String, dynamic> data) {
     _delegate.update(document, data);
     _writes++;
+    _targets.add(FirestoreRulesWriteTarget(
+      operation: 'UPDATE',
+      collection: FirestoreRulesAudit.collectionFor(document.path),
+      pathTemplate: FirestoreRulesAudit.pathTemplateFor(document.path),
+      changedKeys: _knownExistence[document.path] == true
+          ? FirestoreRulesAudit.affectedKeysFromKnownState(
+                before: _knownBefore[document.path],
+                payload: data, merge: true,
+              ) ?? FirestoreRulesAudit.safeProjectionKeys(data)
+          : FirestoreRulesAudit.safeProjectionKeys(data),
+      documentExists: true,
+      documentEvidence: 'UPDATE_REQUIRES_EXISTENCE',
+      fieldEvidence: _knownExistence[document.path] == true &&
+              FirestoreRulesAudit.affectedKeysFromKnownState(
+                before: _knownBefore[document.path],
+                payload: data, merge: true,
+              ) != null
+          ? 'PRIOR_SNAPSHOT_DIFF'
+          : FirestoreRulesAudit.safeProjectionKeys(data) != null
+              ? 'WRITE_SCOPE' : 'UNKNOWN',
+    ));
   }
 
   void delete(DocumentReference<Object?> document) {
     _delegate.delete(document);
     _deletes++;
+    _targets.add(FirestoreRulesWriteTarget(
+      operation: 'DELETE',
+      collection: FirestoreRulesAudit.collectionFor(document.path),
+      pathTemplate: FirestoreRulesAudit.pathTemplateFor(document.path),
+    ));
   }
 
   Future<void> commit() async {
-    await _delegate.commit();
-    if (_committed) return;
-    _committed = true;
-    FirebaseActivityMeter.instance.record(
-      service: 'firestore',
-      operation: 'COMMITTED_BATCH',
-      source: _source,
-      committedWrites: _writes,
-      committedDeletes: _deletes,
-      detail: 'writes=$_writes deletes=$_deletes',
-    );
+    final meter = FirebaseActivityMeter.instance;
+    final requestId = meter.nextOperationId();
+    final authAtStart = FirebaseAuthRulesDiagnostics.captureForRequest();
+    var success = false;
+    String? firebaseCode;
+    try {
+      await _delegate.commit();
+      success = true;
+      if (!_committed) {
+        _committed = true;
+        meter.record(
+          service: 'firestore',
+          operation: 'COMMITTED_BATCH',
+          source: _source,
+          requestId: requestId,
+          committedWrites: _writes,
+          committedDeletes: _deletes,
+          detail: 'writes=$_writes deletes=$_deletes',
+        );
+      }
+    } on FirebaseException catch (error) {
+      firebaseCode = error.code;
+      meter.record(
+        service: 'firestore',
+        operation: 'COMMITTED_BATCH',
+        source: _source,
+        result: 'error',
+        requestId: requestId,
+        firebaseCode: error.code,
+        detail: 'writes=$_writes deletes=$_deletes',
+      );
+      rethrow;
+    } catch (error) {
+      meter.record(
+        service: 'firestore',
+        operation: 'COMMITTED_BATCH',
+        source: _source,
+        result: 'error',
+        requestId: requestId,
+        detail: error.runtimeType.toString(),
+      );
+      rethrow;
+    } finally {
+      meter.recordWriteTargets(
+        requestId: requestId,
+        source: _source,
+        targets: _targets,
+        authOverride: authAtStart,
+        kind: 'BATCH',
+      );
+      meter.recordRulesAudit(
+        requestId: requestId,
+        collection: null,
+        operation: 'BATCH',
+        source: _source,
+        success: success,
+        firebaseCode: firebaseCode,
+        authOverride: authAtStart,
+        sessionChanged: (authAtStart != null && !FirebaseAuthRulesDiagnostics.isSameSession(authAtStart)),
+        expectedOverride: FirestoreRulesAudit.expectedWrites(
+          _targets, authOverride: authAtStart,
+        ),
+      );
+    }
   }
 }
 
@@ -754,37 +1541,102 @@ extension FirebaseActivityFirestoreTransaction on FirebaseFirestore {
     Future<T> Function(Transaction transaction) transactionHandler, {
     Duration timeout = const Duration(seconds: 30),
     int maxAttempts = 5,
+    String? source,
   }) async {
     final meter = FirebaseActivityMeter.instance;
     final operationId = meter.nextOperationId();
-    FirebaseWriteCommitDelta? successfulAttempt;
-    final result = await runTransaction<T>(
-      (transaction) {
-        final attempt = FirebaseWriteCommitDelta();
-        return runZoned<Future<T>>(
-          () async {
-            final value = await transactionHandler(transaction);
-            successfulAttempt = attempt.copy();
-            return value;
-          },
-          zoneValues: <Object, Object>{
-            FirebaseActivityMeter.transactionAttemptKey: attempt,
-          },
-        );
-      },
-      timeout: timeout,
-      maxAttempts: maxAttempts,
-    );
-    final delta = successfulAttempt;
-    if (delta != null && delta.hasOperations) {
+    final authAtStart = FirebaseAuthRulesDiagnostics.captureForRequest();
+    FirebaseWriteCommitDelta? latestAttempt;
+    var attemptCount = 0;
+    var success = false;
+    String? firebaseCode;
+    late final T result;
+    try {
+      result = await runTransaction<T>(
+        (transaction) {
+          final attempt = FirebaseWriteCommitDelta()..tracksOperations = true;
+          attemptCount++;
+          latestAttempt = attempt;
+          return runZoned<Future<T>>(
+            () async {
+              final value = await transactionHandler(
+                _TrackedFirestoreTransaction(transaction, attempt),
+              );
+              latestAttempt = attempt.copy();
+              return value;
+            },
+            zoneValues: <Object, Object>{
+              FirebaseActivityMeter.transactionAttemptKey: attempt,
+            },
+          );
+        },
+        timeout: timeout,
+        maxAttempts: maxAttempts,
+      );
+      success = true;
+      final delta = latestAttempt;
       meter.record(
         service: 'firestore',
         operation: 'COMMITTED_TRANSACTION',
-        source: delta.source,
+        source: source ?? delta?.source ?? 'firestore.transaction',
         operationId: operationId,
-        committedWrites: delta.writes,
-        committedDeletes: delta.deletes,
-        detail: 'sets=${delta.sets} updates=${delta.updates} deletes=${delta.deletes}',
+        requestId: operationId,
+        readPurpose: 'TRANSACTION_COMMIT',
+        committedWrites: delta?.writes ?? 0,
+        committedDeletes: delta?.deletes ?? 0,
+        detail: 'reads=${delta?.readTargets.length ?? 0} '
+            'sets=${delta?.sets ?? 0} updates=${delta?.updates ?? 0} '
+            'deletes=${delta?.deletes ?? 0} attempts=$attemptCount',
+      );
+    } on FirebaseException catch (error) {
+      firebaseCode = error.code;
+      meter.record(
+        service: 'firestore',
+        operation: 'COMMITTED_TRANSACTION',
+        source: source ?? 'firestore.transaction',
+        result: 'error',
+        requestId: operationId,
+        firebaseCode: error.code,
+        detail: 'attempts=$attemptCount',
+      );
+      rethrow;
+    } catch (error) {
+      meter.record(
+        service: 'firestore',
+        operation: 'COMMITTED_TRANSACTION',
+        source: source ?? 'firestore.transaction',
+        result: 'error',
+        requestId: operationId,
+        detail: 'attempts=$attemptCount errorType=${error.runtimeType}',
+      );
+      rethrow;
+    } finally {
+      final delta = latestAttempt;
+      final targets = delta?.targets ?? <FirestoreRulesWriteTarget>[];
+      final readTargets = delta?.readTargets ?? <FirestoreRulesWriteTarget>[];
+      final eventSource = source ?? delta?.source ?? 'firestore.transaction';
+      meter.recordWriteTargets(
+        requestId: operationId,
+        source: eventSource,
+        targets: <FirestoreRulesWriteTarget>[...readTargets, ...targets],
+        authOverride: authAtStart,
+        kind: 'TRANSACTION',
+      );
+      meter.recordRulesAudit(
+        requestId: operationId,
+        collection: null,
+        operation: 'TRANSACTION',
+        source: eventSource,
+        success: success,
+        firebaseCode: firebaseCode,
+        authOverride: authAtStart,
+        sessionChanged: (authAtStart != null &&
+            !FirebaseAuthRulesDiagnostics.isSameSession(authAtStart)),
+        expectedOverride: FirestoreRulesAudit.expectedTransaction(
+          reads: readTargets,
+          writes: targets,
+          authOverride: authAtStart,
+        ),
       );
     }
     return result;
@@ -795,12 +1647,26 @@ extension FirebaseActivityFirestoreTransaction on FirebaseFirestore {
 }
 
 extension FirebaseActivityFutureTracking<T> on Future<T> {
-  Future<T> trackFirestore(String operation, String source) {
+  Future<T> trackFirestore(
+    String operation,
+    String source, {
+    String? collection,
+    String? pathTemplate,
+    Set<String>? changedKeys,
+    String? readPurpose,
+    DocumentReference? documentReference,
+  }) {
     return FirebaseActivityMeter.instance.trackFuture<T>(
       this,
       service: 'firestore',
       operation: operation,
       source: source,
+      collection: collection ?? (documentReference == null
+          ? null : FirestoreRulesAudit.collectionFor(documentReference.path)),
+      pathTemplate: pathTemplate ?? (documentReference == null
+          ? null : FirestoreRulesAudit.pathTemplateFor(documentReference.path)),
+      changedKeys: changedKeys,
+      readPurpose: readPurpose,
     );
   }
 
@@ -816,7 +1682,15 @@ extension FirebaseActivityFutureTracking<T> on Future<T> {
 }
 
 extension FirebaseActivityStreamTracking<T> on Stream<T> {
-  Stream<T> trackFirestoreSnapshots(String source) {
-    return FirebaseActivityMeter.instance.observeSnapshots<T>(this, source);
+  Stream<T> trackFirestoreSnapshots(
+    String source, {
+    String? collection,
+    String? pathTemplate,
+    String? operation,
+  }) {
+    return FirebaseActivityMeter.instance.observeSnapshots<T>(
+      this, source, collection: collection, pathTemplate: pathTemplate,
+      operation: operation,
+    );
   }
 }

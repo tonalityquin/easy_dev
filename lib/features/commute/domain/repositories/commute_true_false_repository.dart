@@ -77,7 +77,7 @@ class CommuteTrueFalseRepository {
           '$trimmedArea.$trimmedWorkerName': Timestamp.fromDate(clockInAt),
         },
         SetOptions(merge: true),
-      ).trackFirestore('SET', 'features/commute/domain/repositories/commute_true_false_repository.dart');
+      ).trackFirestore('SET', 'features/commute/domain/repositories/commute_true_false_repository.dart', collection: 'commute_true_false');
 
       debugPrint(
         '[CommuteTrueFalseRepository] 출근 시각 업데이트 완료 '
@@ -139,7 +139,7 @@ class CommuteTrueFalseRepository {
     final trimmedDivision = division.trim();
     if (trimmedDivision.isEmpty) return <String, Map<String, Object?>>{};
 
-    final doc = await _firestore.collection('commute_true_false').doc(trimmedDivision).get().trackFirestore('GET', 'features/commute/domain/repositories/commute_true_false_repository.dart');
+    final doc = await _firestore.collection('commute_true_false').doc(trimmedDivision).get().trackFirestore('GET', 'features/commute/domain/repositories/commute_true_false_repository.dart', collection: 'commute_true_false', readPurpose: 'WORK_STATUS_DIVISION_RESTORE');
     if (!doc.exists) return <String, Map<String, Object?>>{};
     return _normalizeByArea(doc.data() ?? <String, dynamic>{});
   }
@@ -160,7 +160,7 @@ class CommuteTrueFalseRepository {
     await docRef.update(<Object, Object?>{
       FieldPath(<String>[trimmedArea, trimmedWorker]): FieldValue.delete(),
       FieldPath(<String>['$trimmedArea.$trimmedWorker']): FieldValue.delete(),
-    }).trackFirestore('UPDATE', 'features/commute/domain/repositories/commute_true_false_repository.dart');
+    }).trackFirestore('UPDATE', 'features/commute/domain/repositories/commute_true_false_repository.dart', collection: 'commute_true_false');
   }
 
 }

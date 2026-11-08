@@ -1,3 +1,4 @@
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -98,9 +99,14 @@ class TypePageRealtimeViewsRefreshService {
 
     final repository = context.read<PlateRepository>();
 
-    await Future.wait<void>(
-      collections.map(
-        (collection) => _fetchOne(repository, collection, normalizedArea),
+    await FirebaseActivityMeter.instance.traceAction<void>(
+      kind: 'TYPE_PAGE_VIEW_REFRESH',
+      source: 'shared/page/pages/common/type_page.dart',
+      detail: 'collections=${collections.join(',')}',
+      action: () => Future.wait<void>(
+        collections.map(
+          (collection) => _fetchOne(repository, collection, normalizedArea),
+        ),
       ),
     );
   }
@@ -184,6 +190,8 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
   bool _pendingFull = false;
   bool _pendingDepartureOnly = false;
   String _pendingArea = '';
+  int _pendingTtsEventCount = 0;
+  final List<String> _pendingTtsEventIds = <String>[];
 
   @override
   void initState() {
@@ -204,6 +212,11 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
     if (currentArea.isEmpty || currentArea != event.area) return;
 
     _pendingArea = currentArea;
+    _pendingTtsEventCount++;
+    final meter = FirebaseActivityMeter.instance;
+    final ttsEventId = meter.nextOperationId();
+    _pendingTtsEventIds.add(ttsEventId);
+    meter.record(service: 'workflow', operation: 'TTS_EVENT_RECEIVED', source: 'shared/page/pages/common/type_page.dart', detail: 'ttsEventId=$ttsEventId type=${event.type} plateRef=${meter.plateRefFor(event.docId)} eventTimestampMs=${event.timestampMs}');
 
     if (event.type == PlateType.departureCompleted.firestoreValue) {
       if (!_pendingFull) _pendingDepartureOnly = true;
@@ -216,18 +229,31 @@ class _TypePageShellState<PState, PgState extends ChangeNotifier>
       final area = _pendingArea.trim();
       final doFull = _pendingFull;
       final doDepartureOnly = _pendingDepartureOnly;
+      final eventCount = _pendingTtsEventCount;
+      final ttsEventIds = List<String>.of(_pendingTtsEventIds);
 
       _pendingFull = false;
       _pendingDepartureOnly = false;
       _pendingArea = '';
+      _pendingTtsEventCount = 0;
+      _pendingTtsEventIds.clear();
 
       if (area.isEmpty) return;
       if (!mounted) return;
 
-      if (doFull) {
-        await TtsViewRefreshService.refreshFull(area);
-      } else if (doDepartureOnly) {
-        await TtsViewRefreshService.refreshDepartureOnly(area);
+      if (doFull || doDepartureOnly) {
+        await meter.traceAction<void>(
+          kind: doFull ? 'TTS_FULL_REFRESH' : 'TTS_DEPARTURE_REFRESH',
+          source: 'shared/page/pages/common/type_page.dart',
+          detail: 'debouncedEvents=$eventCount ttsEventIds=${ttsEventIds.join(',')} debounceMs=250',
+          action: () async {
+            if (doFull) {
+              await TtsViewRefreshService.refreshFull(area);
+            } else {
+              await TtsViewRefreshService.refreshDepartureOnly(area);
+            }
+          },
+        );
       }
     });
   }

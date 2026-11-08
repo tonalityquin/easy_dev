@@ -131,7 +131,7 @@ class EndWorkReportRepository {
     final missing = <String>[];
 
     for (final monthKey in keys) {
-      final monthDoc = await areaRef.collection('months').doc(monthKey).get().trackFirestore('GET', 'features/dashboard/domain/repositories/end_work_report_repository.dart');
+      final monthDoc = await areaRef.collection('months').doc(monthKey).get().trackFirestore('GET', 'features/dashboard/domain/repositories/end_work_report_repository.dart', collection: 'end_work_reports', pathTemplate: 'end_work_reports/*/months/*', readPurpose: 'END_WORK_MONTH_DOCUMENT_FETCH');
       if (!monthDoc.exists || monthDoc.data() == null) {
         missing.add(monthKey);
         continue;
@@ -145,7 +145,7 @@ class EndWorkReportRepository {
     }
 
     if (allowLegacyFallback && missing.isNotEmpty) {
-      final areaDoc = await areaRef.get().trackFirestore('GET', 'features/dashboard/domain/repositories/end_work_report_repository.dart');
+      final areaDoc = await areaRef.get().trackFirestore('GET', 'features/dashboard/domain/repositories/end_work_report_repository.dart', collection: 'end_work_reports', pathTemplate: 'end_work_reports/*', readPurpose: 'END_WORK_LEGACY_AREA_FALLBACK_FETCH');
       final data = areaDoc.data();
       if (data != null) {
         final legacy = _extractAllDaysFromLegacyAreaDoc(
@@ -184,7 +184,7 @@ class EndWorkReportRepository {
         q = q.where('division', isEqualTo: division);
       }
 
-      final snap = await q.get().trackFirestore('GET', 'features/dashboard/domain/repositories/end_work_report_repository.dart');
+      final snap = await q.get().trackFirestore('QUERY', 'features/dashboard/domain/repositories/end_work_report_repository.dart', collection: 'months', pathTemplate: '**/months');
       for (final monthDoc in snap.docs) {
         _mergeOneMonthDocIntoCache(
           rebuilt: rebuilt,
@@ -335,11 +335,11 @@ class EndWorkReportRepository {
       qAreas = qAreas.where('division', isEqualTo: division);
     }
 
-    final areaSnap = await qAreas.get().trackFirestore('GET', 'features/dashboard/domain/repositories/end_work_report_repository.dart');
+    final areaSnap = await qAreas.get().trackFirestore('QUERY', 'features/dashboard/domain/repositories/end_work_report_repository.dart', collection: 'end_work_reports', pathTemplate: 'end_work_reports');
     dev.log('[STAT] fallback scan: areaDocs=${areaSnap.size}', name: 'EndWorkReportRepository');
 
     for (final areaDoc in areaSnap.docs) {
-      final monthsSnap = await areaDoc.reference.collection('months').get().trackFirestore('GET', 'features/dashboard/domain/repositories/end_work_report_repository.dart');
+      final monthsSnap = await areaDoc.reference.collection('months').get().trackFirestore('QUERY', 'features/dashboard/domain/repositories/end_work_report_repository.dart', collection: 'end_work_reports', pathTemplate: 'end_work_reports/*/months');
       for (final monthDoc in monthsSnap.docs) {
         _mergeOneMonthDocIntoCache(
           rebuilt: rebuilt,
@@ -361,7 +361,7 @@ class EndWorkReportRepository {
       q = q.where('division', isEqualTo: division);
     }
 
-    final snap = await q.get().trackFirestore('GET', 'features/dashboard/domain/repositories/end_work_report_repository.dart');
+    final snap = await q.get().trackFirestore('QUERY', 'features/dashboard/domain/repositories/end_work_report_repository.dart', collection: 'end_work_reports', pathTemplate: 'end_work_reports');
     dev.log('[STAT] legacy scan: areaDocs=${snap.size}', name: 'EndWorkReportRepository');
 
     for (final doc in snap.docs) {

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../../app/models/capability.dart';
 import '../../../../../app/utils/developer_operation_status_dialog.dart';
+import '../../../../../features/dev/application/developer_structure_write_guard.dart';
 import '../../../../../app/utils/snackbar_helper.dart';
 import '../../../../../design_system/common_ui/common_ui_components.dart';
 import '../../../../../design_system/common_ui/common_ui_overlays.dart';
@@ -56,7 +57,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
     final snapshot = await FirebaseFirestore.instance
         .collection('areas')
         .where('division', isEqualTo: division)
-        .get(const GetOptions(source: Source.serverAndCache)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+        .get(const GetOptions(source: Source.serverAndCache)).trackFirestore('QUERY', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', collection: 'areas', pathTemplate: 'areas',);
     final items = snapshot.docs
         .map(DevAreaListItem.fromDocument)
         .where((item) => item.name.isNotEmpty)
@@ -111,6 +112,10 @@ class _AddAreaTabState extends State<AddAreaTab> {
       standardModeMessage: '개발자 모드 OFF: 지역 생성 로그를 콘솔에 기록합니다.',
     );
     try {
+      await DeveloperStructureWriteGuard.requireAuthorized(
+        operation: 'area_create',
+      );
+      trace.log('개발자 Firebase 인증 이메일 확인 완료: 지역 생성', progress: 0.08);
       final firestore = FirebaseFirestore.instance;
       final areaRef = firestore.collection('areas').doc('$division-$areaName');
       final showRef = firestore.collection('user_accounts_show').doc('$division-$areaName');
@@ -119,8 +124,8 @@ class _AddAreaTabState extends State<AddAreaTab> {
         progress: 0.16,
       );
       await firestore.runTrackedActivityTransaction((transaction) async {
-        final areaSnap = await transaction.get(areaRef).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
-        final showSnap = await transaction.get(showRef).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+        final areaSnap = await transaction.get(areaRef).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', collection: 'areas', pathTemplate: 'areas/*', readPurpose: 'AREA_CREATE_DUPLICATE_CHECK');
+        final showSnap = await transaction.get(showRef).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*', readPurpose: 'AREA_CREATE_ACCOUNT_PROJECTION_CONFLICT_CHECK');
         if (areaSnap.exists) throw StateError('AREA_ALREADY_EXISTS');
         if (showSnap.exists) throw StateError('AREA_ACCOUNT_META_ALREADY_EXISTS');
         trace.log('중복 문서 검사 완료: reads=2', progress: 0.4);
@@ -141,7 +146,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
             area: areaName,
           ),
         );
-      }).trackFirestore('TRANSACTION', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+      });
       trace.log('Firestore transaction commit 완료: writes=2', progress: 0.9);
       _refreshAreas();
       await trace.succeed('지역과 계정 메타 생성이 완료되었습니다.');
@@ -161,9 +166,13 @@ class _AddAreaTabState extends State<AddAreaTab> {
       );
       if (!mounted || trace.developerMode) return;
       final raw = error.toString();
-      final message = raw.contains('AREA_ALREADY_EXISTS')
-          ? '이미 존재하는 지역입니다.'
-          : raw.contains('AREA_ACCOUNT_META_ALREADY_EXISTS')
+      final message = error is DeveloperStructurePermissionException
+          ? error.toString()
+          : error is FirebaseException && error.code == 'permission-denied'
+              ? '개발자 계정의 지역 생성 권한을 확인하세요.'
+              : raw.contains('AREA_ALREADY_EXISTS')
+                  ? '이미 존재하는 지역입니다.'
+                  : raw.contains('AREA_ACCOUNT_META_ALREADY_EXISTS')
               ? '동일한 지역 계정 메타가 이미 존재합니다.'
               : '지역 생성 실패: $error';
       showFailedSnackbar(context, message, useCommonUi: true);
@@ -202,6 +211,10 @@ class _AddAreaTabState extends State<AddAreaTab> {
       standardModeMessage: '개발자 모드 OFF: 지역 수정 로그를 콘솔에 기록합니다.',
     );
     try {
+      await DeveloperStructureWriteGuard.requireAuthorized(
+        operation: 'area_update',
+      );
+      trace.log('개발자 Firebase 인증 이메일 확인 완료: 지역 수정', progress: 0.08);
       final firestore = FirebaseFirestore.instance;
       final areaRef = firestore.collection('areas').doc(item.documentId);
       trace.log(
@@ -215,7 +228,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
         );
       }
       await firestore.runTrackedActivityTransaction((transaction) async {
-        final areaSnap = await transaction.get(areaRef).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+        final areaSnap = await transaction.get(areaRef).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', documentReference: areaRef, readPurpose: 'AREA_UPDATE_EXISTING_DATA_VALIDATION');
         if (!areaSnap.exists) throw StateError('AREA_NOT_FOUND');
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', result: 'staged');
         transaction.update(
@@ -233,7 +246,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
                   includeCreatedAt: false,
                 ),
         );
-      }).trackFirestore('TRANSACTION', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+      });
       trace.log('Area 최신 필드 저장 완료: counts=display_only', progress: 0.9);
       _refreshAreas();
       await trace.succeed('지역 설정 수정이 완료되었습니다.');
@@ -254,7 +267,11 @@ class _AddAreaTabState extends State<AddAreaTab> {
       if (!mounted || trace.developerMode) return;
       showFailedSnackbar(
         context,
-        '지역 설정 저장 실패: $error',
+        error is DeveloperStructurePermissionException
+            ? error.toString()
+            : error is FirebaseException && error.code == 'permission-denied'
+                ? '개발자 계정의 지역 수정 권한을 확인하세요.'
+                : '지역 설정 저장 실패: $error',
         useCommonUi: true,
       );
     } finally {
@@ -283,24 +300,22 @@ class _AddAreaTabState extends State<AddAreaTab> {
       standardModeMessage: '개발자 모드 OFF: 지역 삭제 로그를 콘솔에 기록합니다.',
     );
     try {
+      await DeveloperStructureWriteGuard.requireAuthorized(
+        operation: 'area_delete',
+      );
+      trace.log('개발자 Firebase 인증 이메일 확인 완료: 지역 삭제', progress: 0.08);
       final firestore = FirebaseFirestore.instance;
       final showRef = firestore.collection('user_accounts_show').doc('${item.division}-${item.name}');
       final showSnap = await showRef.get(
         const GetOptions(source: Source.server),
-      ).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+      ).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*', readPurpose: 'AREA_DELETE_ACCOUNT_PROJECTION_FETCH');
       if (UserAccountShowMap.users(showSnap.data()).isNotEmpty) {
         throw StateError('RELATED_USER_PROJECTION_EXISTS');
-      }
-      final legacySnap = await showRef.collection('users').limit(1).get(
-        const GetOptions(source: Source.server),
-      ).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
-      if (legacySnap.docs.isNotEmpty) {
-        throw StateError('RELATED_LEGACY_USER_PROJECTION_EXISTS');
       }
       final accountCandidates = await firestore
           .collection('user_accounts')
           .where('areas', arrayContains: item.name)
-          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart');
+          .get(const GetOptions(source: Source.server)).trackFirestore('QUERY', 'shared/secondary/pages/sheets/tabs/add_area_tab.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
       final accountExists = accountCandidates.docs.any((doc) {
         final divisions = List<dynamic>.from(doc.data()['divisions'] ?? const <dynamic>[])
             .map((value) => value.toString().trim())
@@ -308,7 +323,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
         return divisions.contains(item.division);
       });
       trace.log(
-        '연관 계정 검사 완료: projectionExists=${UserAccountShowMap.users(showSnap.data()).isNotEmpty || legacySnap.docs.isNotEmpty} sourceCandidates=${accountCandidates.docs.length} sourceMatch=$accountExists',
+        '연관 계정 검사 완료: projectionExists=${UserAccountShowMap.users(showSnap.data()).isNotEmpty} sourceCandidates=${accountCandidates.docs.length} sourceMatch=$accountExists',
         progress: 0.42,
       );
       if (accountExists) throw StateError('RELATED_USER_ACCOUNT_EXISTS');
@@ -337,9 +352,13 @@ class _AddAreaTabState extends State<AddAreaTab> {
       );
       if (!mounted || trace.developerMode) return;
       final raw = error.toString();
-      final message = raw.contains('RELATED_USER')
-          ? '소속 계정이 남아 있어 지역을 삭제할 수 없습니다.'
-          : '지역 삭제 실패: $error';
+      final message = error is DeveloperStructurePermissionException
+          ? error.toString()
+          : error is FirebaseException && error.code == 'permission-denied'
+              ? '개발자 계정의 지역 삭제 권한을 확인하세요.'
+              : raw.contains('RELATED_USER')
+                  ? '소속 계정이 남아 있어 지역을 삭제할 수 없습니다.'
+                  : '지역 삭제 실패: $error';
       showFailedSnackbar(context, message, useCommonUi: true);
     } finally {
       if (mounted) setState(() => _deletingAreaName = null);

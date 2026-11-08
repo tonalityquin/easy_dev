@@ -22,7 +22,7 @@ class SectorReadService {
       final snapshot = await _firestore
           .collection(collectionName)
           .where('area', isEqualTo: normalizedArea)
-          .get().trackFirestore('GET', 'features/sector/data/services/sector_read_service.dart');
+          .get().trackFirestore('QUERY', 'features/sector/data/services/sector_read_service.dart', collection: 'sector');
 
       final sectors = <SectorModel>[];
       for (final document in snapshot.docs) {

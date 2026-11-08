@@ -1,0 +1,158 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function _isSignedIn() {
+      return request.auth != null &&
+             request.auth.token.firebase.sign_in_provider == 'google.com' &&
+             request.auth.token.email_verified == true;
+    }
+
+    function _isDeveloper() {
+      return _isSignedIn() &&
+             request.auth.token.email == 'surge1868@gmail.com';
+    }
+
+    function _isAccountProjectionUpdate() {
+      return _isSignedIn() &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+               ['users', 'updatedAt']
+             );
+    }
+
+    function _isAccountProjectionCreate() {
+      return _isSignedIn() &&
+             request.resource.data.keys().hasOnly(['users', 'updatedAt']) &&
+             request.resource.data.keys().hasAll(['users', 'updatedAt']) &&
+             request.resource.data.users is map &&
+             request.resource.data.users.keys().size() == 1 &&
+             request.resource.data.updatedAt == request.time;
+    }
+
+    match /user_accounts/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /user_account_codes/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /tablet_accounts/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /personal_accounts/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /commute_user_logs/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /plate_status/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /user_accounts_show/{scopeId} {
+      allow read: if _isSignedIn();
+      allow create: if _isDeveloper() || _isAccountProjectionCreate();
+      allow delete: if _isDeveloper();
+      allow update: if _isDeveloper() || _isAccountProjectionUpdate();
+    }
+
+    match /user_accounts_show/{scopeId}/users/{userId} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /plates/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /parking_requests_view/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /departure_requests_view/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /parking_completed_view/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /monthly_plate_status/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /monthly_plate_status_view/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /areas/{document=**} {
+      allow read: if _isSignedIn();
+      allow create, update, delete: if _isDeveloper();
+    }
+
+    match /divisions/{document=**} {
+      allow read: if _isSignedIn();
+      allow create, update, delete: if _isDeveloper();
+    }
+
+    match /locations/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /sector/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /locationSlotReservations/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /head_memo_libraries/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /bill/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /end_work_reports/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /plate_out_log/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /{path=**}/plates/{plateDocId} {
+      allow read: if _isSignedIn();
+    }
+
+    match /plate_counters/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /plate_billing_counts/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /commute_true_false/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /voice_channels/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /rule/{document=**} {
+      allow read, write: if _isSignedIn();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

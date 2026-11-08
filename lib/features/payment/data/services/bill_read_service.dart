@@ -21,7 +21,7 @@ class BillReadService {
       snapshot = await _firestore
           .collection('bill')
           .where('area', isEqualTo: area)
-          .get().trackFirestore('GET', 'features/payment/data/services/bill_read_service.dart');
+          .get().trackFirestore('QUERY', 'features/payment/data/services/bill_read_service.dart', collection: 'bill');
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint('❌ Firestore bill.read 실패(area=$area): $e');

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -140,6 +141,7 @@ class MovementPlate extends ChangeNotifier {
         operation: 'MovementPlate.viewUpsert.success',
         details: <String, Object?>{
           'collection': collection,
+          'actionId': FirebaseActivityMeter.instance.currentActionId,
           'area': area,
           'plateDocId': plateDocId,
           'createdAtSource': 'transition_snapshot',
@@ -169,6 +171,7 @@ class MovementPlate extends ChangeNotifier {
   }) async {
     final should = forceViewSync ? true : await _pcGate.shouldSync();
     if (!should) {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SKIPPED', source: 'shared/plate/application/common/movement_plate.dart', detail: 'reason=SYNC_GATE_DISABLED method=_upsertParkingCompletedViewItem');
       if (kDebugMode) {
         _emitTrace(
           '🚫 [MovementPlate] skip parking_completed_view upsert (${await _pcGate.debugReason()})',
@@ -179,6 +182,7 @@ class MovementPlate extends ChangeNotifier {
     }
 
     try {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_START', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=UPSERT collection=$_parkingCompletedViewCollection');
       await _repository.upsertViewItem(
         collection: _parkingCompletedViewCollection,
         area: area,
@@ -188,6 +192,7 @@ class MovementPlate extends ChangeNotifier {
         primaryAtField: 'parkingCompletedAt',
         createdAt: createdAt,
       );
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SUCCESS', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=UPSERT collection=$_parkingCompletedViewCollection');
       _reportViewUpsertSuccess(
         collection: _parkingCompletedViewCollection,
         area: area,
@@ -196,6 +201,7 @@ class MovementPlate extends ChangeNotifier {
         traceLog: traceLog,
       );
     } catch (e, st) {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_FAILED', source: 'shared/plate/application/common/movement_plate.dart', result: 'error', detail: 'operation=UPSERT collection=$_parkingCompletedViewCollection errorType=${e.runtimeType}');
       _emitTrace('⚠️ parking_completed_view upsert 실패: $e', traceLog);
       await DevFirebaseDebugDialog.show(
         operation: 'movement.parking_completed_view.upsert',
@@ -223,6 +229,7 @@ class MovementPlate extends ChangeNotifier {
   }) async {
     final should = forceViewSync ? true : await _pcGate.shouldSync();
     if (!should) {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SKIPPED', source: 'shared/plate/application/common/movement_plate.dart', detail: 'reason=SYNC_GATE_DISABLED method=_removeParkingCompletedViewItem');
       if (kDebugMode) {
         _emitTrace(
           '🚫 [MovementPlate] skip parking_completed_view remove (${await _pcGate.debugReason()})',
@@ -233,12 +240,15 @@ class MovementPlate extends ChangeNotifier {
     }
 
     try {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_START', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=REMOVE collection=$_parkingCompletedViewCollection');
       await _repository.removeViewItem(
         collection: _parkingCompletedViewCollection,
         area: area,
         plateDocId: plateDocId,
       );
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SUCCESS', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=REMOVE collection=$_parkingCompletedViewCollection');
     } catch (e, st) {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_FAILED', source: 'shared/plate/application/common/movement_plate.dart', result: 'error', detail: 'operation=REMOVE collection=$_parkingCompletedViewCollection errorType=${e.runtimeType}');
       _emitTrace('⚠️ parking_completed_view remove 실패: $e', traceLog);
       await DevFirebaseDebugDialog.show(
         operation: 'movement.parking_completed_view.remove',
@@ -265,6 +275,7 @@ class MovementPlate extends ChangeNotifier {
   }) async {
     final should = forceViewSync ? true : await _depGate.shouldSync();
     if (!should) {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SKIPPED', source: 'shared/plate/application/common/movement_plate.dart', detail: 'reason=SYNC_GATE_DISABLED method=_upsertDepartureRequestsViewItem');
       if (kDebugMode) {
         _emitTrace(
           '🚫 [MovementPlate] skip departure_requests_view upsert (${await _depGate.debugReason()})',
@@ -275,6 +286,7 @@ class MovementPlate extends ChangeNotifier {
     }
 
     try {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_START', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=UPSERT collection=$_departureRequestsViewCollection');
       await _repository.upsertViewItem(
         collection: _departureRequestsViewCollection,
         area: area,
@@ -284,6 +296,7 @@ class MovementPlate extends ChangeNotifier {
         primaryAtField: 'departureRequestedAt',
         createdAt: createdAt,
       );
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SUCCESS', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=UPSERT collection=$_departureRequestsViewCollection');
       _reportViewUpsertSuccess(
         collection: _departureRequestsViewCollection,
         area: area,
@@ -292,6 +305,7 @@ class MovementPlate extends ChangeNotifier {
         traceLog: traceLog,
       );
     } catch (e, st) {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_FAILED', source: 'shared/plate/application/common/movement_plate.dart', result: 'error', detail: 'operation=UPSERT collection=$_departureRequestsViewCollection errorType=${e.runtimeType}');
       _emitTrace('⚠️ departure_requests_view upsert 실패: $e', traceLog);
       await DevFirebaseDebugDialog.show(
         operation: 'movement.departure_requests_view.upsert',
@@ -319,6 +333,7 @@ class MovementPlate extends ChangeNotifier {
   }) async {
     final should = forceViewSync ? true : await _depGate.shouldSync();
     if (!should) {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SKIPPED', source: 'shared/plate/application/common/movement_plate.dart', detail: 'reason=SYNC_GATE_DISABLED method=_removeDepartureRequestsViewItem');
       if (kDebugMode) {
         _emitTrace(
           '🚫 [MovementPlate] skip departure_requests_view remove (${await _depGate.debugReason()})',
@@ -329,12 +344,15 @@ class MovementPlate extends ChangeNotifier {
     }
 
     try {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_START', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=REMOVE collection=$_departureRequestsViewCollection');
       await _repository.removeViewItem(
         collection: _departureRequestsViewCollection,
         area: area,
         plateDocId: plateDocId,
       );
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SUCCESS', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=REMOVE collection=$_departureRequestsViewCollection');
     } catch (e, st) {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_FAILED', source: 'shared/plate/application/common/movement_plate.dart', result: 'error', detail: 'operation=REMOVE collection=$_departureRequestsViewCollection errorType=${e.runtimeType}');
       _emitTrace('⚠️ departure_requests_view remove 실패: $e', traceLog);
       await DevFirebaseDebugDialog.show(
         operation: 'movement.departure_requests_view.remove',
@@ -361,6 +379,7 @@ class MovementPlate extends ChangeNotifier {
   }) async {
     final should = forceViewSync ? true : await _reqGate.shouldSync();
     if (!should) {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SKIPPED', source: 'shared/plate/application/common/movement_plate.dart', detail: 'reason=SYNC_GATE_DISABLED method=_upsertParkingRequestsViewItem');
       if (kDebugMode) {
         _emitTrace(
           '🚫 [MovementPlate] skip parking_requests_view upsert (${await _reqGate.debugReason()})',
@@ -371,6 +390,7 @@ class MovementPlate extends ChangeNotifier {
     }
 
     try {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_START', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=UPSERT collection=$_parkingRequestsViewCollection');
       await _repository.upsertViewItem(
         collection: _parkingRequestsViewCollection,
         area: area,
@@ -380,6 +400,7 @@ class MovementPlate extends ChangeNotifier {
         primaryAtField: 'parkingRequestedAt',
         createdAt: createdAt,
       );
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SUCCESS', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=UPSERT collection=$_parkingRequestsViewCollection');
       _reportViewUpsertSuccess(
         collection: _parkingRequestsViewCollection,
         area: area,
@@ -388,6 +409,7 @@ class MovementPlate extends ChangeNotifier {
         traceLog: traceLog,
       );
     } catch (e, st) {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_FAILED', source: 'shared/plate/application/common/movement_plate.dart', result: 'error', detail: 'operation=UPSERT collection=$_parkingRequestsViewCollection errorType=${e.runtimeType}');
       _emitTrace('⚠️ parking_requests_view upsert 실패: $e', traceLog);
       await DevFirebaseDebugDialog.show(
         operation: 'movement.parking_requests_view.upsert',
@@ -415,6 +437,7 @@ class MovementPlate extends ChangeNotifier {
   }) async {
     final should = forceViewSync ? true : await _reqGate.shouldSync();
     if (!should) {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SKIPPED', source: 'shared/plate/application/common/movement_plate.dart', detail: 'reason=SYNC_GATE_DISABLED method=_removeParkingRequestsViewItem');
       if (kDebugMode) {
         _emitTrace(
           '🚫 [MovementPlate] skip parking_requests_view remove (${await _reqGate.debugReason()})',
@@ -425,12 +448,15 @@ class MovementPlate extends ChangeNotifier {
     }
 
     try {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_START', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=REMOVE collection=$_parkingRequestsViewCollection');
       await _repository.removeViewItem(
         collection: _parkingRequestsViewCollection,
         area: area,
         plateDocId: plateDocId,
       );
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SUCCESS', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=REMOVE collection=$_parkingRequestsViewCollection');
     } catch (e, st) {
+      FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_FAILED', source: 'shared/plate/application/common/movement_plate.dart', result: 'error', detail: 'operation=REMOVE collection=$_parkingRequestsViewCollection errorType=${e.runtimeType}');
       _emitTrace('⚠️ parking_requests_view remove 실패: $e', traceLog);
       await DevFirebaseDebugDialog.show(
         operation: 'movement.parking_requests_view.remove',
@@ -454,48 +480,55 @@ class MovementPlate extends ChangeNotifier {
     bool forceViewSync = false,
     MovementPlateTraceLog? traceLog,
   }) async {
-    final actor = _user.name;
-    final plateDocId = _plateDocId(plateNumber, area);
+    await FirebaseActivityMeter.instance.traceAction<void>(
+      kind: 'TYPE_CHANGE_REQUESTS_TO_COMPLETED',
+      source: 'shared/plate/application/common/movement_plate.dart',
+      plateId: _plateDocId(plateNumber, area),
+      action: () async {
+        final actor = _user.name;
+        final plateDocId = _plateDocId(plateNumber, area);
 
-    _debugOps(
-      action: 'setParkingCompleted(requests→completed)',
-      plateNumber: plateNumber,
-      area: area,
-      plateDocId: plateDocId,
-      txReads: 1,
-      txWrites: 1,
-      viewWritesMin: 0,
-      viewWritesMax: 2,
-      traceLog: traceLog,
-      gateReason:
-          'pc(${await _pcGate.debugReason()}), req(${await _reqGate.debugReason()})',
-    );
+        _debugOps(
+          action: 'setParkingCompleted(requests→completed)',
+          plateNumber: plateNumber,
+          area: area,
+          plateDocId: plateDocId,
+          txReads: 1,
+          txWrites: 1,
+          viewWritesMin: 0,
+          viewWritesMax: 2,
+          traceLog: traceLog,
+          gateReason:
+              'pc(${await _pcGate.debugReason()}), req(${await _reqGate.debugReason()})',
+        );
 
-    final createdAt = await _repository.transitionPlateType(
-      plateId: plateDocId,
-      actor: actor,
-      fromType: PlateType.parkingRequests,
-      toType: PlateType.parkingCompleted,
-      area: area,
-      location: location,
-      eventAtField: 'parkingCompletedAt',
-      forceOverride: forceOverride,
-    );
+        final createdAt = await _repository.transitionPlateType(
+          plateId: plateDocId,
+          actor: actor,
+          fromType: PlateType.parkingRequests,
+          toType: PlateType.parkingCompleted,
+          area: area,
+          location: location,
+          eventAtField: 'parkingCompletedAt',
+          forceOverride: forceOverride,
+        );
 
-    await _removeParkingRequestsViewItem(
-      area: area,
-      plateDocId: plateDocId,
-      forceViewSync: forceViewSync,
-      traceLog: traceLog,
-    );
-    await _upsertParkingCompletedViewItem(
-      area: area,
-      plateDocId: plateDocId,
-      plateNumber: plateNumber,
-      location: location,
-      createdAt: createdAt,
-      forceViewSync: forceViewSync,
-      traceLog: traceLog,
+        await _removeParkingRequestsViewItem(
+          area: area,
+          plateDocId: plateDocId,
+          forceViewSync: forceViewSync,
+          traceLog: traceLog,
+        );
+        await _upsertParkingCompletedViewItem(
+          area: area,
+          plateDocId: plateDocId,
+          plateNumber: plateNumber,
+          location: location,
+          createdAt: createdAt,
+          forceViewSync: forceViewSync,
+          traceLog: traceLog,
+        );
+      },
     );
   }
 
@@ -507,48 +540,55 @@ class MovementPlate extends ChangeNotifier {
     bool forceViewSync = false,
     MovementPlateTraceLog? traceLog,
   }) async {
-    final actor = _user.name;
-    final plateDocId = _plateDocId(plateNumber, area);
+    await FirebaseActivityMeter.instance.traceAction<void>(
+      kind: 'TYPE_CHANGE_COMPLETED_TO_DEPARTURE_REQUESTS',
+      source: 'shared/plate/application/common/movement_plate.dart',
+      plateId: _plateDocId(plateNumber, area),
+      action: () async {
+        final actor = _user.name;
+        final plateDocId = _plateDocId(plateNumber, area);
 
-    _debugOps(
-      action: 'setDepartureRequested(completed→departure_requests)',
-      plateNumber: plateNumber,
-      area: area,
-      plateDocId: plateDocId,
-      txReads: 1,
-      txWrites: 1,
-      viewWritesMin: 0,
-      viewWritesMax: 2,
-      traceLog: traceLog,
-      gateReason:
-          'pc(${await _pcGate.debugReason()}), dep(${await _depGate.debugReason()})',
-    );
+        _debugOps(
+          action: 'setDepartureRequested(completed→departure_requests)',
+          plateNumber: plateNumber,
+          area: area,
+          plateDocId: plateDocId,
+          txReads: 1,
+          txWrites: 1,
+          viewWritesMin: 0,
+          viewWritesMax: 2,
+          traceLog: traceLog,
+          gateReason:
+              'pc(${await _pcGate.debugReason()}), dep(${await _depGate.debugReason()})',
+        );
 
-    final createdAt = await _repository.transitionPlateType(
-      plateId: plateDocId,
-      actor: actor,
-      fromType: PlateType.parkingCompleted,
-      toType: PlateType.departureRequests,
-      area: area,
-      location: location,
-      eventAtField: 'departureRequestedAt',
-      forceOverride: forceOverride,
-    );
+        final createdAt = await _repository.transitionPlateType(
+          plateId: plateDocId,
+          actor: actor,
+          fromType: PlateType.parkingCompleted,
+          toType: PlateType.departureRequests,
+          area: area,
+          location: location,
+          eventAtField: 'departureRequestedAt',
+          forceOverride: forceOverride,
+        );
 
-    await _removeParkingCompletedViewItem(
-      area: area,
-      plateDocId: plateDocId,
-      forceViewSync: forceViewSync,
-      traceLog: traceLog,
-    );
-    await _upsertDepartureRequestsViewItem(
-      area: area,
-      plateDocId: plateDocId,
-      plateNumber: plateNumber,
-      location: location,
-      createdAt: createdAt,
-      forceViewSync: forceViewSync,
-      traceLog: traceLog,
+        await _removeParkingCompletedViewItem(
+          area: area,
+          plateDocId: plateDocId,
+          forceViewSync: forceViewSync,
+          traceLog: traceLog,
+        );
+        await _upsertDepartureRequestsViewItem(
+          area: area,
+          plateDocId: plateDocId,
+          plateNumber: plateNumber,
+          location: location,
+          createdAt: createdAt,
+          forceViewSync: forceViewSync,
+          traceLog: traceLog,
+        );
+      },
     );
   }
 
@@ -560,39 +600,46 @@ class MovementPlate extends ChangeNotifier {
     bool forceViewSync = false,
     MovementPlateTraceLog? traceLog,
   }) async {
-    final actor = _user.name;
-    final plateDocId = _plateDocId(plateNumber, area);
+    await FirebaseActivityMeter.instance.traceAction<void>(
+      kind: 'TYPE_CHANGE_COMPLETED_TO_DEPARTURE_COMPLETED',
+      source: 'shared/plate/application/common/movement_plate.dart',
+      plateId: _plateDocId(plateNumber, area),
+      action: () async {
+        final actor = _user.name;
+        final plateDocId = _plateDocId(plateNumber, area);
 
-    _debugOps(
-      action:
-          'setDepartureCompletedDirectFromParkingCompleted(completed→departure_completed)',
-      plateNumber: plateNumber,
-      area: area,
-      plateDocId: plateDocId,
-      txReads: 1,
-      txWrites: 1,
-      viewWritesMin: 0,
-      viewWritesMax: 1,
-      traceLog: traceLog,
-      gateReason: 'pc(${await _pcGate.debugReason()})',
-    );
+        _debugOps(
+          action:
+              'setDepartureCompletedDirectFromParkingCompleted(completed→departure_completed)',
+          plateNumber: plateNumber,
+          area: area,
+          plateDocId: plateDocId,
+          txReads: 1,
+          txWrites: 1,
+          viewWritesMin: 0,
+          viewWritesMax: 1,
+          traceLog: traceLog,
+          gateReason: 'pc(${await _pcGate.debugReason()})',
+        );
 
-    await _repository.transitionPlateType(
-      plateId: plateDocId,
-      actor: actor,
-      fromType: PlateType.parkingCompleted,
-      toType: PlateType.departureCompleted,
-      area: area,
-      location: location,
-      eventAtField: 'departureCompletedAt',
-      forceOverride: forceOverride,
-    );
+        await _repository.transitionPlateType(
+          plateId: plateDocId,
+          actor: actor,
+          fromType: PlateType.parkingCompleted,
+          toType: PlateType.departureCompleted,
+          area: area,
+          location: location,
+          eventAtField: 'departureCompletedAt',
+          forceOverride: forceOverride,
+        );
 
-    await _removeParkingCompletedViewItem(
-      area: area,
-      plateDocId: plateDocId,
-      forceViewSync: forceViewSync,
-      traceLog: traceLog,
+        await _removeParkingCompletedViewItem(
+          area: area,
+          plateDocId: plateDocId,
+          forceViewSync: forceViewSync,
+          traceLog: traceLog,
+        );
+      },
     );
   }
 
@@ -602,41 +649,48 @@ class MovementPlate extends ChangeNotifier {
     bool forceViewSync = false,
     MovementPlateTraceLog? traceLog,
   }) async {
-    final actor = _user.name;
+    await FirebaseActivityMeter.instance.traceAction<void>(
+      kind: 'TYPE_CHANGE_DEPARTURE_REQUESTS_TO_COMPLETED',
+      source: 'shared/plate/application/common/movement_plate.dart',
+      plateId: selectedPlate.id.isNotEmpty ? selectedPlate.id : _plateDocId(selectedPlate.plateNumber, selectedPlate.area),
+      action: () async {
+        final actor = _user.name;
 
-    final plateDocId = (selectedPlate.id.isNotEmpty)
-        ? selectedPlate.id
-        : _plateDocId(selectedPlate.plateNumber, selectedPlate.area);
+        final plateDocId = (selectedPlate.id.isNotEmpty)
+            ? selectedPlate.id
+            : _plateDocId(selectedPlate.plateNumber, selectedPlate.area);
 
-    _debugOps(
-      action: 'setDepartureCompleted(departure_requests→departure_completed)',
-      plateNumber: selectedPlate.plateNumber,
-      area: selectedPlate.area,
-      plateDocId: plateDocId,
-      txReads: 1,
-      txWrites: 1,
-      viewWritesMin: 0,
-      viewWritesMax: 1,
-      traceLog: traceLog,
-      gateReason: 'dep(${await _depGate.debugReason()})',
-    );
+        _debugOps(
+          action: 'setDepartureCompleted(departure_requests→departure_completed)',
+          plateNumber: selectedPlate.plateNumber,
+          area: selectedPlate.area,
+          plateDocId: plateDocId,
+          txReads: 1,
+          txWrites: 1,
+          viewWritesMin: 0,
+          viewWritesMax: 1,
+          traceLog: traceLog,
+          gateReason: 'dep(${await _depGate.debugReason()})',
+        );
 
-    await _repository.transitionPlateType(
-      plateId: plateDocId,
-      actor: actor,
-      fromType: PlateType.departureRequests,
-      toType: PlateType.departureCompleted,
-      area: selectedPlate.area,
-      location: selectedPlate.location,
-      eventAtField: 'departureCompletedAt',
-      forceOverride: forceOverride,
-    );
+        await _repository.transitionPlateType(
+          plateId: plateDocId,
+          actor: actor,
+          fromType: PlateType.departureRequests,
+          toType: PlateType.departureCompleted,
+          area: selectedPlate.area,
+          location: selectedPlate.location,
+          eventAtField: 'departureCompletedAt',
+          forceOverride: forceOverride,
+        );
 
-    await _removeDepartureRequestsViewItem(
-      area: selectedPlate.area,
-      plateDocId: plateDocId,
-      forceViewSync: forceViewSync,
-      traceLog: traceLog,
+        await _removeDepartureRequestsViewItem(
+          area: selectedPlate.area,
+          plateDocId: plateDocId,
+          forceViewSync: forceViewSync,
+          traceLog: traceLog,
+        );
+      },
     );
   }
 
@@ -648,48 +702,55 @@ class MovementPlate extends ChangeNotifier {
     bool forceViewSync = false,
     MovementPlateTraceLog? traceLog,
   }) async {
-    final actor = _user.name;
-    final plateDocId = _plateDocId(plateNumber, area);
+    await FirebaseActivityMeter.instance.traceAction<void>(
+      kind: 'TYPE_CHANGE_RETURN_TO_PARKING_COMPLETED',
+      source: 'shared/plate/application/common/movement_plate.dart',
+      plateId: _plateDocId(plateNumber, area),
+      action: () async {
+        final actor = _user.name;
+        final plateDocId = _plateDocId(plateNumber, area);
 
-    _debugOps(
-      action: 'goBackToParkingCompleted(departure_requests→completed)',
-      plateNumber: plateNumber,
-      area: area,
-      plateDocId: plateDocId,
-      txReads: 1,
-      txWrites: 1,
-      viewWritesMin: 0,
-      viewWritesMax: 2,
-      traceLog: traceLog,
-      gateReason:
-          'dep(${await _depGate.debugReason()}), pc(${await _pcGate.debugReason()})',
-    );
+        _debugOps(
+          action: 'goBackToParkingCompleted(departure_requests→completed)',
+          plateNumber: plateNumber,
+          area: area,
+          plateDocId: plateDocId,
+          txReads: 1,
+          txWrites: 1,
+          viewWritesMin: 0,
+          viewWritesMax: 2,
+          traceLog: traceLog,
+          gateReason:
+              'dep(${await _depGate.debugReason()}), pc(${await _pcGate.debugReason()})',
+        );
 
-    final createdAt = await _repository.transitionPlateType(
-      plateId: plateDocId,
-      actor: actor,
-      fromType: PlateType.departureRequests,
-      toType: PlateType.parkingCompleted,
-      area: area,
-      location: location,
-      eventAtField: 'parkingCompletedAt',
-      forceOverride: forceOverride,
-    );
+        final createdAt = await _repository.transitionPlateType(
+          plateId: plateDocId,
+          actor: actor,
+          fromType: PlateType.departureRequests,
+          toType: PlateType.parkingCompleted,
+          area: area,
+          location: location,
+          eventAtField: 'parkingCompletedAt',
+          forceOverride: forceOverride,
+        );
 
-    await _removeDepartureRequestsViewItem(
-      area: area,
-      plateDocId: plateDocId,
-      forceViewSync: forceViewSync,
-      traceLog: traceLog,
-    );
-    await _upsertParkingCompletedViewItem(
-      area: area,
-      plateDocId: plateDocId,
-      plateNumber: plateNumber,
-      location: location,
-      createdAt: createdAt,
-      forceViewSync: forceViewSync,
-      traceLog: traceLog,
+        await _removeDepartureRequestsViewItem(
+          area: area,
+          plateDocId: plateDocId,
+          forceViewSync: forceViewSync,
+          traceLog: traceLog,
+        );
+        await _upsertParkingCompletedViewItem(
+          area: area,
+          plateDocId: plateDocId,
+          plateNumber: plateNumber,
+          location: location,
+          createdAt: createdAt,
+          forceViewSync: forceViewSync,
+          traceLog: traceLog,
+        );
+      },
     );
   }
 
@@ -702,59 +763,66 @@ class MovementPlate extends ChangeNotifier {
     bool forceViewSync = false,
     MovementPlateTraceLog? traceLog,
   }) async {
-    final actor = _user.name;
-    final plateDocId = _plateDocId(plateNumber, area);
+    await FirebaseActivityMeter.instance.traceAction<void>(
+      kind: 'TYPE_CHANGE_RETURN_TO_PARKING_REQUESTS',
+      source: 'shared/plate/application/common/movement_plate.dart',
+      plateId: _plateDocId(plateNumber, area),
+      action: () async {
+        final actor = _user.name;
+        final plateDocId = _plateDocId(plateNumber, area);
 
-    _debugOps(
-      action:
-          'goBackToParkingRequest(${fromType.firestoreValue}→parking_requests)',
-      plateNumber: plateNumber,
-      area: area,
-      plateDocId: plateDocId,
-      txReads: 1,
-      txWrites: 1,
-      viewWritesMin: 0,
-      viewWritesMax: 2,
-      traceLog: traceLog,
-      gateReason:
-          'req(${await _reqGate.debugReason()}), pc/dep gates apply if removing',
-    );
+        _debugOps(
+          action:
+              'goBackToParkingRequest(${fromType.firestoreValue}→parking_requests)',
+          plateNumber: plateNumber,
+          area: area,
+          plateDocId: plateDocId,
+          txReads: 1,
+          txWrites: 1,
+          viewWritesMin: 0,
+          viewWritesMax: 2,
+          traceLog: traceLog,
+          gateReason:
+              'req(${await _reqGate.debugReason()}), pc/dep gates apply if removing',
+        );
 
-    final createdAt = await _repository.transitionPlateType(
-      plateId: plateDocId,
-      actor: actor,
-      fromType: fromType,
-      toType: PlateType.parkingRequests,
-      area: area,
-      location: newLocation,
-      eventAtField: 'requestTime',
-      forceOverride: forceOverride,
-    );
+        final createdAt = await _repository.transitionPlateType(
+          plateId: plateDocId,
+          actor: actor,
+          fromType: fromType,
+          toType: PlateType.parkingRequests,
+          area: area,
+          location: newLocation,
+          eventAtField: 'requestTime',
+          forceOverride: forceOverride,
+        );
 
-    if (fromType == PlateType.parkingCompleted) {
-      await _removeParkingCompletedViewItem(
-        area: area,
-        plateDocId: plateDocId,
-        forceViewSync: forceViewSync,
-        traceLog: traceLog,
-      );
-    } else if (fromType == PlateType.departureRequests) {
-      await _removeDepartureRequestsViewItem(
-        area: area,
-        plateDocId: plateDocId,
-        forceViewSync: forceViewSync,
-        traceLog: traceLog,
-      );
-    }
+        if (fromType == PlateType.parkingCompleted) {
+          await _removeParkingCompletedViewItem(
+            area: area,
+            plateDocId: plateDocId,
+            forceViewSync: forceViewSync,
+            traceLog: traceLog,
+          );
+        } else if (fromType == PlateType.departureRequests) {
+          await _removeDepartureRequestsViewItem(
+            area: area,
+            plateDocId: plateDocId,
+            forceViewSync: forceViewSync,
+            traceLog: traceLog,
+          );
+        }
 
-    await _upsertParkingRequestsViewItem(
-      area: area,
-      plateDocId: plateDocId,
-      plateNumber: plateNumber,
-      location: newLocation,
-      createdAt: createdAt,
-      forceViewSync: forceViewSync,
-      traceLog: traceLog,
+        await _upsertParkingRequestsViewItem(
+          area: area,
+          plateDocId: plateDocId,
+          plateNumber: plateNumber,
+          location: newLocation,
+          createdAt: createdAt,
+          forceViewSync: forceViewSync,
+          traceLog: traceLog,
+        );
+      },
     );
   }
 }

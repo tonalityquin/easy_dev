@@ -14,6 +14,7 @@ import '../../account/domain/models/user/user_account_view_projection.dart';
 import '../../account/data/services/user_account_show_map.dart';
 import '../../dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../dev/application/developer_account_authorization.dart';
+import '../../dev/application/developer_structure_write_guard.dart';
 
 class DevBootstrapException implements Exception {
   const DevBootstrapException(this.message);
@@ -115,6 +116,14 @@ class DevBootstrapService {
 
   Future<DevBootstrapResult> ensure({required String email}) async {
     _verifySession(email);
+    try {
+      await DeveloperStructureWriteGuard.requireAuthorized(
+        operation: 'dev_bootstrap',
+        requireDeveloperMode: false,
+      );
+    } on DeveloperStructurePermissionException {
+      throw const DevBootstrapException('개발자 Gmail 인증을 다시 확인하세요.');
+    }
     _record('dev_bootstrap_started');
     try {
       final settings = DevAreaSettingsDraft(
@@ -133,9 +142,17 @@ class DevBootstrapService {
           _firestore.collection('user_accounts_show').doc(areaDocumentId);
 
       final scaffold = await _firestore.runTransaction<_DevScaffold>((tx) async {
-        final divisionSnap = await tx.get(divisionRef).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
-        final areaSnap = await tx.get(areaRef).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
-        final metaSnap = await tx.get(metaRef).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
+        final divisionSnap = await tx.get(divisionRef).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart', documentReference: divisionRef, readPurpose: 'DEV_BOOTSTRAP_DIVISION_VALIDATION');
+        final areaSnap = await tx.get(areaRef).trackFirestore(
+          'GET',
+          'features/launcher/application/dev_bootstrap_service.dart',
+          documentReference: areaRef,
+         readPurpose: 'DEV_BOOTSTRAP_HEADQUARTER_AREA_VALIDATION');
+        final metaSnap = await tx.get(metaRef).trackFirestore(
+          'GET',
+          'features/launcher/application/dev_bootstrap_service.dart',
+          documentReference: metaRef,
+         readPurpose: 'DEV_BOOTSTRAP_ACCOUNT_PROJECTION_VALIDATION');
         final divisionData = divisionSnap.data() ?? <String, dynamic>{};
         final areaData = areaSnap.data() ?? <String, dynamic>{};
         final metaData = metaSnap.data() ?? <String, dynamic>{};
@@ -163,7 +180,7 @@ class DevBootstrapService {
         }
         final existingAccountSnap = await tx.get(
           _firestore.collection('user_accounts').doc(accountId),
-        ).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
+        ).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts/*', readPurpose: 'DEV_BOOTSTRAP_EXISTING_ADMIN_VALIDATION');
         if (existingAccountSnap.exists) {
           _verifyExistingAccount(
             existingAccountSnap.data()!,
@@ -171,12 +188,9 @@ class DevBootstrapService {
             email,
           );
         }
-        final existingProjectionSnap = await tx.get(
-          metaRef.collection('users').doc(accountId),
-        ).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
-        if (!metaSnap.exists && existingProjectionSnap.exists) {
+        if (!metaSnap.exists && existingAccountSnap.exists) {
           throw const DevBootstrapException(
-            '기존 계정 조회 문서의 메타가 없어 자동 초기화하지 않습니다.',
+            '기존 계정의 목록 문서가 없어 자동 초기화하지 않습니다.',
           );
         }
         if (areaSnap.exists &&
@@ -242,7 +256,7 @@ class DevBootstrapService {
       final rootRef = _firestore.collection('user_accounts').doc(accountId);
       final codeRef = _firestore.collection('user_account_codes').doc(codeNumber);
       final showUserRef = metaRef;
-      final rootSnap = await rootRef.get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
+      final rootSnap = await rootRef.get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart', documentReference: rootRef, readPurpose: 'DEV_BOOTSTRAP_ROOT_ACCOUNT_RECHECK');
       var accountCreated = false;
       var reservationRepaired = false;
       var projectionRepaired = false;
@@ -260,9 +274,14 @@ class DevBootstrapService {
         projectionRepaired = repaired.projectionRepaired;
       } else {
         final codeSnap =
-            await codeRef.get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
+            await codeRef.get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart', documentReference: codeRef, readPurpose: 'DEV_BOOTSTRAP_CODE_RESERVATION_RECHECK');
         final showUserSnap =
-            await showUserRef.get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
+            await showUserRef.get(const GetOptions(source: Source.server))
+                .trackFirestore(
+                  'GET',
+                  'features/launcher/application/dev_bootstrap_service.dart',
+                  documentReference: showUserRef,
+                 readPurpose: 'DEV_BOOTSTRAP_ACCOUNT_PROJECTION_RECHECK');
         final showEntry = UserAccountShowMap.account(showUserSnap.data(), accountId);
         if (codeSnap.exists || showEntry != null) {
           throw const DevBootstrapException(
@@ -288,7 +307,7 @@ class DevBootstrapService {
         );
         _verifySession(email);
         try {
-          await DevUserWriteService(firestore: _firestore).createUser(
+          await DevUserWriteService(firestore: _firestore).createBootstrapUser(
             user: user,
             division: division,
             area: area,
@@ -307,7 +326,7 @@ class DevBootstrapService {
             rethrow;
           }
           final concurrentSnap =
-              await rootRef.get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
+              await rootRef.get(const GetOptions(source: Source.server)).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart', documentReference: rootRef, readPurpose: 'DEV_BOOTSTRAP_CONCURRENT_ROOT_CHECK');
           if (!concurrentSnap.exists) rethrow;
           _verifyExistingAccount(concurrentSnap.data()!, codeNumber, email);
           final repaired = await _repairExistingAccount(
@@ -378,9 +397,17 @@ class DevBootstrapService {
     required String email,
   }) async {
     return _firestore.runTransaction<_DevAccountRepair>((tx) async {
-      final rootSnap = await tx.get(rootRef).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
-      final codeSnap = await tx.get(codeRef).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
-      final metaSnap = await tx.get(metaRef).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart');
+      final rootSnap = await tx.get(rootRef).trackFirestore('GET', 'features/launcher/application/dev_bootstrap_service.dart', documentReference: rootRef, readPurpose: 'DEV_BOOTSTRAP_REPAIR_ROOT_VALIDATION');
+      final codeSnap = await tx.get(codeRef).trackFirestore(
+        'GET',
+        'features/launcher/application/dev_bootstrap_service.dart',
+        documentReference: codeRef,
+       readPurpose: 'DEV_BOOTSTRAP_REPAIR_CODE_VALIDATION');
+      final metaSnap = await tx.get(metaRef).trackFirestore(
+        'GET',
+        'features/launcher/application/dev_bootstrap_service.dart',
+        documentReference: metaRef,
+       readPurpose: 'DEV_BOOTSTRAP_REPAIR_PROJECTION_VALIDATION');
       if (!rootSnap.exists || !metaSnap.exists) {
         throw const DevBootstrapException('개발 계정 원본 또는 메타가 없습니다.');
       }

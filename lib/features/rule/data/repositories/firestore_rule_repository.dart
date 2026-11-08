@@ -28,7 +28,7 @@ class FirestoreRuleRepository implements RuleRepository {
       area: identity.$2,
     );
     try {
-      final snapshot = await _collection.doc(id).get().trackFirestore('GET', 'features/rule/data/repositories/firestore_rule_repository.dart');
+      final snapshot = await _collection.doc(id).get().trackFirestore('GET', 'features/rule/data/repositories/firestore_rule_repository.dart', collection: 'rule', readPurpose: 'WORK_RULE_DOCUMENT_FETCH');
       if (!snapshot.exists || snapshot.data() == null) {
         debugPrint('[RuleRepository] 조회 완료: id=$id found=false');
         return null;
@@ -72,7 +72,7 @@ class FirestoreRuleRepository implements RuleRepository {
     final now = DateTime.now();
     try {
       final result = await _firestore.runTransaction<RuleModel>((transaction) async {
-        final existing = await transaction.get(reference).trackFirestore('GET', 'features/rule/data/repositories/firestore_rule_repository.dart');
+        final existing = await transaction.get(reference).trackFirestore('GET', 'features/rule/data/repositories/firestore_rule_repository.dart', collection: 'rule', readPurpose: 'WORK_RULE_CREATE_EXISTENCE_CHECK');
         if (existing.exists) throw const RuleAlreadyExistsException();
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/rule/data/repositories/firestore_rule_repository.dart', result: 'staged');
         transaction.set(reference, <String, dynamic>{
@@ -98,7 +98,7 @@ class FirestoreRuleRepository implements RuleRepository {
           createdAt: now,
           updatedAt: now,
         );
-      }).trackFirestore('TRANSACTION', 'features/rule/data/repositories/firestore_rule_repository.dart');
+      }).trackFirestore('TRANSACTION', 'features/rule/data/repositories/firestore_rule_repository.dart', collection: 'rule');
       debugPrint(
         '[RuleRepository] 생성 완료: id=$id todos=${todos.length} contentLength=${normalizedContent.length} responseManualLength=${normalizedResponseManual.length} responseManualPageCount=${normalizedPages.length}',
       );
@@ -136,7 +136,7 @@ class FirestoreRuleRepository implements RuleRepository {
     final now = DateTime.now();
     try {
       final result = await _firestore.runTransaction<RuleModel>((transaction) async {
-        final existing = await transaction.get(reference).trackFirestore('GET', 'features/rule/data/repositories/firestore_rule_repository.dart');
+        final existing = await transaction.get(reference).trackFirestore('GET', 'features/rule/data/repositories/firestore_rule_repository.dart', collection: 'rule', readPurpose: 'WORK_RULE_UPDATE_CURRENT_STATE_VALIDATION');
         if (!existing.exists || existing.data() == null) {
           throw const RuleNotFoundException();
         }
@@ -165,7 +165,7 @@ class FirestoreRuleRepository implements RuleRepository {
           createdAt: current.createdAt,
           updatedAt: now,
         );
-      }).trackFirestore('TRANSACTION', 'features/rule/data/repositories/firestore_rule_repository.dart');
+      }).trackFirestore('TRANSACTION', 'features/rule/data/repositories/firestore_rule_repository.dart', collection: 'rule');
       debugPrint(
         '[RuleRepository] 수정 완료: id=$id todos=${todos.length} contentLength=${normalizedContent.length} responseManualLength=${normalizedResponseManual.length} responseManualPageCount=${normalizedPages.length}',
       );
@@ -190,7 +190,7 @@ class FirestoreRuleRepository implements RuleRepository {
     final reference = _collection.doc(id);
     try {
       await _firestore.runTransaction<void>((transaction) async {
-        final existing = await transaction.get(reference).trackFirestore('GET', 'features/rule/data/repositories/firestore_rule_repository.dart');
+        final existing = await transaction.get(reference).trackFirestore('GET', 'features/rule/data/repositories/firestore_rule_repository.dart', collection: 'rule', readPurpose: 'WORK_RULE_DELETE_EXISTENCE_CHECK');
         if (!existing.exists || existing.data() == null) {
           throw const RuleNotFoundException();
         }
@@ -198,7 +198,7 @@ class FirestoreRuleRepository implements RuleRepository {
         _ensureOwnership(current, identity.$1, identity.$2);
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'features/rule/data/repositories/firestore_rule_repository.dart', result: 'staged');
         transaction.delete(reference);
-      }).trackFirestore('TRANSACTION', 'features/rule/data/repositories/firestore_rule_repository.dart');
+      }).trackFirestore('TRANSACTION', 'features/rule/data/repositories/firestore_rule_repository.dart', collection: 'rule');
       debugPrint('[RuleRepository] 삭제 완료: id=$id');
     } catch (error, stackTrace) {
       debugPrint('[RuleRepository] 삭제 실패: id=$id error=$error');

@@ -91,6 +91,9 @@ class StatusDialog {
     Duration pagePopDelay = const Duration(milliseconds: 80),
     String? barrierLabel,
     String? description,
+    String? securitySummary,
+    Listenable? securitySummaryChanges,
+    String Function()? securitySummaryProvider,
     String? copyText,
     String copyButtonLabel = '전문 복사',
     Future<String> Function()? copyTextProvider,
@@ -143,6 +146,9 @@ class StatusDialog {
           title: title,
           tone: tone,
           description: trimmedDescription,
+          securitySummary: securitySummary?.trim() ?? '',
+          securitySummaryChanges: securitySummaryChanges,
+          securitySummaryProvider: securitySummaryProvider,
           copyText: effectiveCopyText,
           copyTextProvider: copyTextProvider,
           requireDeveloperModeForCopy: requireDeveloperModeForCopy ||
@@ -224,6 +230,9 @@ class StatusDialog {
     String title = workStartReportSuccess,
     bool closeCurrentPageAfter = false,
     String? description,
+    String? securitySummary,
+    Listenable? securitySummaryChanges,
+    String Function()? securitySummaryProvider,
     String? copyText,
     String copyButtonLabel = '전문 복사',
     Future<String> Function()? copyTextProvider,
@@ -240,6 +249,9 @@ class StatusDialog {
       tone: StatusDialogTone.success,
       closeCurrentPageAfter: closeCurrentPageAfter,
       description: description,
+      securitySummary: securitySummary,
+      securitySummaryChanges: securitySummaryChanges,
+      securitySummaryProvider: securitySummaryProvider,
       copyText: copyText,
       copyTextProvider: copyTextProvider,
       requireDeveloperModeForCopy: requireDeveloperModeForCopy,
@@ -260,6 +272,9 @@ class StatusDialog {
     String title = loginFailed,
     bool closeCurrentPageAfter = false,
     String? description,
+    String? securitySummary,
+    Listenable? securitySummaryChanges,
+    String Function()? securitySummaryProvider,
     String? copyText,
     String copyButtonLabel = '전문 복사',
     Future<String> Function()? copyTextProvider,
@@ -276,6 +291,9 @@ class StatusDialog {
       tone: StatusDialogTone.failure,
       closeCurrentPageAfter: closeCurrentPageAfter,
       description: description,
+      securitySummary: securitySummary,
+      securitySummaryChanges: securitySummaryChanges,
+      securitySummaryProvider: securitySummaryProvider,
       copyText: copyText,
       copyTextProvider: copyTextProvider,
       requireDeveloperModeForCopy: requireDeveloperModeForCopy,
@@ -306,6 +324,9 @@ class _StatusDialogSurface extends StatefulWidget {
     required this.title,
     required this.tone,
     required this.description,
+    required this.securitySummary,
+    required this.securitySummaryChanges,
+    required this.securitySummaryProvider,
     required this.copyText,
     required this.copyTextProvider,
     required this.requireDeveloperModeForCopy,
@@ -318,6 +339,9 @@ class _StatusDialogSurface extends StatefulWidget {
   final String title;
   final StatusDialogTone tone;
   final String description;
+  final String securitySummary;
+  final Listenable? securitySummaryChanges;
+  final String Function()? securitySummaryProvider;
   final String copyText;
   final Future<String> Function()? copyTextProvider;
   final bool requireDeveloperModeForCopy;
@@ -333,6 +357,38 @@ class _StatusDialogSurface extends StatefulWidget {
 class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
   bool _copied = false;
   bool _debugCopied = false;
+  late String _liveSecuritySummary;
+
+  @override
+  void initState() {
+    super.initState();
+    _liveSecuritySummary = widget.securitySummary;
+    widget.securitySummaryChanges?.addListener(_refreshSecuritySummary);
+  }
+
+  @override
+  void didUpdateWidget(covariant _StatusDialogSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.securitySummaryChanges != widget.securitySummaryChanges) {
+      oldWidget.securitySummaryChanges?.removeListener(_refreshSecuritySummary);
+      widget.securitySummaryChanges?.addListener(_refreshSecuritySummary);
+    }
+    _refreshSecuritySummary();
+  }
+
+  void _refreshSecuritySummary() {
+    if (!mounted) return;
+    final next = widget.securitySummaryProvider?.call() ?? widget.securitySummary;
+    if (_liveSecuritySummary != next) {
+      setState(() => _liveSecuritySummary = next);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.securitySummaryChanges?.removeListener(_refreshSecuritySummary);
+    super.dispose();
+  }
 
   Future<void> _copy() async {
     if (widget.copyText.isEmpty && widget.copyTextProvider == null) return;
@@ -440,6 +496,7 @@ class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
                   title: widget.title,
                   tone: widget.tone,
                   description: widget.description,
+                  securitySummary: _liveSecuritySummary,
                   hasDescription: widget.description.isNotEmpty,
                   hasCopyText: widget.copyText.isNotEmpty,
                   hasDebugCopyText: widget.debugCopyText.isNotEmpty,
@@ -466,6 +523,7 @@ class _StatusDialogContent extends StatelessWidget {
     required this.title,
     required this.tone,
     required this.description,
+    required this.securitySummary,
     required this.hasDescription,
     required this.hasCopyText,
     required this.hasDebugCopyText,
@@ -481,6 +539,7 @@ class _StatusDialogContent extends StatelessWidget {
   final String title;
   final StatusDialogTone tone;
   final String description;
+  final String securitySummary;
   final bool hasDescription;
   final bool hasCopyText;
   final bool hasDebugCopyText;
@@ -598,6 +657,72 @@ class _StatusDialogContent extends StatelessWidget {
                     color: descriptionColor,
                   ),
                 ),
+              ),
+            ),
+          ),
+        ],
+        if (securitySummary.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: 1),
+            duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+            curve: CommonUiMotion.enter,
+            builder: (context, progress, child) => Opacity(
+              opacity: progress,
+              child: Transform.translate(
+                offset: Offset(0, 10 * (1 - progress)),
+                child: child,
+              ),
+            ),
+            child: AnimatedContainer(
+              duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+              curve: CommonUiMotion.standard,
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: accentContainer,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: accent.withOpacity(0.24)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Firebase 보안 진단',
+                    style: textTheme.labelLarge?.copyWith(
+                      color: titleColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  AnimatedSize(
+                    duration: reduceMotion ? Duration.zero : CommonUiMotion.selection,
+                    curve: CommonUiMotion.standard,
+                    child: AnimatedSwitcher(
+                      duration: reduceMotion ? Duration.zero : CommonUiMotion.component,
+                      switchInCurve: CommonUiMotion.enter,
+                      switchOutCurve: CommonUiMotion.standard,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, 0.08),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      child: SelectableText(
+                        securitySummary,
+                        key: ValueKey<String>(securitySummary),
+                        style: textTheme.bodySmall?.copyWith(
+                          color: descriptionColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

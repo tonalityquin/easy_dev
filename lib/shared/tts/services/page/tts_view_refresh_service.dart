@@ -1,3 +1,4 @@
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 
 import '../../../plate/data/repositories/firestore_plate_repository.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
@@ -46,18 +47,26 @@ class TtsViewRefreshService {
     required bool force,
   }) async {
     final a = area.trim();
-    if (a.isEmpty) return;
+    if (a.isEmpty) {
+      FirebaseActivityMeter.instance.traceStep('TTS_VIEW_SKIP', source: 'shared/tts/services/page/tts_view_refresh_service.dart', detail: 'reason=EMPTY_AREA collection=$collection');
+      return;
+    }
 
     if (!force) {
-      if (_isBlocked(collection, a)) return;
+      if (_isBlocked(collection, a)) {
+        FirebaseActivityMeter.instance.traceStep('TTS_VIEW_SKIP', source: 'shared/tts/services/page/tts_view_refresh_service.dart', detail: 'reason=COOLDOWN collection=$collection');
+        return;
+      }
       _startCooldown(collection, a);
     }
 
+    FirebaseActivityMeter.instance.traceStep('TTS_VIEW_FETCH_START', source: 'shared/tts/services/page/tts_view_refresh_service.dart', detail: 'collection=$collection force=$force');
     final data = await _repository.fetchViewDocumentData(
       collection: collection,
       area: a,
     );
     _lastDataByKey[_k(collection, a)] = data;
+    FirebaseActivityMeter.instance.traceStep('TTS_VIEW_FETCH_COMPLETE', source: 'shared/tts/services/page/tts_view_refresh_service.dart', detail: 'collection=$collection hasData=${data != null}');
   }
 
   static Future<void> refreshFull(String area) async {

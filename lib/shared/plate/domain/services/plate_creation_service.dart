@@ -183,6 +183,7 @@ class PlateCreationService {
           .collection(_monthlyPlateStatusCollection)
           .doc('${plateNumber}_$area');
       FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+      FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=SET collection=monthly_plate_status purpose=STATUS_MEMO_UPDATE');
       transaction.set(
         monthlyRef,
         <String, dynamic>{
@@ -210,14 +211,17 @@ class PlateCreationService {
     );
     if (memo.isEmpty) {
       FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+      FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=DELETE collection=plate_status purpose=CURRENT_MONTH_STATUS_CLEAR');
       transaction.delete(currentRef);
       FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+      FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=DELETE collection=plate_status purpose=PREVIOUS_MONTH_STATUS_CLEAR');
       transaction.delete(previousRef);
       final sourcePath = expectedStatusSourcePath.trim();
       if (sourcePath.isNotEmpty &&
           sourcePath != currentRef.path &&
           sourcePath != previousRef.path) {
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+        FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=DELETE collection=plate_status purpose=SOURCE_STATUS_CLEAR');
         transaction.delete(_firestore.doc(sourcePath));
       }
       return;
@@ -225,6 +229,7 @@ class PlateCreationService {
 
     FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
 
+    FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=SET collection=plate_status purpose=CURRENT_MONTH_STATUS_SAVE');
     transaction.set(
       currentRef,
       <String, dynamic>{
@@ -510,8 +515,13 @@ class PlateCreationService {
         plateType == PlateType.parkingCompleted;
 
     try {
-      await _firestore.runTrackedActivityTransaction((tx) async {
-        final snap = await tx.get(docRef).trackFirestore('GET', 'shared/plate/domain/services/plate_creation_service.dart');
+      await FirebaseActivityMeter.instance.traceAction<void>(
+        kind: 'PLATE_REGISTER_TRANSACTION',
+        source: 'shared/plate/domain/services/plate_creation_service.dart',
+        plateId: plateDocId,
+        detail: 'plateType=${plateType.firestoreValue}',
+        action: () => _firestore.runTrackedActivityTransaction((tx) async {
+        final snap = await tx.get(docRef).trackFirestore('GET', 'shared/plate/domain/services/plate_creation_service.dart', collection: 'plates', pathTemplate: 'plates/*', readPurpose: 'REGISTER_DUPLICATE_AND_REENTRY_CHECK',);
         if (snap.exists) {
           final data = snap.data();
           final existingTypeStr = (data?[PlateFields.type] as String?) ?? '';
@@ -531,7 +541,7 @@ class PlateCreationService {
 
         final monthlyStatusSnapshot =
             (monthlyStatusScope || shouldValidateStatusSnapshot)
-                ? await tx.get(monthlyStatusRef).trackFirestore('GET', 'shared/plate/domain/services/plate_creation_service.dart')
+                ? await tx.get(monthlyStatusRef).trackFirestore('GET', 'shared/plate/domain/services/plate_creation_service.dart', documentReference: monthlyStatusRef, readPurpose: monthlyStatusScope ? 'REGISTER_MONTHLY_STATUS_VALIDATION' : 'REGISTER_MONTHLY_CONFLICT_VALIDATION',)
                 : null;
         if (monthlyStatusScope) {
           final monthlyData = monthlyStatusSnapshot?.data();
@@ -600,9 +610,9 @@ class PlateCreationService {
               }
             }
             final currentStatusSnapshot =
-                await tx.get(currentHistoryStatusRef).trackFirestore('GET', 'shared/plate/domain/services/plate_creation_service.dart');
+                await tx.get(currentHistoryStatusRef).trackFirestore('GET', 'shared/plate/domain/services/plate_creation_service.dart', documentReference: currentHistoryStatusRef, readPurpose: 'REGISTER_HISTORY_CURRENT_MONTH_REVALIDATION',);
             final previousStatusSnapshot =
-                await tx.get(previousHistoryStatusRef).trackFirestore('GET', 'shared/plate/domain/services/plate_creation_service.dart');
+                await tx.get(previousHistoryStatusRef).trackFirestore('GET', 'shared/plate/domain/services/plate_creation_service.dart', documentReference: previousHistoryStatusRef, readPurpose: 'REGISTER_HISTORY_PREVIOUS_MONTH_REVALIDATION',);
             DocumentSnapshot<Map<String, dynamic>>? sourceStatusSnapshot;
             if (expectedSourcePath.isNotEmpty) {
               if (expectedSourcePath == currentHistoryStatusRef.path) {
@@ -738,6 +748,7 @@ class PlateCreationService {
 
             if (canWriteRequestsView) {
               FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=SET collection=parking_requests_view purpose=UPSERT');
               tx.set(
                 requestsViewRef,
                 <String, dynamic>{
@@ -764,6 +775,7 @@ class PlateCreationService {
             if (existingType == PlateType.parkingRequests &&
                 canWriteRequestsView) {
               FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=SET collection=parking_requests_view purpose=REMOVE');
               tx.set(
                 requestsViewRef,
                 <String, dynamic>{
@@ -783,6 +795,7 @@ class PlateCreationService {
 
             if (canWriteCompletedView) {
               FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=SET collection=parking_completed_view purpose=UPSERT');
               tx.set(
                 completedViewRef,
                 <String, dynamic>{
@@ -808,6 +821,7 @@ class PlateCreationService {
 
             if (canWriteRequestsView) {
               FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=SET collection=parking_requests_view purpose=REMOVE');
               tx.set(
                 requestsViewRef,
                 <String, dynamic>{
@@ -827,6 +841,7 @@ class PlateCreationService {
             final countersRef =
                 _firestore.collection('plate_counters').doc('area_$area');
             FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+            FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=SET collection=plate_counters purpose=INCREMENT');
             tx.set(
               countersRef,
               {'departureCompletedEvents': FieldValue.increment(1)},
@@ -836,6 +851,7 @@ class PlateCreationService {
 
           FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_UPDATE', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
 
+          FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=UPDATE collection=plates');
           tx.update(docRef, partial);
 
           if (shouldIncrementReentryBillingCount) {
@@ -868,6 +884,7 @@ class PlateCreationService {
 
             if (canWriteRequestsView) {
               FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=SET collection=parking_requests_view purpose=UPSERT');
               tx.set(
                 requestsViewRef,
                 <String, dynamic>{
@@ -897,6 +914,7 @@ class PlateCreationService {
 
             if (canWriteCompletedView) {
               FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=SET collection=parking_completed_view purpose=UPSERT');
               tx.set(
                 completedViewRef,
                 <String, dynamic>{
@@ -922,6 +940,7 @@ class PlateCreationService {
 
             if (canWriteRequestsView) {
               FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
+              FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=SET collection=parking_requests_view purpose=REMOVE');
               tx.set(
                 requestsViewRef,
                 <String, dynamic>{
@@ -938,6 +957,7 @@ class PlateCreationService {
 
           FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_creation_service.dart', result: 'staged');
 
+          FirebaseActivityMeter.instance.traceStep('REGISTER_WRITE_TARGET', source: 'shared/plate/domain/services/plate_creation_service.dart', detail: 'operation=SET collection=plates');
           tx.set(docRef, map);
           if (shouldIncrementBillingCount) {
             PlateBillingCountService.incrementInTransaction(
@@ -966,7 +986,8 @@ class PlateCreationService {
             now: statusWriteTime,
           );
         }
-      }).trackFirestore('TRANSACTION', 'shared/plate/domain/services/plate_creation_service.dart');
+        }, source: 'shared/plate/domain/services/plate_creation_service.dart'),
+      );
     } on DuplicatePlateException {
       rethrow;
     } catch (_) {

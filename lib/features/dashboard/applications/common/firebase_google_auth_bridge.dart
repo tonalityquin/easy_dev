@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../../../app/utils/secure_auth_diagnostics.dart';
 import '../../../../app/diagnostics/firebase_activity_meter.dart';
+import '../../../../app/diagnostics/firebase_auth_rules_diagnostics.dart';
+import '../../../selector/application/dev_auth.dart';
 
 String _firebaseBridgeTs() => DateTime.now().toIso8601String();
 
@@ -25,6 +27,11 @@ class FirebaseGoogleAuthBridge {
 
   bool get canUseDebugAnonymousFallback =>
       kDebugMode && _enableDebugAnonymousFallback;
+
+  Future<void> _auditSession(String source) async {
+    if (!DevAuth.devModeEnabled.value) return;
+    await FirebaseAuthRulesDiagnostics.inspect(source: source);
+  }
 
   Future<void> configureRuntime() async {
     if (_runtimeConfigured) {
@@ -94,6 +101,7 @@ class FirebaseGoogleAuthBridge {
       SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] 기존 Firebase 사용자 유지 uid=${existing.uid} email=${existing.email}',
       );
+      await _auditSession('firebase_google_existing_session');
       return true;
     }
 
@@ -164,6 +172,7 @@ class FirebaseGoogleAuthBridge {
       SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Firebase 사용자와 Google 사용자 이메일 일치 email=$normalizedGoogleEmail',
       );
+      await _auditSession('firebase_google_session_reuse');
       return true;
     }
 
@@ -206,7 +215,7 @@ class FirebaseGoogleAuthBridge {
       SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] FirebaseAuth Google 로그인 성공 uid=${user?.uid} email=${user?.email} anonymous=${user?.isAnonymous}',
       );
-
+      await _auditSession('firebase_google_sign_in');
       return user != null;
     } catch (e, st) {
       SecureAuthDiagnostics.record(
@@ -222,6 +231,7 @@ class FirebaseGoogleAuthBridge {
       SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug 익명 Firebase 세션 재사용 uid=${current.uid}',
       );
+      await _auditSession('firebase_anonymous_reuse');
       return true;
     }
 
@@ -235,6 +245,7 @@ class FirebaseGoogleAuthBridge {
       SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug 익명 Firebase 로그인 성공 uid=${result.user?.uid}',
       );
+      await _auditSession('firebase_anonymous_sign_in');
       return result.user != null;
     } catch (e, st) {
       SecureAuthDiagnostics.record(
@@ -260,6 +271,7 @@ class FirebaseGoogleAuthBridge {
       SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 익명 세션 재사용 uid=${current.uid}',
       );
+      await _auditSession('firebase_developer_anonymous_reuse');
       return current;
     }
 
@@ -290,6 +302,7 @@ class FirebaseGoogleAuthBridge {
       SecureAuthDiagnostics.record(
         '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Debug developer Firebase 익명 인증 성공 uid=${user?.uid} anonymous=${user?.isAnonymous}',
       );
+      await _auditSession('firebase_developer_anonymous_sign_in');
       return user;
     } catch (error, stackTrace) {
       SecureAuthDiagnostics.record(
@@ -324,6 +337,7 @@ class FirebaseGoogleAuthBridge {
     SecureAuthDiagnostics.record(
       '[FB-AUTH-BRIDGE][${_firebaseBridgeTs()}] Firebase 로그아웃 완료',
     );
+    await _auditSession('firebase_sign_out');
   }
 
   Future<void> signOutAll() async {

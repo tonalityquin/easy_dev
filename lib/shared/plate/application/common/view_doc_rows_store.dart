@@ -1,3 +1,4 @@
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 import 'package:flutter/foundation.dart';
 
 @immutable
@@ -53,5 +54,6 @@ class ViewDocRowsStore extends ChangeNotifier {
     _revByKey[key] = (_revByKey[key] ?? 0) + 1;
     debugPrint('[ViewDocRowsStore] setRows $c/$a rows=${rows.length} rev=${_revByKey[key]} source=${source ?? ''}');
     notifyListeners();
+    FirebaseActivityMeter.instance.traceStep('VIEW_STORE_UPDATED', source: 'shared/plate/application/common/view_doc_rows_store.dart', detail: 'collection=$c rows=${rows.length} revision=${_revByKey[key]}');
   }
 }

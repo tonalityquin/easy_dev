@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
 
 class PlateBillingCountService {
   const PlateBillingCountService._();
@@ -76,6 +77,11 @@ class PlateBillingCountService {
       area: safeArea,
     );
 
+    FirebaseActivityMeter.instance.traceStep(
+      'REGISTER_WRITE_TARGET',
+      source: 'shared/plate/domain/services/plate_billing_count_service.dart',
+      detail: 'operation=SET collection=plate_billing_counts purpose=BILLING_COUNT_INCREMENT',
+    );
     transaction.set(
       ref,
       <String, dynamic>{

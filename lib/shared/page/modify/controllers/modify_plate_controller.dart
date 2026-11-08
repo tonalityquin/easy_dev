@@ -396,6 +396,7 @@ class ModifyPlateController {
       plateNumber: plate.plateNumber,
       area: plate.area,
       scope: PlateStatusScope.monthly,
+      readPurpose: 'MODIFY_STATUS_CONTEXT',
     );
 
     if (monthlyLookup.isFailed) {
@@ -417,6 +418,7 @@ class ModifyPlateController {
         plateNumber: plate.plateNumber,
         area: plate.area,
         scope: PlateStatusScope.history,
+        readPurpose: 'MODIFY_STATUS_CONTEXT',
       );
     } else if ((canUseBill ? selectedBillType : _determineBillType()) == '정기') {
       scope = PlateStatusScope.monthly;
@@ -427,6 +429,7 @@ class ModifyPlateController {
         plateNumber: plate.plateNumber,
         area: plate.area,
         scope: PlateStatusScope.history,
+        readPurpose: 'MODIFY_STATUS_CONTEXT',
       );
     }
 

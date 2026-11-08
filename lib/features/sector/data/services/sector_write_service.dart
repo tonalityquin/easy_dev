@@ -33,7 +33,7 @@ class SectorWriteService {
       );
 
       final reference = _collection.doc(documentId);
-      final existing = await reference.get().trackFirestore('GET', 'features/sector/data/services/sector_write_service.dart');
+      final existing = await reference.get().trackFirestore('GET', 'features/sector/data/services/sector_write_service.dart', collection: 'sector', readPurpose: 'SECTOR_CREATE_TARGET_EXISTENCE_CHECK');
       if (existing.exists) {
         throw SectorDuplicateNameException(sectorName);
       }
@@ -45,7 +45,7 @@ class SectorWriteService {
         'normalizedName': normalizedName,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      }).trackFirestore('SET', 'features/sector/data/services/sector_write_service.dart');
+      }).trackFirestore('SET', 'features/sector/data/services/sector_write_service.dart', collection: 'sector');
 
       debugPrint(
         '[SectorWriteService] 등록 완료: id=$documentId, area=$normalizedArea, name=$sectorName',
@@ -86,7 +86,7 @@ class SectorWriteService {
 
     try {
       final sourceReference = _collection.doc(normalizedId);
-      final sourceSnapshot = await sourceReference.get().trackFirestore('GET', 'features/sector/data/services/sector_write_service.dart');
+      final sourceSnapshot = await sourceReference.get().trackFirestore('GET', 'features/sector/data/services/sector_write_service.dart', collection: 'sector', readPurpose: 'SECTOR_RENAME_SOURCE_VALIDATION');
       if (!sourceSnapshot.exists || sourceSnapshot.data() == null) {
         throw const SectorNotFoundException();
       }
@@ -109,10 +109,10 @@ class SectorWriteService {
           'name': sectorName,
           'normalizedName': normalizedName,
           'updatedAt': FieldValue.serverTimestamp(),
-        }).trackFirestore('UPDATE', 'features/sector/data/services/sector_write_service.dart');
+        }).trackFirestore('UPDATE', 'features/sector/data/services/sector_write_service.dart', collection: 'sector');
       } else {
         final targetReference = _collection.doc(targetId);
-        final targetSnapshot = await targetReference.get().trackFirestore('GET', 'features/sector/data/services/sector_write_service.dart');
+        final targetSnapshot = await targetReference.get().trackFirestore('GET', 'features/sector/data/services/sector_write_service.dart', collection: 'sector', readPurpose: 'SECTOR_RENAME_TARGET_DUPLICATE_CHECK');
         if (targetSnapshot.exists) {
           throw SectorDuplicateNameException(sectorName);
         }
@@ -128,7 +128,7 @@ class SectorWriteService {
         });
         FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_DELETE', source: 'features/sector/data/services/sector_write_service.dart', result: 'staged');
         batch.delete(sourceReference);
-        await batch.commit().trackFirestore('BATCH', 'features/sector/data/services/sector_write_service.dart');
+        await batch.commit().trackFirestore('BATCH', 'features/sector/data/services/sector_write_service.dart', collection: 'sector');
       }
 
       debugPrint(
@@ -154,7 +154,7 @@ class SectorWriteService {
     required String normalizedName,
     String? excludedId,
   }) async {
-    final snapshot = await _collection.where('area', isEqualTo: area).get().trackFirestore('GET', 'features/sector/data/services/sector_write_service.dart');
+    final snapshot = await _collection.where('area', isEqualTo: area).get().trackFirestore('QUERY', 'features/sector/data/services/sector_write_service.dart', collection: 'sector');
     for (final document in snapshot.docs) {
       if (document.id == excludedId) continue;
       final data = document.data();

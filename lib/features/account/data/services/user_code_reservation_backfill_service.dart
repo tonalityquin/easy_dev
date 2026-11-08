@@ -94,7 +94,7 @@ class UserCodeReservationBackfillService {
     onLog?.call('user_accounts 코드번호 수집을 시작합니다.', 0.03);
     final rootSnapshot = await _roots.get(
       const GetOptions(source: Source.server),
-    ).trackFirestore('GET', 'features/account/data/services/user_code_reservation_backfill_service.dart');
+    ).trackFirestore('QUERY', 'features/account/data/services/user_code_reservation_backfill_service.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
     final codeOwners = <String, List<QueryDocumentSnapshot<Map<String, dynamic>>>>{};
     final identifierOwners = <String, Set<String>>{};
     var invalidRootCodes = 0;
@@ -124,7 +124,7 @@ class UserCodeReservationBackfillService {
 
     final reservationSnapshot = await _reservations.get(
       const GetOptions(source: Source.server),
-    ).trackFirestore('GET', 'features/account/data/services/user_code_reservation_backfill_service.dart');
+    ).trackFirestore('QUERY', 'features/account/data/services/user_code_reservation_backfill_service.dart', collection: 'user_account_codes', pathTemplate: 'user_account_codes',);
     final reservationByCode = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{
       for (final doc in reservationSnapshot.docs) doc.id: doc,
     };
@@ -181,9 +181,9 @@ class UserCodeReservationBackfillService {
       final root = entry.value;
       try {
         final created = await _firestore.runTransaction<bool>((tx) async {
-          final rootSnap = await tx.get(root.reference).trackFirestore('GET', 'features/account/data/services/user_code_reservation_backfill_service.dart');
+          final rootSnap = await tx.get(root.reference).trackFirestore('GET', 'features/account/data/services/user_code_reservation_backfill_service.dart', documentReference: root.reference, readPurpose: 'USER_CODE_BACKFILL_ROOT_REVALIDATION');
           final reservationRef = _reservations.doc(code);
-          final reservationSnap = await tx.get(reservationRef).trackFirestore('GET', 'features/account/data/services/user_code_reservation_backfill_service.dart');
+          final reservationSnap = await tx.get(reservationRef).trackFirestore('GET', 'features/account/data/services/user_code_reservation_backfill_service.dart', collection: 'user_account_codes', pathTemplate: 'user_account_codes/*', readPurpose: 'USER_CODE_BACKFILL_RESERVATION_REVALIDATION');
           if (!rootSnap.exists || rootSnap.data() == null) {
             throw StateError('ROOT_MISSING:${root.id}');
           }
@@ -237,7 +237,7 @@ class UserCodeReservationBackfillService {
     onLog?.call('코드 인덱스와 Root 연결을 재검증합니다.', 0.78);
     final verifyReservations = await _reservations.get(
       const GetOptions(source: Source.server),
-    ).trackFirestore('GET', 'features/account/data/services/user_code_reservation_backfill_service.dart');
+    ).trackFirestore('QUERY', 'features/account/data/services/user_code_reservation_backfill_service.dart', collection: 'user_account_codes', pathTemplate: 'user_account_codes',);
     final verifyByCode = <String, Map<String, dynamic>>{
       for (final doc in verifyReservations.docs) doc.id: doc.data(),
     };

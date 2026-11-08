@@ -4,6 +4,7 @@ import '../../../../features/account/data/services/user_account_show_map.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../app/utils/developer_operation_status_dialog.dart';
+import '../../../../features/dev/application/developer_structure_write_guard.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../design_system/common_ui/common_ui_theme.dart';
 import 'tabs/add_area_tab.dart';
@@ -48,7 +49,7 @@ class _AreaManagementState extends State<AreaManagement>
       final snap = await FirebaseFirestore.instance
           .collection('divisions')
           .orderBy('name')
-          .get(const GetOptions(source: Source.serverAndCache)).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart');
+          .get(const GetOptions(source: Source.serverAndCache)).trackFirestore('QUERY', 'shared/secondary/pages/sheets/area_management.dart', collection: 'divisions', pathTemplate: 'divisions',);
       final divisions = snap.docs
           .map((doc) => (doc.data()['name'] ?? '').toString().trim())
           .where((value) => value.isNotEmpty)
@@ -89,6 +90,10 @@ class _AreaManagementState extends State<AreaManagement>
       standardModeMessage: '개발자 모드 OFF: 회사 생성 로그를 콘솔에 기록합니다.',
     );
     try {
+      await DeveloperStructureWriteGuard.requireAuthorized(
+        operation: 'division_create',
+      );
+      trace.log('개발자 Firebase 인증 이메일 확인 완료: 회사 생성', progress: 0.08);
       final firestore = FirebaseFirestore.instance;
       final divisionRef = firestore.collection('divisions').doc(name);
       final headquarterRef = firestore.collection('areas').doc('$name-$name');
@@ -103,9 +108,9 @@ class _AreaManagementState extends State<AreaManagement>
         progress: 0.2,
       );
       await firestore.runTrackedActivityTransaction((transaction) async {
-        final divisionSnap = await transaction.get(divisionRef).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart');
-        final headquarterSnap = await transaction.get(headquarterRef).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart');
-        final accountMetaSnap = await transaction.get(accountMetaRef).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart');
+        final divisionSnap = await transaction.get(divisionRef).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart', collection: 'divisions', pathTemplate: 'divisions/*', readPurpose: 'HEADQUARTER_DIVISION_CREATE_VALIDATION');
+        final headquarterSnap = await transaction.get(headquarterRef).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart', collection: 'areas', pathTemplate: 'areas/*', readPurpose: 'HEADQUARTER_AREA_CREATE_VALIDATION');
+        final accountMetaSnap = await transaction.get(accountMetaRef).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart', collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*', readPurpose: 'HEADQUARTER_ACCOUNT_PROJECTION_CREATE_VALIDATION');
         if (divisionSnap.exists) {
           throw StateError('DIVISION_ALREADY_EXISTS');
         }
@@ -140,7 +145,7 @@ class _AreaManagementState extends State<AreaManagement>
             area: name,
           ),
         );
-      }).trackFirestore('TRANSACTION', 'shared/secondary/pages/sheets/area_management.dart');
+      });
       trace.log('Firestore transaction commit 완료: writes=3', progress: 0.88);
       await _loadDivisions();
       await trace.succeed('회사와 본사 지역 생성이 완료되었습니다.');
@@ -162,9 +167,13 @@ class _AreaManagementState extends State<AreaManagement>
       if (!mounted) return false;
       if (!trace.developerMode) {
         final raw = error.toString();
-        final message = raw.contains('DIVISION_ALREADY_EXISTS')
-            ? '이미 등록된 회사입니다.'
-            : raw.contains('HEADQUARTER_ALREADY_EXISTS')
+        final message = error is DeveloperStructurePermissionException
+            ? error.toString()
+            : error is FirebaseException && error.code == 'permission-denied'
+                ? '개발자 계정의 회사 생성 권한을 확인하세요.'
+                    : raw.contains('DIVISION_ALREADY_EXISTS')
+                    ? '이미 등록된 회사입니다.'
+                    : raw.contains('HEADQUARTER_ALREADY_EXISTS')
                 ? '동일한 본사 지역 문서가 이미 존재합니다.'
                 : raw.contains('HEADQUARTER_ACCOUNT_META_ALREADY_EXISTS')
                     ? '동일한 본사 계정 메타 문서가 이미 존재합니다.'
@@ -185,17 +194,21 @@ class _AreaManagementState extends State<AreaManagement>
       standardModeMessage: '개발자 모드 OFF: 회사 삭제 로그를 콘솔에 기록합니다.',
     );
     try {
+      await DeveloperStructureWriteGuard.requireAuthorized(
+        operation: 'division_delete',
+      );
+      trace.log('개발자 Firebase 인증 이메일 확인 완료: 회사 삭제', progress: 0.08);
       final firestore = FirebaseFirestore.instance;
       final divisionRef = firestore.collection('divisions').doc(name);
       final areasSnap = await firestore
           .collection('areas')
           .where('division', isEqualTo: name)
-          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart');
+          .get(const GetOptions(source: Source.server)).trackFirestore('QUERY', 'shared/secondary/pages/sheets/area_management.dart', collection: 'areas', pathTemplate: 'areas',);
       final accountSnap = await firestore
           .collection('user_accounts')
           .where('divisions', arrayContains: name)
           .limit(1)
-          .get(const GetOptions(source: Source.server)).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart');
+          .get(const GetOptions(source: Source.server)).trackFirestore('QUERY', 'shared/secondary/pages/sheets/area_management.dart', collection: 'user_accounts', pathTemplate: 'user_accounts',);
       trace.log(
         '연관 문서 검사: areas=${areasSnap.docs.length} accountExists=${accountSnap.docs.isNotEmpty}',
         progress: 0.24,
@@ -209,15 +222,9 @@ class _AreaManagementState extends State<AreaManagement>
         final showRef = firestore.collection('user_accounts_show').doc('$name-$areaName');
         final showSnap = await showRef.get(
           const GetOptions(source: Source.server),
-        ).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart');
+        ).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart', collection: 'user_accounts_show', pathTemplate: 'user_accounts_show/*', readPurpose: 'HEADQUARTER_AREA_ACCOUNT_SHOW_FETCH');
         if (UserAccountShowMap.users(showSnap.data()).isNotEmpty) {
           throw StateError('RELATED_USER_PROJECTION_EXISTS:$areaName');
-        }
-        final legacySnap = await showRef.collection('users').limit(1).get(
-          const GetOptions(source: Source.server),
-        ).trackFirestore('GET', 'shared/secondary/pages/sheets/area_management.dart');
-        if (legacySnap.docs.isNotEmpty) {
-          throw StateError('RELATED_LEGACY_USER_PROJECTION_EXISTS:$areaName');
         }
       }
       trace.log('계정 원본 및 projection 비어 있음 확인 완료', progress: 0.46);
@@ -262,9 +269,13 @@ class _AreaManagementState extends State<AreaManagement>
       if (!mounted) return false;
       if (!trace.developerMode) {
         final raw = error.toString();
-        final message = raw.contains('RELATED_USER_ACCOUNT_EXISTS')
-            ? '소속 계정이 남아 있어 회사를 삭제할 수 없습니다.'
-            : raw.contains('RELATED_USER_PROJECTION_EXISTS')
+        final message = error is DeveloperStructurePermissionException
+            ? error.toString()
+            : error is FirebaseException && error.code == 'permission-denied'
+                ? '개발자 계정의 회사 삭제 권한을 확인하세요.'
+                    : raw.contains('RELATED_USER_ACCOUNT_EXISTS')
+                    ? '소속 계정이 남아 있어 회사를 삭제할 수 없습니다.'
+                    : raw.contains('RELATED_USER_PROJECTION_EXISTS')
                 ? '계정 projection이 남아 있어 회사를 삭제할 수 없습니다.'
                 : '회사 삭제 실패: $error';
         showFailedSnackbar(context, message, useCommonUi: true);

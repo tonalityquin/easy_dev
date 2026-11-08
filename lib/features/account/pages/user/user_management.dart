@@ -91,11 +91,16 @@ class _UserManagementState extends State<UserManagement> {
           area: areaState.currentArea,
         ) ??
         false;
-    if (skipServerRefresh) {
+    if (skipServerRefresh && userState.hasValidUserListForCurrentScope) {
       _clearSelection(userState, reason: 'create_local_refresh');
       _log('initial_refresh_skipped reason=created_account_local count=${userState.users.length}');
       AccountRoleDiagnostics.record('user_create_list_refresh_skipped reason=local_cache');
       return;
+    }
+    if (skipServerRefresh) {
+      AccountRoleDiagnostics.recordList(
+        'user_create_list_refresh_required reason=unvalidated_local_list',
+      );
     }
     _log('initial_refresh_started');
     try {
@@ -967,6 +972,19 @@ class _UserManagementState extends State<UserManagement> {
 
     final listBody = initialLoading
         ? const SizedBox.expand(key: ValueKey<String>('initial_loading'))
+        : userState.userListLoadError != null
+            ? KeyedSubtree(
+                key: ValueKey<String>('view_list_error_${userState.userListLoadError}'),
+                child: OpsEmptyState(
+                  icon: Icons.error_outline_rounded,
+                  title: '계정 목록을 확인할 수 없습니다',
+                  message: userState.userListLoadError == 'USER_ACCOUNT_VIEW_MISSING'
+                      ? '계정 목록 문서가 없습니다. 관리자 복구가 필요합니다.'
+                      : userState.userListLoadError == 'USER_ACCOUNT_VIEW_USERS_INVALID'
+                          ? '계정 목록 데이터 형식을 확인해야 합니다.'
+                              : '현재 목록을 불러오지 못했습니다. 새로고침으로 다시 시도하세요.',
+                ),
+              )
         : visibleUsers.isEmpty
             ? KeyedSubtree(
                 key: ValueKey<String>(
@@ -1065,7 +1083,27 @@ class _UserManagementState extends State<UserManagement> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
-                  child: OpsDockResultSwitcher(child: listBody),
+                  child: AnimatedSwitcher(
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, .025),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: .985, end: 1).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                    ),
+                    child: listBody,
+                  ),
                 ),
               ),
               OpsDockContextFooterTransition(

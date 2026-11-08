@@ -163,7 +163,6 @@ class TriplePlateState extends ChangeNotifier {
   }
 
   void _initDefaultLoads() {
-    tripleSubscribeType(PlateType.parkingCompleted);
     tripleSubscribeType(PlateType.departureCompleted);
   }
 
@@ -211,7 +210,7 @@ class TriplePlateState extends ChangeNotifier {
       if (type == PlateType.departureCompleted && removedIds.isNotEmpty) {
         for (final removedId in removedIds) {
           try {
-            final fresh = await _repository.getPlate(removedId);
+            final fresh = await _repository.getPlate(removedId, readPurpose: 'DEPARTURE_COMPLETED_VIEW_RECONCILE');
             if (fresh == null) continue;
 
             final sameArea = fresh.area == area;

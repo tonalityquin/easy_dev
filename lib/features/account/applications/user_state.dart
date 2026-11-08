@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../app/auth/google_auth_session.dart';
 import '../../../app/models/account_area_access.dart';
 import '../../../app/models/account_role_diagnostics.dart';
+import '../../../app/models/account_role.dart';
 import '../../../app/init/work_schedule_prefs.dart';
 import '../../../app/utils/area_context_debug_trace.dart';
 import '../../../app/utils/dev_firebase_debug_dialog.dart';
@@ -61,6 +62,9 @@ class UserState extends ChangeNotifier {
   TabletModel? _tablet;
 
   List<UserModel> _userList = const [];
+  String? _userListLoadError;
+  bool _userListValidated = false;
+  String _userListValidatedScope = '';
   List<TabletModel> _tabletList = const [];
 
   String? _selectedUserId;
@@ -98,6 +102,50 @@ class UserState extends ChangeNotifier {
   TabletModel? get tablet => _tablet;
 
   UnmodifiableListView<UserModel> get users => UnmodifiableListView(_userList);
+
+  String? get userListLoadError => _userListLoadError;
+
+  String get _currentUserScopeKey =>
+      '${_areaState.currentDivision.trim()}|${_areaState.currentArea.trim()}';
+
+  bool get hasValidUserListForCurrentScope =>
+      _userListValidated &&
+      _userListLoadError == null &&
+      _areaState.currentDivision.trim().isNotEmpty &&
+      _areaState.currentArea.trim().isNotEmpty &&
+      _userListValidatedScope == _currentUserScopeKey;
+
+  Future<void> _reconcileCommittedUserChange({
+    required String operation,
+    required List<UserModel> Function(List<UserModel>) updateLocalList,
+  }) async {
+    if (hasValidUserListForCurrentScope) {
+      _userList = updateLocalList(_userList);
+      _userListLoadError = null;
+      notifyListeners();
+      AccountRoleDiagnostics.recordList(
+        '${operation}_list_local_applied serverReads=0 count=${_userList.length}',
+      );
+      try {
+        await _repository.updateUsersCache(_currentUserScopeKey, _userList);
+        AccountRoleDiagnostics.recordList('${operation}_cache_updated');
+      } catch (error) {
+        AccountRoleDiagnostics.recordList(
+          '${operation}_cache_failed type=${error.runtimeType} serverCommitted=true',
+        );
+      }
+      return;
+    }
+    AccountRoleDiagnostics.recordList('${operation}_list_resync_started');
+    try {
+      await refreshUsersBySelectedAreaAndCache();
+      AccountRoleDiagnostics.recordList('${operation}_list_resync_completed');
+    } catch (error) {
+      AccountRoleDiagnostics.recordList(
+        '${operation}_list_resync_failed type=${error.runtimeType} serverCommitted=true',
+      );
+    }
+  }
 
   UnmodifiableListView<TabletModel> get tabletUsers =>
       UnmodifiableListView(_tabletList);
@@ -218,6 +266,9 @@ class UserState extends ChangeNotifier {
   }
 
   Future<void> refreshUsersBySelectedAreaAndCache() async {
+    _userListLoadError = null;
+    _userListValidated = false;
+    _userListValidatedScope = '';
     final selectedArea = _areaState.currentArea.trim();
     final currentDivision = _areaState.currentDivision.trim();
 
@@ -227,17 +278,37 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data = currentDivision.isNotEmpty
-          ? await _repository.refreshUsersByDivisionAreaFromShow(
-              currentDivision, selectedArea)
-          : await _repository.refreshUsersBySelectedArea(selectedArea);
+      if (currentDivision.isEmpty || selectedArea.isEmpty) {
+        AccountRoleDiagnostics.recordList(
+          'user_show_view_only_skipped reason=scope_required',
+        );
+        throw StateError('USER_ACCOUNT_SCOPE_REQUIRED');
+      }
+      final data = await _repository.refreshUsersByDivisionAreaFromShow(
+        currentDivision,
+        selectedArea,
+      );
 
       _userList = List<UserModel>.of(data, growable: false);
       _clearSelectionSilently();
-      _prevAreaUsers = selectedArea;
+      _userListValidatedScope = '$currentDivision|$selectedArea';
+      _userListValidated = true;
+      _prevAreaUsers = _userListValidatedScope;
+      AccountRoleDiagnostics.recordList(
+        'user_show_list_validated count=${_userList.length} source=view',
+      );
     } catch (e) {
       _clearSelectionSilently();
+      _userList = <UserModel>[];
+      _userListValidated = false;
+      _userListValidatedScope = '';
+      _prevAreaUsers = '';
+      _userListLoadError = e is StateError ? e.message : e.runtimeType.toString();
+      AccountRoleDiagnostics.recordList(
+        'user_show_view_only_failed reason=$_userListLoadError source=user_state',
+      );
       debugPrint('🔥 Error refreshing users: $e');
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -360,12 +431,11 @@ class UserState extends ChangeNotifier {
     try {
       await _repository.setUserActiveStatus(selectedId, isActive: isActive);
 
-      final area = _areaState.currentArea.trim();
       final idx = _userList.indexWhere((u) => u.id == selectedId);
       if (idx >= 0) {
         final updated = _userList[idx].copyWith(isActive: isActive);
         _userList = _replaceItem(_userList, updated);
-        await _repository.updateUsersCache(area, _userList);
+        await _repository.updateUsersCache(_currentUserScopeKey, _userList);
       }
 
       notifyListeners();
@@ -613,7 +683,7 @@ class UserState extends ChangeNotifier {
 
     final area = _areaState.currentArea.trim();
     _userList = _replaceItem(_userList, updatedUser);
-    await _repository.updateUsersCache(area, _userList);
+    await _repository.updateUsersCache(_currentUserScopeKey, _userList);
 
     await saveCardToUserCodeNumber(updatedUser);
     debugPrint(
@@ -928,28 +998,48 @@ class UserState extends ChangeNotifier {
     String? previousId,
     void Function(String)? onError,
   }) async {
-    try {
-      await _repository.updateUser(updatedUser, previousId: previousId);
-
-      final area = _areaState.currentArea.trim();
-      final previous = (previousId ?? '').trim();
-      if (previous.isNotEmpty && previous != updatedUser.id) {
-        _userList = _userList
-            .where((user) => user.id != previous && user.id != updatedUser.id)
-            .toList(growable: true)
-          ..add(updatedUser);
-      } else {
-        _userList = _replaceItem(_userList, updatedUser);
-      }
-      await _repository.updateUsersCache(area, _userList);
-
-      notifyListeners();
-      return true;
-    } catch (e, st) {
-      debugPrint('updateUserCardAsAdmin error: $e\n$st');
-      onError?.call('사용자 수정 실패: $e');
+    final requesterRole = RoleType.fromName(role);
+    if (requesterRole?.canManageAccounts != true) {
+      AccountRoleDiagnostics.recordList(
+        'user_update_blocked reason=role_denied',
+      );
+      onError?.call('사용자 수정 권한이 없습니다.');
       return false;
     }
+    try {
+      await _repository.updateUser(updatedUser, previousId: previousId);
+      AccountRoleDiagnostics.recordList(
+        'user_update_server_committed role=${requesterRole!.name}',
+      );
+    } catch (error) {
+      AccountRoleDiagnostics.recordList(
+        'user_update_server_failed type=${error.runtimeType}',
+      );
+      onError?.call('사용자 수정 실패: $error');
+      return false;
+    }
+    final previous = (previousId ?? '').trim();
+    try {
+      await _reconcileCommittedUserChange(
+        operation: 'user_update',
+        updateLocalList: (current) {
+          if (previous.isNotEmpty && previous != updatedUser.id) {
+            return <UserModel>[
+              ...current.where(
+                (user) => user.id != previous && user.id != updatedUser.id,
+              ),
+              updatedUser,
+            ];
+          }
+          return _replaceItem(current, updatedUser);
+        },
+      );
+    } catch (error) {
+      AccountRoleDiagnostics.recordList(
+        'user_update_postcommit_failed type=${error.runtimeType} serverCommitted=true',
+      );
+    }
+    return true;
   }
 
   Future<bool> updateTabletCardAsAdmin(
@@ -1148,16 +1238,38 @@ class UserState extends ChangeNotifier {
     UserModel user, {
     void Function(String)? onError,
   }) async {
+    final requesterRole = RoleType.fromName(role);
+    if (requesterRole?.canManageAccounts != true) {
+      AccountRoleDiagnostics.recordCreation(
+        'user_create_blocked reason=role_denied role=${requesterRole?.name ?? 'unknown'}',
+      );
+      onError?.call('사용자 추가 실패: ACCOUNT_CREATE_ROLE_DENIED');
+      return;
+    }
+    AccountRoleDiagnostics.recordCreation(
+      'user_create_role_allowed role=${requesterRole!.name}',
+    );
     try {
       await _repository.addUserCard(user.copyWith());
-
-      final area = _areaState.currentArea.trim();
-      _userList = _insertOrReplace(_userList, user);
-      await _repository.updateUsersCache(area, _userList);
-
-      notifyListeners();
-    } catch (e) {
-      onError?.call('사용자 추가 실패: $e');
+      AccountRoleDiagnostics.recordCreation(
+        'user_create_server_committed writes=3 result=success',
+      );
+    } catch (error) {
+      AccountRoleDiagnostics.recordCreation(
+        'user_create_server_failed type=${error.runtimeType}',
+      );
+      onError?.call('사용자 추가 실패: $error');
+      return;
+    }
+    try {
+      await _reconcileCommittedUserChange(
+        operation: 'user_create',
+        updateLocalList: (current) => _insertOrReplace(current, user),
+      );
+    } catch (error) {
+      AccountRoleDiagnostics.recordCreation(
+        'user_create_postcommit_failed type=${error.runtimeType} serverCommitted=true',
+      );
     }
   }
 
@@ -1186,10 +1298,9 @@ class UserState extends ChangeNotifier {
     try {
       await _repository.deleteUsers(ids);
 
-      final area = _areaState.currentArea.trim();
       _userList =
           _userList.where((u) => !ids.contains(u.id)).toList(growable: false);
-      await _repository.updateUsersCache(area, _userList);
+      await _repository.updateUsersCache(_currentUserScopeKey, _userList);
 
       _clearSelectionSilently();
 
@@ -1935,9 +2046,10 @@ class UserState extends ChangeNotifier {
   Future<void> _fetchUsersByAreaWithCache({bool force = false}) async {
     final selectedArea = _areaState.currentArea.trim();
     if (selectedArea.isEmpty) return;
-    if (!force && _prevAreaUsers == selectedArea) return;
+    final scope = _currentUserScopeKey;
+    if (!force && _prevAreaUsers == scope) return;
 
-    _prevAreaUsers = selectedArea;
+    _prevAreaUsers = scope;
 
     _clearSelectionSilently();
 
@@ -1945,10 +2057,15 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data = await _repository.getUsersByAreaOnceWithCache(selectedArea);
+      final data = await _repository.getUsersByAreaOnceWithCache(scope);
       _userList = List<UserModel>.of(data, growable: false);
+      _userListValidated = false;
+      _userListValidatedScope = '';
       _clearSelectionSilently();
     } catch (e) {
+      _prevAreaUsers = '';
+      _userListValidated = false;
+      _userListValidatedScope = '';
       _clearSelectionSilently();
       debugPrint('_fetchUsersByAreaWithCache 실패: $e');
     } finally {

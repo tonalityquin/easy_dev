@@ -899,7 +899,7 @@ class HeadMemo {
   static Future<List<HeadMemoRemoteBookSummary>> fetchRemoteBookIndex() async {
     await _ensureInited();
     try {
-      final metaSnapshot = await _remoteMetaRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
+      final metaSnapshot = await _remoteMetaRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart', collection: 'head_memo_libraries', pathTemplate: 'head_memo_libraries/*/meta/*', readPurpose: 'HEAD_MEMO_BOOK_INDEX_META_FETCH');
       final metaData = metaSnapshot.data();
       final rawIndex = metaData?['bookIndex'];
       final summaries = <HeadMemoRemoteBookSummary>[];
@@ -915,7 +915,12 @@ class HeadMemo {
         }
       }
       if (summaries.isEmpty) {
-        final bookSnapshot = await _remoteBooksRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
+        final bookSnapshot = await _remoteBooksRef.get().trackFirestore(
+          'QUERY',
+          'features/headquarter/page/sheets/head_memo.dart',
+          collection: 'head_memo_libraries',
+          pathTemplate: 'head_memo_libraries/*/books',
+        );
         for (var i = 0; i < bookSnapshot.docs.length; i += 1) {
           final doc = bookSnapshot.docs[i];
           final data = Map<String, dynamic>.from(doc.data());
@@ -949,9 +954,9 @@ class HeadMemo {
     final selectedBookId = remoteBookId.trim();
     if (selectedBookId.isEmpty) throw StateError('remote_book_id_empty');
     try {
-      final metaSnapshot = await _remoteMetaRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
+      final metaSnapshot = await _remoteMetaRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart', collection: 'head_memo_libraries', pathTemplate: 'head_memo_libraries/*/meta/*', readPurpose: 'HEAD_MEMO_BOOK_PULL_META_FETCH');
       final metaData = metaSnapshot.data();
-      final selectedBookSnapshot = await _remoteBookRef(selectedBookId).get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
+      final selectedBookSnapshot = await _remoteBookRef(selectedBookId).get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart', collection: 'head_memo_libraries', pathTemplate: 'head_memo_libraries/*/books/*', readPurpose: 'HEAD_MEMO_BOOK_PULL_CONTENT_FETCH');
       if (!selectedBookSnapshot.exists) {
         throw StateError('remote_head_memo_book_not_found');
       }
@@ -961,7 +966,7 @@ class HeadMemo {
       final pageIds = rawPageIds is List
           ? rawPageIds.whereType<String>().where((id) => id.trim().isNotEmpty).toList()
           : <String>[];
-      final pageSnapshot = await _remotePagesRef(selectedBookId).orderBy('order').get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
+      final pageSnapshot = await _remotePagesRef(selectedBookId).orderBy('order').get().trackFirestore('QUERY', 'features/headquarter/page/sheets/head_memo.dart', collection: 'head_memo_libraries', pathTemplate: 'head_memo_libraries/*/books/*/pages',);
       final entries = <MapEntry<HeadMemoPage, int>>[];
       for (var i = 0; i < pageSnapshot.docs.length; i += 1) {
         final doc = pageSnapshot.docs[i];
@@ -1167,7 +1172,7 @@ class HeadMemo {
 
     try {
       final localBookId = (activeBookId.value ?? book.value.id).trim();
-      final metaSnapshot = await _remoteMetaRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
+      final metaSnapshot = await _remoteMetaRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart', collection: 'head_memo_libraries', pathTemplate: 'head_memo_libraries/*/meta/*', readPurpose: 'HEAD_MEMO_LIBRARY_PULL_META_FETCH');
       final metaData = metaSnapshot.data();
       final metaActiveBookId = (metaData?['activeBookId'] as String?)?.trim();
       final preferredBookIds = <String>[
@@ -1179,7 +1184,7 @@ class HeadMemo {
       DocumentSnapshot<Map<String, dynamic>>? selectedBookSnapshot;
       var selectedBookId = '';
       for (final candidate in preferredBookIds) {
-        final snapshot = await _remoteBookRef(candidate).get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
+        final snapshot = await _remoteBookRef(candidate).get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart', collection: 'head_memo_libraries', pathTemplate: 'head_memo_libraries/*/books/*', readPurpose: 'HEAD_MEMO_LIBRARY_PREFERRED_BOOK_FETCH');
         if (snapshot.exists) {
           selectedBookSnapshot = snapshot;
           selectedBookId = candidate;
@@ -1188,7 +1193,7 @@ class HeadMemo {
       }
 
       if (selectedBookSnapshot == null || !selectedBookSnapshot.exists) {
-        final legacySnapshot = await _remoteRootRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
+        final legacySnapshot = await _remoteRootRef.get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart', documentReference: _remoteRootRef, readPurpose: 'HEAD_MEMO_LIBRARY_FALLBACK_BOOK_FETCH');
         final legacyData = legacySnapshot.data();
         if (legacyData != null && legacyData['books'] is List) {
           return await _pullLegacyLibraryFromFirestore(legacyData);
@@ -1204,7 +1209,7 @@ class HeadMemo {
       final pageIds = rawPageIds is List
           ? rawPageIds.whereType<String>().where((id) => id.trim().isNotEmpty).toList()
           : <String>[];
-      final pageSnapshot = await _remotePagesRef(selectedBookId).orderBy('order').get().trackFirestore('GET', 'features/headquarter/page/sheets/head_memo.dart');
+      final pageSnapshot = await _remotePagesRef(selectedBookId).orderBy('order').get().trackFirestore('QUERY', 'features/headquarter/page/sheets/head_memo.dart', collection: 'head_memo_libraries', pathTemplate: 'head_memo_libraries/*/books/*/pages',);
       final entries = <MapEntry<HeadMemoPage, int>>[];
       for (var i = 0; i < pageSnapshot.docs.length; i += 1) {
         final doc = pageSnapshot.docs[i];

@@ -139,6 +139,15 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
   String? _selectedParentName;
   String? _recentParentName;
   String _loadedArea = '';
+  String? _occupancyConfigurationSignature;
+  PlateParkingAreaMode? _occupancyMode;
+  int _occupancyGeneration = 0;
+  int _occupancyRequestSerial = 0;
+  Future<bool>? _occupancyInFlight;
+  Completer<bool>? _queuedFreshOccupancy;
+  String? _queuedFreshTrigger;
+  bool _occupancyNeedsRefresh = false;
+  bool _locationCacheDeferredLogged = false;
   bool _occupancyLoading = false;
   String? _occupancyError;
   Map<String, _BlockedSlotKind> _blockedByLocation =
@@ -184,9 +193,39 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     return context.read<AreaState>().currentArea.trim();
   }
 
+  static String _areaConfigurationSignature(List<LocationModel> locations) {
+    final serialized = locations.map((location) {
+      final data = location.toCacheMap();
+      data.remove('isSelected');
+      data.remove('plateCount');
+      return jsonEncode(data);
+    }).toList(growable: false)..sort();
+    return jsonEncode(serialized);
+  }
+
+  void _debugAfterFrame(String message) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _debug(message);
+    });
+  }
+
+  void _invalidateOccupancyRequests(String reason) {
+    _occupancyGeneration++;
+    _occupancyRequestSerial++;
+    _occupancyInFlight = null;
+    final queued = _queuedFreshOccupancy;
+    _queuedFreshOccupancy = null;
+    _queuedFreshTrigger = null;
+    if (queued != null && !queued.isCompleted) {
+      queued.complete(false);
+      _debugAfterFrame('occupancyFetch=cancelled_before_dispatch reason=$reason queue=fresh');
+    }
+  }
+
   void _syncArea() {
     final area = _effectiveArea();
     if (area == _loadedArea) return;
+    _invalidateOccupancyRequests('AREA_CHANGED');
     _loadedArea = area;
     _selectedParentName = null;
     _recentParentName = null;
@@ -196,9 +235,75 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     _lastAreaConfigurationSignature = '';
     _lastParentOrderSignature = '';
     _invalidAreaConfigurationHandling = false;
-    if (area.isNotEmpty) {
-      unawaited(_reloadOccupancy());
+    _occupancyConfigurationSignature = null;
+    _occupancyMode = null;
+    _occupancyNeedsRefresh = false;
+    _locationCacheDeferredLogged = false;
+  }
+
+  void _resetOccupancyWhileLocationCacheLoads() {
+    if (_locationCacheDeferredLogged) return;
+    _locationCacheDeferredLogged = true;
+    final area = _loadedArea;
+    if (_occupancyMode == PlateParkingAreaMode.diagram &&
+        (_occupancyLoading || _occupancyInFlight != null)) {
+      _occupancyNeedsRefresh = true;
+      _invalidateOccupancyRequests('LOCATION_CACHE_LOADING');
+      _occupancyLoading = false;
     }
+    if (area.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || area != _loadedArea || !context.read<LocationState>().isLoading) {
+        return;
+      }
+      _debug('occupancyFetch=deferred reason=LOCATION_CACHE_LOADING area=$area source=sqlite_location_cache reads=0');
+    });
+  }
+
+  void _applyOccupancyPolicy(
+    String area,
+    List<LocationModel> areaLocations,
+    PlateParkingAreaConfiguration configuration,
+  ) {
+    if (area != _loadedArea || area.isEmpty) return;
+    final signature = _areaConfigurationSignature(areaLocations);
+    final unchanged = signature == _occupancyConfigurationSignature &&
+        _occupancyMode == configuration.mode;
+    if (unchanged && !_occupancyNeedsRefresh) {
+      _locationCacheDeferredLogged = false;
+      return;
+    }
+    if (!unchanged) {
+      _invalidateOccupancyRequests('AREA_CONFIGURATION_CHANGED');
+      _occupancyConfigurationSignature = signature;
+      _occupancyMode = configuration.mode;
+      _blockedByLocation = <String, _BlockedSlotKind>{};
+      _occupancyError = null;
+    }
+    _locationCacheDeferredLogged = false;
+    _occupancyNeedsRefresh = false;
+    _occupancyLoading = configuration.mode == PlateParkingAreaMode.diagram;
+    final generation = _occupancyGeneration;
+    final mode = configuration.mode;
+    final origin = unchanged ? 'cache_loading_revalidation' : 'diagram_initial';
+    _debugAfterFrame('occupancyConfiguration=resolved area=$area mode=${mode.name} changed=${!unchanged} generation=$generation entries=${areaLocations.length}');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _loadedArea != area || generation != _occupancyGeneration) {
+        if (mounted) _debug('occupancyFetch=cancelled_before_dispatch reason=STALE_CONFIGURATION area=$area');
+        return;
+      }
+      if (mode != PlateParkingAreaMode.diagram) {
+        final reason = switch (mode) {
+          PlateParkingAreaMode.plain => 'PLAIN_MODE',
+          PlateParkingAreaMode.mixed => 'MIXED_CONFIGURATION',
+          PlateParkingAreaMode.empty => 'EMPTY_CONFIGURATION',
+          PlateParkingAreaMode.diagram => 'DIAGRAM_MODE',
+        };
+        _debug('occupancyFetch=skipped reason=$reason area=$area mode=${mode.name} source=sqlite_location_cache reads=0');
+        return;
+      }
+      unawaited(_reloadOccupancy(trigger: origin));
+    });
   }
 
   @override
@@ -372,7 +477,7 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     if (!enabled || !mounted) return;
     setState(() => _debugDialogShowing = true);
     _debug(
-      'parking_debug=status_dialog_open area=$_loadedArea currentLocation=${_currentLocation.trim()} towerAutoAssigning=${_towerAutoAssigningChildKey ?? ''}',
+      'parking_debug=status_dialog_open area=$_loadedArea mode=${_occupancyMode?.name ?? 'unresolved'} occupancyLoading=$_occupancyLoading activeRequest=${_occupancyInFlight != null} queuedFresh=${_queuedFreshOccupancy != null} requestSerial=$_occupancyRequestSerial generation=$_occupancyGeneration currentLocation=${_currentLocation.trim()} towerAutoAssigning=${_towerAutoAssigningChildKey ?? ''}',
     );
     try {
       final code = _debugPrintCode;
@@ -442,9 +547,96 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     }
   }
 
-  Future<bool> _refreshOccupancy() async {
+  bool _canDispatchOccupancy(String area, String trigger) {
+    if (!mounted || area.isEmpty || area != _loadedArea) return false;
+    final state = context.read<LocationState>();
+    if (state.isLoading || _occupancyMode != PlateParkingAreaMode.diagram ||
+        _effectiveArea() != area) {
+      _debug('occupancyFetch=cancelled_before_dispatch reason=MODE_OR_CACHE_CHANGED area=$area trigger=$trigger mode=${_occupancyMode?.name ?? 'unresolved'}');
+      return false;
+    }
+    final locations = state.locations
+        .where((location) => location.area.trim() == area)
+        .toList(growable: false);
+    final mode = PlateParkingAreaConfiguration.resolve(locations).mode;
+    if (mode != PlateParkingAreaMode.diagram ||
+        _areaConfigurationSignature(locations) != _occupancyConfigurationSignature) {
+      _debug('occupancyFetch=cancelled_before_dispatch reason=CONFIGURATION_CHANGED area=$area trigger=$trigger mode=${mode.name}');
+      return false;
+    }
+    return true;
+  }
+
+  Future<bool> _refreshOccupancy({
+    String trigger = 'interaction',
+    bool requireFresh = false,
+  }) {
     final area = _loadedArea.trim();
-    if (area.isEmpty || !mounted) return false;
+    if (!_canDispatchOccupancy(area, trigger)) return Future<bool>.value(false);
+    final active = _occupancyInFlight;
+    if (active != null) {
+      if (!requireFresh) {
+        _debug('occupancyFetch=coalesced area=$area trigger=$trigger freshness=shared generation=$_occupancyGeneration additionalGets=0');
+        return _queuedFreshOccupancy?.future ?? active;
+      }
+      final pending = _queuedFreshOccupancy ??= Completer<bool>();
+      _queuedFreshTrigger = trigger;
+      _debug('occupancyFetch=queued_fresh area=$area trigger=$trigger generation=$_occupancyGeneration additionalGetsWhenDispatched=2');
+      return pending.future;
+    }
+    return _startOccupancyFetch(area: area, trigger: trigger);
+  }
+
+  Future<bool> _startOccupancyFetch({
+    required String area,
+    required String trigger,
+  }) {
+    if (!_canDispatchOccupancy(area, trigger)) return Future<bool>.value(false);
+    final generation = _occupancyGeneration;
+    final requestId = ++_occupancyRequestSerial;
+    final future = _performOccupancyFetch(
+      area: area,
+      trigger: trigger,
+      generation: generation,
+      requestId: requestId,
+    );
+    _occupancyInFlight = future;
+    future.then(
+      (_) => _finishOccupancyFetch(future, area),
+      onError: (Object error, StackTrace stack) =>
+          _finishOccupancyFetch(future, area),
+    );
+    return future;
+  }
+
+  void _finishOccupancyFetch(Future<bool> completed, String area) {
+    if (!identical(_occupancyInFlight, completed)) return;
+    _occupancyInFlight = null;
+    final pending = _queuedFreshOccupancy;
+    final trigger = _queuedFreshTrigger ?? 'queued_refresh';
+    _queuedFreshOccupancy = null;
+    _queuedFreshTrigger = null;
+    if (pending == null || pending.isCompleted) return;
+    if (!_canDispatchOccupancy(area, trigger)) {
+      pending.complete(false);
+      return;
+    }
+    final next = _startOccupancyFetch(area: area, trigger: trigger);
+    next.then(
+      pending.complete,
+      onError: (Object error, StackTrace stack) {
+        if (!pending.isCompleted) pending.complete(false);
+      },
+    );
+  }
+
+  Future<bool> _performOccupancyFetch({
+    required String area,
+    required String trigger,
+    required int generation,
+    required int requestId,
+  }) async {
+    _debug('occupancyFetch=started area=$area trigger=$trigger requestId=$requestId generation=$generation freshness=${trigger == 'tower_auto_assign' || trigger == 'child_expanded' ? 'fresh' : 'display'} collections=parking_completed_view,departure_requests_view expectedGets=2');
     setState(() {
       _occupancyLoading = true;
       _occupancyError = null;
@@ -480,29 +672,54 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
       }
       apply(rows[0], _BlockedSlotKind.parked);
       apply(rows[1], _BlockedSlotKind.departureRequest);
-      if (!mounted) return false;
+      if (!mounted || generation != _occupancyGeneration ||
+          area != _loadedArea ||
+          requestId != _occupancyRequestSerial ||
+          _occupancyMode != PlateParkingAreaMode.diagram ||
+          !_canDispatchOccupancy(area, trigger)) {
+        if (mounted) _debug('occupancyFetch=discarded reason=STALE_REQUEST area=$area trigger=$trigger requestId=$requestId');
+        return false;
+      }
+      if (_queuedFreshOccupancy != null) {
+        _debug('occupancyFetch=discarded reason=FRESH_QUERY_QUEUED area=$area trigger=$trigger requestId=$requestId');
+        return false;
+      }
       setState(() {
         _blockedByLocation = blocked;
         _occupancyLoading = false;
         _occupancyError = null;
       });
-      _debug(
-        'parking_spatial=occupancy_ready area=$area blocked=${blocked.length} source=view_firestore',
-      );
+      _debug('occupancyFetch=completed area=$area trigger=$trigger requestId=$requestId generation=$generation blocked=${blocked.length} source=view_firestore');
+      _debug('parking_spatial=occupancy_ready area=$area blocked=${blocked.length} source=view_firestore');
       return true;
     } catch (error) {
-      if (!mounted) return false;
+      if (!mounted || generation != _occupancyGeneration ||
+          area != _loadedArea ||
+          requestId != _occupancyRequestSerial ||
+          _occupancyMode != PlateParkingAreaMode.diagram ||
+          !_canDispatchOccupancy(area, trigger)) {
+        if (mounted) _debug('occupancyFetch=discarded reason=STALE_REQUEST area=$area trigger=$trigger requestId=$requestId');
+        return false;
+      }
+      if (_queuedFreshOccupancy != null) {
+        _debug('occupancyFetch=discarded reason=FRESH_QUERY_QUEUED area=$area trigger=$trigger requestId=$requestId');
+        return false;
+      }
       setState(() {
         _occupancyLoading = false;
         _occupancyError = error.toString();
       });
+      _debug('occupancyFetch=failed area=$area trigger=$trigger requestId=$requestId errorType=${error.runtimeType}');
       _debug('parking_spatial=occupancy_error error=$error');
       return false;
     }
   }
 
-  Future<void> _reloadOccupancy() async {
-    await _refreshOccupancy();
+  Future<void> _reloadOccupancy({
+    String trigger = 'interaction',
+    bool requireFresh = false,
+  }) async {
+    await _refreshOccupancy(trigger: trigger, requireFresh: requireFresh);
   }
 
   List<String> _preferredCategories() {
@@ -698,8 +915,11 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
         return;
       }
 
-      final refreshed = await _refreshOccupancy();
-      if (!mounted) return;
+      final autoAssignArea = _loadedArea;
+      final autoAssignGeneration = _occupancyGeneration;
+      final refreshed = await _refreshOccupancy(trigger: 'tower_auto_assign', requireFresh: true);
+      if (!mounted || _loadedArea != autoAssignArea ||
+          _occupancyGeneration != autoAssignGeneration) return;
       if (!refreshed) {
         _debug(
           'tower_auto_assign=blocked reason=occupancy_refresh_failed parent=${parent.locationName} child=${child.locationName} capacity=$capacity',
@@ -727,7 +947,8 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
         slotNo,
       );
       await _towerAutoAssignSettle();
-      if (!mounted) return;
+      if (!mounted || _loadedArea != autoAssignArea ||
+          _occupancyGeneration != autoAssignGeneration) return;
       _debug(
         'tower_auto_assign=resolved parent=${parent.locationName} child=${child.locationName} slot=$slotNo slotKey=$slotKey capacity=$capacity blocked=$blockedCount free=${math.max(0, capacity - blockedCount)} resolution=lowest_available_slot sources=parking_completed_view+departure_requests_view departure_request_counts_as_occupied=true',
       );
@@ -870,7 +1091,7 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
     _debug(
       'parking_child=expanded parent=${parent.locationName} child=${child.locationName}',
     );
-    unawaited(_reloadOccupancy());
+    unawaited(_reloadOccupancy(trigger: 'child_expanded', requireFresh: true));
   }
 
   Future<void> _closeFocus({required String reason}) async {
@@ -1321,6 +1542,19 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
         context.select<AreaState, String>((state) => state.currentArea.trim());
     final overrideArea = widget.areaOverride?.trim() ?? '';
     final currentArea = overrideArea.isNotEmpty ? overrideArea : observedArea;
+    if (currentArea != _loadedArea) {
+      _syncArea();
+    }
+    final locationState = context.watch<LocationState>();
+    if (locationState.isLoading) {
+      _resetOccupancyWhileLocationCacheLoads();
+    } else {
+      final areaLocations = locationState.locations
+          .where((location) => location.area.trim() == currentArea)
+          .toList(growable: false);
+      final configuration = PlateParkingAreaConfiguration.resolve(areaLocations);
+      _applyOccupancyPolicy(currentArea, areaLocations, configuration);
+    }
     return PopScope(
       canPop: _focusedChild == null && _selectedParentName == null,
       onPopInvoked: (didPop) {
@@ -1353,10 +1587,18 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeInCubic,
                   transitionBuilder: (child, animation) {
+                    final scale = Tween<double>(begin: 0.985, end: 1.0)
+                        .animate(CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ));
                     return SizeTransition(
                       sizeFactor: animation,
                       axisAlignment: -1,
-                      child: FadeTransition(opacity: animation, child: child),
+                      child: FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(scale: scale, child: child),
+                      ),
                     );
                   },
                   child: _occupancyLoading
@@ -1434,7 +1676,36 @@ class _PlateParkingWorkspaceState extends State<PlateParkingWorkspace>
                           onAction: widget.onExit,
                         );
                       }
-                      return _buildMain(context, locations);
+                      final configuration =
+                          PlateParkingAreaConfiguration.resolve(locations);
+                      final reduceMotion =
+                          MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+                      return AnimatedSwitcher(
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 190),
+                        reverseDuration: reduceMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 140),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(
+                              scale: Tween<double>(begin: 0.98, end: 1.0)
+                                  .animate(animation),
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: KeyedSubtree(
+                          key: ValueKey<String>(
+                            'parking_mode:$currentArea:${configuration.mode.name}',
+                          ),
+                          child: _buildMain(context, locations),
+                        ),
+                      );
                     },
                   ),
                 ),

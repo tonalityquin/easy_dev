@@ -34,7 +34,7 @@ class EndWorkReportFirestoreRepository {
         .where('type', isEqualTo: PlateType.departureCompleted.firestoreValue)
         .where('area', isEqualTo: area)
         .where('isLockedFee', isEqualTo: true)
-        .get().trackFirestore('GET', 'features/dashboard/data/repositories/end_work_report_firestore_repository.dart');
+        .get().trackFirestore('QUERY', 'features/dashboard/data/repositories/end_work_report_firestore_repository.dart', collection: 'plates', pathTemplate: 'plates',);
 
     return snap.docs
         .map((d) => LockedPlateRecord(docId: d.id, data: d.data()))
@@ -127,7 +127,7 @@ class EndWorkReportFirestoreRepository {
 
     var operation = 'append';
     await _firestore.runTrackedActivityTransaction((tx) async {
-      final snap = await tx.get(ref).trackFirestore('GET', 'features/dashboard/data/repositories/end_work_report_firestore_repository.dart');
+      final snap = await tx.get(ref).trackFirestore('GET', 'features/dashboard/data/repositories/end_work_report_firestore_repository.dart', documentReference: ref, readPurpose: 'END_WORK_DAILY_LOG_DUPLICATE_VALIDATION');
       final existing = snap.data();
       final rawLogs = existing?['logs'];
       final existingLogs = rawLogs is List ? rawLogs : const <dynamic>[];
@@ -192,7 +192,7 @@ class EndWorkReportFirestoreRepository {
           : 'append';
       FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'features/dashboard/data/repositories/end_work_report_firestore_repository.dart', result: 'staged');
       tx.set(ref, update, SetOptions(merge: true));
-    }).trackFirestore('TRANSACTION', 'features/dashboard/data/repositories/end_work_report_firestore_repository.dart');
+    });
 
     final message = '[EndWorkReport][plate_out_log] '
         'plateDocId=${record.docId} plate=$plateNumber operation=$operation '
@@ -263,8 +263,8 @@ class EndWorkReportFirestoreRepository {
       'history': FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]),
     };
 
-    final inserted = await _firestore.runTransaction<bool>((tx) async {
-      final submissionSnapshot = await tx.get(submissionRef).trackFirestore('GET', 'features/dashboard/data/repositories/end_work_report_firestore_repository.dart');
+    final inserted = await _firestore.runTrackedActivityTransaction<bool>((tx) async {
+      final submissionSnapshot = await tx.get(submissionRef).trackFirestore('GET', 'features/dashboard/data/repositories/end_work_report_firestore_repository.dart', documentReference: submissionRef, readPurpose: 'END_WORK_MONTHLY_SUBMISSION_VALIDATION');
       if (submissionSnapshot.exists) {
         final existing = submissionSnapshot.data() ?? const <String, dynamic>{};
         final existingVerified = existing['gcsLogVerified'] == true;
@@ -380,7 +380,7 @@ class EndWorkReportFirestoreRepository {
         },
       );
       return true;
-    }).trackFirestore('TRANSACTION', 'features/dashboard/data/repositories/end_work_report_firestore_repository.dart');
+    }, source: 'features/dashboard/data/repositories/end_work_report_firestore_repository.dart');
     debugPrint(
       '[EndWorkReport][submission] id=$submissionId area=$area month=$monthKey date=$dateStr inserted=$inserted gcsVerified=$gcsLogVerified',
     );
@@ -408,7 +408,7 @@ class EndWorkReportFirestoreRepository {
         'departureCompletedEvents': 0,
       },
       SetOptions(merge: true),
-    ).trackFirestore('SET', 'features/dashboard/data/repositories/end_work_report_firestore_repository.dart');
+    ).trackFirestore('SET', 'features/dashboard/data/repositories/end_work_report_firestore_repository.dart', collection: 'plate_counters', pathTemplate: 'plate_counters/*',);
   }
 
   DocumentReference<Map<String, dynamic>> _plateOutLogRef({

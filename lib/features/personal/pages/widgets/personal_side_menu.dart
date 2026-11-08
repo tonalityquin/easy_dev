@@ -172,7 +172,7 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
             'updatedAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true),
-        ).trackFirestore('SET', 'features/personal/pages/widgets/personal_side_menu.dart');
+        ).trackFirestore('SET', 'features/personal/pages/widgets/personal_side_menu.dart', collection: 'personal_accounts');
         trace.log('개인형 원격 로그아웃 상태 반영이 완료되었습니다.', progress: 0.38);
       } else {
         trace.log(

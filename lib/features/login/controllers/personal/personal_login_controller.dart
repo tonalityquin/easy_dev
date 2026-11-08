@@ -140,7 +140,7 @@ class PersonalLoginController {
       accountId = _accountDocId(codeNumber: codeNumber, area: selectedArea);
       if (accountId.isEmpty) return false;
 
-      final snap = await _personalAccountsRef.doc(accountId).get().trackFirestore('GET', 'features/login/controllers/personal/personal_login_controller.dart');
+      final snap = await _personalAccountsRef.doc(accountId).get().trackFirestore('GET', 'features/login/controllers/personal/personal_login_controller.dart', collection: 'personal_accounts', readPurpose: 'PERSONAL_SESSION_RESTORE_VALIDATION');
       final data = snap.data();
       final active = (data?['isActive'] as bool?) ?? true;
       if (!snap.exists || data == null || !active) return false;
@@ -290,7 +290,7 @@ class PersonalLoginController {
         (field) => _personalAccountsRef
             .where(field, isEqualTo: normalized)
             .limit(20)
-            .get().trackFirestore('GET', 'features/login/controllers/personal/personal_login_controller.dart'),
+            .get().trackFirestore('QUERY', 'features/login/controllers/personal/personal_login_controller.dart', collection: 'personal_accounts'),
       ),
     );
     final byId =
@@ -520,7 +520,7 @@ class PersonalLoginController {
         final duplicate = await _personalAccountsRef
             .where('codeNumber', isEqualTo: normalizedCodeNumber)
             .limit(1)
-            .get().trackFirestore('GET', 'features/login/controllers/personal/personal_login_controller.dart');
+            .get().trackFirestore('QUERY', 'features/login/controllers/personal/personal_login_controller.dart', collection: 'personal_accounts');
         if (duplicate.docs.isEmpty) break;
         attempts += 1;
         normalizedCodeNumber = AccountCodeNumber.generate();
@@ -536,7 +536,7 @@ class PersonalLoginController {
       final duplicate = await _personalAccountsRef
           .where('codeNumber', isEqualTo: normalizedCodeNumber)
           .limit(1)
-          .get().trackFirestore('GET', 'features/login/controllers/personal/personal_login_controller.dart');
+          .get().trackFirestore('QUERY', 'features/login/controllers/personal/personal_login_controller.dart', collection: 'personal_accounts');
       if (duplicate.docs.isNotEmpty) {
         throw StateError('CODE_NUMBER_GENERATION_FAILED');
       }
@@ -549,7 +549,7 @@ class PersonalLoginController {
         throw StateError('INVALID_PERSONAL_DOCUMENT_ID');
       }
       final docRef = _personalAccountsRef.doc(docId);
-      final existingDoc = await docRef.get().trackFirestore('GET', 'features/login/controllers/personal/personal_login_controller.dart');
+      final existingDoc = await docRef.get().trackFirestore('GET', 'features/login/controllers/personal/personal_login_controller.dart', collection: 'personal_accounts', readPurpose: 'PERSONAL_ACCOUNT_REGISTRATION_DUPLICATE_CHECK');
       if (existingDoc.exists) {
         throw StateError('PERSONAL_DOCUMENT_ID_CONFLICT');
       }
@@ -562,7 +562,7 @@ class PersonalLoginController {
           area: normalizedArea,
           division: division,
         ),
-      ).trackFirestore('SET', 'features/login/controllers/personal/personal_login_controller.dart');
+      ).trackFirestore('SET', 'features/login/controllers/personal/personal_login_controller.dart', collection: 'personal_accounts');
       PersonalAccountDiagnostics.record(
         'create_success',
         meta: <String, Object?>{
@@ -832,7 +832,7 @@ class PersonalLoginController {
             'updatedAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true),
-        ).trackFirestore('SET', 'features/login/controllers/personal/personal_login_controller.dart');
+        ).trackFirestore('SET', 'features/login/controllers/personal/personal_login_controller.dart', collection: 'personal_accounts');
       }
       debugPrint(
         '[LOGIN-PERSONAL][${_ts()}] session activated persistence=${persistSession ? 'persistent' : 'ephemeral'} accountId=${account.documentId} area=${account.selectedArea}',

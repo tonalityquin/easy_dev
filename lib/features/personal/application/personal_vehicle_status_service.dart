@@ -29,7 +29,7 @@ class PersonalVehicleStatusService {
           .where(PlateFields.area, isEqualTo: normalizedArea)
           .where(PlateFields.plateNumber, whereIn: variants)
           .limit(20)
-          .get().trackFirestore('GET', 'features/personal/application/personal_vehicle_status_service.dart');
+          .get().trackFirestore('QUERY', 'features/personal/application/personal_vehicle_status_service.dart', collection: 'plates', pathTemplate: 'plates',);
 
       for (final doc in snap.docs) {
         try {
@@ -89,7 +89,7 @@ class PersonalVehicleStatusService {
             .where(PlateFields.area, isEqualTo: normalizedArea)
             .where(PlateFields.plateFourDigit, isEqualTo: tail)
             .limit(20)
-            .get().trackFirestore('GET', 'features/personal/application/personal_vehicle_status_service.dart');
+            .get().trackFirestore('QUERY', 'features/personal/application/personal_vehicle_status_service.dart', collection: 'plates', pathTemplate: 'plates',);
 
         for (final doc in snap.docs) {
           try {
@@ -161,7 +161,7 @@ class PersonalVehicleStatusService {
     final docId = '${canonical}_$normalizedArea';
 
     try {
-      final doc = await _firestore.collection('monthly_plate_status').doc(docId).get().trackFirestore('GET', 'features/personal/application/personal_vehicle_status_service.dart');
+      final doc = await _firestore.collection('monthly_plate_status').doc(docId).get().trackFirestore('GET', 'features/personal/application/personal_vehicle_status_service.dart', collection: 'monthly_plate_status', pathTemplate: 'monthly_plate_status/*', readPurpose: 'PERSONAL_MONTHLY_PARKING_STATUS_CHECK');
       if (!doc.exists) return null;
       final data = doc.data();
       if (data == null) return null;

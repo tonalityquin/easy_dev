@@ -374,7 +374,7 @@ class _RealTimeStatusPreviewBodyState extends State<RealTimeStatusPreviewBody>
     final id = plateId.trim();
     if (id.isEmpty) return null;
     final repo = context.read<PlateRepository>();
-    return repo.getPlate(id);
+    return repo.getPlate(id, readPurpose: 'PLATE_STATUS_PREVIEW_OPEN');
   }
 
   String _expectedPlateTypeNameForCollection(String collection) {

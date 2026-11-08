@@ -6,9 +6,10 @@ import '../../../app/terminal/application/parkinworkin_terminal_diagnostics.dart
 class DeveloperAccountAuthorization {
   DeveloperAccountAuthorization._();
 
+  static const String developerEmail = 'surge1868@gmail.com';
+
   static const Set<String> allowedEmails = <String>{
-    'surge1868@gmail.com',
-    'qperfectusofficial@gmail.com',
+    developerEmail,
   };
 
   static bool _releaseSessionAuthorized = false;
