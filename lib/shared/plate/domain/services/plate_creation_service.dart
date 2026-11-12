@@ -1,9 +1,14 @@
-import '../../../../app/diagnostics/firebase_activity_meter.dart';
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../../app/diagnostics/firebase_activity_meter.dart';
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../enums/plate_type.dart';
 import '../models/plate_model.dart';
+import '../models/plate_view_verification_plan.dart';
 import '../models/plate_status_draft.dart';
 import '../models/plate_status_lookup_result.dart';
 import 'plate_status_record.dart';
@@ -988,6 +993,72 @@ class PlateCreationService {
         }
         }, source: 'shared/plate/domain/services/plate_creation_service.dart'),
       );
+      final viewCollection = plateType == PlateType.parkingRequests
+          ? 'parking_requests_view'
+          : plateType == PlateType.parkingCompleted
+              ? 'parking_completed_view'
+              : '';
+      final viewWritten = plateType == PlateType.parkingRequests
+          ? canWriteRequestsView
+          : plateType == PlateType.parkingCompleted && canWriteCompletedView;
+      if (viewCollection.isNotEmpty && viewWritten) {
+        debugPrint(
+          '[PLATE_VIEW_SCHEMA] operation=register plateId=$plateDocId collection=$viewCollection field=${PlateFields.plateNumber} result=success',
+        );
+        unawaited(
+          DevFirebaseDebugDialog.show(
+            operation: 'plateViewSchema.register.success',
+            details: <String, Object?>{
+              'plateId': plateDocId,
+              'collection': viewCollection,
+              'area': area,
+              'field': PlateFields.plateNumber,
+              'sourceResult': 'COMMITTED',
+              'viewResult': 'COMMITTED',
+              'viewOperation': 'UPSERT',
+              ...PlateViewVerificationPlan(
+                plateDocId: plateDocId,
+                expectedPlateNumber: plateNumber,
+                areaAfter: area,
+                expectedType: plateType,
+                viewResult: 'COMMITTED',
+                viewActions: <String>['$viewCollection.UPSERT.$area.$plateDocId'],
+              ).toDetails(),
+            },
+            title: '신규 차량 View 등록 상태',
+            success: true,
+            useCommonUi: true,
+            copyAsDebugPrintCode: true,
+            devModeOnly: true,
+          ),
+        );
+      } else if (viewCollection.isNotEmpty) {
+        debugPrint('[PLATE_VIEW_SCHEMA] operation=register plateId=$plateDocId collection=$viewCollection sourceResult=COMMITTED viewResult=SKIPPED reason=SYNC_GATE_DISABLED');
+        unawaited(DevFirebaseDebugDialog.show(
+          operation: 'plateViewSchema.register.skipped',
+          details: <String, Object?>{
+            'plateId': plateDocId,
+            'area': area,
+            'collection': viewCollection,
+            'sourceResult': 'COMMITTED',
+            'viewResult': 'SKIPPED',
+            'viewReason': 'SYNC_GATE_DISABLED',
+            ...PlateViewVerificationPlan(
+              plateDocId: plateDocId,
+              expectedPlateNumber: plateNumber,
+              areaAfter: area,
+              expectedType: plateType,
+              viewResult: 'SKIPPED',
+              verificationEligible: false,
+            ).toDetails(),
+          },
+          title: '신규 차량 View 등록 상태',
+          success: true,
+          useCommonUi: true,
+          copyAsDebugPrintCode: true,
+          devModeOnly: true,
+        ));
+      }
     } on DuplicatePlateException {
       rethrow;
     } catch (_) {

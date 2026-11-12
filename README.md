@@ -1,5 +1,13 @@
 # ParkinWorkin — 기술 명세 및 개발 초기화
 
+**2026-11-12 세 주차 View 상태별 현재 정합성 수동 서버 검증(37장, 최신):** 기준본은 `261112 0120.zip`이다. 신규 등록·상태 전환·일반 수정·주행 선택의 개발자 진단에 공통 검증 계획(원본 차량 ID·예상 차량번호·작업 직후 상태·지역·View 쓰기 결과)을 기록한다. 개발자 모드 ON에서 수동 실행할 때만 원본 `plates` 문서(최대 1 GET)를 서버에서 재조회하고 현재 상태에 따라 세 지역 View를 검사한다(현재 지역 최대 3 GET, 지역 이동 시 이전 지역 최대 3 GET 추가). 입차 요청·입차 완료·출차 요청은 해당 View에만 존재해야 하며 출차 완료는 세 View 모두 부재가 정상이다. 원본이 그사이 변경됐거나 진단 정보가 불완전하면 실패로 단정하지 않고 `VERIFY_INCONCLUSIVE`로 구분한다. 실제 쓰기 결과(`COMMITTED`·`SKIPPED`·`PARTIAL`)와 수동 검증 당시 상태는 별개다. 기존 원본 및 View 저장 스키마, Firestore Rules, 일반 사용자 화면, `debugPrint`와 개발자 STATUS의 선택·전체 복사, 기존 모션과 감소 설정을 유지하며 검증 계획 변경 Fade·Slide 모션을 추가한다. 코드 주석·힌트 텍스트는 추가하지 않는다. Flutter 빌드·Firebase 서버·실기기 동작은 미검증이고 세부 기준은 37장에 있다.
+
+
+**2026-11-11 주행 선택 View 저장·검증 지역 일치 개선(36장, 현행):** 기준 압축본은 `261111 2302.zip`이다. `recordWhoPlateClick()`에서 원본 `plates`의 `area`를 우선하여 계산한 실제 `docArea`를 Transaction 결과로 반환하고, 개발자 STATUS에는 호출 지역 `areaArgument`·확정 지역 `resolvedArea`·실제 View 쓰기 지역 `actualViewArea`·대상 컬렉션과 예상 차량번호를 분리 기록한다. 개발자 모드 ON에서만 보이는 STATUS의 수동 검증은 View가 실제 커밋된 지역을 사용하며, 쓰기를 생략한 기록으로는 저장 검증을 실행하지 않는다. 기존 `debugPrint(...)` 선택·전체 복사, Fade·Slide·Scale 및 기록 전환 애니메이션과 모션 감소 설정을 유지하고 지역 비교 표시에도 전환 애니메이션을 적용한다. 정상 업무의 Firestore 요청 수·원본 스키마·Rules·일반 UI는 그대로다. Flutter 빌드·Emulator·실기기 시험은 별도 검증 대상이며 세부 내용은 36장에 있다.
+
+**2026-11-11 개발자 STATUS 기록 정합성·연속 이벤트 보존 개선(34~35장, 현행):** 기준본은 `261111 2142.zip`이다. 원본 `plates`와 세 주차 View의 차량번호 저장 키는 기존 수정본과 동일하게 `plate_number`를 사용한다. 차량 수정·주행 선택 시 원본 Transaction 커밋과 실제 View 쓰기/생략을 구분하고, 상태 전환의 개별 View 실패를 `PARTIAL`로 표시한다. 개발자 모드 ON에서는 STATUS를 하나만 표시하면서 새 진단 이벤트를 최근 200건까지 메모리에 누적하며, 개별·전체 `debugPrint(...)` 코드 복사와 기록 변경 애니메이션을 제공한다. 실제 서버 문서 스키마 확인은 개발자가 버튼을 눌렀을 때만 세 지역 View 문서를 조회한다. 개발자 모드 OFF에서는 진단 기록을 지우고 복사를 차단한다. Firebase Rules, 업무 데이터 스키마, 일반 UI/TTS는 변경하지 않는다. Flutter 빌드·실기기·Emulator·운영 Firestore 검증은 미수행이며 적용 범위와 한계는 34~35장에 명시한다.
+
+
 **2026-11-07 Double·Triple·Minor 입차 완료 `plates` 초기 조회 제거(28장, 현행):** `261107 1901.zip`의 세 PlateState `_initDefaultLoads()`에서 `parkingCompleted` 자동 조회 호출만 각 1줄 삭제한다. 기존 `parking_completed_view` 실시간 테이블, 출차 완료 `plates` 초기 조회, Triple·Minor 주행 복구, TTS, Single, 화면 애니메이션과 개발자 모드 ON STATUS `debugPrint(...)` 클립보드 복사는 유지한다. 초기 `plates` QUERY는 Single 0, Double 2→1, Triple 3→2, Minor 3→2회(기본 화면 초기화 경로 기준; TTS·리스너 별도)로 예상한다. 다른 명시적 입차 완료 조회 경로 및 화면 선택 상태는 삭제하지 않으며, 정적 코드 점검 외 실제 기기·과금 검증은 미완료다.
 
 **2026-11-07 계정 관리·생성·수정 결과 정합성 리팩터링(27장, 현행):** 기준은 `261107 1730.zip`이다. Firebase Custom Claims, 추가 권한 발급 도구, Cloud Functions 및 기존 데이터 이관 없이 기존 Google 인증과 앱 Role 7종을 유지한다. 계정 관리 허용 Role 4종의 일반·운영 관리 생성/수정 경로에 앱 내부 Role 검사를 적용하고 개발 초기 계정 생성은 별도 호출로 유지한다. 서버 커밋과 로컬 목록·캐시 후처리를 구분하며, 검증된 목록은 추가 조회 없이 갱신하고 불완전한 목록에 한해 선택한 회사·지역의 View를 다시 읽는다. 캐시는 회사·지역 조합으로 분리한다. 개발자 모드 ON의 STATUS `debugPrint(...)` 복사와 기존 애니메이션을 유지하고 계정 목록 Fade·Slide·Scale 전환을 보완한다. `firestore.rules`는 이전 버전 그대로이며 서버의 업무 Role별 직접 쓰기 차단은 여전히 미완료다. Flutter·Emulator·실기기·운영 비용 검증은 별도다.
@@ -2728,3 +2736,313 @@ Flutter·Dart SDK 및 실제 Firebase/Android 실행 환경이 현재 작업 환
 **Flutter SDK·Dart 분석기·Android/Firebase 실기기 검증 환경이 제공되지 않아 실제 `flutter analyze`, 빌드, Firebase 서버 읽기 과금, TTS 발화·백그라운드, 화면/애니메이션 렌더링, 클립보드 복사는 검증하지 못했다.** 정적 코드 경로 일치를 실행 성공으로 표시하지 않는다.
 
 실기기에서는 Double·Triple·Minor 텍스트형 열기·선택·닫기·재진입에 대해 Workspace의 `PARKING_OCCUPANCY_CHECK` GET **0회**, 도면형 최초 진입 **2회**, 동일 시점 조회 중복 요청 통합, 하위 펼치기/기계식 최신 GET, 같은 구성 SQLite 재다운로드, 서로 다른 지역 전환, 타입 전환 중 늦은 응답, 네트워크 실패, STATUS `debugPrint(...)` 코드 복사를 같은 사용자 동작 기준으로 재현해 확인한다. 다른 화면 실시간 리스너와 TTS View 조회·등록 View 쓰기는 별도로 집계한다.
+
+
+## 34. 세 주차 View `plate_number` 단일 필드 적용 상태 — 2026-11-11
+
+### 34.1 기준, 목적 및 이전 작업과의 관계
+
+- 기준 압축본: `261111 2142.zip`; 이번 리팩터링은 이 기준본의 실제 전체 소스에 적용한다.
+- 원본 `plates`는 `plate_number`를 유지하고, `parking_requests_view`, `parking_completed_view`, `departure_requests_view`의 `items.{plateDocId}` 내부 차량번호 필드도 `plate_number` 하나만 기록하도록 이미 적용되어 있다.
+- Firestore의 저장 필드명 `plate_number`와 Dart의 변수·속성명 `plateNumber`는 다른 개념이다. Dart 변수명을 일괄 변경하지 않는다.
+- 세 View의 저장 단위는 지역 문서 `{area}`와 `items` Map을 유지한다. 신규 등록, 상태 전환, 정보 수정, 주행 선택의 기존 데이터 경로와 삭제 방식은 보존한다.
+- View가 비어 있고 과거 앱의 쓰기가 없다는 것은 사용자가 제공한 전제이며 운영 데이터 실측 결과가 아니다. 원본 `plates`의 기존 문서가 자동으로 View에 생성되지는 않는다.
+
+### 34.2 현재 소스에서 보존한 필드 계약
+
+| 구분 | 컬렉션 | 필드명 | 적용 결과 |
+| --- | --- | --- | --- |
+| 원본 | `plates` | `plate_number` | 유지 |
+| 입차 요청 | `parking_requests_view/{area}.items.{plateDocId}` | `plate_number` | 유지 |
+| 입차 완료 | `parking_completed_view/{area}.items.{plateDocId}` | `plate_number` | 유지 |
+| 출차 요청 | `departure_requests_view/{area}.items.{plateDocId}` | `plate_number` | 유지 |
+
+- 신규 등록: `lib/shared/plate/domain/services/plate_creation_service.dart`의 `PlateFields.plateNumber` 사용 유지.
+- 상태 전환: `lib/shared/plate/data/repositories/firestore_plate_repository.dart`의 `upsertViewItem()` 사용 유지.
+- 수정·주행 선택: `lib/shared/plate/domain/services/plate_write_service.dart`에서 원본 필드와 View 필드를 동일한 `PlateFields.plateNumber`로 기록하는 기존 변경 유지.
+- View 조회: Repository의 `plate_number` 우선 읽기 및 문서 키 복원 안전장치 유지.
+- 본 절은 이미 적용된 차량번호 필드 통일의 현행 상태를 설명하며, 이번 개선이 이를 다시 변경하지 않는다는 의미이다.
+
+### 34.3 기존 상태 표시의 확인된 한계와 이번 개선 연결
+
+- 기존 `updatePlate()`는 View와 무관한 필드만 수정할 때 View 쓰기 없이도 일반 `result=success` 로그를 생성했다.
+- `MovementPlate`의 원본 상태 전환 커밋과 View 제거·추가가 각각 분리되어 있어, 원본은 성공하고 일부 View만 실패할 수 있다.
+- 이전 `DevFirebaseDebugDialog.show()`는 `_showing`이 참이면 새 팝업 요청을 버렸으며, STATUS에서 이미 발생한 이벤트의 누적 목록을 확인할 수 없었다.
+- 이 문제의 구체적인 개선 내용과 정적 검증·비검증 범위는 다음 35장을 적용 기준으로 한다.
+
+## 35. 개발자 STATUS 실제 쓰기 결과·연속 이벤트 기록·수동 검증 — 2026-11-11
+
+### 35.1 목표 및 변경 금지 범위
+
+- 목표: 실제 커밋 여부와 View 쓰기 여부를 구분하고, 여러 개발자 진단 이벤트가 연속 발생해도 현재 표시 중인 다이얼로그로 인해 메모리 기록이 버려지지 않게 한다.
+- 원본 `plates` 필드명, 세 View의 지역별 문서·`items` Map 구조, 사용자용 화면·주행 조작·TTS, Firestore Rules 및 기본 Firebase 요청 수를 임의로 변경하지 않는다.
+- 개발자 STATUS는 기존 `StatusDialog`에 개발자 전용 기록 내용을 주입하는 방식으로 재사용한다. 새 안내 입력 `hintText`·`helperText`는 추가하지 않는다. 수정된 Dart 파일에는 코드 주석을 두지 않는다.
+- 애니메이션은 기존 다이얼로그 진입 Fade·Slide·Scale을 유지하고, 진단 항목 선택 배경 `AnimatedContainer`, 기록 상세 `AnimatedSwitcher`, 선택 복사 성공 `AnimatedScale`을 추가한다. `MediaQuery.disableAnimations`가 참이면 신규 애니메이션을 즉시 처리한다.
+
+### 35.2 수정 파일 전체 목록
+
+| 경로 | 실제 변경 | 주요 사용자/개발자 효과 |
+| --- | --- | --- |
+| `lib/shared/plate/domain/services/plate_write_service.dart` | 차량 수정 Transaction에서 실제 View 작업 목록 반환, 주행 선택 Transaction에서 대상 View 결과 반환 | `COMMITTED`와 `SKIPPED`를 구분, 실패한 Transaction은 성공으로 기록하지 않음 |
+| `lib/shared/plate/application/common/movement_plate.dart` | 6개 View 제거/추가 함수가 `committed`, `skipped`, `failed` 결과 반환, 각 상태 전환마다 종합 결과 기록 | 원본 커밋 후 View 실패를 `PARTIAL`로 표시 |
+| `lib/shared/plate/data/repositories/firestore_plate_repository.dart` | 필수 View 경로 인자가 비면 조용히 끝내지 않고 `ArgumentError` 발생 | 무작업 완료를 쓰기 성공으로 오인하는 문제 방지 |
+| `lib/shared/plate/domain/services/plate_creation_service.dart` | 신규 등록 성공 시 View 저장 또는 생략과 서버 검증 미수행을 분리 기록 | 신규 차량 등록 진단 정확성 개선 |
+| `lib/app/utils/dev_firebase_debug_dialog.dart` | 최근 200건의 개발자 이벤트 기록, 단일 STATUS 표시·실시간 갱신, 선택 기록 복사, 수동 View 서버 검증 | 연속 이벤트 누락 방지·추가 팝업 폭주 방지 |
+| `lib/app/utils/status_dialog.dart` | 기존 API에 선택적 `developerContent` 추가, 본문 내부 스크롤과 최신 복사 Provider 재사용 | 기존 STATUS 디자인·클립보드 기능을 이용한 개발자 기록 UI |
+| `README.md` | 34~35장 추가 및 최신 정책 안내 | 현재 구현과 검증 범위를 문서화 |
+
+### 35.3 `updatePlate()`의 실제 커밋·View 생략 판정
+
+| 상황 | 수정 전 | 수정 후 |
+| --- | --- | --- |
+| 차량 원본만 수정 | `result=success`로 View까지 성공한 듯 표시 | `sourceResult=COMMITTED`, `viewResult=SKIPPED`, `viewReason=NO_VIEW_WRITE_STAGED` |
+| 상태·위치 등 View 관련 수정 | View 기록 유무가 성공 로그만으로 불명확 | 실제 Transaction에 등록된 `collection.REMOVE/UPSERT.area.plateDocId` 작업 목록 반환 후 `viewResult=COMMITTED` |
+| Transaction 실패 | 예외 및 오류 로그 | 기존 예외 전파 유지; `COMMITTED` 성공 결과를 생성하지 않음 |
+
+- `FirebaseFirestore.runTransaction()`의 콜백이 재시도될 수 있으므로 각 시도에서 View 작업 목록을 새로 생성하고, 최종 성공한 Transaction이 반환한 목록만 커밋 완료로 기록한다.
+- View를 대상으로 삼지 않았거나 지역 ID가 없어 등록하지 않은 쓰기는 `SKIPPED`로 남는다. `COMMITTED`는 Firestore 커밋 완료 의미이며 서버 문서 내용의 재조회 검증은 아니다.
+- 기본 진단 기록에서는 원래 코드에 없던 별도 View GET을 수행하지 않는다.
+
+### 35.4 주행 선택과 신규 등록의 결과 분리
+
+| 작업 | 변경 전 | 변경 후 |
+| --- | --- | --- |
+| 주행 선택·취소 | 원본 성공 이후 일반 `success` 로그 | 원본 `COMMITTED`; 요청 View `COMMITTED:*.UPSERT` 또는 `SKIPPED:...` |
+| 신규 입차 요청·완료 등록 | View에 저장했을 때만 성공 다이얼로그 | 저장 시 `sourceResult=COMMITTED`, `viewResult=COMMITTED`, 생략 시 `viewResult=SKIPPED` 및 원인 기록 |
+| View 데이터 확인 | 성공 메시지가 스키마까지 확인한 것처럼 보일 수 있음 | 자동 검증은 `verification=NOT_VERIFIED`로 명시 |
+
+### 35.5 상태 전환의 부분 성공 판정
+
+- `MovementPlate`는 원본 상태 전환 후 이전 View 제거와 새 View 추가를 별도 순차 작업으로 처리한다. 호출 흐름과 데이터 쓰기 방식은 기존대로 유지한다.
+- 여섯 상태 전환의 각 View 도우미는 `committed`, `skipped`, `failed`를 반환한다. 실제 오류를 내부에서 처리한 경우에도 호출부가 해당 결과를 알 수 있도록 한다.
+- 모든 View 작업이 성공하면 `COMMITTED`, 실패가 하나라도 있으면 `PARTIAL`, 실패 없이 일부 작업이 생략되면 `COMMITTED_WITH_SKIPS`를 표시한다.
+- `PARTIAL`은 원본이 이미 커밋되었을 수 있다는 뜻이며 자동 롤백 완료를 뜻하지 않는다. 사용자에게 원본 전환 자체를 실패한 것으로 거짓 표시하지 않는다.
+- 저장소에서 빈 `collection`, `area`, `plateDocId`로 인해 실제 요청이 발생하지 않던 경우는 `ArgumentError`로 실패를 반환하도록 변경한다.
+- 실행 중 오류가 없는 View 제거 결과 `COMMITTED`는 삭제가 존재했던 것을 별도 서버 조회해 확인한 결과가 아니라 제거 명령의 성공 완료를 의미한다.
+
+### 35.6 단일 개발자 STATUS·누락 방지·복사
+
+- `DevFirebaseDebugDialog.show()`는 기존과 같이 진단 텍스트를 `debugPrint`로 출력한다. 개발자 모드 ON 여부를 확인한 다음에만 화면용 메모리 진단 이벤트를 누적한다.
+- `_showing` 플래그는 다이얼로그의 중복 **표시**만 막는다. 이미 STATUS가 열린 상황에서도 새 이벤트는 기록 목록에 추가되고 `ValueNotifier`로 기존 UI에 즉시 반영된다.
+- 다이얼로그는 수동 종료 방식이며, 개별 호출자에서 모달 닫기를 기다리느라 업무 처리가 멈추지 않도록 표시 Future는 별도로 실행한다.
+- 새 STATUS는 최근 200건을 메모리에 보관한다. 초과된 이벤트는 제거하고 제외 건수를 표시한다. 따라서 전체 이벤트의 영구 보존은 보장하지 않으며 장기 추적은 기존 Firebase Activity Journal을 별도로 참조해야 한다.
+- 선택한 기록은 `debugPrint(...)` 문장으로 클립보드에 복사할 수 있다. 하단 `전체 debugPrint 코드 복사`는 클릭 시점에 메모리에 남은 모든 이벤트를 다시 조합하여 복사한다.
+- 개발자 모드 OFF로 전환되면 기록을 지우고 화면 내용을 숨기며 클립보드 복사를 차단한다. 이 기능은 개발자 모드를 우회해 개발자 권한을 부여하지 않는다.
+
+### 35.7 개발자 수동 서버 View 검증
+
+- 단순 `COMMITTED` 로그만으로 `plate_number` 값·구형 `plateNumber` 부재·이전 View 항목 삭제를 확인한 것처럼 표현하지 않는다.
+- 개발자 모드 ON에서 지역 ID와 차량 문서 ID가 있는 기록을 선택하면 `서버 View 검증 (최대 3 GET)` 버튼을 사용할 수 있다. **자동 조회는 추가하지 않는다.**
+- 클릭 시 `parking_requests_view/{area}`, `parking_completed_view/{area}`, `departure_requests_view/{area}`를 `Source.server`로 각각 최대 한 번 읽는다. 세 문서 중 해당 차량 항목이 있는 곳을 찾고, `plate_number`의 비어 있지 않음·문서 키 기준 차량번호와의 일치·구형 `plateNumber` 키의 부재를 확인한다.
+- 세 View에 해당 차량이 정확히 한 곳에만 존재하고 스키마가 유효하며 미확정 로컬 쓰기가 없을 때 `VERIFY_PASSED`로 기록한다. 전부 없거나 중복되거나 필드가 잘못되면 `VERIFY_FAILED`, `hasPendingWrites`가 있으면 `VERIFY_PENDING_WRITES`로 기록한다.
+- 출차 완료처럼 세 View 모두에 차량이 없어야 할 수 있는 업무 상태에서는 이 단일 상태 검증 조건이 적용되지 않을 수 있으며, 이때 `VERIFY_FAILED`는 반드시 실제 업무 오류를 뜻하지 않는다. 원본 상태에 따른 세부 기대값 검증은 별도 과제다.
+- 서버 조회 실패·권한 오류는 `VERIFY_FAILED`로 기록하며 원본 쓰기 결과를 거짓으로 변경하지 않는다. 수동 검증은 검증 시점의 스냅샷만 확인한다.
+- 개발자 검증 버튼을 누르는 경우에만 최대 3건의 추가 문서 GET이 발생할 수 있다. 조회는 `MANUAL_PLATE_VIEW_VERIFY` 목적 코드로 기존 Activity Meter에 기록한다.
+
+### 35.8 정적 검증 및 실제 실행 경계
+
+| 검증 항목 | 판정 및 범위 |
+| --- | --- |
+| 원본 저장 필드와 세 View 차량번호 키 | `PlateFields.plateNumber`(`plate_number`) 보존 확인 |
+| 변경 대상 | Dart 6개 파일과 README 1개에 제한 |
+| 신규 Dart 주석·힌트 텍스트 | 수정 6파일에서 `//` 주석 줄, `hintText`, `helperText` 없음 |
+| 상태 전환의 View 커밋·생략·오류 추적 | 소스 호출 경로 정적 점검 |
+| 진단 기록·개별/전체 복사·애니메이션 | 구현 코드 정적 점검 |
+| 독립 Flutter 빌드 및 `flutter analyze` | Flutter/Dart SDK 미설치로 미검증 |
+| Emulator/Firebase 서버 GET·SET·Transaction | 미검증; 실제 권한·커밋·인덱스·과금 확인 필요 |
+| Android 실기기 애니메이션·클립보드·개발자 모드 전환 | 미검증; 접근성 감소 설정 및 화면 높이 회귀 테스트 필요 |
+| UI·TTS·상태 전환 전체 회귀 | 미검증; 기존 사용자 조작 시나리오 검증 필요 |
+
+- 덮어쓰기 패키지는 위 표에 기재한 전체 수정 파일을 원래 프로젝트 상대 경로 그대로 보관한다. 변경하지 않은 원본 파일이나 플랫폼 빌드 산출물은 포함하지 않는다.
+- 검증되지 않은 동작은 성공했다고 단정하지 않는다. README는 변경의 기준과 예상 동작을 설명하며 실환경 성능·보안·비용을 보증하지 않는다.
+
+
+## 36. 주행 선택 View 실제 저장 지역과 수동 서버 검증 지역 일치 — 2026-11-11
+
+### 36.1 기준본·목적·변경하지 않은 조건
+
+- 기준본: 사용자가 전달한 `261111 2302.zip`의 `lib/` 및 `README.md` 전체. 기존 1~35장의 기록은 삭제하거나 요약하지 않고 그대로 보존한다.
+- 확인된 원인: `PlateWriteService.recordWhoPlateClick()`은 Transaction 내부에서 `docArea = ((data['area'] as String?) ?? area).trim()`으로 실제 쓰기 지역을 계산했지만, 성공 STATUS에 `areaArgument`만 담았다. 수동 서버 검증은 `areaArgument`를 사용할 수 있어 원본의 실제 지역이 화면 전달 지역과 다르면 다른 문서를 조회할 수 있었다.
+- 목표: View의 저장 대상 지역을 바꾸는 것이 아니라, 이미 사용한 실제 지역을 최종 Transaction 결과에서 수집해 그 지역을 수동 검증에 그대로 사용한다.
+- 원본 `plates`의 `plate_number`, 세 View의 `items.{plateDocId}.plate_number`, 지역별 View 문서 구조, 주행 상태 업데이트, SharedPreferences 설정, Firebase Rules, 기존 일반 UI·TTS 및 다른 Firebase 기능은 변경하지 않는다.
+- 수정된 Dart 소스에 코드 주석·`hintText`·`helperText`를 추가하지 않는다. 개발자 STATUS는 기존 화면과 클립보드 권한 재검사를 활용한다.
+
+### 36.2 원인과 변경 전·후
+
+| 항목 | 변경 전 | 변경 후 |
+| --- | --- | --- |
+| 주행 선택 시 실제 View 쓰기 지역 | 원본 `data['area']` 우선, 없으면 호출 인자 `area` | 동일한 기존 결정 규칙 유지 |
+| Transaction 반환 | `String`(`COMMITTED:...` 또는 `SKIPPED:...`) | `_DrivingViewResult(viewAction, resolvedArea, expectedPlateNumber, writtenCollection)` |
+| 호출 지역 표시 | `areaArgument` | `areaArgument` 유지 |
+| 실제 지역 표시 | 반환·STATUS에 없음 | `resolvedArea`에 최종 Transaction에서 사용한 `docArea` 기록 |
+| 실제 View 쓰기 위치 | View 쓰기 실행 여부와 별도로 식별하기 어려움 | `writtenCollection`이 존재할 때만 `actualViewArea=resolvedArea`; 생략하면 null |
+| 차량번호 확인값 | 문서 ID가 `_$area`로 끝날 때만 복원 | 이미 읽은 원본 문서의 `plate_number`(기존 추출 함수의 보조 경로 포함)를 `expectedPlateNumber`로 전달하여 우선 사용 |
+| 수동 서버 검증 지역 | `area ?? areaArgument` | 진단 이벤트에 `actualViewArea` 키가 있으면 해당 값만 사용; null/빈 값이라면 대체 지역을 선택하지 않음 |
+| 주행 View 미쓰기 | `SKIPPED` 문자열만 반환 | `SKIPPED` 결과, 실제 View 쓰기 컬렉션 null, 검증 버튼 미표시 |
+| 정상 커밋 | 원본과 View를 Transaction에 등록한 뒤 성공 문자열 반환 | 최종 성공 결과에 View 이름·실제 지역 포함, 원본과 View의 커밋 의미 유지 |
+
+`_DrivingViewResult`는 `plate_write_service.dart` 안의 비공개 반환 타입이다. Transaction 재시도 시 콜백 외부의 변경 가능한 기록을 누적하지 않고 성공한 최종 실행에서 반환한 값만 STATUS에 기록한다. View 쓰기 실행 여부를 `writtenCollection`으로 명시하며, `resolvedArea`는 지역을 계산했다는 뜻이지 무조건 View를 썼다는 뜻은 아니다.
+
+### 36.3 `plate_write_service.dart` 실제 코드 변경
+
+| 지점 | 변경 근거 | 실제 적용 |
+| --- | --- | --- |
+| `recordWhoPlateClick()` Transaction | 기존 `runTrackedActivityTransaction<String>`은 저장 지역을 반환하지 않음 | `_DrivingViewResult` 반환으로 변경 |
+| `docArea` 결정 직후 | Transaction에서 이미 원본 `plates`를 읽음 | 기존 `_extractPlateNumberFromPlateDoc(data, id)` 결과를 지역과 함께 반환해 추가 GET 없이 사용 |
+| `departure_requests_view` 쓰기 | `.doc(docArea)`를 기준으로 UPSERT | 기존 쓰기 유지, 결과에 `writtenCollection=departure_requests_view`, `resolvedArea=docArea` 포함 |
+| `parking_requests_view` 쓰기 | `.doc(docArea)`를 기준으로 UPSERT | 기존 쓰기 유지, 결과에 `writtenCollection=parking_requests_view`, `resolvedArea=docArea` 포함 |
+| 쓰기 생략 | 쓰기 게이트 비활성 또는 지역이 비어 있음 | 컬렉션 null, `SKIPPED:SYNC_GATE_DISABLED:*` 또는 `SKIPPED:AREA_EMPTY`로 구분 |
+| 개발자 `debugPrint`·STATUS | 성공이지만 실제 저장 지역을 기록하지 않음 | 요청 지역, 확정 지역, 실제 저장 지역, View 컬렉션, View 결과를 로그에 포함. STATUS에는 예상 번호도 포함 |
+
+소스의 결과 구조는 다음 네 값을 포함한다: `viewAction`(작업 결과), `resolvedArea`(원본 우선 결정 지역), `writtenCollection`(실제 View UPSERT가 등록된 경우의 컬렉션), `expectedPlateNumber`(원본에서 읽은 비교용 번호). `runTrackedActivityTransaction`이 예외를 던지면 성공 로그를 만들지 않고 기존 실패 처리·예외 전파를 유지한다.
+
+### 36.4 `dev_firebase_debug_dialog.dart` 수동 검증·복사·애니메이션
+
+| 기능 | 이전 동작 | 변경 후 동작 |
+| --- | --- | --- |
+| 지역 선택 | `area`/`areaArgument`를 조회 기준으로 사용 | `actualViewArea` 키가 있는 기록은 해당 값을 조회 기준으로 사용; 다른 과거 기록에는 기존 지역 선택 규칙 유지 |
+| 생략된 View | 호출 인자 지역으로도 수동 검증 가능 | `actualViewArea`가 null인 경우 검증 버튼 미표시 및 함수 실행 차단 |
+| 차량번호 비교 | 차량 문서 키의 지역 접미사가 조회 지역과 같을 때만 비교 가능 | `expectedPlateNumber`를 우선 사용하고 없을 때만 문서 ID 복원. 어떤 방식으로도 예상 번호를 얻지 못하면 정상 판정하지 않음 |
+| 대상 컬렉션 | 세 View 중 하나에 유효한 항목이 있으면 통과 가능 | `viewCollection`이 있는 기록은 해당 컬렉션의 항목이 `PRESENT_SCHEMA_OK`여야 통과; 중복·구형 키·번호 불일치도 실패 |
+| 디버그 코드 복사 | 선택/전체 이벤트를 `debugPrint(...)` Dart 문장으로 복사 | 같은 경로 유지, 추가 지역 필드가 복사 내용에 포함됨 |
+| 진단 UI | 이벤트 선택·복사 피드백 애니메이션 | 요청 지역과 실제 저장 지역을 비교 표시하는 Fade+Slide 전환을 추가하고 기존 모션 보존 |
+| 접근성 | `MediaQuery.disableAnimations` 지원 | 신규 지역 전환도 같은 `Duration.zero` 처리 |
+| 개발자 모드 | ON에서만 기록 표시·복사, OFF 기록 삭제 | 변경 없음 |
+
+수동 검증은 `Source.server`로 현재 선택 지역의 세 View 지역 문서를 최대 3번 읽는다. 기본 주행 선택·저장에는 추가 GET을 넣지 않는다. `COMMITTED`는 쓰기 커밋을, `VERIFY_PASSED`는 수동 검증 실행 시점에 확인한 문서 내용만 의미한다. 검증 전에는 `verification=NOT_VERIFIED`다. 개발자 모드 OFF의 일반 사용자에게 새 진단 UI나 힌트 입력은 노출하지 않는다.
+
+### 36.5 사용자 재현 시나리오와 제한
+
+| 상황 | 예시 | 예상 진단 동작 |
+| --- | --- | --- |
+| 지역 일치 | 화면 A / 원본 A | View A에 저장하고 A 조회, 요청·실제 지역 일치 표시 |
+| 지역 불일치 | 화면 A / 원본 B | View B에 저장하고 B 조회, 불일치 표시 및 복사 가능 |
+| 원본 `area` 없음 | 화면 A / 원본 null | 기존 `?? area` 규칙에 따라 A로 저장·조회 |
+| 원본 `area` 빈 문자열 | 화면 A / 원본 `''` | 기존 `.trim()` 결과 빈 값으로 View 동기화 생략, 수동 검증 버튼 미표시 |
+| View 동기화 게이트 OFF | 지역 B의 주행 상태만 원본에 업데이트 | `SKIPPED` 기록, `actualViewArea=null`, View 저장 검증 버튼 미표시 |
+| 문서 ID와 실제 지역 접미사 불일치 | `123가4567_A`, 실제 지역 B | 원본의 예상 차량번호를 비교하므로 문서 ID 접미사에 의존하지 않음 |
+| View 잘못된 컬렉션에 저장 | 입차 요청 View에만 유효한 항목, 예상 대상은 출차 요청 View | 해당 주행 이벤트의 `viewCollection`과 달라 `VERIFY_FAILED` |
+| 원본/Transaction 실패 | 원본 미존재, 충돌 등 | 성공 STATUS를 출력하지 않으며 오류 경로 유지 |
+
+이번 개선은 **주행 선택 진단 이벤트에서 실제 지역과 대상 View의 정확성**을 보완한다. 다른 종류의 기존 진단 이벤트가 상태·대상 View 정보를 제공하지 않으면 단순한 세 View 전체 탐색 기준이 남을 수 있다. 출차 완료처럼 어느 View에도 없어야 하는 경우의 상태별 검증은 별도 과제이며, 이 변경만으로 원본 상태의 전체 정합성이 항상 보증되는 것은 아니다. 검증은 시점별 서버 조회 결과이고 동시 사용자 변경 이후까지 보증하지 않는다.
+
+### 36.6 적용 파일·검증 범위
+
+| 덮어쓰기 파일 | 변경 내용 |
+| --- | --- |
+| `lib/shared/plate/domain/services/plate_write_service.dart` | 비공개 Transaction 결과 타입, 실제 지역·View·차량번호 반환 및 STATUS 기록 |
+| `lib/app/utils/dev_firebase_debug_dialog.dart` | 실제 지역 기반 수동 GET, 생략 검사 차단, 예상 번호·컬렉션 검사, 지역 비교 전환 모션 |
+| `README.md` | 최상단 최신 안내와 36장 추가, 1~35장 전체 원문 보존 |
+
+- 수정된 Dart 두 파일에서 새 주석·`hintText`·`helperText`를 생성하지 않는다. 기존 STATUS의 선택/전체 클립보드 복사 및 원래 Fade·Slide·Scale·기록 선택·복사 피드백 모션을 유지한다.
+- 정적 검증 대상: 두 Dart 파일의 변경 지점, 각 Transaction 결과 반환 분기, 쓰기/조회 호출 개수, 실제 지역 우선 선택, `SKIPPED`의 검증 차단, `debugPrint` 및 복사 연계, README 1~35장 보존, ZIP CRC 및 파일 경로 일치.
+- **Flutter/Dart SDK가 없는 환경에서는 `flutter analyze`와 실제 빌드, Firebase Emulator, 운영 서버 데이터, Android 실기기 애니메이션과 클립보드 실행을 검증하지 못한다.** 정적 검사 통과를 실환경 정상 동작으로 표현하지 않는다.
+
+
+## 37. 세 View 컬렉션 상태별 현재 정합성 검증 — 2026-11-12
+
+### 37.1 기준본·목적·비변경 조건
+
+- 기준본은 `261112 0120.zip`의 2,936줄 `README.md`와 기존 Dart 소스다. 기존 1~36장 및 해당 서두 안내는 삭제하거나 요약하지 않고 보존한다.
+- 기존 검증은 입차 요청·입차 완료·출차 요청 View 중 한 곳에 차량이 있으면 검증을 통과할 수 있었고, 출차 완료처럼 세 View 모두 없어야 하는 상태를 판별하지 못했다. 신규 등록은 `collection`, 상태 전환은 `viewResults`, 일반 수정은 `viewActions`로 서로 다른 필드명을 전달했다.
+- 이번 수정은 개발자 진단 결과의 구조와 명시적 수동 검증만 바꾼다. 원본 `plates`와 세 View의 `plate_number` 저장, 앱의 업무 트랜잭션·상태 전환 쓰기 순서·UI·TTS·Firestore Rules는 변경하지 않는다.
+- 개발자 모드 ON에서만 진단 기록·복사·수동 검사에 접근할 수 있다. 개발자 모드 OFF에서는 기록과 복사를 숨긴다. 기존 STATUS 단일 다이얼로그, 200건 메모리 상한 및 복사 정책을 유지한다.
+
+### 37.2 원본 상태별 View 기대 행렬
+
+| 원본 `plates.type` | `parking_requests_view` | `parking_completed_view` | `departure_requests_view` | 기대 발견 수 |
+| --- | --- | --- | --- | --- |
+| `입차 요청` | 존재·스키마 정상 | 부재 | 부재 | 1 |
+| `입차 완료` | 부재 | 존재·스키마 정상 | 부재 | 1 |
+| `출차 요청` | 부재 | 부재 | 존재·스키마 정상 | 1 |
+| `출차 완료` | 부재 | 부재 | 부재 | 0 |
+
+- 해당 View에 존재하는 항목은 `items.{plateDocId}.plate_number`가 원본의 차량번호와 같고, 구형 `plateNumber` 키가 없어야 한다. 다른 View나 이전 지역에서 발견되면 현재 정합성 불일치다.
+- 이 행렬은 검증 버튼을 누른 시점에 읽은 원본 상태에 대해 적용한다. 과거 특정 쓰기의 성공을 사후에 영구적으로 보증하는 규칙이 아니다.
+
+### 37.3 공통 진단 계약
+
+| 필드 | 의미 | 공급 경로 |
+| --- | --- | --- |
+| `verificationPlanVersion=1` | 상태별 수동 검증을 지원하는 신규 이벤트 | 공통 `PlateViewVerificationPlan` |
+| `plateDocId` | 실제 원본 차량 문서 ID이자 View `items` 키 | 모든 진단 공급자 |
+| `expectedPlateNumber` | 작업 직후 예상 차량번호 | 신규 등록 입력·전환 인자·수정/주행 Transaction 결과 |
+| `expectedPlateType` | 작업 직후 예상 상태 | 등록/전환 선택·원본 Transaction 데이터 |
+| `expectedViewCollection` | 입차 요청/완료/출차 요청에 대응하는 View; 출차 완료는 null | `PlateViewVerificationPlan.collectionFor()` |
+| `expectedViewPresence` | 출차 완료 `ABSENT`, 나머지 세 활성 상태 `PRESENT`, 불명 상태 `UNKNOWN` | 공통 모델 |
+| `areaAfter`, `areaBefore` | 작업 후 지역과 변경 전 지역(있다면) | 등록·전환·수정/주행 결과 |
+| `viewResult`, `viewActions` | 그 작업의 실제 View 쓰기·생략·부분 실패 기록 | 각 쓰기 함수의 최종 결과 |
+| `verificationEligible` | 수동 현재 상태 검증 UI를 제공할지 여부 | 검증 계획 생성 시 결정 |
+| `verification=NOT_VERIFIED` | 아직 서버 재조회 검증이 없다는 뜻 | 이벤트 생성 시 |
+
+- 신규 파일 `lib/shared/plate/domain/models/plate_view_verification_plan.dart`는 위 필드 형식 및 기대 View 이름을 일관되게 생성한다. 실제 Firestore 문서의 필드를 추가하거나 바꾸지 않는다.
+- 일반 수정 Transaction은 원본 읽기와 View 쓰기가 같은 Transaction으로 커밋된 이후에 반환한 계획만 STATUS에 전달한다. Transaction 재시도 중간의 계획을 성공 이벤트로 누적하지 않는다.
+- 상태 전환은 원본과 View가 별도 쓰기인 기존 구조를 유지하므로 각 View의 `COMMITTED`·`FAILED`·`SKIPPED` 기록과 `PARTIAL` 판정을 그대로 보존한다. 사후 수동 검사 결과가 과거 부분 실패 기록을 덮어쓰지 않는다.
+- 주행 선택은 기존 `actualViewArea`, `areaArgument`, `resolvedArea` 진단을 유지하면서 최종 원본 상태·지역·예상 차량번호의 검증 계획을 추가한다. 실제 View 쓰기가 `SKIPPED`라면 해당 주행 이벤트의 서버 검증 버튼을 제공하지 않는다.
+
+### 37.4 신규 등록·상태 전환·일반 수정 변경
+
+| 파일 | 이전 진단 | 이번 진단 |
+| --- | --- | --- |
+| `plate_creation_service.dart` | 신규 View 컬렉션을 `collection`으로만 전달 | `expectedPlateType`·`expectedViewCollection`·`areaAfter`·`expectedPlateNumber` 포함. 등록 시 동기화를 생략했다면 `verificationEligible=false` |
+| `movement_plate.dart` | 상태 전환 결과에 `viewResults`만 포함 | 여섯 상태 전환 결과에 예상 상태·번호·지역을 포함하고 출차 완료의 `ABSENT` 판정을 명시 |
+| `plate_write_service.dart` | 일반 수정 Transaction 결과가 `List<String>` | `PlateViewVerificationPlan` 반환, 수정 전·후 지역과 최종 상태·번호·실제 View 작업을 기록 |
+| `plate_write_service.dart` 주행 선택 | 실제 지역·대상 View는 기록하지만 상태별 공통 계획 없음 | 기존 실제 지역 기록을 유지하고 `expectedPlateType`·공통 계획을 추가 |
+
+- 개별 `MovementPlate.viewUpsert.success` 기록은 개별 UPSERT 성공 표시이지 세 View의 통합 정합성 결과가 아니다. 검증 버튼은 공통 계획이 있는 상태 전환 통합 이벤트에서 제공한다.
+
+### 37.5 개발자 수동 검증 알고리즘과 판정
+
+1. 개발자 모드 ON·검증 가능한 진단 계획인지 확인한다. 계획이 없거나 지역·차량 ID가 불완전한 이벤트는 검증 버튼을 노출하지 않는다.
+2. 개발자가 수동 실행할 때에만 `plates/{plateDocId}`를 `Source.server`로 읽는다. 원본이 없거나 현재 상태·지역·차량번호를 확인할 수 없다면 `VERIFY_INCONCLUSIVE`로 기록한다.
+3. 원본의 현재 타입·지역·차량번호를 선택했던 이벤트의 기대값과 비교한다. 이미 변경된 경우 `VERIFY_INCONCLUSIVE`(`EVENT_SOURCE_CHANGED`)로 분리하여, 오래된 기록을 업무 오류로 오판하지 않는다.
+4. 정보가 일치하면 현재 지역의 세 View 문서에서 해당 차량 항목의 존재·부재와 `plate_number` 값, 구형 키 부재를 검사한다. `areaBefore`가 다르면 이전 지역의 세 View에서도 잔여 항목 부재를 확인한다.
+5. 현재 원본 상태의 기대 행렬에 모두 부합하면 `VERIFY_PASSED`, 해당 View가 없거나 잘못된 View에만 있거나 중복/스키마 오류이면 `VERIFY_FAILED`로 기록한다.
+6. Firestore 서버 읽기 오류는 `VERIFY_READ_FAILED`, 로컬 미커밋 쓰기가 섞이면 `VERIFY_PENDING_WRITES`로 구분한다. 수동 검증과 원본 쓰기 결과를 하나의 `success`로 합치지 않는다.
+
+| 사용자 작업 | 기존 단순 검사 문제 | 수정 후 수동 검사 |
+| --- | --- | --- |
+| 신규 입차 요청·입차 완료 등록 | `collection` 필드를 기대 View로 인식하지 못함 | 명시적 상태에 맞는 한 View 존재를 확인 |
+| 입차 요청 → 입차 완료 | 기존 View에만 남아도 통과 가능 | 입차 완료 View에만 존재하고 이전 View가 비어 있어야 통과 |
+| 입차 완료 → 출차 요청 | 기존 View에만 남아도 통과 가능 | 출차 요청 View에만 존재해야 통과 |
+| 출차 완료 | 세 View 모두 없으면 기존 `found != 1` 규칙으로 실패 | 세 View 모두 부재가 통과 |
+| 일반 정보·위치 수정 | 작업 성공 진단에 지역·상태 정보가 없음 | Transaction의 최종 지역·상태를 전달하여 검증 가능 |
+| 지역 A → B 이동 | B만 확인하면 A에 남은 항목을 놓침 | 현재 지역 B의 세 View와 이전 지역 A의 세 View를 검사 |
+| 기존 주행 선택·취소 | 실제 지역 판정은 지원하지만 공통 상태 계획 없음 | 기존 지역 정확성을 유지하고 원본 현재 타입을 기준으로 검사 |
+
+### 37.6 Firestore 조회 비용·동시성·보안 한계
+
+- 일반 사용자 신규 등록, 수정, 주행 선택, 상태 전환에는 이번 진단 개선으로 인한 추가 Firestore GET을 넣지 않는다.
+- 개발자가 수동 서버 검증 버튼을 눌렀을 때만 원본 `plates` 문서 최대 1회, 현재 지역 세 View 최대 3회, 이전 지역이 다른 경우 이전 지역 세 View 최대 3회를 읽는다. 따라서 검증 1회당 최대 4 또는 7 GET 시도가 발생한다. 실제 청구는 성공·실패·규칙 평가와 공급자 과금 조건에 따라 다를 수 있다.
+- 각 원본/View 문서 조회는 원자적 단일 스냅샷이 아니므로 다른 기기가 검증 사이에 상태를 변경하면 실패 또는 불확정 판정이 발생할 수 있다. 검사 완료 시점 이후의 불변성도 보증하지 않는다.
+- 검증할 수 있는 영역은 이벤트의 현 지역 및 알고 있는 이전 지역이다. 별도로 기록되지 않은 제3지역의 오래된 View 항목까지 전역 탐색하여 없음을 증명하지 않는다.
+- Firestore Rules·인증 정책은 변경하지 않는다. 일반 사용자에게 개발자 검증 UI나 로그 클립보드 기능을 노출하지 않는다. 수동 조회는 기존 Firebase Activity Meter의 `MANUAL_PLATE_VIEW_VERIFY`로 계측한다.
+
+### 37.7 STATUS·모션·복사·사용자 경험
+
+- 기존 단일 개발자 STATUS의 최근 200건 메모리 기록, 미확인 이벤트의 추가/선택, `debugPrint` 출력 및 선택·전체 `debugPrint(...)` 코드 클립보드 복사를 유지한다.
+- 진단 계획의 예상 상태·대상 View를 표시하는 영역에는 Fade·Slide `AnimatedSwitcher`를 추가한다. 기존 기록 선택·복사 성공 애니메이션은 유지하고 `MediaQuery.disableAnimations`가 활성화된 경우 모션 시간을 0으로 한다.
+- 수동 검증에서 상태 변화(`VERIFY_INCONCLUSIVE`), 현재 상태 오류(`VERIFY_FAILED`), 서버 조회 오류(`VERIFY_READ_FAILED`)를 구분하여 기록으로 추가한다. 검증 결과도 해당 전체 복사에 포함된다.
+- 앱의 일반 사용자 UI·위치/주행 업무 버튼·TTS·상태 전환 애니메이션을 변경하지 않는다. 수정한 Dart 소스에는 코드 주석·`hintText`·`helperText`를 추가하지 않는다.
+
+### 37.8 덮어쓰기 파일 및 검증 경계
+
+| 변경 대상 | 내용 |
+| --- | --- |
+| `README.md` | 기존 1~36장과 서두 원문 보존, 최신 현행 안내 및 37장 추가 |
+| `lib/shared/plate/domain/models/plate_view_verification_plan.dart` | 신규 진단 계획 모델 전체 |
+| `lib/shared/plate/domain/services/plate_creation_service.dart` | 신규 등록 진단 계획 추가 |
+| `lib/shared/plate/application/common/movement_plate.dart` | 여섯 상태 전환의 목표 상태·번호·View 결과 진단 |
+| `lib/shared/plate/domain/services/plate_write_service.dart` | 일반 수정 Transaction 계획 반환, 주행 선택 공통 계획 연결 |
+| `lib/app/utils/dev_firebase_debug_dialog.dart` | 원본 현재 상태+세 View/이전 지역 수동 검증 및 기대 상태 모션 |
+
+| 검증 항목 | 수행 범위 |
+| --- | --- |
+| 소스 및 README 변경 범위·경로·ZIP 무결성 | 정적 비교·CRC 검사 |
+| 상태별 계획 생성, 원본/지역/컬렉션/차량번호 검사 분기 | 정적 점검 |
+| 주석·힌트 텍스트 미삽입, 복사·애니메이션 기존 연결 | 정적 점검 |
+| Flutter `analyze`, Dart 컴파일/실제 빌드 | SDK 부재로 미검증 |
+| Firebase Emulator/운영 데이터 정합성·권한·비용 | 미검증 |
+| Android 실기기 STATUS·애니메이션·클립보드 | 미검증 |
+
+- 정적 검사 성공은 런타임에서 모든 업무 데이터 정합성을 입증하지 않는다. 적용 이후 개발자 모드에서 등록·전환·수정·출차 완료·지역 이동·주행 선택의 수동 검증 결과를 확인해야 한다.

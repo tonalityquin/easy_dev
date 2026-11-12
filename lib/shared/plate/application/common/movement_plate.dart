@@ -8,6 +8,7 @@ import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../domain/enums/plate_type.dart';
 import '../../domain/models/plate_model.dart';
+import '../../domain/models/plate_view_verification_plan.dart';
 import '../../domain/repositories/plate_repository.dart';
 
 typedef MovementPlateTraceLog = void Function(String message);
@@ -51,6 +52,8 @@ class _ViewSyncGate {
     return 'write=${writeOn ? "ON" : "OFF"}, tab=${tabOn ? "ON" : "OFF"}';
   }
 }
+
+enum _ViewWriteOutcome { committed, skipped, failed }
 
 class MovementPlate extends ChangeNotifier {
   final PlateRepository _repository;
@@ -133,7 +136,7 @@ class MovementPlate extends ChangeNotifier {
   }) {
     final createdAtAvailable = createdAt != null;
     _emitTrace(
-      '✅ [MovementPlate.viewUpsert] collection=$collection area=$area plateId=$plateDocId createdAtSource=transition_snapshot createdAtAvailable=$createdAtAvailable additionalPlateRead=0 runtimeHydration=disabled',
+      '✅ [MovementPlate.viewUpsert] collection=$collection area=$area plateId=$plateDocId field=${PlateFields.plateNumber} createdAtSource=transition_snapshot createdAtAvailable=$createdAtAvailable additionalPlateRead=0 runtimeHydration=disabled result=success',
       traceLog,
     );
     unawaited(
@@ -144,6 +147,7 @@ class MovementPlate extends ChangeNotifier {
           'actionId': FirebaseActivityMeter.instance.currentActionId,
           'area': area,
           'plateDocId': plateDocId,
+          'field': PlateFields.plateNumber,
           'createdAtSource': 'transition_snapshot',
           'createdAtAvailable': createdAtAvailable,
           'createdAtValue': createdAt?.toIso8601String(),
@@ -160,7 +164,55 @@ class MovementPlate extends ChangeNotifier {
     );
   }
 
-  Future<void> _upsertParkingCompletedViewItem({
+  void _reportTransitionResult({
+    required String operation,
+    required String plateDocId,
+    required String area,
+    required Map<String, _ViewWriteOutcome> viewResults,
+    required String plateNumber,
+    required PlateType expectedType,
+  }) {
+    final hasFailure = viewResults.values.contains(_ViewWriteOutcome.failed);
+    final hasSkip = viewResults.values.contains(_ViewWriteOutcome.skipped);
+    final result = hasFailure
+        ? 'PARTIAL'
+        : hasSkip
+            ? 'COMMITTED_WITH_SKIPS'
+            : 'COMMITTED';
+    final serialized = viewResults.map(
+      (key, value) => MapEntry(key, value.name.toUpperCase()),
+    );
+    debugPrint(
+      '[PLATE_VIEW_SYNC] operation=$operation plateId=$plateDocId sourceResult=COMMITTED result=$result viewResults=$serialized verification=NOT_VERIFIED',
+    );
+    unawaited(DevFirebaseDebugDialog.show(
+      operation: 'MovementPlate.$operation.result',
+      details: <String, Object?>{
+        'plateDocId': plateDocId,
+        'area': area,
+        'sourceResult': 'COMMITTED',
+        'result': result,
+        'viewResults': serialized,
+        ...PlateViewVerificationPlan(
+          plateDocId: plateDocId,
+          expectedPlateNumber: plateNumber,
+          areaAfter: area,
+          expectedType: expectedType,
+          viewResult: result,
+          viewActions: serialized.entries
+              .map((entry) => '${entry.key}:${entry.value}')
+              .toList(growable: false),
+        ).toDetails(),
+      },
+      title: '차량 상태 전환·View 처리 결과',
+      success: !hasFailure,
+      useCommonUi: true,
+      copyAsDebugPrintCode: true,
+      devModeOnly: true,
+    ));
+  }
+
+  Future<_ViewWriteOutcome> _upsertParkingCompletedViewItem({
     required String area,
     required String plateDocId,
     required String plateNumber,
@@ -178,7 +230,7 @@ class MovementPlate extends ChangeNotifier {
           traceLog,
         );
       }
-      return;
+      return _ViewWriteOutcome.skipped;
     }
 
     try {
@@ -200,6 +252,7 @@ class MovementPlate extends ChangeNotifier {
         createdAt: createdAt,
         traceLog: traceLog,
       );
+      return _ViewWriteOutcome.committed;
     } catch (e, st) {
       FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_FAILED', source: 'shared/plate/application/common/movement_plate.dart', result: 'error', detail: 'operation=UPSERT collection=$_parkingCompletedViewCollection errorType=${e.runtimeType}');
       _emitTrace('⚠️ parking_completed_view upsert 실패: $e', traceLog);
@@ -218,10 +271,11 @@ class MovementPlate extends ChangeNotifier {
         copyAsDebugPrintCode: true,
         devModeOnly: true,
       );
+      return _ViewWriteOutcome.failed;
     }
   }
 
-  Future<void> _removeParkingCompletedViewItem({
+  Future<_ViewWriteOutcome> _removeParkingCompletedViewItem({
     required String area,
     required String plateDocId,
     bool forceViewSync = false,
@@ -236,7 +290,7 @@ class MovementPlate extends ChangeNotifier {
           traceLog,
         );
       }
-      return;
+      return _ViewWriteOutcome.skipped;
     }
 
     try {
@@ -247,6 +301,7 @@ class MovementPlate extends ChangeNotifier {
         plateDocId: plateDocId,
       );
       FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SUCCESS', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=REMOVE collection=$_parkingCompletedViewCollection');
+      return _ViewWriteOutcome.committed;
     } catch (e, st) {
       FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_FAILED', source: 'shared/plate/application/common/movement_plate.dart', result: 'error', detail: 'operation=REMOVE collection=$_parkingCompletedViewCollection errorType=${e.runtimeType}');
       _emitTrace('⚠️ parking_completed_view remove 실패: $e', traceLog);
@@ -261,10 +316,11 @@ class MovementPlate extends ChangeNotifier {
           'forceViewSync': forceViewSync,
         },
       );
+      return _ViewWriteOutcome.failed;
     }
   }
 
-  Future<void> _upsertDepartureRequestsViewItem({
+  Future<_ViewWriteOutcome> _upsertDepartureRequestsViewItem({
     required String area,
     required String plateDocId,
     required String plateNumber,
@@ -282,7 +338,7 @@ class MovementPlate extends ChangeNotifier {
           traceLog,
         );
       }
-      return;
+      return _ViewWriteOutcome.skipped;
     }
 
     try {
@@ -304,6 +360,7 @@ class MovementPlate extends ChangeNotifier {
         createdAt: createdAt,
         traceLog: traceLog,
       );
+      return _ViewWriteOutcome.committed;
     } catch (e, st) {
       FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_FAILED', source: 'shared/plate/application/common/movement_plate.dart', result: 'error', detail: 'operation=UPSERT collection=$_departureRequestsViewCollection errorType=${e.runtimeType}');
       _emitTrace('⚠️ departure_requests_view upsert 실패: $e', traceLog);
@@ -322,10 +379,11 @@ class MovementPlate extends ChangeNotifier {
         copyAsDebugPrintCode: true,
         devModeOnly: true,
       );
+      return _ViewWriteOutcome.failed;
     }
   }
 
-  Future<void> _removeDepartureRequestsViewItem({
+  Future<_ViewWriteOutcome> _removeDepartureRequestsViewItem({
     required String area,
     required String plateDocId,
     bool forceViewSync = false,
@@ -340,7 +398,7 @@ class MovementPlate extends ChangeNotifier {
           traceLog,
         );
       }
-      return;
+      return _ViewWriteOutcome.skipped;
     }
 
     try {
@@ -351,6 +409,7 @@ class MovementPlate extends ChangeNotifier {
         plateDocId: plateDocId,
       );
       FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SUCCESS', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=REMOVE collection=$_departureRequestsViewCollection');
+      return _ViewWriteOutcome.committed;
     } catch (e, st) {
       FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_FAILED', source: 'shared/plate/application/common/movement_plate.dart', result: 'error', detail: 'operation=REMOVE collection=$_departureRequestsViewCollection errorType=${e.runtimeType}');
       _emitTrace('⚠️ departure_requests_view remove 실패: $e', traceLog);
@@ -365,10 +424,11 @@ class MovementPlate extends ChangeNotifier {
           'forceViewSync': forceViewSync,
         },
       );
+      return _ViewWriteOutcome.failed;
     }
   }
 
-  Future<void> _upsertParkingRequestsViewItem({
+  Future<_ViewWriteOutcome> _upsertParkingRequestsViewItem({
     required String area,
     required String plateDocId,
     required String plateNumber,
@@ -386,7 +446,7 @@ class MovementPlate extends ChangeNotifier {
           traceLog,
         );
       }
-      return;
+      return _ViewWriteOutcome.skipped;
     }
 
     try {
@@ -408,6 +468,7 @@ class MovementPlate extends ChangeNotifier {
         createdAt: createdAt,
         traceLog: traceLog,
       );
+      return _ViewWriteOutcome.committed;
     } catch (e, st) {
       FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_FAILED', source: 'shared/plate/application/common/movement_plate.dart', result: 'error', detail: 'operation=UPSERT collection=$_parkingRequestsViewCollection errorType=${e.runtimeType}');
       _emitTrace('⚠️ parking_requests_view upsert 실패: $e', traceLog);
@@ -426,10 +487,11 @@ class MovementPlate extends ChangeNotifier {
         copyAsDebugPrintCode: true,
         devModeOnly: true,
       );
+      return _ViewWriteOutcome.failed;
     }
   }
 
-  Future<void> _removeParkingRequestsViewItem({
+  Future<_ViewWriteOutcome> _removeParkingRequestsViewItem({
     required String area,
     required String plateDocId,
     bool forceViewSync = false,
@@ -444,7 +506,7 @@ class MovementPlate extends ChangeNotifier {
           traceLog,
         );
       }
-      return;
+      return _ViewWriteOutcome.skipped;
     }
 
     try {
@@ -455,6 +517,7 @@ class MovementPlate extends ChangeNotifier {
         plateDocId: plateDocId,
       );
       FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_SUCCESS', source: 'shared/plate/application/common/movement_plate.dart', detail: 'operation=REMOVE collection=$_parkingRequestsViewCollection');
+      return _ViewWriteOutcome.committed;
     } catch (e, st) {
       FirebaseActivityMeter.instance.traceStep('VIEW_WRITE_FAILED', source: 'shared/plate/application/common/movement_plate.dart', result: 'error', detail: 'operation=REMOVE collection=$_parkingRequestsViewCollection errorType=${e.runtimeType}');
       _emitTrace('⚠️ parking_requests_view remove 실패: $e', traceLog);
@@ -469,6 +532,7 @@ class MovementPlate extends ChangeNotifier {
           'forceViewSync': forceViewSync,
         },
       );
+      return _ViewWriteOutcome.failed;
     }
   }
 
@@ -513,13 +577,15 @@ class MovementPlate extends ChangeNotifier {
           forceOverride: forceOverride,
         );
 
-        await _removeParkingRequestsViewItem(
+        final viewResults = <String, _ViewWriteOutcome>{};
+
+        viewResults['parking_requests_view.REMOVE'] = await _removeParkingRequestsViewItem(
           area: area,
           plateDocId: plateDocId,
           forceViewSync: forceViewSync,
           traceLog: traceLog,
         );
-        await _upsertParkingCompletedViewItem(
+        viewResults['parking_completed_view.UPSERT'] = await _upsertParkingCompletedViewItem(
           area: area,
           plateDocId: plateDocId,
           plateNumber: plateNumber,
@@ -527,6 +593,14 @@ class MovementPlate extends ChangeNotifier {
           createdAt: createdAt,
           forceViewSync: forceViewSync,
           traceLog: traceLog,
+        );
+        _reportTransitionResult(
+          operation: 'setParkingCompleted',
+          plateDocId: plateDocId,
+          plateNumber: plateNumber,
+          expectedType: PlateType.parkingCompleted,
+          area: area,
+          viewResults: viewResults,
         );
       },
     );
@@ -573,13 +647,15 @@ class MovementPlate extends ChangeNotifier {
           forceOverride: forceOverride,
         );
 
-        await _removeParkingCompletedViewItem(
+        final viewResults = <String, _ViewWriteOutcome>{};
+
+        viewResults['parking_completed_view.REMOVE'] = await _removeParkingCompletedViewItem(
           area: area,
           plateDocId: plateDocId,
           forceViewSync: forceViewSync,
           traceLog: traceLog,
         );
-        await _upsertDepartureRequestsViewItem(
+        viewResults['departure_requests_view.UPSERT'] = await _upsertDepartureRequestsViewItem(
           area: area,
           plateDocId: plateDocId,
           plateNumber: plateNumber,
@@ -587,6 +663,14 @@ class MovementPlate extends ChangeNotifier {
           createdAt: createdAt,
           forceViewSync: forceViewSync,
           traceLog: traceLog,
+        );
+        _reportTransitionResult(
+          operation: 'setDepartureRequested',
+          plateDocId: plateDocId,
+          plateNumber: plateNumber,
+          expectedType: PlateType.departureRequests,
+          area: area,
+          viewResults: viewResults,
         );
       },
     );
@@ -633,11 +717,21 @@ class MovementPlate extends ChangeNotifier {
           forceOverride: forceOverride,
         );
 
-        await _removeParkingCompletedViewItem(
+        final viewResults = <String, _ViewWriteOutcome>{};
+
+        viewResults['parking_completed_view.REMOVE'] = await _removeParkingCompletedViewItem(
           area: area,
           plateDocId: plateDocId,
           forceViewSync: forceViewSync,
           traceLog: traceLog,
+        );
+        _reportTransitionResult(
+          operation: 'setDepartureCompletedDirectFromParkingCompleted',
+          plateDocId: plateDocId,
+          plateNumber: plateNumber,
+          expectedType: PlateType.departureCompleted,
+          area: area,
+          viewResults: viewResults,
         );
       },
     );
@@ -684,11 +778,21 @@ class MovementPlate extends ChangeNotifier {
           forceOverride: forceOverride,
         );
 
-        await _removeDepartureRequestsViewItem(
+        final viewResults = <String, _ViewWriteOutcome>{};
+
+        viewResults['departure_requests_view.REMOVE'] = await _removeDepartureRequestsViewItem(
           area: selectedPlate.area,
           plateDocId: plateDocId,
           forceViewSync: forceViewSync,
           traceLog: traceLog,
+        );
+        _reportTransitionResult(
+          operation: 'setDepartureCompleted',
+          plateDocId: plateDocId,
+          plateNumber: selectedPlate.plateNumber,
+          expectedType: PlateType.departureCompleted,
+          area: selectedPlate.area,
+          viewResults: viewResults,
         );
       },
     );
@@ -735,13 +839,15 @@ class MovementPlate extends ChangeNotifier {
           forceOverride: forceOverride,
         );
 
-        await _removeDepartureRequestsViewItem(
+        final viewResults = <String, _ViewWriteOutcome>{};
+
+        viewResults['departure_requests_view.REMOVE'] = await _removeDepartureRequestsViewItem(
           area: area,
           plateDocId: plateDocId,
           forceViewSync: forceViewSync,
           traceLog: traceLog,
         );
-        await _upsertParkingCompletedViewItem(
+        viewResults['parking_completed_view.UPSERT'] = await _upsertParkingCompletedViewItem(
           area: area,
           plateDocId: plateDocId,
           plateNumber: plateNumber,
@@ -749,6 +855,14 @@ class MovementPlate extends ChangeNotifier {
           createdAt: createdAt,
           forceViewSync: forceViewSync,
           traceLog: traceLog,
+        );
+        _reportTransitionResult(
+          operation: 'goBackToParkingCompleted',
+          plateDocId: plateDocId,
+          plateNumber: plateNumber,
+          expectedType: PlateType.parkingCompleted,
+          area: area,
+          viewResults: viewResults,
         );
       },
     );
@@ -797,15 +911,17 @@ class MovementPlate extends ChangeNotifier {
           forceOverride: forceOverride,
         );
 
+        final viewResults = <String, _ViewWriteOutcome>{};
+
         if (fromType == PlateType.parkingCompleted) {
-          await _removeParkingCompletedViewItem(
+          viewResults['parking_completed_view.REMOVE'] = await _removeParkingCompletedViewItem(
             area: area,
             plateDocId: plateDocId,
             forceViewSync: forceViewSync,
             traceLog: traceLog,
           );
         } else if (fromType == PlateType.departureRequests) {
-          await _removeDepartureRequestsViewItem(
+          viewResults['departure_requests_view.REMOVE'] = await _removeDepartureRequestsViewItem(
             area: area,
             plateDocId: plateDocId,
             forceViewSync: forceViewSync,
@@ -813,7 +929,7 @@ class MovementPlate extends ChangeNotifier {
           );
         }
 
-        await _upsertParkingRequestsViewItem(
+        viewResults['parking_requests_view.UPSERT'] = await _upsertParkingRequestsViewItem(
           area: area,
           plateDocId: plateDocId,
           plateNumber: plateNumber,
@@ -821,6 +937,14 @@ class MovementPlate extends ChangeNotifier {
           createdAt: createdAt,
           forceViewSync: forceViewSync,
           traceLog: traceLog,
+        );
+        _reportTransitionResult(
+          operation: 'goBackToParkingRequest',
+          plateDocId: plateDocId,
+          plateNumber: plateNumber,
+          expectedType: PlateType.parkingRequests,
+          area: area,
+          viewResults: viewResults,
         );
       },
     );

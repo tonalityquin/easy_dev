@@ -100,6 +100,7 @@ class StatusDialog {
     bool requireDeveloperModeForCopy = false,
     bool useCommonUi = false,
     bool awaitManualClose = false,
+    Widget? developerContent,
   }) async {
     if (!context.mounted) return;
 
@@ -149,6 +150,7 @@ class StatusDialog {
           securitySummary: securitySummary?.trim() ?? '',
           securitySummaryChanges: securitySummaryChanges,
           securitySummaryProvider: securitySummaryProvider,
+          developerContent: developerContent,
           copyText: effectiveCopyText,
           copyTextProvider: copyTextProvider,
           requireDeveloperModeForCopy: requireDeveloperModeForCopy ||
@@ -240,6 +242,7 @@ class StatusDialog {
     Duration? visibleDuration,
     bool useCommonUi = false,
     bool awaitManualClose = false,
+    Widget? developerContent,
   }) {
     final hasCopyText = copyText != null && copyText.trim().isNotEmpty;
 
@@ -252,6 +255,7 @@ class StatusDialog {
       securitySummary: securitySummary,
       securitySummaryChanges: securitySummaryChanges,
       securitySummaryProvider: securitySummaryProvider,
+      developerContent: developerContent,
       copyText: copyText,
       copyTextProvider: copyTextProvider,
       requireDeveloperModeForCopy: requireDeveloperModeForCopy,
@@ -282,6 +286,7 @@ class StatusDialog {
     Duration? visibleDuration,
     bool useCommonUi = false,
     bool awaitManualClose = false,
+    Widget? developerContent,
   }) {
     final hasCopyText = copyText != null && copyText.trim().isNotEmpty;
 
@@ -294,6 +299,7 @@ class StatusDialog {
       securitySummary: securitySummary,
       securitySummaryChanges: securitySummaryChanges,
       securitySummaryProvider: securitySummaryProvider,
+      developerContent: developerContent,
       copyText: copyText,
       copyTextProvider: copyTextProvider,
       requireDeveloperModeForCopy: requireDeveloperModeForCopy,
@@ -327,6 +333,7 @@ class _StatusDialogSurface extends StatefulWidget {
     required this.securitySummary,
     required this.securitySummaryChanges,
     required this.securitySummaryProvider,
+    required this.developerContent,
     required this.copyText,
     required this.copyTextProvider,
     required this.requireDeveloperModeForCopy,
@@ -342,6 +349,7 @@ class _StatusDialogSurface extends StatefulWidget {
   final String securitySummary;
   final Listenable? securitySummaryChanges;
   final String Function()? securitySummaryProvider;
+  final Widget? developerContent;
   final String copyText;
   final Future<String> Function()? copyTextProvider;
   final bool requireDeveloperModeForCopy;
@@ -497,6 +505,7 @@ class _StatusDialogSurfaceState extends State<_StatusDialogSurface> {
                   tone: widget.tone,
                   description: widget.description,
                   securitySummary: _liveSecuritySummary,
+                  developerContent: widget.developerContent,
                   hasDescription: widget.description.isNotEmpty,
                   hasCopyText: widget.copyText.isNotEmpty,
                   hasDebugCopyText: widget.debugCopyText.isNotEmpty,
@@ -524,6 +533,7 @@ class _StatusDialogContent extends StatelessWidget {
     required this.tone,
     required this.description,
     required this.securitySummary,
+    required this.developerContent,
     required this.hasDescription,
     required this.hasCopyText,
     required this.hasDebugCopyText,
@@ -540,6 +550,7 @@ class _StatusDialogContent extends StatelessWidget {
   final StatusDialogTone tone;
   final String description;
   final String securitySummary;
+  final Widget? developerContent;
   final bool hasDescription;
   final bool hasCopyText;
   final bool hasDebugCopyText;
@@ -727,6 +738,14 @@ class _StatusDialogContent extends StatelessWidget {
             ),
           ),
         ],
+        if (developerContent != null) ...[
+          const SizedBox(height: 12),
+          Flexible(
+            child: SingleChildScrollView(
+              child: developerContent!,
+            ),
+          ),
+        ],
         if (hasCopyText) ...[
           const SizedBox(height: 18),
           if (useCommonUi)
@@ -760,20 +779,27 @@ class _StatusDialogContent extends StatelessWidget {
                   ),
                 ),
                 if (hasDebugCopyText)
-                  AnimatedSwitcher(
+                  AnimatedScale(
+                    scale: debugCopied ? 1.025 : 1,
                     duration: reduceMotion
                         ? Duration.zero
                         : CommonUiMotion.selection,
-                    transitionBuilder: (child, animation) => FadeTransition(
-                      opacity: animation,
-                      child: ScaleTransition(scale: animation, child: child),
-                    ),
-                    child: CommonButton(
-                      key: ValueKey<bool>(debugCopied),
-                      label: debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
-                      icon: debugCopied ? Icons.check_rounded : Icons.code_rounded,
-                      onPressed: onDebugCopy,
-                      haptic: CommonHaptic.selection,
+                    curve: CommonUiMotion.enter,
+                    child: AnimatedSwitcher(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : CommonUiMotion.selection,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(scale: animation, child: child),
+                      ),
+                      child: CommonButton(
+                        key: ValueKey<bool>(debugCopied),
+                        label: debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
+                        icon: debugCopied ? Icons.check_rounded : Icons.code_rounded,
+                        onPressed: onDebugCopy,
+                        haptic: CommonHaptic.selection,
+                      ),
                     ),
                   ),
                 CommonButton(
@@ -815,19 +841,26 @@ class _StatusDialogContent extends StatelessWidget {
                   ),
                 ),
                 if (hasDebugCopyText)
-                  AnimatedSwitcher(
+                  AnimatedScale(
+                    scale: debugCopied ? 1.025 : 1,
                     duration: reduceMotion
                         ? Duration.zero
                         : const Duration(milliseconds: 180),
-                    child: OutlinedButton.icon(
-                      key: ValueKey<bool>(debugCopied),
-                      onPressed: onDebugCopy,
-                      icon: Icon(
-                        debugCopied ? Icons.check_rounded : Icons.code_rounded,
-                        size: 18,
-                      ),
-                      label: Text(
-                        debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
+                    curve: Curves.easeOutCubic,
+                    child: AnimatedSwitcher(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : const Duration(milliseconds: 180),
+                      child: OutlinedButton.icon(
+                        key: ValueKey<bool>(debugCopied),
+                        onPressed: onDebugCopy,
+                        icon: Icon(
+                          debugCopied ? Icons.check_rounded : Icons.code_rounded,
+                          size: 18,
+                        ),
+                        label: Text(
+                          debugCopied ? '복사 완료' : 'debugPrint 코드 복사',
+                        ),
                       ),
                     ),
                   ),

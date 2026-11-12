@@ -155,8 +155,7 @@ List<ViewRowData> _viewRowsFromSnapshot(
     if (value is! Map) continue;
 
     final map = Map<String, dynamic>.from(value);
-    final plateNumber = (map['plateNumber'] as String?) ??
-        (map['plate_number'] as String?) ??
+    final plateNumber = (map[PlateFields.plateNumber] as String?) ??
         _fallbackPlateNumberFromDocId(plateDocId);
     if (plateNumber.trim().isEmpty) continue;
 
@@ -913,7 +912,9 @@ class FirestorePlateRepository implements PlateRepository {
     final c = collection.trim();
     final a = area.trim();
     final docId = plateDocId.trim();
-    if (c.isEmpty || a.isEmpty || docId.isEmpty) return;
+    if (c.isEmpty || a.isEmpty || docId.isEmpty) {
+      throw ArgumentError('View 경로에 빈 값이 있어 쓰기를 진행할 수 없습니다.');
+    }
 
     await _firestore.collection(c).doc(a).set(
       <String, dynamic>{
@@ -921,7 +922,7 @@ class FirestorePlateRepository implements PlateRepository {
         'updatedAt': FieldValue.serverTimestamp(),
         'items': <String, dynamic>{
           docId: <String, dynamic>{
-            'plateNumber': plateNumber,
+            PlateFields.plateNumber: plateNumber,
             'location': location.isNotEmpty ? location : _kLocUnknown,
             primaryAtField: FieldValue.serverTimestamp(),
             PlateFields.createdAt: createdAt ?? FieldValue.delete(),
@@ -935,7 +936,7 @@ class FirestorePlateRepository implements PlateRepository {
     ).trackFirestore('SET', 'shared/plate/data/repositories/firestore_plate_repository.dart', collection: c, pathTemplate: '$c/*',);
 
     debugPrint(
-      '✅ [FirestorePlateRepository.upsertViewItem] collection=$c area=$a plateId=$docId createdAtSource=transition_snapshot createdAtAvailable=${createdAt != null} additionalPlateRead=0',
+      '[PLATE_VIEW_SCHEMA] operation=transition_upsert collection=$c area=$a plateId=$docId field=${PlateFields.plateNumber} result=success createdAtAvailable=${createdAt != null} additionalPlateRead=0',
     );
   }
 
@@ -948,7 +949,9 @@ class FirestorePlateRepository implements PlateRepository {
     final c = collection.trim();
     final a = area.trim();
     final docId = plateDocId.trim();
-    if (c.isEmpty || a.isEmpty || docId.isEmpty) return;
+    if (c.isEmpty || a.isEmpty || docId.isEmpty) {
+      throw ArgumentError('View 경로에 빈 값이 있어 쓰기를 진행할 수 없습니다.');
+    }
 
     await _firestore.collection(c).doc(a).set(
       <String, dynamic>{

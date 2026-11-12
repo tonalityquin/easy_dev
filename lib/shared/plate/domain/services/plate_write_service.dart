@@ -9,6 +9,7 @@ import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../enums/plate_type.dart';
 import '../models/plate_log_model.dart';
 import '../models/plate_model.dart';
+import '../models/plate_view_verification_plan.dart';
 
 const String _kLocSep = ' - ';
 const String _kLocUnknown = '미지정';
@@ -103,6 +104,22 @@ Map<String, dynamic> _normalizePlatesLocationValue(dynamic v) {
   if (v is Map) return Map<String, dynamic>.from(v);
   if (v is String) return _locationToMap(v);
   return _locationToMap(_kLocUnknown);
+}
+
+class _DrivingViewResult {
+  const _DrivingViewResult({
+    required this.viewAction,
+    required this.resolvedArea,
+    required this.expectedPlateNumber,
+    required this.expectedType,
+    this.writtenCollection,
+  });
+
+  final String viewAction;
+  final String resolvedArea;
+  final String expectedPlateNumber;
+  final String? writtenCollection;
+  final PlateType expectedType;
 }
 
 class PlateWriteService {
@@ -202,11 +219,11 @@ class PlateWriteService {
 
   String _extractPlateNumberFromPlateDoc(
       Map<String, dynamic> data, String docId) {
-    final v1 = (data['plateNumber'] as String?)?.trim();
-    if (v1 != null && v1.isNotEmpty) return v1;
+    final current = (data[PlateFields.plateNumber] as String?)?.trim();
+    if (current != null && current.isNotEmpty) return current;
 
-    final v2 = (data[PlateFields.plateNumber] as String?)?.trim();
-    if (v2 != null && v2.isNotEmpty) return v2;
+    final legacy = (data['plateNumber'] as String?)?.trim();
+    if (legacy != null && legacy.isNotEmpty) return legacy;
 
     return _fallbackPlateFromDocId(docId);
   }
@@ -418,7 +435,8 @@ class PlateWriteService {
         final bool shouldSyncReqView = await _shouldSyncParkingRequestsView();
 
         try {
-          await _firestore.runTrackedActivityTransaction((tx) async {
+          final plan = await _firestore.runTrackedActivityTransaction<PlateViewVerificationPlan>((tx) async {
+            final actions = <String>[];
             final snap = await tx.get(docRef).trackFirestore('GET', 'shared/plate/domain/services/plate_write_service.dart', collection: 'plates', pathTemplate: 'plates/*', readPurpose: 'TRANSACTION_UPDATE_VALIDATION',);
             if (!snap.exists) {
               throw FirebaseException(
@@ -542,8 +560,18 @@ class PlateWriteService {
                 selectedByChanged ||
                 sectorChanged;
 
+            PlateViewVerificationPlan buildPlan() => PlateViewVerificationPlan(
+              plateDocId: documentId,
+              expectedPlateNumber: afterPlateNumber,
+              areaBefore: beforeArea,
+              areaAfter: afterArea,
+              expectedType: plateTypeFromFirestoreValue(afterType),
+              viewResult: actions.isEmpty ? 'SKIPPED' : 'COMMITTED',
+              viewActions: actions,
+            );
+
             if (!affectsViews) {
-              return;
+              return buildPlan();
             }
 
             DocumentReference<Map<String, dynamic>> _viewRef(
@@ -559,6 +587,7 @@ class PlateWriteService {
             }) {
               if (area.trim().isEmpty) return;
               final ref = _viewRef(collection, area.trim());
+              actions.add('$collection.REMOVE.$area.$plateDocId');
 
               FirebaseActivityMeter.instance.record(service: 'firestore', operation: 'STAGE_SET', source: 'shared/plate/domain/services/plate_write_service.dart', result: 'staged');
 
@@ -593,10 +622,10 @@ class PlateWriteService {
               if (area.trim().isEmpty) return;
 
               final ref = _viewRef(collection, area.trim());
+              actions.add('$collection.UPSERT.$area.$plateDocId');
               final selectedByValue = isSelected ? selectedBy?.trim() : null;
 
               final item = <String, dynamic>{
-                'plateNumber': plateNumber,
                 PlateFields.plateNumber: plateNumber,
                 'location': location,
                 PlateFields.sectorId:
@@ -774,9 +803,37 @@ class PlateWriteService {
                 }
               }
             }
+            return buildPlan();
           });
 
+          final viewActions = plan.viewActions;
+          final viewResult = plan.viewResult;
+          final viewReason = viewActions.isEmpty
+              ? 'NO_VIEW_WRITE_STAGED'
+              : 'TRANSACTION_COMMITTED';
           debugPrint("✅ 문서 업데이트 완료(+view sync): $documentId");
+          debugPrint(
+            '[PLATE_VIEW_SCHEMA] operation=updatePlate plateId=$documentId field=${PlateFields.plateNumber} sourceResult=COMMITTED viewResult=$viewResult viewActions=${viewActions.join(",")} verification=NOT_VERIFIED',
+          );
+          unawaited(
+            DevFirebaseDebugDialog.show(
+              operation: 'plateViewSchema.updatePlate.success',
+              details: <String, Object?>{
+                'plateId': documentId,
+                'field': PlateFields.plateNumber,
+                'viewCollections': 'parking_requests_view,parking_completed_view,departure_requests_view',
+                'sourceResult': 'COMMITTED',
+                'viewResult': viewResult,
+                'viewReason': viewReason,
+                ...plan.toDetails(),
+              },
+              title: '차량 수정·View 필드 상태',
+              success: true,
+              useCommonUi: true,
+              copyAsDebugPrintCode: true,
+              devModeOnly: true,
+            ),
+          );
         } on FirebaseException catch (e, st) {
           debugPrint("🔥 문서 업데이트 실패: $e");
           unawaited(
@@ -790,6 +847,8 @@ class PlateWriteService {
                 'updatedFields': updatedFields.keys.toList(growable: false),
                 'hasLog': log != null,
                 'hasTransactionExtension': transactionExtension != null,
+                'sourceResult': 'FAILED',
+                'viewResult': 'NOT_COMMITTED',
               },
             ),
           );
@@ -807,6 +866,8 @@ class PlateWriteService {
                 'updatedFields': updatedFields.keys.toList(growable: false),
                 'hasLog': log != null,
                 'hasTransactionExtension': transactionExtension != null,
+                'sourceResult': 'FAILED',
+                'viewResult': 'NOT_COMMITTED',
               },
             ),
           );
@@ -1047,7 +1108,7 @@ class PlateWriteService {
         final canUpsertReqView = await _canUpsertParkingRequestsView();
 
         try {
-          await _firestore.runTrackedActivityTransaction((tx) async {
+          final result = await _firestore.runTrackedActivityTransaction<_DrivingViewResult>((tx) async {
             final snap = await tx.get(docRef).trackFirestore('GET', 'shared/plate/domain/services/plate_write_service.dart', collection: 'plates', pathTemplate: 'plates/*', readPurpose: 'TRANSACTION_DRIVING_VALIDATION');
             if (!snap.exists) {
               throw FirebaseException(
@@ -1105,18 +1166,23 @@ class PlateWriteService {
             tx.update(docRef, update);
 
             final docArea = ((data['area'] as String?) ?? area).trim();
+            final expectedPlateNumber =
+                _extractPlateNumberFromPlateDoc(data, id);
 
             if (typeEnum == PlateType.departureRequests && docArea.isNotEmpty) {
               if (!canUpsertDepView) {
-                return;
+                return _DrivingViewResult(
+                  viewAction: 'SKIPPED:SYNC_GATE_DISABLED:departure_requests_view',
+                  resolvedArea: docArea,
+                  expectedPlateNumber: expectedPlateNumber,
+                  expectedType: typeEnum!,
+                );
               }
 
               final viewRef =
                   _firestore.collection('departure_requests_view').doc(docArea);
 
-              final plateNumber = ((data['plateNumber'] as String?) ??
-                      _fallbackPlateFromDocId(id))
-                  .trim();
+              final plateNumber = expectedPlateNumber;
 
               final location = _normalizeLocation(data['location']);
 
@@ -1132,7 +1198,6 @@ class PlateWriteService {
                   'updatedAt': FieldValue.serverTimestamp(),
                   'items': <String, dynamic>{
                     id: <String, dynamic>{
-                      'plateNumber': plateNumber,
                       PlateFields.plateNumber: plateNumber,
                       'location': location,
                       'departureRequestedAt':
@@ -1149,19 +1214,29 @@ class PlateWriteService {
                 },
                 SetOptions(merge: true),
               );
+              return _DrivingViewResult(
+                viewAction: 'COMMITTED:departure_requests_view.UPSERT',
+                resolvedArea: docArea,
+                expectedPlateNumber: expectedPlateNumber,
+                expectedType: typeEnum!,
+                writtenCollection: 'departure_requests_view',
+              );
             }
 
             if (typeEnum == PlateType.parkingRequests && docArea.isNotEmpty) {
               if (!canUpsertReqView) {
-                return;
+                return _DrivingViewResult(
+                  viewAction: 'SKIPPED:SYNC_GATE_DISABLED:parking_requests_view',
+                  resolvedArea: docArea,
+                  expectedPlateNumber: expectedPlateNumber,
+                  expectedType: typeEnum!,
+                );
               }
 
               final viewRef =
                   _firestore.collection('parking_requests_view').doc(docArea);
 
-              final plateNumber = ((data['plateNumber'] as String?) ??
-                      _fallbackPlateFromDocId(id))
-                  .trim();
+              final plateNumber = expectedPlateNumber;
 
               final location = _normalizeLocation(data['location']);
 
@@ -1177,7 +1252,6 @@ class PlateWriteService {
                   'updatedAt': FieldValue.serverTimestamp(),
                   'items': <String, dynamic>{
                     id: <String, dynamic>{
-                      'plateNumber': plateNumber,
                       PlateFields.plateNumber: plateNumber,
                       'location': location,
                       'parkingRequestedAt': reqAt ?? FieldValue.serverTimestamp(),
@@ -1193,8 +1267,66 @@ class PlateWriteService {
                 },
                 SetOptions(merge: true),
               );
+              return _DrivingViewResult(
+                viewAction: 'COMMITTED:parking_requests_view.UPSERT',
+                resolvedArea: docArea,
+                expectedPlateNumber: expectedPlateNumber,
+                expectedType: typeEnum!,
+                writtenCollection: 'parking_requests_view',
+              );
             }
+            return _DrivingViewResult(
+              viewAction: docArea.isEmpty
+                  ? 'SKIPPED:AREA_EMPTY'
+                  : 'SKIPPED:VIEW_NOT_APPLICABLE',
+              resolvedArea: docArea,
+              expectedPlateNumber: expectedPlateNumber,
+              expectedType: typeEnum!,
+            );
           });
+          final actualViewAreaLabel = result.writtenCollection == null
+              ? 'NOT_WRITTEN'
+              : result.resolvedArea;
+          final viewCollectionLabel =
+              result.writtenCollection ?? 'NOT_WRITTEN';
+          debugPrint(
+            '[PLATE_VIEW_SCHEMA] operation=recordWhoPlateClick plateId=$id field=${PlateFields.plateNumber} isSelected=$isSelected result=success areaArgument=$area resolvedArea=${result.resolvedArea} actualViewArea=$actualViewAreaLabel viewCollection=$viewCollectionLabel viewAction=${result.viewAction}',
+          );
+          unawaited(
+            DevFirebaseDebugDialog.show(
+              operation: 'plateViewSchema.recordWhoPlateClick.success',
+              details: <String, Object?>{
+                'plateId': id,
+                'areaArgument': area,
+                'resolvedArea': result.resolvedArea,
+                'actualViewArea': result.writtenCollection == null
+                    ? null
+                    : result.resolvedArea,
+                'viewCollection': result.writtenCollection,
+                'expectedPlateNumber': result.expectedPlateNumber,
+                'field': PlateFields.plateNumber,
+                'isSelected': isSelected,
+                'sourceResult': 'COMMITTED',
+                'viewAction': result.viewAction,
+                ...PlateViewVerificationPlan(
+                  plateDocId: id,
+                  expectedPlateNumber: result.expectedPlateNumber,
+                  areaAfter: result.resolvedArea,
+                  expectedType: result.expectedType,
+                  viewResult: result.writtenCollection == null
+                      ? 'SKIPPED'
+                      : 'COMMITTED',
+                  viewActions: <String>[result.viewAction],
+                  verificationEligible: result.writtenCollection != null,
+                ).toDetails(),
+              },
+              title: '주행 선택 View 상태',
+              success: true,
+              useCommonUi: true,
+              copyAsDebugPrintCode: true,
+              devModeOnly: true,
+            ),
+          );
         } on FirebaseException catch (e, st) {
           unawaited(
             DevFirebaseDebugDialog.show(
@@ -1207,6 +1339,8 @@ class PlateWriteService {
                 'isSelected': isSelected,
                 'selectedBy': selectedBy,
                 'areaArgument': area,
+                'sourceResult': 'FAILED',
+                'viewResult': 'NOT_COMMITTED',
               },
             ),
           );
@@ -1223,6 +1357,8 @@ class PlateWriteService {
                 'isSelected': isSelected,
                 'selectedBy': selectedBy,
                 'areaArgument': area,
+                'sourceResult': 'FAILED',
+                'viewResult': 'NOT_COMMITTED',
               },
             ),
           );
